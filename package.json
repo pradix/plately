@@ -1,0 +1,11 @@
+{
+  "name": "plately-webapp",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  }
+}

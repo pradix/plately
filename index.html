@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plately</title>
+    <meta
+      name="description"
+      content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
+    />
+    <meta name="theme-color" content="#8da485" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Plately" />
+    <link rel="icon" type="image/png" href="assets/favicon.png" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="app-shell">
+        <section class="screen screen--active" id="homeScreen">
+          <header class="topbar">
+            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar home">
+              <img class="brand-logo" src="assets/plately.png" alt="Plately" />
+            </button>
+            <div class="topbar-actions">
+              <button class="icon-button" type="button" aria-label="Zoeken">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M10.5 4.75a5.75 5.75 0 1 0 0 11.5a5.75 5.75 0 0 0 0-11.5Zm0 13.5a7.75 7.75 0 1 1 5.01-13.66a7.75 7.75 0 0 1-5.01 13.66Zm10.04 1.38l-4.42-4.42l1.41-1.41l4.42 4.42l-1.41 1.41Z"
+                  />
+                </svg>
+              </button>
+              <button class="icon-button icon-button--alert" type="button" aria-label="Meldingen">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12 3.75a4.75 4.75 0 0 0-4.75 4.75v1.07c0 .72-.24 1.43-.67 2l-1.1 1.47a2.75 2.75 0 0 0 2.2 4.4h8.64a2.75 2.75 0 0 0 2.2-4.4l-1.1-1.47a3.36 3.36 0 0 1-.67-2V8.5A4.75 4.75 0 0 0 12 3.75Zm0 17a2.74 2.74 0 0 1-2.47-1.55h4.94A2.74 2.74 0 0 1 12 20.75Z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </header>
+
+          <section class="search-card" aria-label="Zoeken">
+            <div class="search-input">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M10.5 4.75a5.75 5.75 0 1 0 0 11.5a5.75 5.75 0 0 0 0-11.5Zm0 13.5a7.75 7.75 0 1 1 5.01-13.66a7.75 7.75 0 0 1-5.01 13.66Zm10.04 1.38l-4.42-4.42l1.41-1.41l4.42 4.42l-1.41 1.41Z"
+                />
+              </svg>
+              <input id="searchInput" type="search" placeholder="Zoek recepten of ingrediënten..." />
+            </div>
+            <button class="filter-button" type="button" id="openImportButton" aria-label="Importvenster openen">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M4 7.25A1.25 1.25 0 0 1 5.25 6h13.5a1.25 1.25 0 1 1 0 2.5H5.25A1.25 1.25 0 0 1 4 7.25Zm3.5 4.75A1.25 1.25 0 0 1 8.75 10.75h6.5a1.25 1.25 0 1 1 0 2.5h-6.5A1.25 1.25 0 0 1 7.5 12Zm-2 4.75A1.25 1.25 0 0 1 6.75 15.5h10.5a1.25 1.25 0 1 1 0 2.5H6.75A1.25 1.25 0 0 1 5.5 16.75Z"
+                />
+              </svg>
+            </button>
+          </section>
+
+          <section class="import-banner">
+            <div class="import-banner__head">
+              <span class="import-banner__icon" aria-hidden="true">↓</span>
+              <div>
+                <h1>Sla een recept op</h1>
+                <p class="section-copy">Importeer direct een recept vanuit Instagram, TikTok of een website.</p>
+              </div>
+            </div>
+            <form class="import-banner__form" id="homeImportForm">
+              <div class="import-banner__row">
+                <input
+                  id="homeImportUrl"
+                  type="url"
+                  class="import-banner__input"
+                  placeholder="Plak een link..."
+                />
+                <button class="import-banner__button" id="homeImportSubmit" type="submit">Importeer</button>
+              </div>
+              <p class="import-banner__feedback" id="homeImportFeedback">
+                Voeg direct een recept toe vanuit social media of een receptenwebsite.
+              </p>
+            </form>
+          </section>
+
+          <section class="section-heading">
+            <h2>Populair nu</h2>
+            <button type="button" class="ghost-link" id="openFeaturedRecipeButton">Bekijk</button>
+          </section>
+
+          <article class="featured-card" id="featuredCard" tabindex="0" role="button" aria-label="Uitgelicht recept openen">
+            <div class="featured-image-wrap">
+              <span class="featured-badge">FEATURED</span>
+              <span class="source-favicon source-favicon--featured" id="featuredSourceIcon" aria-hidden="true"></span>
+              <img
+                id="featuredImage"
+                class="featured-image"
+                src="assets/hero-burger.svg"
+                alt="Uitgelicht recept"
+              />
+            </div>
+            <div class="featured-copy">
+              <div>
+                <h3 id="featuredTitle">Pasta carbonara</h3>
+              </div>
+              <p class="recipe-time" id="featuredTime">35 min</p>
+            </div>
+          </article>
+
+          <section class="section-heading">
+            <h2>Quick &amp; Easy</h2>
+          </section>
+
+          <section class="quick-grid" id="quickRecipeGrid"></section>
+
+          <section class="section-heading">
+            <h2>Categorieën</h2>
+          </section>
+
+          <section class="category-grid" id="categoryGrid"></section>
+
+          <section class="section-heading">
+            <div>
+              <h2>Meer recepten</h2>
+              <p class="section-subcopy">Open een recept om details en ingrediënten te bekijken.</p>
+            </div>
+          </section>
+
+          <section class="recipe-grid" id="recipeGrid"></section>
+        </section>
+
+        <section class="screen detail-screen" id="detailScreen">
+          <header class="topbar topbar--hero">
+            <button class="icon-button icon-button--solid" id="detailBackButton" type="button" aria-label="Terug">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10.78 5.22a1 1 0 0 1 0 1.41L6.41 11H20a1 1 0 1 1 0 2H6.41l4.37 4.37a1 1 0 0 1-1.41 1.41l-6.08-6.08a1 1 0 0 1 0-1.41l6.08-6.08a1 1 0 0 1 1.41 0Z"/>
+              </svg>
+            </button>
+            <div class="topbar-spacer" aria-hidden="true"></div>
+            <div class="topbar-spacer" aria-hidden="true"></div>
+          </header>
+          <div class="detail-hero">
+            <img id="detailHeroImage" src="assets/hero-burger.svg" alt="Receptafbeelding" />
+          </div>
+
+          <article class="detail-sheet">
+            <div class="detail-sheet__header">
+              <div>
+                <h1 id="detailTitle">The Ultimate Avo-Burger</h1>
+              </div>
+              <span class="meal-pill" id="detailMealTag">Lunch</span>
+            </div>
+
+            <div class="detail-stats">
+              <span class="detail-stat"><span>◔</span><strong id="detailTime">35 min</strong></span>
+              <span class="detail-stat"><span>◔</span><strong id="detailKcal">650 kcal</strong></span>
+              <span class="detail-stat"><span>◔</span><strong id="detailServings">2 Pers.</strong></span>
+            </div>
+
+            <p class="detail-description" id="detailDescription">
+              Een heerlijke vegetarische burger waarbij het broodje is vervangen door perfect rijpe avocado helften.
+            </p>
+            <div class="cook-tools">
+              <button class="cook-toggle" id="wakeLockButton" type="button" aria-pressed="false">Scherm tijdens koken: uit</button>
+            </div>
+
+            <section class="detail-section">
+              <div class="detail-section__header">
+                <h2>Ingrediënten</h2>
+                <p id="detailIngredientCount">6 items</p>
+              </div>
+              <div class="detail-servings-row">
+                <div class="servings-control">
+                  <button class="servings-btn" id="servingsDown" type="button" aria-label="Minder personen">−</button>
+                  <span id="servingsDisplay">2 pers.</span>
+                  <button class="servings-btn" id="servingsUp" type="button" aria-label="Meer personen">+</button>
+                </div>
+              </div>
+              <ul class="ingredient-list" id="detailIngredientList"></ul>
+            </section>
+
+            <button class="detail-cta" id="addSelectedToGroceriesButton" type="button">
+              Zet op boodschappenlijst
+            </button>
+
+            <section class="detail-section">
+              <div class="detail-section__header">
+                <h2>Bereiding</h2>
+                <p id="detailStepCount"></p>
+              </div>
+              <ol class="step-list" id="detailStepList"></ol>
+            </section>
+          </article>
+        </section>
+
+        <section class="screen grocery-screen" id="groceryScreen">
+          <header class="topbar">
+            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar home">
+              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
+            </button>
+            <div class="topbar-actions">
+              <button class="icon-button icon-button--soft" type="button" aria-label="Zoeken">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M10.5 4.75a5.75 5.75 0 1 0 0 11.5a5.75 5.75 0 0 0 0-11.5Zm0 13.5a7.75 7.75 0 1 1 5.01-13.66a7.75 7.75 0 0 1-5.01 13.66Zm10.04 1.38l-4.42-4.42l1.41-1.41l4.42 4.42l-1.41 1.41Z"
+                  />
+                </svg>
+              </button>
+              <button class="icon-button icon-button--alert" type="button" aria-label="Meldingen">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12 3.75a4.75 4.75 0 0 0-4.75 4.75v1.07c0 .72-.24 1.43-.67 2l-1.1 1.47a2.75 2.75 0 0 0 2.2 4.4h8.64a2.75 2.75 0 0 0 2.2-4.4l-1.1-1.47a3.36 3.36 0 0 1-.67-2V8.5A4.75 4.75 0 0 0 12 3.75Zm0 17a2.74 2.74 0 0 1-2.47-1.55h4.94A2.74 2.74 0 0 1 12 20.75Z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </header>
+
+          <div class="grocery-tools-hidden" aria-hidden="true">
+            <button class="icon-button icon-button--soft" id="groceryAddButton" type="button" aria-label="Recept toevoegen">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M11 5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6V5Z"/>
+                </svg>
+              </button>
+              <button class="icon-button icon-button--soft" id="clearGroceryListButton" type="button" aria-label="Lijst leegmaken">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 7.25a1.25 1.25 0 1 0 0-2.5a1.25 1.25 0 0 0 0 2.5Zm0 6a1.25 1.25 0 1 0 0-2.5a1.25 1.25 0 0 0 0 2.5Zm0 6a1.25 1.25 0 1 0 0-2.5a1.25 1.25 0 0 0 0 2.5Z"/>
+                </svg>
+              </button>
+          </div>
+
+          <section class="grocery-headline">
+            <h1>Boodschappen</h1>
+            <p id="grocerySubtitle">0 items te gaan</p>
+          </section>
+
+          <section class="grocery-order" id="groceryOrder">
+            <article class="order-panel">
+              <div class="order-panel__intro">
+                <span class="order-panel__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M7 8.25V7a5 5 0 1 1 10 0v1.25h1.25A1.75 1.75 0 0 1 20 10v8.25A2.75 2.75 0 0 1 17.25 21h-10.5A2.75 2.75 0 0 1 4 18.25V10c0-.97.78-1.75 1.75-1.75H7Zm2 0h6V7a3 3 0 1 0-6 0v1.25Zm-3 2v8a.75.75 0 0 0 .75.75h10.5a.75.75 0 0 0 .75-.75v-8H6Z"/>
+                  </svg>
+                </span>
+                <div>
+                  <h2>Bestel online</h2>
+                  <p>Laat je lijstje bezorgen</p>
+                </div>
+              </div>
+              <div class="order-panel__stores">
+                <button class="store-cta store-cta--ah" id="orderAHButton" type="button" aria-label="Open Albert Heijn lijst">
+                  <span class="store-cta__abbr">AH</span>
+                </button>
+                <button class="store-cta store-cta--jumbo" id="orderJumboButton" type="button" aria-label="Open Jumbo mandje">
+                  <span class="store-cta__abbr">JB</span>
+                </button>
+              </div>
+            </article>
+            <section class="store-assistant is-hidden" id="storeAssistant">
+              <div class="store-assistant__head">
+                <div>
+                  <p class="section-kicker" id="storeAssistantKicker">PLATELY LIJSTJE</p>
+                  <h2 id="storeAssistantTitle">Klaar voor je supermarkt</h2>
+                  <p class="store-assistant__copy" id="storeAssistantCopy">
+                    We houden je selectie op deze pagina en sturen je daarna door naar de supermarkt.
+                  </p>
+                </div>
+              </div>
+              <div class="basket-summary" id="basketSummary"></div>
+              <div class="basket-list" id="basketList"></div>
+              <div class="basket-footer">
+                <p class="basket-note" id="basketNote"></p>
+                <button class="primary-button" id="basketContinueButton" type="button">Open supermarkt</button>
+              </div>
+            </section>
+          </section>
+
+          <section class="grocery-groups" id="groceryGroups"></section>
+        </section>
+
+        <section class="screen mealplan-screen" id="mealPlanScreen">
+          <header class="topbar">
+            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar recepten">
+              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
+            </button>
+          </header>
+
+          <section class="planner-intro">
+            <h1>Maaltijdplan</h1>
+            <p>Plan je week met het laatst gekozen recept of bewaar combinaties voor later.</p>
+          </section>
+
+          <section class="planner-focus" id="mealPlanCurrentRecipe"></section>
+          <section class="planner-grid" id="mealPlanGrid"></section>
+        </section>
+
+        <section class="screen profile-screen" id="settingsScreen">
+          <header class="topbar">
+            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar recepten">
+              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
+            </button>
+            <div class="topbar-actions">
+              <button class="icon-button icon-button--soft" type="button" aria-label="Zoeken">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M10.5 4.75a5.75 5.75 0 1 0 0 11.5a5.75 5.75 0 0 0 0-11.5Zm0 13.5a7.75 7.75 0 1 1 5.01-13.66a7.75 7.75 0 0 1-5.01 13.66Zm10.04 1.38l-4.42-4.42l1.41-1.41l4.42 4.42l-1.41 1.41Z"
+                  />
+                </svg>
+              </button>
+              <button class="icon-button icon-button--alert" type="button" aria-label="Meldingen">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12 3.75a4.75 4.75 0 0 0-4.75 4.75v1.07c0 .72-.24 1.43-.67 2l-1.1 1.47a2.75 2.75 0 0 0 2.2 4.4h8.64a2.75 2.75 0 0 0 2.2-4.4l-1.1-1.47a3.36 3.36 0 0 1-.67-2V8.5A4.75 4.75 0 0 0 12 3.75Zm0 17a2.74 2.74 0 0 1-2.47-1.55h4.94A2.74 2.74 0 0 1 12 20.75Z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </header>
+
+          <section class="profile-hero">
+            <div class="profile-avatar-wrap">
+              <div class="profile-avatar">
+                <img src="assets/profile-avatar.svg" alt="Sarah de Vries" class="profile-avatar__image" />
+              </div>
+              <button class="profile-avatar-edit" id="profileEditAvatarButton" type="button" aria-label="Profiel bewerken">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M15.1 5.1a2.5 2.5 0 1 1 3.54 3.54L9.5 17.78L5.75 18.75l.97-3.75L15.1 5.1Zm-8.34 9.89l2.35 2.35"/>
+                </svg>
+              </button>
+            </div>
+            <h1 id="profileName">Sarah de Vries</h1>
+            <p class="profile-meta">
+              <span id="profileHandle">@sarahkookt</span>
+              <span id="profileRecipeCount">0 recepten</span>
+            </p>
+            <div class="profile-actions">
+              <button class="secondary-button profile-actions__main" id="profileEditButton" type="button">Profiel bewerken</button>
+              <button class="icon-button icon-button--soft" id="shareProfileButton" type="button" aria-label="Profiel delen">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z"/>
+                </svg>
+              </button>
+            </div>
+          </section>
+
+          <section class="premium-card">
+            <div class="premium-card__head">
+              <span class="premium-card__icon" aria-hidden="true">♛</span>
+              <h2>Plately Premium</h2>
+            </div>
+            <p>Ontgrendel chef-collecties, slimme importchecks en automatisch opgebouwde weekmenu&apos;s.</p>
+            <button class="premium-card__button" id="premiumButton" type="button">Ontdek Premium</button>
+          </section>
+
+          <section class="profile-section-head">
+            <h2>Mijn kookboeken</h2>
+            <p id="profileCookbookCount">0 collecties</p>
+          </section>
+
+          <section class="cookbook-grid" id="cookbookList"></section>
+          <div class="profile-space"></div>
+        </section>
+
+        <section class="screen import-screen" id="importScreen">
+          <header class="topbar">
+            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar home">
+              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
+            </button>
+          </header>
+
+          <div class="import-platforms">
+            <button class="platform-card platform-card--active" type="button" data-platform-choice="tiktok">
+              <span class="platform-card__emoji">🎵</span>
+              <span class="platform-card__name">TikTok</span>
+              <span class="platform-card__badge">Actief</span>
+            </button>
+            <button class="platform-card" type="button" data-platform-choice="instagram">
+              <span class="platform-card__emoji">📸</span>
+              <span class="platform-card__name">Instagram</span>
+              <span class="platform-card__badge platform-card__badge--soft">Beta</span>
+            </button>
+            <button class="platform-card" type="button" data-platform-choice="website">
+              <span class="platform-card__emoji">🌐</span>
+              <span class="platform-card__name">Website</span>
+              <span class="platform-card__badge">Actief</span>
+            </button>
+          </div>
+
+          <form id="importScreenForm" class="import-url-form">
+            <div class="import-url-row">
+              <input
+                id="importScreenUrl"
+                type="url"
+                class="import-url-input"
+                placeholder="Plak hier je link..."
+                autocomplete="off"
+              />
+              <button class="import-go-btn" id="importScreenSubmit" type="submit" aria-label="Importeren">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6"/>
+                </svg>
+              </button>
+            </div>
+            <p class="import-hint" id="importScreenFeedback">Kopieer de link uit de app en plak hem hierboven.</p>
+          </form>
+
+          <section class="import-tips">
+            <p class="import-tips__label">HOE WERKT HET</p>
+            <div class="import-tip">
+              <span class="import-tip__num">1</span>
+              <p>Open TikTok, Instagram of een receptwebsite en kopieer de link.</p>
+            </div>
+            <div class="import-tip">
+              <span class="import-tip__num">2</span>
+              <p>Kom terug en plak de link in het veld hierboven.</p>
+            </div>
+            <div class="import-tip">
+              <span class="import-tip__num">3</span>
+              <p>We halen titel, ingredienten, stappen en een korte omschrijving automatisch op.</p>
+            </div>
+          </section>
+        </section>
+
+        <nav class="bottom-nav" aria-label="Hoofdnavigatie">
+          <button type="button" class="nav-item nav-item--active" data-view="home">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 4.75A2.75 2.75 0 0 0 4.25 7.5v9A2.75 2.75 0 0 0 7 19.25h10A2.75 2.75 0 0 0 19.75 16.5v-9A2.75 2.75 0 0 0 17 4.75H7Zm0 2h10c.41 0 .75.34.75.75v9a.75.75 0 0 1-.75.75H7a.75.75 0 0 1-.75-.75v-9c0-.41.34-.75.75-.75Zm1.5 1.75h7a1 1 0 1 1 0 2h-7a1 1 0 1 1 0-2Zm0 4h7a1 1 0 1 1 0 2h-7a1 1 0 1 1 0-2Z"/>
+            </svg>
+            <span>Recepten</span>
+          </button>
+          <button type="button" class="nav-item" data-view="mealplan">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6.75 3.5A2.25 2.25 0 0 0 4.5 5.75v11.5A2.25 2.25 0 0 0 6.75 19.5h10.5a2.25 2.25 0 0 0 2.25-2.25V5.75A2.25 2.25 0 0 0 17.25 3.5H6.75Zm0 2h10.5c.14 0 .25.11.25.25v2.5H6.5v-2.5c0-.14.11-.25.25-.25Zm-.25 4.75H10v7H6.75a.25.25 0 0 1-.25-.25v-6.75Zm5.5 0h5.5v6.75a.25.25 0 0 1-.25.25H12v-7Z"/>
+            </svg>
+            <span>Maaltijdplan</span>
+          </button>
+          <button type="button" class="nav-item" data-view="grocery">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7.2 5.25h9.6l.62 3.25H6.58l.62-3.25Zm-1.09-2a1 1 0 0 0-.98.8L4 9.62V18a2.25 2.25 0 0 0 2.25 2.25h11.5A2.25 2.25 0 0 0 20 18V9.62l-1.13-5.57a1 1 0 0 0-.98-.8H6.11ZM7.5 11a1 1 0 1 1 0 2h9a1 1 0 1 1 0 2h-9a1 1 0 1 1 0-2h9a1 1 0 1 1 0-2h-9Z"/>
+            </svg>
+            <span>Lijstje</span>
+          </button>
+          <button type="button" class="nav-item" data-view="settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 4.5a3.25 3.25 0 1 0 0 6.5a3.25 3.25 0 0 0 0-6.5Zm-5.25 13a4.75 4.75 0 0 1 9.5 0v1.75a1 1 0 1 1-2 0V17.5a2.75 2.75 0 0 0-5.5 0v1.75a1 1 0 1 1-2 0V17.5Z"/>
+            </svg>
+            <span>Profiel</span>
+          </button>
+        </nav>
+      </section>
+    </main>
+
+    <div class="modal hidden" id="importModal" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="true"></div>
+      <section class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <div>
+            <p class="section-kicker">IMPORTEER RECEPT</p>
+            <h2 id="importTitle">Importeer een recept</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-modal="true" aria-label="Sluiten">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M6.7 5.3L12 10.58l5.3-5.29l1.4 1.41L13.42 12l5.29 5.3l-1.41 1.4L12 13.42l-5.3 5.29l-1.4-1.41L10.58 12l-5.29-5.3l1.41-1.4Z"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <form id="importForm" class="import-form">
+          <label>
+            Platform
+            <div class="platform-switcher">
+              <button class="platform-button is-selected" type="button" data-platform-choice="tiktok">
+                TikTok
+              </button>
+              <button class="platform-button" type="button" data-platform-choice="instagram">
+                Instagram
+              </button>
+              <button class="platform-button" type="button" data-platform-choice="website">
+                Website
+              </button>
+            </div>
+          </label>
+
+          <label>
+            Link
+            <input
+              id="recipeUrl"
+              name="recipeUrl"
+              type="url"
+              placeholder="https://www.tiktok.com/@creator/video/123..."
+              required
+            />
+          </label>
+
+          <label>
+            Notitie
+            <textarea
+              id="recipeNote"
+              name="recipeNote"
+              rows="3"
+              placeholder="Bijv. eiwitrijk lunchrecept voor morgen"
+            ></textarea>
+          </label>
+
+          <button class="primary-button" id="submitImport" type="submit">Recept importeren</button>
+          <button class="secondary-button" id="closeImportSecondaryButton" type="button">Sluiten</button>
+          <p class="helper-text" id="importFeedback">
+            De app roept nu een backend importer aan. TikTok werkt direct voor publieke posts; Instagram
+            vraagt om een Meta app-token.
+          </p>
+        </form>
+      </section>
+    </div>
+
+    <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
