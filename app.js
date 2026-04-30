@@ -418,6 +418,7 @@ const reviewPreviewImage = document.getElementById("reviewPreviewImage");
 const reviewPreviewMealTag = document.getElementById("reviewPreviewMealTag");
 const reviewPreviewHost = document.getElementById("reviewPreviewHost");
 const reviewForm = document.getElementById("reviewForm");
+const reviewInsights = document.getElementById("reviewInsights");
 const reviewTitleInput = document.getElementById("reviewTitleInput");
 const reviewDescriptionInput = document.getElementById("reviewDescriptionInput");
 const reviewTimeInput = document.getElementById("reviewTimeInput");
@@ -838,31 +839,165 @@ function parseIngredientInput(value) {
   return { quantity: "1", unit: "x", name: cleanValue || "Ingredient" };
 }
 
+function normalizeUnit(unit) {
+  const value = String(unit || "").trim().toLowerCase();
+  if (!value || value === "x") return "stuk";
+  if (value === "stuks") return "stuk";
+  if (value === "grams") return "g";
+  if (value === "liter") return "l";
+  if (value === "milliliter") return "ml";
+  return value;
+}
+
+function normalizeIngredientKey(name) {
+  return String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function parseAmountLabel(value) {
+  const match = String(value || "").trim().match(/^(\d+(?:[.,]\d+)?)\s*(.+)?$/);
+  if (!match) {
+    return null;
+  }
+
+  const amount = Number.parseFloat(match[1].replace(",", "."));
+  if (!Number.isFinite(amount)) {
+    return null;
+  }
+
+  return {
+    amount,
+    unit: normalizeUnit(match[2] || ""),
+  };
+}
+
+function formatMergedAmount(amount, unit) {
+  const rounded = Number.isInteger(amount) ? String(amount) : String(Math.round(amount * 10) / 10).replace(".", ",");
+  if (!unit || unit === "stuk") {
+    return `${rounded} ${amount === 1 ? "stuk" : "stuks"}`;
+  }
+  return `${rounded} ${unit}`.trim();
+}
+
+function mergeAmountLabels(existing, incoming) {
+  const left = parseAmountLabel(existing);
+  const right = parseAmountLabel(incoming);
+
+  if (left && right && left.unit === right.unit) {
+    return formatMergedAmount(left.amount + right.amount, left.unit);
+  }
+
+  const uniqueValues = [...new Set([String(existing || "").trim(), String(incoming || "").trim()].filter(Boolean))];
+  return uniqueValues.join(" + ");
+}
+
 function getIngredientEmoji(name) {
-  const value = name.toLowerCase();
-  if (/avocado/.test(value)) return "🥑";
-  if (/(sla|spinazie|kool|broccoli)/.test(value)) return "🥬";
-  if (/tomaat/.test(value)) return "🍅";
-  if (/(ui|sjalot)/.test(value)) return "🧅";
-  if (/knoflook/.test(value)) return "🧄";
-  if (/banaan/.test(value)) return "🍌";
-  if (/citroen|limoen|lime/.test(value)) return "🍋";
-  if (/paprika/.test(value)) return "🫑";
-  if (/komkommer|courgette/.test(value)) return "🥒";
-  if (/wortel/.test(value)) return "🥕";
-  if (/aardappel|friet/.test(value)) return "🍟";
-  if (/burger|gehakt|vlees/.test(value)) return "🥩";
-  if (/kip/.test(value)) return "🍗";
-  if (/zalm|vis|tonijn/.test(value)) return "🐟";
-  if (/ei/.test(value)) return "🥚";
-  if (/yoghurt|melk/.test(value)) return "🥛";
-  if (/feta|kaas/.test(value)) return "🧀";
-  if (/honing/.test(value)) return "🍯";
-  if (/mayonaise|mayo|saus/.test(value)) return "🫙";
-  if (/rijst/.test(value)) return "🍚";
-  if (/pasta|spaghetti|penne|linguine|noodle/.test(value)) return "🍝";
-  if (/brood|toast|bun/.test(value)) return "🍞";
+  const value = String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  const matchers = [
+    [/avocado/, "🥑"],
+    [/(banaan|bananen)/, "🍌"],
+    [/(aardbei|aardbeien|framboos|frambozen|blauwe bes|blauwe bessen|bosbes|bosbessen)/, "🫐"],
+    [/(appel|appels)/, "🍎"],
+    [/(peer|peren)/, "🍐"],
+    [/(citroen|citroenen|limoen|limoenen|lime)/, "🍋"],
+    [/(sinaasappel|mandarijn)/, "🍊"],
+    [/(druif|druiven)/, "🍇"],
+    [/(kers|kersen)/, "🍒"],
+    [/(perzik|abrikoos|mango|ananas)/, "🍑"],
+    [/(tomaat|tomaten|cherry tomaat|cherrytomaat)/, "🍅"],
+    [/(paprika|paprika's|paprikamix)/, "🫑"],
+    [/(komkommer|courgette|augurk)/, "🥒"],
+    [/(wortel|wortels|peen|winterpeen)/, "🥕"],
+    [/(broccoli|bloemkool|kool|spruit|spruitjes|paksoi|boerenkool)/, "🥦"],
+    [/(sla|ijsbergsla|romaine|rucola|spinazie|andijvie|veldslamix|slamix)/, "🥬"],
+    [/(ui|uien|rode ui|gele ui|sjalot|sjalotten|bosui|lente ui)/, "🧅"],
+    [/(knoflook|knoflookteen|knoflooktenen)/, "🧄"],
+    [/(champignon|champignons|paddenstoel|paddenstoelen)/, "🍄"],
+    [/(mais|maiskorrel)/, "🌽"],
+    [/(chili|peper|jalapeno)/, "🌶️"],
+    [/(aardappel|aardappelen|krieltjes|friet|zoete aardappel)/, "🥔"],
+    [/(rijst|basmati|jasmijnrijst)/, "🍚"],
+    [/(spaghetti|pasta|penne|fusilli|macaroni|tagliatelle|linguine|lasagne|gnocchi|noodle|noedels)/, "🍝"],
+    [/(wrap|tortilla|naan|pita|broodje|bun|brood|toast|bagel|brioche)/, "🍞"],
+    [/(ei|eieren)/, "🥚"],
+    [/(melk|karnemelk|yoghurt|kwark|room|slagroom|kookroom|creme fraiche|creme fraîche)/, "🥛"],
+    [/(kaas|parmezaan|pecorino|feta|mozzarella|cheddar|gouda|mascarpone)/, "🧀"],
+    [/(boter|margarine)/, "🧈"],
+    [/(kip|kipfilet|kippendij|kipgehakt)/, "🍗"],
+    [/(burger|gehakt|rundergehakt|vlees|biefstuk|spek|spekjes|ham)/, "🥩"],
+    [/(zalm|tonijn|kabeljauw|garnalen|vis)/, "🐟"],
+    [/(tofu|tempeh|vegetarische burger|vega burger|falafel)/, "🌱"],
+    [/(bonen|kidneybonen|kikkererwten|linzen)/, "🫘"],
+    [/(pesto|saus|pastasaus|tomatenpuree|tomatenblokjes|mayonaise|mayo|dressing|ketjap|soja)/, "🫙"],
+    [/(honing|siroop)/, "🍯"],
+    [/(suiker|poedersuiker|dadel|dadels|rozijn|rozijnen)/, "🍯"],
+    [/(bloem|speltbloem|zelfrijzend bakmeel|amandelmeel|meel|havermout)/, "🌾"],
+    [/(koffie|espresso|cacao|chocolade)/, "☕"],
+    [/(koriander|peterselie|basilicum|bieslook|munt|dille)/, "🌿"],
+    [/(mosterd|kerrie|kruiden|paprikapoeder|komijn|oregano|tijm|kaneel)/, "🧂"],
+  ];
+
+  for (const [pattern, emoji] of matchers) {
+    if (pattern.test(value)) {
+      return emoji;
+    }
+  }
+
   return "🛒";
+}
+
+function getIngredientIllustration(name) {
+  const value = String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (/avocado/.test(value)) return "assets/ingredients/avocado.svg";
+  if (/(banaan|bananen)/.test(value)) return "assets/ingredients/banana.svg";
+  if (/(tomaat|tomaten|cherry tomaat|cherrytomaat)/.test(value)) return "assets/ingredients/tomato.svg";
+  if (/(ui|uien|rode ui|gele ui|sjalot|sjalotten|bosui|lente ui)/.test(value)) return "assets/ingredients/onion.svg";
+  if (/(sla|ijsbergsla|romaine|rucola|spinazie|andijvie|veldslamix|slamix|broccoli|bloemkool|kool)/.test(value)) {
+    return "assets/ingredients/greens.svg";
+  }
+  if (/(wortel|wortels|peen|winterpeen)/.test(value)) return "assets/ingredients/carrot.svg";
+  if (/(komkommer|courgette|augurk)/.test(value)) return "assets/ingredients/cucumber.svg";
+  if (/(aardappel|aardappelen|krieltjes|friet|zoete aardappel)/.test(value)) return "assets/ingredients/potato.svg";
+  if (/(spaghetti|pasta|penne|fusilli|macaroni|tagliatelle|linguine|lasagne|gnocchi|noodle|noedels)/.test(value)) {
+    return "assets/ingredients/pasta.svg";
+  }
+  if (/(wrap|tortilla|naan|pita|broodje|bun|brood|toast|bagel|brioche)/.test(value)) return "assets/ingredients/bread.svg";
+  if (/(ei|eieren)/.test(value)) return "assets/ingredients/egg.svg";
+  if (/(melk|karnemelk|yoghurt|kwark|room|slagroom|kookroom|creme fraiche|creme fraîche)/.test(value)) {
+    return "assets/ingredients/milk.svg";
+  }
+  if (/(kaas|parmezaan|pecorino|feta|mozzarella|cheddar|gouda|mascarpone)/.test(value)) return "assets/ingredients/cheese.svg";
+  if (/(kip|kipfilet|kippendij|kipgehakt)/.test(value)) return "assets/ingredients/chicken.svg";
+  if (/(burger|gehakt|rundergehakt|vlees|biefstuk|spek|spekjes|ham)/.test(value)) return "assets/ingredients/steak.svg";
+  if (/(zalm|tonijn|kabeljauw|garnalen|vis)/.test(value)) return "assets/ingredients/fish.svg";
+  if (/(tofu|tempeh|vegetarische burger|vega burger|falafel|bonen|kidneybonen|kikkererwten|linzen)/.test(value)) {
+    return "assets/ingredients/beans.svg";
+  }
+  if (/(pesto|saus|pastasaus|tomatenpuree|tomatenblokjes|mayonaise|mayo|dressing|ketjap|soja|honing|siroop)/.test(value)) {
+    return "assets/ingredients/jar.svg";
+  }
+  if (/(koriander|peterselie|basilicum|bieslook|munt|dille|kruiden|oregano|tijm)/.test(value)) return "assets/ingredients/herb.svg";
+  return "";
+}
+
+function getIngredientVisualMarkup(name) {
+  const illustration = getIngredientIllustration(name);
+  if (illustration) {
+    return `<img class="ingredient-visual__img" src="${illustration}" alt="" loading="lazy" />`;
+  }
+  return `<span class="ingredient-visual__emoji">${getIngredientEmoji(name)}</span>`;
 }
 
 function getIngredientGroup(name) {
@@ -932,6 +1067,22 @@ function getVisibleRecipes() {
   });
 }
 
+function getImportStatusMeta(recipe) {
+  if (!recipe || recipe.isSeed || SEED_RECIPE_IDS.has(recipe.id)) {
+    return { label: "Redactie", tone: "editorial" };
+  }
+
+  if (recipe.needsReview) {
+    return { label: "Controle nodig", tone: "warn" };
+  }
+
+  if ((recipe.ingredients || []).length >= 5 && (recipe.instructions || []).length >= 4) {
+    return { label: "Klaar om te koken", tone: "good" };
+  }
+
+  return { label: "Even nalopen", tone: "soft" };
+}
+
 function renderFeaturedRecipe() {
   const recipe = getFeaturedRecipe();
   featuredImage.src = recipe.image;
@@ -990,18 +1141,22 @@ function renderRecentImports() {
   }
 
   recentImportList.innerHTML = recipes
-    .map(
-      (recipe) => `
+    .map((recipe) => {
+      const status = getImportStatusMeta(recipe);
+      return `
         <button class="recent-import-card" type="button" data-review-recipe-id="${recipe.id}">
           <img src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.alt)}" />
           <div class="recent-import-card__copy">
-            <span class="recent-import-card__kicker">${escapeHtml(getPlatformLabel(recipe.platform))}</span>
+            <div class="recent-import-card__topline">
+              <span class="recent-import-card__kicker">${escapeHtml(getPlatformLabel(recipe.platform))}</span>
+              <span class="import-status-badge import-status-badge--${status.tone}">${escapeHtml(status.label)}</span>
+            </div>
             <strong>${escapeHtml(recipe.title)}</strong>
             <span>${escapeHtml(recipe.ingredients.length)} ingrediënten • ${escapeHtml(recipe.instructions.length)} stappen</span>
           </div>
         </button>
-      `
-    )
+      `;
+    })
     .join("");
 }
 
@@ -1025,35 +1180,37 @@ function renderQuickRecipeGrid() {
     return;
   }
   quickRecipeGrid.innerHTML = recipes
-    .map(
-      (recipe) => `
+    .map((recipe, index) => `
         <button class="quick-card" type="button" data-recipe-id="${recipe.id}">
-          <span class="quick-card__radio" aria-hidden="true"></span>
-          <span class="quick-card__img" aria-hidden="true">${getIngredientEmoji(recipe.ingredients[0]?.name || recipe.title)}</span>
+          <span class="quick-card__glow quick-card__glow--${(index % 4) + 1}" aria-hidden="true"></span>
+          <span class="quick-card__img" aria-hidden="true">${getIngredientVisualMarkup(recipe.ingredients[0]?.name || recipe.title)}</span>
           <span class="quick-card__copy">
+            <span class="quick-card__eyebrow">${escapeHtml(recipe.mealTag)}</span>
             <strong>${escapeHtml(recipe.title)}</strong>
-            <span>${escapeHtml(recipe.time)}</span>
+            <span>${escapeHtml(recipe.time)} • ${escapeHtml(recipe.ingredients.length)} ingrediënten</span>
           </span>
         </button>
-      `
-    )
+      `)
     .join("");
 }
 
 function renderCategoryGrid() {
   const categories = [
-    { title: "Ontbijt", count: state.recipes.filter((recipe) => /ontbijt/i.test(recipe.mealTag)).length || 12 },
-    { title: "Salades", count: 12 },
-    { title: "Dips", count: 12 },
-    { title: "Hoofdgerechten", count: state.recipes.filter((recipe) => /avond|lunch/i.test(recipe.mealTag)).length || 12 },
+    { title: "Ontbijt", count: state.recipes.filter((recipe) => /ontbijt/i.test(recipe.mealTag)).length || 12, icon: "☀️", tone: "sun" },
+    { title: "Salades", count: 12, icon: "🥗", tone: "leaf" },
+    { title: "Dips", count: 12, icon: "🫙", tone: "peach" },
+    { title: "Hoofdgerechten", count: state.recipes.filter((recipe) => /avond|lunch/i.test(recipe.mealTag)).length || 12, icon: "🍽️", tone: "stone" },
   ];
 
   categoryGrid.innerHTML = categories
     .map(
       (category) => `
-        <article class="category-card">
-          <h3>${escapeHtml(category.title)}</h3>
-          <p>${category.count} recepten</p>
+        <article class="category-card category-card--${category.tone}">
+          <span class="category-card__icon" aria-hidden="true">${category.icon}</span>
+          <div class="category-card__copy">
+            <h3>${escapeHtml(category.title)}</h3>
+            <p>${category.count} recepten</p>
+          </div>
         </article>
       `
     )
@@ -1124,6 +1281,7 @@ function renderDetailRecipe(resetServings = false) {
   }
   if (reviewImportButton) {
     reviewImportButton.classList.toggle("hidden", Boolean(recipe.isSeed || SEED_RECIPE_IDS.has(recipe.id)));
+    reviewImportButton.textContent = recipe.needsReview ? "Import herstellen" : "Import nalopen";
   }
   if (detailIngredientCount) {
     detailIngredientCount.textContent = `${recipe.ingredients.length} items`;
@@ -1137,7 +1295,7 @@ function renderDetailRecipe(resetServings = false) {
         <li class="ingredient-item">
           <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
           <span class="ingredient-name">${ingredient.name}</span>
-          <span class="ingredient-circle" aria-hidden="true"></span>
+          <span class="ingredient-thumb" aria-hidden="true">${getIngredientVisualMarkup(ingredient.name)}</span>
         </li>
       `
     )
@@ -1214,10 +1372,11 @@ function renderGroceryGroups() {
               (item) => `
                 <button class="grocery-entry ${item.checked ? "is-checked" : ""}" type="button" data-grocery-id="${item.id}">
                   <span class="grocery-check">${item.checked ? "✓" : ""}</span>
-                  <span class="grocery-entry__img" aria-hidden="true">${getIngredientEmoji(item.title)}</span>
+                  <span class="grocery-entry__img" aria-hidden="true">${getIngredientVisualMarkup(item.title)}</span>
                   <span class="grocery-entry__content">
                     <p class="grocery-entry__title">${item.title}</p>
                     <p class="grocery-entry__meta">${item.amount}</p>
+                    ${item.recipeTitle ? `<p class="grocery-entry__source">${escapeHtml(item.recipeTitle)}</p>` : ""}
                   </span>
                 </button>
               `
@@ -1266,7 +1425,60 @@ function renderImportReview() {
   reviewMealTagInput.value = recipe.mealTag || "";
   reviewIngredientsInput.value = serializeIngredientsForReview(recipe);
   reviewInstructionsInput.value = (recipe.instructions || []).join("\n");
+  renderReviewInsights(recipe);
   reviewFeedback.textContent = "Pas de import aan en sla hem daarna op.";
+}
+
+function buildReviewInsights(recipe) {
+  const insights = [];
+
+  if ((recipe.title || "").length > 44) {
+    insights.push({ tone: "warn", text: "De titel is nog vrij lang. Maak hem kort en duidelijk." });
+  } else {
+    insights.push({ tone: "good", text: "Titel oogt kort en duidelijk." });
+  }
+
+  if (!recipe.description || recipe.description.length < 30) {
+    insights.push({ tone: "warn", text: "Voeg een korte omschrijving toe, zodat het recept duidelijker wordt op home." });
+  } else {
+    insights.push({ tone: "good", text: "Omschrijving is aanwezig." });
+  }
+
+  if ((recipe.ingredients || []).length < 4) {
+    insights.push({ tone: "warn", text: "Er staan weinig ingrediënten in. Controleer of de import compleet is." });
+  } else {
+    insights.push({ tone: "good", text: `${recipe.ingredients.length} ingrediënten gevonden.` });
+  }
+
+  if ((recipe.instructions || []).length < 3) {
+    insights.push({ tone: "warn", text: "De bereidingswijze is waarschijnlijk nog te kort. Voeg losse stappen toe." });
+  } else {
+    insights.push({ tone: "good", text: `${recipe.instructions.length} bereidingsstappen klaar.` });
+  }
+
+  if (recipe.needsReview) {
+    insights.unshift({ tone: "warn", text: "Deze import lijkt nog onvolledig. Loop hem even na voordat je gaat koken." });
+  }
+
+  return insights;
+}
+
+function renderReviewInsights(recipe) {
+  if (!reviewInsights) {
+    return;
+  }
+
+  const insights = buildReviewInsights(recipe);
+  reviewInsights.innerHTML = insights
+    .map(
+      (item) => `
+        <article class="review-insight review-insight--${item.tone}">
+          <span class="review-insight__dot" aria-hidden="true"></span>
+          <p>${escapeHtml(item.text)}</p>
+        </article>
+      `
+    )
+    .join("");
 }
 
 function parseReviewLines(value) {
@@ -1307,6 +1519,7 @@ function saveImportReview() {
     alt: normalizeImportedTitle(reviewTitleInput.value.trim()),
     ingredients: nextIngredients,
     instructions: nextInstructions,
+    needsReview: nextIngredients.length < 4 || nextInstructions.length < 3,
   });
 
   state.selectedRecipeId = recipe.id;
@@ -1521,21 +1734,34 @@ async function shareSelectedRecipe() {
 }
 
 function addRecipeToGrocery(recipe) {
-  const existingKeys = new Set(
-    state.groceryItems.map((item) => `${item.recipeTitle.toLowerCase()}::${item.title.toLowerCase()}`)
-  );
   let added = 0;
+  let merged = 0;
 
   recipe.ingredients.forEach((ingredient) => {
-    const key = `${recipe.title.toLowerCase()}::${ingredient.name.toLowerCase()}`;
-    if (existingKeys.has(key)) {
+    const normalizedTitle = normalizeIngredientKey(ingredient.name);
+    const nextAmount = formatIngredientAmount(ingredient, state.currentServings / parseBaseServings(recipe.servings));
+    const existingItem = state.groceryItems.find(
+      (item) =>
+        !item.checked &&
+        normalizeIngredientKey(item.title) === normalizedTitle &&
+        item.group === getIngredientGroup(ingredient.name)
+    );
+
+    if (existingItem) {
+      existingItem.amount = mergeAmountLabels(existingItem.amount, nextAmount);
+      if (recipe.title && !String(existingItem.recipeTitle || "").includes(recipe.title)) {
+        existingItem.recipeTitle = existingItem.recipeTitle
+          ? `${existingItem.recipeTitle}, ${recipe.title}`
+          : recipe.title;
+      }
+      merged += 1;
       return;
     }
 
     state.groceryItems.push({
       id: `${recipe.id}-${ingredient.name}-${Date.now()}-${added}`,
       title: ingredient.name,
-      amount: formatIngredientAmount(ingredient, state.currentServings / parseBaseServings(recipe.servings)),
+      amount: nextAmount,
       recipeId: recipe.id,
       recipeTitle: recipe.title,
       recipeSourceUrl: recipe.sourceUrl || "",
@@ -1543,13 +1769,24 @@ function addRecipeToGrocery(recipe) {
       group: getIngredientGroup(ingredient.name),
       checked: false,
     });
-    existingKeys.add(key);
     added += 1;
   });
 
   renderGroceryGroups();
   schedulePersistAppState();
-  showToast(added ? `${recipe.title} toegevoegd aan je boodschappenlijst.` : "Dit recept stond al op je lijst.");
+  if (added && merged) {
+    showToast(`${recipe.title} toegevoegd. ${merged} ingrediënten zijn samengevoegd.`);
+    return;
+  }
+  if (added) {
+    showToast(`${recipe.title} toegevoegd aan je boodschappenlijst.`);
+    return;
+  }
+  if (merged) {
+    showToast(`${recipe.title} is samengevoegd met je bestaande lijst.`);
+    return;
+  }
+  showToast("Dit recept stond al op je lijst.");
 }
 
 function addCustomGroceryItem() {
@@ -1569,20 +1806,29 @@ function addCustomGroceryItem() {
     return;
   }
 
-  state.groceryItems.unshift({
-    id: `grocery-custom-${Date.now()}`,
-    title: cleanTitle,
-    amount: amount.trim() || "1 stuk",
-    recipeId: "",
-    recipeTitle: "",
-    recipeSourceUrl: "",
-    recipePlatform: "website",
-    group: getIngredientGroup(cleanTitle),
-    checked: false,
-  });
+  const cleanAmount = amount.trim() || "1 stuk";
+  const existingItem = state.groceryItems.find(
+    (item) => !item.checked && normalizeIngredientKey(item.title) === normalizeIngredientKey(cleanTitle)
+  );
+
+  if (existingItem) {
+    existingItem.amount = mergeAmountLabels(existingItem.amount, cleanAmount);
+  } else {
+    state.groceryItems.unshift({
+      id: `grocery-custom-${Date.now()}`,
+      title: cleanTitle,
+      amount: cleanAmount,
+      recipeId: "",
+      recipeTitle: "",
+      recipeSourceUrl: "",
+      recipePlatform: "website",
+      group: getIngredientGroup(cleanTitle),
+      checked: false,
+    });
+  }
   renderGroceryGroups();
   schedulePersistAppState();
-  showToast(`${cleanTitle} toegevoegd.`);
+  showToast(existingItem ? `${cleanTitle} samengevoegd op je lijst.` : `${cleanTitle} toegevoegd.`);
 }
 
 function getUncheckedIngredientNames() {
