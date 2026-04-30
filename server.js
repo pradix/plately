@@ -1918,6 +1918,58 @@ function extractTikTokHtmlSignals(html) {
   };
 }
 
+function extractInstagramHtmlSignals(html) {
+  const titleCandidates = [];
+  const captionCandidates = [];
+  const authorCandidates = [];
+
+  const ogTitle = parseMetaTag(html, "og:title");
+  const ogDescription = parseMetaTag(html, "og:description");
+  const twitterTitle = parseMetaTag(html, "twitter:title", "name");
+  const twitterDescription = parseMetaTag(html, "twitter:description", "name");
+  const titleTag = parseTitleTag(html);
+
+  if (ogTitle) {
+    titleCandidates.push(ogTitle);
+  }
+  if (ogDescription) {
+    captionCandidates.push(ogDescription);
+  }
+  if (twitterTitle) {
+    titleCandidates.push(twitterTitle);
+  }
+  if (twitterDescription) {
+    captionCandidates.push(twitterDescription);
+  }
+  if (titleTag) {
+    titleCandidates.push(titleTag);
+  }
+
+  const rawFieldMatches = [...html.matchAll(/"([A-Za-z0-9_]+)"\s*:\s*"((?:\\.|[^"\\])*)"/g)];
+  for (const match of rawFieldMatches) {
+    const key = match[1];
+    const value = safelyParseJson(`"${match[2]}"`);
+    if (!value) {
+      continue;
+    }
+    if (/caption|description|accessibility_caption|text/i.test(key) && isUsefulCaptionCandidate(value)) {
+      captionCandidates.push(value);
+    }
+    if (/title|name/i.test(key) && isUsefulTitleCandidate(value)) {
+      titleCandidates.push(value);
+    }
+    if (/author|creator|username|full_name|owner/i.test(key)) {
+      authorCandidates.push(value);
+    }
+  }
+
+  return {
+    titles: [...new Set(titleCandidates.map((item) => sanitizeText(item)).filter((item) => isUsefulTitleCandidate(item)))],
+    captions: [...new Set(captionCandidates.map((item) => sanitizeText(item)).filter((item) => isUsefulCaptionCandidate(item)))],
+    authors: [...new Set(authorCandidates.map((item) => sanitizeText(item)).filter(Boolean))],
+  };
+}
+
 function extractJsonLdObjects(html) {
   const scripts = [...html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
   const results = [];
@@ -2387,28 +2439,82 @@ async function importTikTok(sourceUrl, note) {
   });
 }
 
-async function importInstagram(sourceUrl) {
-  if (!META_APP_ID || !META_APP_SECRET) {
-    throw new HttpError(
-      501,
-      "Instagram import vraagt om META_APP_ID en META_APP_SECRET in .env, plus goedgekeurde Meta oEmbed toegang."
-    );
+async function importInstagram(sourceUrl, note) {
+  let oembed = null;
+
+  if (META_APP_ID && META_APP_SECRET) {
+    const token = `${META_APP_ID}|${META_APP_SECRET}`;
+    const endpoint =
+      `https://graph.facebook.com/v23.0/instagram_oembed?url=${encodeURIComponent(sourceUrl)}` +
+      `&omitscript=false&access_token=${encodeURIComponent(token)}`;
+
+    oembed = await fetchJson(endpoint).catch(() => null);
   }
 
-  const token = `${META_APP_ID}|${META_APP_SECRET}`;
-  const endpoint =
-    `https://graph.facebook.com/v23.0/instagram_oembed?url=${encodeURIComponent(sourceUrl)}` +
-    `&omitscript=false&access_token=${encodeURIComponent(token)}`;
+  const document = await fetchWebsiteDocument(sourceUrl).catch(() => null);
+  const html = document?.kind === "html" ? document.body : "";
+  const textFallback = document?.kind === "text" ? document.body : "";
+  const htmlSignals = html ? extractInstagramHtmlSignals(html) : { titles: [], captions: [], authors: [] };
+  const ogTitle = html ? parseMetaTag(html, "og:title") : "";
+  const ogDescription = html ? parseMetaTag(html, "og:description") : "";
+  const ogImage = html ? parseMetaTag(html, "og:image") : "";
+  const textDerivedTitle = textFallback ? extractDishPhrase(textFallback) || extractRecipeTitleFromCaption(textFallback) : "";
+  const textDerivedCaption = textFallback && isUsefulCaptionCandidate(textFallback) ? textFallback : "";
 
-  const oembed = await fetchJson(endpoint);
+  const image = ogImage || oembed?.thumbnail_url || "";
+  const author = oembed?.author_name || htmlSignals.authors[0] || "";
+  const captionCandidates = [ogDescription, textDerivedCaption, ...htmlSignals.captions, oembed?.title];
+  const bestCaption = pickBestCaptionCandidate(captionCandidates) || sanitizeText(ogDescription || oembed?.title || "");
+
+  if (bestCaption) {
+    const claudeResult = await extractWithClaude(bestCaption, note || "");
+    if (claudeResult) {
+      const parsedIngredients = Array.isArray(claudeResult.ingredients)
+        ? claudeResult.ingredients.map((ingredient) =>
+            typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient
+          )
+        : [];
+
+      return {
+        platform: "instagram",
+        sourceUrl,
+        title: sanitizeText(claudeResult.title) || "Geïmporteerd recept",
+        description: sanitizeText(claudeResult.description || ""),
+        caption: stripSocialNoise(bestCaption),
+        image,
+        author,
+        ingredients: uniqueByName(parsedIngredients),
+        instructions: Array.isArray(claudeResult.instructions)
+          ? claudeResult.instructions.map((step) => sanitizeText(step)).filter(Boolean)
+          : [],
+        time: sanitizeText(claudeResult.time || "30 min"),
+        servings: sanitizeText(String(claudeResult.servings || "2")),
+        needsReview: parsedIngredients.length === 0,
+        sourceLabel: "Imported from Instagram",
+      };
+    }
+  }
+
+  if (!oembed && !html && !textFallback) {
+    if (!META_APP_ID || !META_APP_SECRET) {
+      throw new HttpError(
+        501,
+        "Instagram import kon geen openbare brondata lezen. Voeg META_APP_ID en META_APP_SECRET toe of gebruik een publieke post."
+      );
+    }
+
+    throw new HttpError(502, "Instagram import kon geen brondata ophalen voor deze post.");
+  }
 
   return buildSocialRecipe({
     platform: "instagram",
     sourceUrl,
-    rawTitle: oembed.title,
-    rawCaption: oembed.title,
-    image: oembed.thumbnail_url || "",
-    author: oembed.author_name,
+    rawTitle: ogTitle || oembed?.title || textDerivedTitle,
+    rawCaption: bestCaption || oembed?.title || "",
+    image,
+    author,
+    titleCandidates: [ogTitle, oembed?.title, textDerivedTitle, ...htmlSignals.titles],
+    captionCandidates,
   });
 }
 
@@ -2434,7 +2540,7 @@ async function importRecipe(url, note) {
     return importTikTok(parsedUrl.toString(), note);
   }
   if (platform === "instagram") {
-    return importInstagram(parsedUrl.toString());
+    return importInstagram(parsedUrl.toString(), note);
   }
   return importWebsite(parsedUrl.toString());
 }
