@@ -2441,6 +2441,7 @@ async function importTikTok(sourceUrl, note) {
 
 async function importInstagram(sourceUrl, note) {
   let oembed = null;
+  let oembedErrorMessage = "";
 
   if (META_APP_ID && META_APP_SECRET) {
     const token = `${META_APP_ID}|${META_APP_SECRET}`;
@@ -2448,7 +2449,10 @@ async function importInstagram(sourceUrl, note) {
       `https://graph.facebook.com/v23.0/instagram_oembed?url=${encodeURIComponent(sourceUrl)}` +
       `&omitscript=false&access_token=${encodeURIComponent(token)}`;
 
-    oembed = await fetchJson(endpoint).catch(() => null);
+    oembed = await fetchJson(endpoint).catch((error) => {
+      oembedErrorMessage = error instanceof Error ? error.message : String(error || "");
+      return null;
+    });
   }
 
   const document = await fetchWebsiteDocument(sourceUrl).catch(() => null);
@@ -2496,6 +2500,13 @@ async function importInstagram(sourceUrl, note) {
   }
 
   if (!oembed && !html && !textFallback) {
+    if (/Meta oEmbed Read|oEmbed Read/i.test(oembedErrorMessage)) {
+      throw new HttpError(
+        503,
+        "Instagram import wacht nog op Meta-goedkeuring voor deze app. Gebruik voorlopig een publieke website-link of probeer een openbare post."
+      );
+    }
+
     if (!META_APP_ID || !META_APP_SECRET) {
       throw new HttpError(
         501,
@@ -2503,7 +2514,10 @@ async function importInstagram(sourceUrl, note) {
       );
     }
 
-    throw new HttpError(502, "Instagram import kon geen brondata ophalen voor deze post.");
+    throw new HttpError(
+      502,
+      "Instagram import kon geen brondata ophalen voor deze post. Probeer een publieke reel/post of gebruik de website-link van het recept."
+    );
   }
 
   return buildSocialRecipe({

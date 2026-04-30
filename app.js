@@ -1888,6 +1888,23 @@ function renderAll() {
   closeBasketModal();
 }
 
+function normalizeUiErrorMessage(message) {
+  const text = String(message || "").trim();
+  if (!text) {
+    return "Importeren mislukt.";
+  }
+
+  if (/Meta oEmbed Read|oEmbed Read/i.test(text)) {
+    return "Instagram-import wacht nog op Meta-goedkeuring voor deze app. Gebruik voorlopig een publieke post of een website-link.";
+  }
+
+  if (/Provide valid app ID|OAuthException/i.test(text)) {
+    return "Instagram-import is nog niet goed gekoppeld aan Meta. Controleer App ID, Secret en app review.";
+  }
+
+  return text;
+}
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, {
     credentials: "same-origin",
@@ -1896,7 +1913,7 @@ async function fetchJson(url, options = {}) {
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(payload?.error || "Importeren mislukt.");
+    throw new Error(normalizeUiErrorMessage(payload?.error || "Importeren mislukt."));
   }
 
   return payload;
