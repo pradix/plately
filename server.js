@@ -2,8 +2,11 @@ const http = require("node:http");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
+const crypto = require("node:crypto");
 
 const ROOT_DIR = __dirname;
+const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT_DIR, "data");
+const DATA_FILE = path.join(DATA_DIR, "plately-db.json");
 
 loadEnvFile();
 
@@ -99,11 +102,290 @@ const QUANTITY_PATTERN = "(?:\\d+(?:[.,]\\d+)?|\\d+\\/\\d+|\\d+\\s+\\d+\\/\\d+)"
 const TIKTOK_CAPTION_FIELD_PATTERN = /(desc|description|caption|shareDesc|seoDesc|text|content)/i;
 const TIKTOK_TITLE_FIELD_PATTERN = /(title|shareTitle|seoTitle|recipeName|name)/i;
 
+const DEFAULT_PROFILE = {
+  name: "Sarah de Vries",
+  handle: "@sarahkookt",
+};
+
+const DEFAULT_COOKBOOKS = [
+  { id: "cookbook-1", name: "Gezond & Fit", recipeIds: ["recipe-3", "recipe-9"] },
+  { id: "cookbook-2", name: "Snelle avonden", recipeIds: ["recipe-1", "recipe-2", "recipe-6"] },
+  { id: "cookbook-3", name: "Comfort Food", recipeIds: ["recipe-5", "recipe-10"] },
+  { id: "cookbook-4", name: "Ontbijt inspiratie", recipeIds: ["recipe-6", "recipe-8"] },
+];
+
+const DEFAULT_MEAL_PLAN = {
+  maandag: "recipe-1",
+  dinsdag: null,
+  woensdag: "recipe-2",
+  donderdag: null,
+  vrijdag: null,
+  zaterdag: null,
+  zondag: null,
+};
+
+let databaseCache = null;
+let databaseWriteQueue = Promise.resolve();
+
 class HttpError extends Error {
   constructor(statusCode, message) {
     super(message);
     this.statusCode = statusCode;
   }
+}
+
+function createEmptyDatabase() {
+  return {
+    users: {},
+    sessions: {},
+  };
+}
+
+function generateId(prefix) {
+  return `${prefix}-${crypto.randomUUID()}`;
+}
+
+function buildDefaultUserData(userId = generateId("user")) {
+  return {
+    id: userId,
+    profile: { ...DEFAULT_PROFILE },
+    importedRecipes: [],
+    cookbooks: DEFAULT_COOKBOOKS.map((cookbook) => ({
+      ...cookbook,
+      recipeIds: [...cookbook.recipeIds],
+    })),
+    selectedCookbookId: "cookbook-1",
+    mealPlan: { ...DEFAULT_MEAL_PLAN },
+    groceryItems: [],
+    featuredRecipeId: "recipe-1",
+    selectedRecipeId: "recipe-1",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function ensureDataFile() {
+  await fsp.mkdir(DATA_DIR, { recursive: true });
+  try {
+    await fsp.access(DATA_FILE);
+  } catch {
+    await fsp.writeFile(DATA_FILE, JSON.stringify(createEmptyDatabase(), null, 2), "utf8");
+  }
+}
+
+async function loadDatabase() {
+  if (databaseCache) {
+    return databaseCache;
+  }
+
+  await ensureDataFile();
+  const rawContents = await fsp.readFile(DATA_FILE, "utf8");
+
+  try {
+    const parsed = JSON.parse(rawContents);
+    databaseCache = {
+      users: parsed?.users && typeof parsed.users === "object" ? parsed.users : {},
+      sessions: parsed?.sessions && typeof parsed.sessions === "object" ? parsed.sessions : {},
+    };
+  } catch {
+    databaseCache = createEmptyDatabase();
+  }
+
+  return databaseCache;
+}
+
+async function persistDatabase() {
+  const db = await loadDatabase();
+  databaseWriteQueue = databaseWriteQueue.then(() =>
+    fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2), "utf8")
+  );
+  return databaseWriteQueue;
+}
+
+function parseCookies(cookieHeader) {
+  return String(cookieHeader || "")
+    .split(/;\s*/)
+    .filter(Boolean)
+    .reduce((accumulator, entry) => {
+      const separatorIndex = entry.indexOf("=");
+      if (separatorIndex === -1) {
+        return accumulator;
+      }
+      const key = entry.slice(0, separatorIndex).trim();
+      const value = entry.slice(separatorIndex + 1).trim();
+      accumulator[key] = decodeURIComponent(value);
+      return accumulator;
+    }, {});
+}
+
+function serializeCookie(name, value, options = {}) {
+  const parts = [`${name}=${encodeURIComponent(value)}`];
+  if (options.maxAge) {
+    parts.push(`Max-Age=${options.maxAge}`);
+  }
+  if (options.path) {
+    parts.push(`Path=${options.path}`);
+  }
+  if (options.httpOnly) {
+    parts.push("HttpOnly");
+  }
+  if (options.sameSite) {
+    parts.push(`SameSite=${options.sameSite}`);
+  }
+  if (options.secure) {
+    parts.push("Secure");
+  }
+  return parts.join("; ");
+}
+
+async function ensureUserSession(request, response) {
+  const db = await loadDatabase();
+  const cookies = parseCookies(request.headers.cookie);
+  let sessionToken = cookies.plately_session || "";
+  let userId = sessionToken ? db.sessions[sessionToken] : "";
+  let shouldWrite = false;
+
+  if (!userId || !db.users[userId]) {
+    userId = generateId("user");
+    db.users[userId] = buildDefaultUserData(userId);
+    shouldWrite = true;
+  }
+
+  if (!sessionToken || db.sessions[sessionToken] !== userId) {
+    sessionToken = crypto.randomBytes(24).toString("hex");
+    db.sessions[sessionToken] = userId;
+    response.setHeader(
+      "Set-Cookie",
+      serializeCookie("plately_session", sessionToken, {
+        path: "/",
+        httpOnly: true,
+        sameSite: "Lax",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24 * 365,
+      })
+    );
+    shouldWrite = true;
+  }
+
+  if (shouldWrite) {
+    await persistDatabase();
+  }
+
+  return db.users[userId];
+}
+
+function sanitizeProfilePayload(profile) {
+  const name = sanitizeText(profile?.name || DEFAULT_PROFILE.name).slice(0, 80) || DEFAULT_PROFILE.name;
+  let handle = sanitizeText(profile?.handle || DEFAULT_PROFILE.handle).replace(/\s+/g, "");
+  handle = handle.replace(/[^@\p{L}\p{N}._-]/gu, "");
+  if (!handle) {
+    handle = DEFAULT_PROFILE.handle;
+  }
+  if (!handle.startsWith("@")) {
+    handle = `@${handle}`;
+  }
+  return {
+    name,
+    handle: handle.slice(0, 40),
+  };
+}
+
+function sanitizeStringArray(value) {
+  return Array.isArray(value) ? value.map((item) => sanitizeText(item)).filter(Boolean) : [];
+}
+
+function sanitizeRecipeForStorage(recipe) {
+  if (!recipe || typeof recipe !== "object") {
+    return null;
+  }
+
+  const id = sanitizeText(recipe.id || generateId("recipe"));
+  const ingredients = Array.isArray(recipe.ingredients)
+    ? recipe.ingredients
+        .map((ingredient) => ({
+          quantity: sanitizeText(ingredient?.quantity || ""),
+          unit: sanitizeText(ingredient?.unit || ""),
+          name: sanitizeText(ingredient?.name || ""),
+        }))
+        .filter((ingredient) => ingredient.name)
+    : [];
+
+  const instructions = sanitizeStringArray(recipe.instructions);
+
+  return {
+    id,
+    title: sanitizeText(recipe.title || "Geïmporteerd recept"),
+    description: sanitizeText(recipe.description || ""),
+    time: sanitizeText(recipe.time || "30 min"),
+    kcal: sanitizeText(recipe.kcal || ""),
+    servings: sanitizeText(recipe.servings || "2 Pers."),
+    mealTag: sanitizeText(recipe.mealTag || "Avond"),
+    sourceUrl: sanitizeText(recipe.sourceUrl || ""),
+    image: sanitizeText(recipe.image || "assets/hero-burger.svg"),
+    alt: sanitizeText(recipe.alt || recipe.title || "Receptafbeelding"),
+    platform: sanitizeText(recipe.platform || "website"),
+    caption: sanitizeText(recipe.caption || ""),
+    author: sanitizeText(recipe.author || ""),
+    ingredients,
+    instructions,
+    isSeed: false,
+  };
+}
+
+function sanitizeCookbookForStorage(cookbook, fallbackId) {
+  return {
+    id: sanitizeText(cookbook?.id || fallbackId || generateId("cookbook")),
+    name: sanitizeText(cookbook?.name || "Nieuw kookboek").slice(0, 80),
+    recipeIds: sanitizeStringArray(cookbook?.recipeIds),
+  };
+}
+
+function sanitizeGroceryItemForStorage(item, index) {
+  return {
+    id: sanitizeText(item?.id || `grocery-${index}-${Date.now()}`),
+    title: sanitizeText(item?.title || "Ingrediënt"),
+    amount: sanitizeText(item?.amount || "1 verpakking"),
+    recipeId: sanitizeText(item?.recipeId || ""),
+    recipeTitle: sanitizeText(item?.recipeTitle || ""),
+    recipeSourceUrl: sanitizeText(item?.recipeSourceUrl || ""),
+    recipePlatform: sanitizeText(item?.recipePlatform || "website"),
+    group: sanitizeText(item?.group || "pantry"),
+    checked: Boolean(item?.checked),
+  };
+}
+
+function sanitizeUserStatePayload(body, currentUser) {
+  const importedRecipes = Array.isArray(body?.importedRecipes)
+    ? body.importedRecipes.map((recipe) => sanitizeRecipeForStorage(recipe)).filter(Boolean)
+    : currentUser.importedRecipes;
+
+  const cookbooks = Array.isArray(body?.cookbooks)
+    ? body.cookbooks
+        .map((cookbook, index) => sanitizeCookbookForStorage(cookbook, `cookbook-${index + 1}`))
+        .filter((cookbook) => cookbook.name)
+    : currentUser.cookbooks;
+
+  const mealPlan = {
+    ...DEFAULT_MEAL_PLAN,
+    ...(body?.mealPlan && typeof body.mealPlan === "object" ? body.mealPlan : currentUser.mealPlan),
+  };
+
+  const groceryItems = Array.isArray(body?.groceryItems)
+    ? body.groceryItems.map((item, index) => sanitizeGroceryItemForStorage(item, index))
+    : currentUser.groceryItems;
+
+  return {
+    ...currentUser,
+    profile: body?.profile ? sanitizeProfilePayload(body.profile) : currentUser.profile,
+    importedRecipes,
+    cookbooks,
+    selectedCookbookId: sanitizeText(body?.selectedCookbookId || currentUser.selectedCookbookId || "cookbook-1"),
+    mealPlan,
+    groceryItems,
+    featuredRecipeId: sanitizeText(body?.featuredRecipeId || currentUser.featuredRecipeId || "recipe-1"),
+    selectedRecipeId: sanitizeText(body?.selectedRecipeId || currentUser.selectedRecipeId || "recipe-1"),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function loadEnvFile() {
@@ -2281,12 +2563,33 @@ const server = http.createServer(async (request, response) => {
         ok: true,
         app: "Plately",
         env: process.env.NODE_ENV || "development",
+        persistence: {
+          mode: "json-file",
+          dataDir: DATA_DIR,
+        },
         platforms: {
           tiktok: { configured: true },
           instagram: { configured: Boolean(META_APP_ID && META_APP_SECRET) },
           website: { configured: true },
         },
       });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/session" && request.method === "GET") {
+      const user = await ensureUserSession(request, response);
+      sendJson(response, 200, { ok: true, user });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/app-state" && request.method === "PUT") {
+      const body = await readRequestBody(request);
+      const user = await ensureUserSession(request, response);
+      const db = await loadDatabase();
+      const nextUser = sanitizeUserStatePayload(body, user);
+      db.users[nextUser.id] = nextUser;
+      await persistDatabase();
+      sendJson(response, 200, { ok: true, user: nextUser });
       return;
     }
 

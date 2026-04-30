@@ -26,6 +26,7 @@ function createSeedRecipe({
     author: "Leuke Recepten",
     ingredients,
     instructions,
+    isSeed: true,
   };
 }
 
@@ -281,6 +282,15 @@ const state = {
   currentServings: 2,
   keepAwake: false,
   wakeLockSentinel: null,
+  session: {
+    ready: false,
+    saving: false,
+    userId: "",
+  },
+  profile: {
+    name: "Sarah de Vries",
+    handle: "@sarahkookt",
+  },
   groceryItems: [],
   basketPreview: null,
   cookbooks: [
@@ -301,6 +311,8 @@ const state = {
   },
   searchQuery: "",
 };
+
+const SEED_RECIPE_IDS = new Set(initialRecipes.map((recipe) => recipe.id));
 
 const homeScreen = document.getElementById("homeScreen");
 const detailScreen = document.getElementById("detailScreen");
@@ -367,6 +379,8 @@ const basketContinueButton = document.getElementById("basketContinueButton");
 const mealPlanCurrentRecipe = document.getElementById("mealPlanCurrentRecipe");
 const mealPlanGrid = document.getElementById("mealPlanGrid");
 const cookbookList = document.getElementById("cookbookList");
+const profileName = document.getElementById("profileName");
+const profileHandle = document.getElementById("profileHandle");
 const profileRecipeCount = document.getElementById("profileRecipeCount");
 const profileCookbookCount = document.getElementById("profileCookbookCount");
 const profileEditButton = document.getElementById("profileEditButton");
@@ -1023,6 +1037,12 @@ function renderGroceryGroups() {
 }
 
 function renderProfileSummary() {
+  if (profileName) {
+    profileName.textContent = state.profile.name;
+  }
+  if (profileHandle) {
+    profileHandle.textContent = state.profile.handle;
+  }
   if (profileRecipeCount) {
     profileRecipeCount.textContent = `${state.recipes.length} recepten`;
   }
@@ -1153,6 +1173,7 @@ function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId) {
   }
   renderCookbookList();
   renderDetailRecipe(false);
+  schedulePersistAppState();
   showToast(`Opgeslagen in ${cookbook.name}.`);
 }
 
@@ -1170,6 +1191,7 @@ function createCookbook(name) {
   state.cookbooks.unshift(cookbook);
   state.selectedCookbookId = cookbook.id;
   renderCookbookList();
+  schedulePersistAppState();
   showToast(`${cookbook.name} aangemaakt.`);
 }
 
@@ -1185,6 +1207,7 @@ function assignSelectedRecipeToDay(dayKey) {
   const recipe = getSelectedRecipe();
   state.mealPlan[dayKey] = recipe.id;
   renderMealPlanGrid();
+  schedulePersistAppState();
   showToast(`${recipe.title} gepland op ${dayKey[0].toUpperCase()}${dayKey.slice(1)}.`);
 }
 
@@ -1242,6 +1265,7 @@ function addRecipeToGrocery(recipe) {
   });
 
   renderGroceryGroups();
+  schedulePersistAppState();
   showToast(added ? `${recipe.title} toegevoegd aan je boodschappenlijst.` : "Dit recept stond al op je lijst.");
 }
 
@@ -1421,7 +1445,7 @@ function parseServingsValue(value) {
 }
 
 function normalizeImportedRecipe(recipe) {
-  const recipeId = `recipe-${Date.now()}`;
+  const recipeId = recipe.id || `recipe-${Date.now()}`;
   const platform = recipe.platform || inferPlatformFromUrl(recipe.sourceUrl || "") || state.selectedPlatform;
   const parsedIngredients = recipe.ingredients?.length
     ? recipe.ingredients.map((ingredient) =>
@@ -1454,11 +1478,104 @@ function normalizeImportedRecipe(recipe) {
     author: recipe.author || "Onbekende maker",
     ingredients: parsedIngredients,
     instructions,
+    isSeed: false,
   };
 }
 
+function getImportedRecipesForPersistence() {
+  return state.recipes
+    .filter((recipe) => !SEED_RECIPE_IDS.has(recipe.id) && !recipe.isSeed)
+    .map((recipe) => ({ ...recipe, isSeed: false }));
+}
+
+function buildPersistedAppState() {
+  return {
+    profile: { ...state.profile },
+    importedRecipes: getImportedRecipesForPersistence(),
+    cookbooks: state.cookbooks.map((cookbook) => ({
+      ...cookbook,
+      recipeIds: [...cookbook.recipeIds],
+    })),
+    selectedCookbookId: state.selectedCookbookId,
+    mealPlan: { ...state.mealPlan },
+    groceryItems: state.groceryItems.map((item) => ({ ...item })),
+    featuredRecipeId: state.featuredRecipeId,
+    selectedRecipeId: state.selectedRecipeId,
+  };
+}
+
+function applyPersistedAppState(user) {
+  if (!user || typeof user !== "object") {
+    return;
+  }
+
+  state.session.userId = user.id || "";
+
+  if (user.profile && typeof user.profile === "object") {
+    state.profile = {
+      name: user.profile.name || state.profile.name,
+      handle: user.profile.handle || state.profile.handle,
+    };
+  }
+
+  const importedRecipes = Array.isArray(user.importedRecipes)
+    ? user.importedRecipes.map((recipe) => normalizeImportedRecipe({ ...recipe, platform: recipe.platform || "website" }))
+    : [];
+
+  if (importedRecipes.length) {
+    state.recipes = [...importedRecipes, ...initialRecipes];
+  }
+
+  if (Array.isArray(user.cookbooks) && user.cookbooks.length) {
+    state.cookbooks = user.cookbooks.map((cookbook) => ({
+      id: cookbook.id,
+      name: cookbook.name,
+      recipeIds: Array.isArray(cookbook.recipeIds) ? cookbook.recipeIds.filter(Boolean) : [],
+    }));
+  }
+
+  if (typeof user.selectedCookbookId === "string" && user.selectedCookbookId) {
+    state.selectedCookbookId = user.selectedCookbookId;
+  }
+
+  if (user.mealPlan && typeof user.mealPlan === "object") {
+    state.mealPlan = {
+      ...state.mealPlan,
+      ...user.mealPlan,
+    };
+  }
+
+  if (Array.isArray(user.groceryItems)) {
+    state.groceryItems = user.groceryItems.map((item) => ({ ...item }));
+  }
+
+  if (typeof user.featuredRecipeId === "string" && getRecipeById(user.featuredRecipeId)) {
+    state.featuredRecipeId = user.featuredRecipeId;
+  }
+
+  if (typeof user.selectedRecipeId === "string" && getRecipeById(user.selectedRecipeId)) {
+    state.selectedRecipeId = user.selectedRecipeId;
+  }
+}
+
+function renderAll() {
+  renderFeaturedRecipe();
+  renderQuickRecipeGrid();
+  renderCategoryGrid();
+  renderRecipeGrid();
+  renderCookbookList();
+  renderDetailRecipe(true);
+  renderGroceryGroups();
+  renderMealPlanGrid();
+  renderProfileSummary();
+  closeBasketModal();
+}
+
 async function fetchJson(url, options = {}) {
-  const response = await fetch(url, options);
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    ...options,
+  });
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
@@ -1473,6 +1590,53 @@ async function refreshBackendStatus() {
     await fetchJson(`${state.apiBase}/api/health`);
   } catch {
     // Keep UI quiet when backend is unavailable.
+  }
+}
+
+let persistTimeoutId = 0;
+
+async function persistAppState() {
+  if (!state.session.ready) {
+    return;
+  }
+
+  state.session.saving = true;
+
+  try {
+    const payload = await fetchJson(`${state.apiBase}/api/app-state`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(buildPersistedAppState()),
+    });
+
+    if (payload?.user?.id) {
+      state.session.userId = payload.user.id;
+    }
+  } catch {
+    // Keep the app usable when persistence fails temporarily.
+  } finally {
+    state.session.saving = false;
+  }
+}
+
+function schedulePersistAppState(delay = 350) {
+  window.clearTimeout(persistTimeoutId);
+  persistTimeoutId = window.setTimeout(() => {
+    persistAppState();
+  }, delay);
+}
+
+async function bootstrapSession() {
+  try {
+    const payload = await fetchJson(`${state.apiBase}/api/session`);
+    applyPersistedAppState(payload.user);
+  } catch {
+    // Fall back to the in-memory demo state if the backend is unreachable.
+  } finally {
+    state.session.ready = true;
+    renderAll();
   }
 }
 
@@ -1599,6 +1763,7 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
     renderCategoryGrid();
     renderRecipeGrid();
     renderDetailRecipe(true);
+    schedulePersistAppState();
 
     onDone(importedRecipe);
   } catch (error) {
@@ -1624,11 +1789,21 @@ platformCards.forEach((button) => {
   });
 });
 
-openFeaturedRecipeButton.addEventListener("click", () => switchView("detail"));
-featuredCard.addEventListener("click", () => switchView("detail"));
+openFeaturedRecipeButton.addEventListener("click", () => {
+  state.selectedRecipeId = state.featuredRecipeId;
+  renderDetailRecipe(true);
+  switchView("detail");
+});
+featuredCard.addEventListener("click", () => {
+  state.selectedRecipeId = state.featuredRecipeId;
+  renderDetailRecipe(true);
+  switchView("detail");
+});
 featuredCard.addEventListener("keydown", (event) => {
   if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
+    state.selectedRecipeId = state.featuredRecipeId;
+    renderDetailRecipe(true);
     switchView("detail");
   }
 });
@@ -1642,6 +1817,7 @@ addSelectedToGroceriesButton.addEventListener("click", () => {
 clearGroceryListButton.addEventListener("click", () => {
   state.groceryItems = [];
   renderGroceryGroups();
+  schedulePersistAppState();
   showToast("Boodschappenlijst leeggemaakt.");
 });
 closeImportSecondaryButton.addEventListener("click", () => closeModal());
@@ -1660,7 +1836,32 @@ if (saveRecipeButton) {
 if (detailSaveHeaderButton) {
   detailSaveHeaderButton.addEventListener("click", () => saveRecipeToCookbook(getSelectedRecipe().id));
 }
-profileEditButton.addEventListener("click", () => showToast("Profiel bewerken volgt in de volgende stap."));
+profileEditButton.addEventListener("click", () => {
+  const nextName = window.prompt("Naam van je profiel", state.profile.name);
+  if (nextName === null) {
+    return;
+  }
+
+  const nextHandle = window.prompt("Gebruikersnaam", state.profile.handle);
+  if (nextHandle === null) {
+    return;
+  }
+
+  state.profile = {
+    name: String(nextName || "").trim() || state.profile.name,
+    handle: String(nextHandle || "")
+      .trim()
+      .replace(/\s+/g, "") || state.profile.handle,
+  };
+
+  if (!state.profile.handle.startsWith("@")) {
+    state.profile.handle = `@${state.profile.handle}`;
+  }
+
+  renderProfileSummary();
+  schedulePersistAppState();
+  showToast("Profiel bijgewerkt.");
+});
 profileEditAvatarButton.addEventListener("click", () => showToast("Avatar aanpassen volgt in de volgende stap."));
 premiumButton.addEventListener("click", () => showToast("Premium preview staat klaar voor later."));
 shareProfileButton.addEventListener("click", async () => {
@@ -1764,6 +1965,7 @@ groceryGroups.addEventListener("click", (event) => {
 
   groceryItem.checked = !groceryItem.checked;
   renderGroceryGroups();
+  schedulePersistAppState();
 });
 
 storeAssistant.addEventListener("click", (event) => {
@@ -1807,6 +2009,7 @@ cookbookList.addEventListener("click", (event) => {
 
   state.selectedCookbookId = cookbookCard.dataset.cookbookId;
   renderCookbookList();
+  schedulePersistAppState();
   showToast(`${getCookbookById(state.selectedCookbookId).name} is nu je standaard kookboek.`);
 });
 
@@ -1833,6 +2036,7 @@ mealPlanGrid.addEventListener("click", (event) => {
   if (clearButton instanceof HTMLElement) {
     state.mealPlan[clearButton.dataset.clearPlanDay] = null;
     renderMealPlanGrid();
+    schedulePersistAppState();
     return;
   }
 
@@ -1968,15 +2172,7 @@ importScreenForm.addEventListener("submit", async (event) => {
 });
 
 syncPlatformUI();
-renderFeaturedRecipe();
-renderQuickRecipeGrid();
-renderCategoryGrid();
-renderRecipeGrid();
-renderCookbookList();
-renderDetailRecipe(true);
-renderGroceryGroups();
-renderMealPlanGrid();
-renderProfileSummary();
-closeBasketModal();
+renderAll();
 refreshBackendStatus();
 registerServiceWorker();
+bootstrapSession();

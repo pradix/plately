@@ -16,6 +16,12 @@ Productieklare basis voor de eerste online versie van Plately:
 - Node `PORT` support
 - health endpoint: `/api/health`
 - basis cache headers voor static files
+- server-side sessie + profielopslag
+- persistente opslag van:
+  - geïmporteerde recepten
+  - kookboeken
+  - weekplanning
+  - boodschappenlijst
 
 ## Lokaal starten
 
@@ -58,6 +64,10 @@ cp .env.example .env
   nodig voor officiële Instagram oEmbed flow
 - `NODE_ENV`
   optioneel, in productie meestal `production`
+- `DATA_DIR`
+  map waar Plately server-side data wegschrijft
+  lokaal kan dit `./data` zijn
+  op Render adviseer ik een persistent disk mount
 
 ## Online zetten op Render
 
@@ -80,8 +90,33 @@ Deze repo bevat al `render.yaml`.
    - `ANTHROPIC_API_KEY`
    - `META_APP_ID`
    - `META_APP_SECRET`
+   - `DATA_DIR=/opt/render/project/src/data`
 5. Deploy.
 6. Koppel daarna je custom domein, bijvoorbeeld `app.plately.nl`.
+
+### Belangrijk voor live data op Render
+
+Plately slaat gebruikersdata nu server-side op in JSON-bestanden.
+
+Zonder extra opslag is het Render-filesysteem ephemeral.
+Dat betekent dat je data kwijt kunt raken bij redeploys of restarts.
+
+Gebruik daarom een `Persistent Disk` in Render.
+
+Officiële docs:
+[Render Persistent Disks](https://render.com/docs/disks)
+
+Aanbevolen mount path:
+
+```text
+/opt/render/project/src/data
+```
+
+Zet daarna ook:
+
+```text
+DATA_DIR=/opt/render/project/src/data
+```
 
 ## Domeinstructuur
 
@@ -103,16 +138,15 @@ Aanbevolen:
 
 Voordat je echt publiek gaat lanceren adviseer ik daarna:
 
-1. database toevoegen
-2. accounts / login
-3. recepten, kookboeken en lijstjes persistent opslaan
-4. analytics en error logging toevoegen
-5. import pipeline verder verharden
-6. privacy policy en terms toevoegen
+1. echte database toevoegen, bij voorkeur Postgres
+2. echte login toevoegen
+3. analytics en error logging toevoegen
+4. import pipeline verder verharden
+5. privacy policy en terms toevoegen
 
 ## Bekende beperkingen
 
 - TikTok import blijft afhankelijk van publieke brondata
 - Instagram import vraagt officiële Meta toegang
 - directe AH / Jumbo cart flows zijn nog niet volledig partner-grade
-- er is nog geen database; data leeft nu in frontend state
+- opslag gebruikt nu server-side JSON sessies; voor echte schaal adviseer ik later Postgres
