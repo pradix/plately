@@ -281,6 +281,7 @@ const state = {
   featuredRecipeId: initialRecipes[0].id,
   reviewRecipeId: "",
   currentServings: 2,
+  recipeProgress: {},
   keepAwake: false,
   wakeLockSentinel: null,
   session: {
@@ -317,9 +318,19 @@ const state = {
     zondag: null,
   },
   searchQuery: "",
+  activeCookbookFilter: null,
 };
 
 const SEED_RECIPE_IDS = new Set(initialRecipes.map((recipe) => recipe.id));
+
+const SEED_CHANNELS = [
+  { id: "ch-ah",  initials: "AH", name: "Allerhande",    color: "#0071c2", url: "https://www.ah.nl/allerhande" },
+  { id: "ch-ek",  initials: "EK", name: "Eef Kookt Zo",  color: "#e8887c", url: "https://www.eefkooktzo.nl" },
+  { id: "ch-mj",  initials: "M",  name: "Miljuschka",    color: "#1a1a1a", url: "https://www.tiktok.com/@miljuschka" },
+  { id: "ch-up",  initials: "UP", name: "Uit Paulines Keuken", color: "#c8a03c", url: "https://www.uitpaulineskeuken.nl" },
+  { id: "ch-jk",  initials: "JK", name: "Jamie Kookt",   color: "#5a8a5a", url: "https://www.jamieoliver.com/nl" },
+  { id: "ch-lr",  initials: "LR", name: "Leuke Recepten", color: "#c06080", url: "https://www.leukerecepten.nl" },
+];
 
 const homeScreen = document.getElementById("homeScreen");
 const detailScreen = document.getElementById("detailScreen");
@@ -368,7 +379,15 @@ const reviewImportButton = document.getElementById("reviewImportButton");
 const detailSaveHeaderButton = document.getElementById("detailSaveHeaderButton");
 const shareRecipeButton = document.getElementById("shareRecipeButton");
 const saveRecipeButton = document.getElementById("saveRecipeButton");
+const cookModeButton = document.getElementById("cookModeButton");
 const wakeLockButton = document.getElementById("wakeLockButton");
+const cookModePanel = document.getElementById("cookModePanel");
+const cookModeProgress = document.getElementById("cookModeProgress");
+const cookModeStepIndex = document.getElementById("cookModeStepIndex");
+const cookModeStepText = document.getElementById("cookModeStepText");
+const cookModePrevButton = document.getElementById("cookModePrevButton");
+const cookModeResetButton = document.getElementById("cookModeResetButton");
+const cookModeNextButton = document.getElementById("cookModeNextButton");
 const detailStepCount = document.getElementById("detailStepCount");
 const detailIngredientCount = document.getElementById("detailIngredientCount");
 const servingsDisplay = document.getElementById("servingsDisplay");
@@ -384,7 +403,6 @@ const addCustomGroceryButton = document.getElementById("addCustomGroceryButton")
 const copyGroceryListButton = document.getElementById("copyGroceryListButton");
 const clearGroceryToolbarButton = document.getElementById("clearGroceryToolbarButton");
 const orderAHButton = document.getElementById("orderAHButton");
-const orderJumboButton = document.getElementById("orderJumboButton");
 const storeAssistant = document.getElementById("storeAssistant");
 const storeAssistantKicker = document.getElementById("storeAssistantKicker");
 const storeAssistantTitle = document.getElementById("storeAssistantTitle");
@@ -458,6 +476,60 @@ function getCookbookById(cookbookId) {
 
 function isRecipeSaved(recipeId) {
   return state.cookbooks.some((cookbook) => cookbook.recipeIds.includes(recipeId));
+}
+
+function normalizeRecipeProgressState(value) {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return Object.entries(value).reduce((accumulator, [recipeId, progress]) => {
+    if (!recipeId || !progress || typeof progress !== "object") {
+      return accumulator;
+    }
+
+    const checkedIngredients = Array.isArray(progress.checkedIngredients)
+      ? progress.checkedIngredients.map((item) => String(item || "").trim()).filter(Boolean)
+      : [];
+    const currentStep = Number.isFinite(progress.currentStep) ? Math.max(0, Math.floor(progress.currentStep)) : 0;
+
+    accumulator[recipeId] = {
+      checkedIngredients,
+      currentStep,
+      cookMode: Boolean(progress.cookMode),
+    };
+    return accumulator;
+  }, {});
+}
+
+function getRecipeProgress(recipeId) {
+  const cleanId = String(recipeId || "").trim();
+  if (!cleanId) {
+    return {
+      checkedIngredients: [],
+      currentStep: 0,
+      cookMode: false,
+    };
+  }
+
+  if (!state.recipeProgress[cleanId]) {
+    state.recipeProgress[cleanId] = {
+      checkedIngredients: [],
+      currentStep: 0,
+      cookMode: false,
+    };
+  }
+
+  return state.recipeProgress[cleanId];
+}
+
+function getIngredientProgressKey(ingredient, index) {
+  return `${index}:${normalizeIngredientKey(ingredient?.name || "ingredient")}`;
+}
+
+function isIngredientChecked(recipeId, ingredient, index) {
+  const progress = getRecipeProgress(recipeId);
+  return progress.checkedIngredients.includes(getIngredientProgressKey(ingredient, index));
 }
 
 function getSourceHost(sourceUrl) {
@@ -631,19 +703,13 @@ function closeModal() {
     "De app roept nu een backend importer aan. TikTok werkt direct voor publieke posts, websites ook; Instagram vraagt om een Meta app-token.";
 }
 
-function getStoreLabel(store) {
-  if (store === "albert-heijn" || store === "ah") {
-    return "Albert Heijn";
-  }
-  return "Jumbo";
+function getStoreLabel() {
+  return "Albert Heijn";
 }
 
-function buildStoreSearchUrl(store, terms) {
+function buildStoreSearchUrl(terms) {
   const query = encodeURIComponent(terms.filter(Boolean).join(" "));
-  if (store === "albert-heijn" || store === "ah") {
-    return `https://www.ah.nl/zoeken?query=${query}`;
-  }
-  return `https://www.jumbo.com/zoeken/?searchTerms=${query}`;
+  return `https://www.ah.nl/zoeken?query=${query}`;
 }
 
 function closeBasketModal() {
@@ -656,9 +722,6 @@ function closeBasketModal() {
 function getBasketHandoffUrl(preview) {
   if (!preview) {
     return "";
-  }
-  if (preview.store === "jumbo") {
-    return "https://www.jumbo.com/mandje/";
   }
   return (
     preview.directUrl ||
@@ -675,24 +738,20 @@ function renderBasketPreview() {
     return;
   }
 
-  const storeLabel = getStoreLabel(preview.store);
+  const storeLabel = "Albert Heijn";
   const itemCount = preview.items.length;
 
-  storeAssistantKicker.textContent = preview.store === "albert-heijn" ? "ALBERT HEIJN LIJSTJE" : "JUMBO MANDJE";
+  storeAssistantKicker.textContent = "ALBERT HEIJN LIJSTJE";
   storeAssistantTitle.textContent = `${preview.recipeTitle || "Boodschappenlijst"} voor ${storeLabel}`;
   storeAssistantCopy.textContent =
-    preview.store === "albert-heijn"
-      ? "We tonen nu je beste productmatches. Waar mogelijk openen we direct je Albert Heijn-lijst."
-      : "We tonen nu je beste productmatches. Waar mogelijk openen we direct je Jumbo-mandje.";
+    "We tonen nu je beste productmatches. Waar mogelijk openen we direct je Albert Heijn-lijst.";
   basketNote.textContent =
     preview.note ||
     "Plately kiest de beste productmatch per ingrediënt en stuurt je daarna door naar de winkel.";
   basketContinueButton.textContent =
-    preview.store === "albert-heijn"
-      ? preview.directUrl && preview.directUrl !== preview.fallbackUrl
-        ? "Open Albert Heijn-lijst"
-        : "Open Albert Heijn"
-      : "Open Jumbo-mandje";
+    preview.directUrl && preview.directUrl !== preview.fallbackUrl
+      ? "Open Albert Heijn-lijst"
+      : "Open Albert Heijn";
 
   basketSummary.innerHTML = `
     <article class="basket-summary__card">
@@ -735,7 +794,7 @@ function renderBasketPreview() {
           <div class="basket-item__actions">
             <a
               class="basket-item__link"
-              href="${escapeHtml(selectedChoice.url || buildStoreSearchUrl(preview.store, [item.ingredientTitle]))}"
+              href="${escapeHtml(selectedChoice.url || buildStoreSearchUrl([item.ingredientTitle]))}"
               target="_blank"
               rel="noreferrer"
             >
@@ -1048,12 +1107,24 @@ function getGroupMeta(group) {
 }
 
 function getVisibleRecipes() {
-  const query = state.searchQuery.trim().toLowerCase();
-  if (!query) {
-    return state.recipes;
+  let recipes = state.recipes;
+
+  // Kookboek-filter
+  if (state.activeCookbookFilter) {
+    const cookbook = state.cookbooks.find((cb) => cb.id === state.activeCookbookFilter);
+    if (cookbook) {
+      const ids = new Set(cookbook.recipeIds);
+      recipes = recipes.filter((recipe) => ids.has(recipe.id));
+    }
   }
 
-  return state.recipes.filter((recipe) => {
+  // Zoek-filter
+  const query = state.searchQuery.trim().toLowerCase();
+  if (!query) {
+    return recipes;
+  }
+
+  return recipes.filter((recipe) => {
     const haystack = [
       recipe.title,
       recipe.description || "",
@@ -1196,22 +1267,79 @@ function renderQuickRecipeGrid() {
 
 function renderCategoryGrid() {
   const categories = [
-    { title: "Ontbijt", count: state.recipes.filter((recipe) => /ontbijt/i.test(recipe.mealTag)).length || 12, icon: "☀️", tone: "sun" },
-    { title: "Salades", count: 12, icon: "🥗", tone: "leaf" },
-    { title: "Dips", count: 12, icon: "🫙", tone: "peach" },
-    { title: "Hoofdgerechten", count: state.recipes.filter((recipe) => /avond|lunch/i.test(recipe.mealTag)).length || 12, icon: "🍽️", tone: "stone" },
+    {
+      title: "Ontbijt",
+      count: state.recipes.filter((r) => /ontbijt/i.test(r.mealTag)).length || 12,
+      image: "https://images.unsplash.com/photo-1533089860892-a9b5ac525b19?w=400&q=80",
+    },
+    {
+      title: "Salades",
+      count: 8,
+      image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80",
+    },
+    {
+      title: "Dips",
+      count: 5,
+      image: "https://images.unsplash.com/photo-1541014741259-de529411b96a?w=400&q=80",
+    },
+    {
+      title: "Hoofdgerechten",
+      count: state.recipes.filter((r) => /avond|lunch/i.test(r.mealTag)).length || 24,
+      image: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&q=80",
+    },
   ];
 
   categoryGrid.innerHTML = categories
     .map(
-      (category) => `
-        <article class="category-card category-card--${category.tone}">
-          <span class="category-card__icon" aria-hidden="true">${category.icon}</span>
-          <div class="category-card__copy">
-            <h3>${escapeHtml(category.title)}</h3>
-            <p>${category.count} recepten</p>
+      (cat) => `
+        <article class="category-card">
+          <img class="category-card__img" src="${escapeHtml(cat.image)}" alt="${escapeHtml(cat.title)}" loading="lazy" />
+          <div class="category-card__overlay">
+            <h3>${escapeHtml(cat.title)}</h3>
+            <p>${cat.count} Recepten</p>
           </div>
         </article>
+      `
+    )
+    .join("");
+}
+
+function renderChannelRow() {
+  const row = document.getElementById("channelRow");
+  if (!row) return;
+  row.innerHTML = SEED_CHANNELS.map((ch) => `
+    <button class="channel-item" type="button" data-channel-url="${escapeHtml(ch.url)}" aria-label="${escapeHtml(ch.name)} openen">
+      <span class="channel-avatar" style="background:${escapeHtml(ch.color)}">${escapeHtml(ch.initials)}</span>
+      <span class="channel-name">${escapeHtml(ch.name)}</span>
+    </button>
+  `).join("");
+}
+
+function renderNavBadge() {
+  const badge = document.getElementById("groceryNavBadge");
+  if (!badge) return;
+  const count = state.groceryItems.filter((item) => !item.checked).length;
+  badge.textContent = count > 0 ? String(count) : "";
+}
+
+function renderCookbookFilterBar() {
+  const bar = document.getElementById("cookbookFilterBar");
+  if (!bar) return;
+
+  const active = state.activeCookbookFilter;
+  const chips = [
+    { id: null, label: "Alle recepten" },
+    ...state.cookbooks.map((cb) => ({ id: cb.id, label: cb.name })),
+  ];
+
+  bar.innerHTML = chips
+    .map(
+      (chip) => `
+        <button
+          class="filter-chip ${chip.id === active ? "filter-chip--active" : ""}"
+          type="button"
+          data-cookbook-filter="${chip.id ?? ""}"
+        >${escapeHtml(chip.label)}</button>
       `
     )
     .join("");
@@ -1254,6 +1382,7 @@ function renderRecipeGrid() {
 
 function renderDetailRecipe(resetServings = false) {
   const recipe = getSelectedRecipe();
+  const recipeProgress = getRecipeProgress(recipe.id);
   const baseServings = parseBaseServings(recipe.servings);
   if (resetServings) {
     state.currentServings = baseServings;
@@ -1280,8 +1409,8 @@ function renderDetailRecipe(resetServings = false) {
     detailSourceLabel.textContent = host || getPlatformLabel(recipe.platform || "website");
   }
   if (reviewImportButton) {
-    reviewImportButton.classList.toggle("hidden", Boolean(recipe.isSeed || SEED_RECIPE_IDS.has(recipe.id)));
-    reviewImportButton.textContent = recipe.needsReview ? "Import herstellen" : "Import nalopen";
+    reviewImportButton.classList.remove("hidden");
+    reviewImportButton.textContent = recipe.needsReview ? "Import herstellen" : "Recept bewerken";
   }
   if (detailIngredientCount) {
     detailIngredientCount.textContent = `${recipe.ingredients.length} items`;
@@ -1291,11 +1420,18 @@ function renderDetailRecipe(resetServings = false) {
 
   detailIngredientList.innerHTML = recipe.ingredients
     .map(
-      (ingredient) => `
-        <li class="ingredient-item">
-          <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
-          <span class="ingredient-name">${ingredient.name}</span>
-          <span class="ingredient-thumb" aria-hidden="true">${getIngredientVisualMarkup(ingredient.name)}</span>
+      (ingredient, index) => `
+        <li>
+          <button
+            class="ingredient-item ${isIngredientChecked(recipe.id, ingredient, index) ? "is-checked" : ""}"
+            type="button"
+            data-ingredient-index="${index}"
+            aria-pressed="${String(isIngredientChecked(recipe.id, ingredient, index))}"
+          >
+            <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
+            <span class="ingredient-name">${ingredient.name}</span>
+            <span class="ingredient-thumb" aria-hidden="true">${getIngredientVisualMarkup(ingredient.name)}</span>
+          </button>
         </li>
       `
     )
@@ -1318,8 +1454,41 @@ function renderDetailRecipe(resetServings = false) {
   if (saveRecipeButton) {
     saveRecipeButton.textContent = isRecipeSaved(recipe.id) ? "Bewaard" : "Bewaar recept";
   }
+  renderCookMode(recipe, recipeProgress);
   updateWakeLockUI();
   renderMealPlanCurrentRecipe();
+}
+
+function renderCookMode(recipe, recipeProgress = getRecipeProgress(recipe.id)) {
+  if (!cookModeButton || !cookModePanel || !cookModeProgress || !cookModeStepIndex || !cookModeStepText) {
+    return;
+  }
+
+  const instructions = Array.isArray(recipe.instructions) ? recipe.instructions : [];
+  const hasSteps = instructions.length > 0;
+  const boundedStepIndex = hasSteps
+    ? Math.min(recipeProgress.currentStep, instructions.length - 1)
+    : 0;
+  recipeProgress.currentStep = boundedStepIndex;
+
+  cookModeButton.classList.toggle("is-active", recipeProgress.cookMode);
+  cookModeButton.setAttribute("aria-pressed", String(recipeProgress.cookMode));
+  cookModeButton.textContent = recipeProgress.cookMode ? "Kookmodus: aan" : "Kookmodus: uit";
+
+  cookModePanel.classList.toggle("hidden", !recipeProgress.cookMode);
+  cookModeProgress.textContent = hasSteps ? `Stap ${boundedStepIndex + 1} van ${instructions.length}` : "Nog geen stappen";
+  cookModeStepIndex.textContent = hasSteps ? String(boundedStepIndex + 1) : "—";
+  cookModeStepText.textContent = hasSteps ? instructions[boundedStepIndex] : "Voeg eerst bereidingsstappen toe in Recept bewerken.";
+
+  if (cookModePrevButton) {
+    cookModePrevButton.disabled = !hasSteps || boundedStepIndex <= 0;
+  }
+  if (cookModeNextButton) {
+    cookModeNextButton.disabled = !hasSteps || boundedStepIndex >= instructions.length - 1;
+  }
+  if (cookModeResetButton) {
+    cookModeResetButton.disabled = !hasSteps;
+  }
 }
 
 function renderGrocerySummary() {
@@ -1339,6 +1508,7 @@ function renderGrocerySummary() {
 function renderGroceryGroups() {
   const uncheckedCount = state.groceryItems.filter((item) => !item.checked).length;
   grocerySubtitle.textContent = `${uncheckedCount} items te gaan`;
+  renderNavBadge();
   renderGrocerySummary();
 
   if (!state.groceryItems.length) {
@@ -1532,6 +1702,52 @@ function saveImportReview() {
   showToast(`${recipe.title} is bijgewerkt.`);
 }
 
+function toggleIngredientChecked(index) {
+  const recipe = getSelectedRecipe();
+  const ingredient = recipe.ingredients[index];
+  if (!ingredient) {
+    return;
+  }
+
+  const progress = getRecipeProgress(recipe.id);
+  const key = getIngredientProgressKey(ingredient, index);
+  if (progress.checkedIngredients.includes(key)) {
+    progress.checkedIngredients = progress.checkedIngredients.filter((item) => item !== key);
+  } else {
+    progress.checkedIngredients = [...progress.checkedIngredients, key];
+  }
+
+  renderDetailRecipe(false);
+  schedulePersistAppState();
+}
+
+function setCookModeStep(nextStepIndex) {
+  const recipe = getSelectedRecipe();
+  const progress = getRecipeProgress(recipe.id);
+  const maxIndex = Math.max(0, recipe.instructions.length - 1);
+  progress.currentStep = Math.min(Math.max(0, nextStepIndex), maxIndex);
+  renderDetailRecipe(false);
+  schedulePersistAppState();
+}
+
+function toggleCookMode() {
+  const recipe = getSelectedRecipe();
+  const progress = getRecipeProgress(recipe.id);
+
+  if (!recipe.instructions.length) {
+    showToast("Voeg eerst bereidingsstappen toe bij Recept bewerken.");
+    return;
+  }
+
+  progress.cookMode = !progress.cookMode;
+  if (!progress.cookMode) {
+    progress.currentStep = 0;
+  }
+
+  renderDetailRecipe(false);
+  schedulePersistAppState();
+}
+
 function renderProfileSummary() {
   if (profileName) {
     profileName.textContent = state.profile.name;
@@ -1610,12 +1826,22 @@ function renderCookbookList() {
 }
 
 function renderMealPlanCurrentRecipe() {
-  const recipe = getSelectedRecipe();
+  const recipe = state.selectedRecipeId ? getSelectedRecipe() : null;
+  if (!recipe) {
+    mealPlanCurrentRecipe.innerHTML = `
+      <article class="planner-focus__card planner-focus__card--empty">
+        <p class="section-kicker">TIP</p>
+        <p class="planner-focus__meta">Open een recept en kom dan hier terug om het in te plannen.</p>
+      </article>
+    `;
+    return;
+  }
   mealPlanCurrentRecipe.innerHTML = `
     <article class="planner-focus__card">
       <p class="section-kicker">GESELECTEERD RECEPT</p>
       <h2 class="planner-focus__title">${escapeHtml(recipe.title)}</h2>
       <p class="planner-focus__meta">${escapeHtml(recipe.time)} • ${escapeHtml(recipe.servings)}</p>
+      <p class="planner-focus__hint">Klik op "Plan hier" bij een dag hieronder om dit recept in te plannen.</p>
     </article>
   `;
 }
@@ -1668,6 +1894,7 @@ function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId) {
     cookbook.recipeIds.unshift(recipeId);
   }
   renderCookbookList();
+  renderCookbookFilterBar();
   renderDetailRecipe(false);
   schedulePersistAppState();
   showToast(`Opgeslagen in ${cookbook.name}.`);
@@ -1687,6 +1914,7 @@ function createCookbook(name) {
   state.cookbooks.unshift(cookbook);
   state.selectedCookbookId = cookbook.id;
   renderCookbookList();
+  renderCookbookFilterBar();
   schedulePersistAppState();
   showToast(`${cookbook.name} aangemaakt.`);
 }
@@ -1884,16 +2112,16 @@ function setStoreButtonLoading(button, isLoading) {
   button.setAttribute("aria-busy", String(isLoading));
 }
 
-async function openStoreBasket(store) {
+async function openStoreBasket() {
   const activeItems = getActiveGroceryItems();
   if (!activeItems.length) {
     showToast("Voeg eerst ingrediënten toe aan je lijst.");
     return;
   }
 
-  const storeSlug = store === "ah" ? "albert-heijn" : "jumbo";
-  const storeName = store === "ah" ? "Albert Heijn" : "Jumbo";
-  const button = store === "ah" ? orderAHButton : orderJumboButton;
+  const storeSlug = "albert-heijn";
+  const storeName = "Albert Heijn";
+  const button = orderAHButton;
   const destLabel = button.querySelector(".store-cta__dest");
 
   // Loading state
@@ -2061,6 +2289,16 @@ function buildPersistedAppState() {
     selectedCookbookId: state.selectedCookbookId,
     mealPlan: { ...state.mealPlan },
     groceryItems: state.groceryItems.map((item) => ({ ...item })),
+    recipeProgress: Object.fromEntries(
+      Object.entries(state.recipeProgress).map(([recipeId, progress]) => [
+        recipeId,
+        {
+          checkedIngredients: [...(progress.checkedIngredients || [])],
+          currentStep: Number.isFinite(progress.currentStep) ? progress.currentStep : 0,
+          cookMode: Boolean(progress.cookMode),
+        },
+      ])
+    ),
     featuredRecipeId: state.featuredRecipeId,
     selectedRecipeId: state.selectedRecipeId,
   };
@@ -2107,6 +2345,7 @@ function applyPersistedAppState(user) {
   }
 
   state.groceryItems = Array.isArray(user.groceryItems) ? user.groceryItems.map((item) => ({ ...item })) : [];
+  state.recipeProgress = normalizeRecipeProgressState(user.recipeProgress);
 
   if (typeof user.featuredRecipeId === "string" && getRecipeById(user.featuredRecipeId)) {
     state.featuredRecipeId = user.featuredRecipeId;
@@ -2120,11 +2359,14 @@ function applyPersistedAppState(user) {
 function renderAll() {
   renderHomeStats();
   renderRecentImports();
+  renderChannelRow();
   renderFeaturedRecipe();
   renderQuickRecipeGrid();
   renderCategoryGrid();
+  renderCookbookFilterBar();
   renderRecipeGrid();
   renderCookbookList();
+  renderNavBadge();
   renderDetailRecipe(true);
   renderImportReview();
   renderGroceryGroups();
@@ -2472,9 +2714,30 @@ if (clearGroceryToolbarButton) {
   });
 }
 closeImportSecondaryButton.addEventListener("click", () => closeModal());
-orderAHButton.addEventListener("click", () => openStoreBasket("ah"));
-orderJumboButton.addEventListener("click", () => openStoreBasket("jumbo"));
+orderAHButton.addEventListener("click", () => openStoreBasket());
 wakeLockButton.addEventListener("click", toggleWakeLock);
+if (cookModeButton) {
+  cookModeButton.addEventListener("click", toggleCookMode);
+}
+if (cookModePrevButton) {
+  cookModePrevButton.addEventListener("click", () => {
+    const recipe = getSelectedRecipe();
+    const progress = getRecipeProgress(recipe.id);
+    setCookModeStep(progress.currentStep - 1);
+  });
+}
+if (cookModeNextButton) {
+  cookModeNextButton.addEventListener("click", () => {
+    const recipe = getSelectedRecipe();
+    const progress = getRecipeProgress(recipe.id);
+    setCookModeStep(progress.currentStep + 1);
+  });
+}
+if (cookModeResetButton) {
+  cookModeResetButton.addEventListener("click", () => {
+    setCookModeStep(0);
+  });
+}
 brandHomeButtons.forEach((button) => {
   button.addEventListener("click", goHome);
 });
@@ -2554,6 +2817,17 @@ navItems.forEach((item) => {
   });
 });
 
+// Home avatar → instellingen
+document.querySelector(".home-avatar")?.addEventListener("click", () => switchView("settings"));
+
+// Kanaal-knoppen → open URL
+document.getElementById("channelRow")?.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-channel-url]");
+  if (btn instanceof HTMLElement && btn.dataset.channelUrl) {
+    window.open(btn.dataset.channelUrl, "_blank", "noopener");
+  }
+});
+
 servingsDown.addEventListener("click", () => {
   if (state.currentServings <= 1) {
     return;
@@ -2573,6 +2847,15 @@ servingsUp.addEventListener("click", () => {
 searchInput.addEventListener("input", (event) => {
   state.searchQuery = event.target.value;
   renderQuickRecipeGrid();
+  renderRecipeGrid();
+});
+
+document.getElementById("cookbookFilterBar")?.addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-cookbook-filter]");
+  if (!(chip instanceof HTMLElement)) return;
+  const val = chip.dataset.cookbookFilter;
+  state.activeCookbookFilter = val || null;
+  renderCookbookFilterBar();
   renderRecipeGrid();
 });
 
@@ -2641,6 +2924,20 @@ groceryGroups.addEventListener("click", (event) => {
   groceryItem.checked = !groceryItem.checked;
   renderGroceryGroups();
   schedulePersistAppState();
+});
+
+detailIngredientList.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  const ingredientButton = target.closest("[data-ingredient-index]");
+  if (!(ingredientButton instanceof HTMLElement)) {
+    return;
+  }
+
+  toggleIngredientChecked(Number(ingredientButton.dataset.ingredientIndex));
 });
 
 storeAssistant.addEventListener("click", (event) => {

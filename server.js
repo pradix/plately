@@ -225,6 +225,7 @@ function buildDefaultUserData(userId = generateId("user")) {
     selectedCookbookId: "cookbook-1",
     mealPlan: { ...DEFAULT_MEAL_PLAN },
     groceryItems: [],
+    recipeProgress: {},
     featuredRecipeId: "recipe-1",
     selectedRecipeId: "recipe-1",
     createdAt: new Date().toISOString(),
@@ -353,6 +354,7 @@ function buildAppStateFromUser(user) {
     groceryItems: Array.isArray(appState.groceryItems)
       ? appState.groceryItems.map((item, index) => sanitizeGroceryItemForStorage(item, index))
       : [],
+    recipeProgress: sanitizeRecipeProgressForStorage(appState.recipeProgress),
     featuredRecipeId: sanitizeText(appState.featuredRecipeId || "recipe-1"),
     selectedRecipeId: sanitizeText(appState.selectedRecipeId || "recipe-1"),
     createdAt: user.created_at,
@@ -609,6 +611,28 @@ function sanitizeGroceryItemForStorage(item, index) {
   };
 }
 
+function sanitizeRecipeProgressForStorage(value) {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return Object.entries(value).reduce((accumulator, [recipeId, progress]) => {
+    const cleanId = sanitizeText(recipeId);
+    if (!cleanId || !progress || typeof progress !== "object") {
+      return accumulator;
+    }
+
+    accumulator[cleanId] = {
+      checkedIngredients: Array.isArray(progress.checkedIngredients)
+        ? progress.checkedIngredients.map((item) => sanitizeText(item)).filter(Boolean)
+        : [],
+      currentStep: Number.isFinite(progress.currentStep) ? Math.max(0, Math.floor(progress.currentStep)) : 0,
+      cookMode: Boolean(progress.cookMode),
+    };
+    return accumulator;
+  }, {});
+}
+
 function sanitizeUserStatePayload(body, currentUser) {
   const importedRecipes = Array.isArray(body?.importedRecipes)
     ? body.importedRecipes.map((recipe) => sanitizeRecipeForStorage(recipe)).filter(Boolean)
@@ -629,6 +653,10 @@ function sanitizeUserStatePayload(body, currentUser) {
     ? body.groceryItems.map((item, index) => sanitizeGroceryItemForStorage(item, index))
     : currentUser.groceryItems;
 
+  const recipeProgress = body?.recipeProgress
+    ? sanitizeRecipeProgressForStorage(body.recipeProgress)
+    : currentUser.recipeProgress;
+
   return {
     ...currentUser,
     profile: body?.profile ? sanitizeProfilePayload(body.profile) : currentUser.profile,
@@ -637,6 +665,7 @@ function sanitizeUserStatePayload(body, currentUser) {
     selectedCookbookId: sanitizeText(body?.selectedCookbookId || currentUser.selectedCookbookId || "cookbook-1"),
     mealPlan,
     groceryItems,
+    recipeProgress,
     featuredRecipeId: sanitizeText(body?.featuredRecipeId || currentUser.featuredRecipeId || "recipe-1"),
     selectedRecipeId: sanitizeText(body?.selectedRecipeId || currentUser.selectedRecipeId || "recipe-1"),
     updatedAt: new Date().toISOString(),
