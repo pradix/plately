@@ -1591,6 +1591,39 @@ img { display: block; max-width: 100%; }
   width: 100%;
 }
 
+.account-card {
+  margin: 18px 0 24px;
+  padding: 18px;
+  border-radius: 26px;
+  background: rgba(255,255,255,0.9);
+  box-shadow: 0 12px 28px rgba(76,85,69,0.06);
+  display: grid;
+  gap: 14px;
+}
+
+.account-card h2 {
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 5.2vw, 2.2rem);
+  letter-spacing: -0.04em;
+}
+
+.account-copy {
+  margin: 8px 0 0;
+  color: var(--muted-strong);
+  line-height: 1.5;
+}
+
+.account-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.account-actions .hidden {
+  display: none;
+}
+
 .premium-card {
   margin: 26px 0 28px;
   border: 1px solid rgba(232, 225, 214, 0.9);
@@ -1765,6 +1798,7 @@ img { display: block; max-width: 100%; }
   z-index: 40;
 }
 .modal.hidden, .toast.hidden { display: none; }
+.hidden { display: none !important; }
 
 .modal-backdrop {
   position: absolute;

@@ -17,6 +17,7 @@ Productieklare basis voor de eerste online versie van Plately:
 - health endpoint: `/api/health`
 - basis cache headers voor static files
 - server-side sessie + profielopslag
+- optionele Postgres accounts + login
 - persistente opslag van:
   - geïmporteerde recepten
   - kookboeken
@@ -68,6 +69,9 @@ cp .env.example .env
   map waar Plately server-side data wegschrijft
   lokaal kan dit `./data` zijn
   op Render adviseer ik een persistent disk mount
+- `DATABASE_URL`
+  schakelt echte accounts + synchronisatie tussen apparaten in via Postgres
+  als deze leeg blijft, werkt Plately als guest met JSON-opslag
 
 ## Online zetten op Render
 
@@ -88,6 +92,7 @@ Deze repo bevat al `render.yaml`.
 3. Render leest automatisch `render.yaml`.
 4. Voeg in Render environment variables toe:
    - `ANTHROPIC_API_KEY`
+   - `DATABASE_URL`
    - `META_APP_ID`
    - `META_APP_SECRET`
    - `DATA_DIR=/opt/render/project/src/data`
@@ -118,6 +123,71 @@ Zet daarna ook:
 DATA_DIR=/opt/render/project/src/data
 ```
 
+## Stap 3: echte accounts met Postgres
+
+Plately ondersteunt nu twee modi:
+
+- `guest mode`
+  zonder `DATABASE_URL`
+  data blijft per browser bewaard via server-side JSON sessies
+- `account mode`
+  met `DATABASE_URL`
+  gebruikers kunnen registreren, inloggen en hun data op meerdere apparaten terugzien
+
+### Wat er nu synchroniseert
+
+- profielnaam en handle
+- geïmporteerde recepten
+- kookboeken
+- standaard kookboek
+- weekplanning
+- boodschappenlijst
+- gekozen featured / geselecteerd recept
+
+### Render setup voor Postgres
+
+1. Maak in Render een `PostgreSQL` database aan.
+2. Kopieer de `External Database URL`.
+3. Open je bestaande Plately web service.
+4. Voeg environment variable toe:
+   - `DATABASE_URL=<jouw render postgres url>`
+5. Redeploy de app.
+
+Na de redeploy verschijnt op het profielscherm automatisch de accountkaart met:
+
+- `Account maken`
+- `Inloggen`
+- `Uitloggen`
+
+### Belangrijke nuance
+
+Als `DATABASE_URL` aan staat, gebruikt Plately Postgres voor ingelogde gebruikers.
+Guest gebruikers blijven daarnaast gewoon werken via de bestaande JSON-opslag.
+
+### Lokaal testen
+
+1. Start lokaal een Postgres database.
+2. Zet in `.env`:
+
+```text
+DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/DATABASE
+```
+
+3. Start daarna opnieuw:
+
+```bash
+npm install
+node server.js
+```
+
+4. Open:
+
+```text
+http://localhost:3000
+```
+
+De auth-tabellen worden automatisch aangemaakt bij de eerste login of registratie.
+
 ## Domeinstructuur
 
 Aanbevolen:
@@ -138,15 +208,15 @@ Aanbevolen:
 
 Voordat je echt publiek gaat lanceren adviseer ik daarna:
 
-1. echte database toevoegen, bij voorkeur Postgres
-2. echte login toevoegen
-3. analytics en error logging toevoegen
-4. import pipeline verder verharden
-5. privacy policy en terms toevoegen
+1. wachtwoord reset / magic link toevoegen
+2. analytics en error logging toevoegen
+3. import pipeline verder verharden
+4. privacy policy en terms toevoegen
+5. later cookbooks en recepten ook relationeel modelleren
 
 ## Bekende beperkingen
 
 - TikTok import blijft afhankelijk van publieke brondata
 - Instagram import vraagt officiële Meta toegang
 - directe AH / Jumbo cart flows zijn nog niet volledig partner-grade
-- opslag gebruikt nu server-side JSON sessies; voor echte schaal adviseer ik later Postgres
+- guest opslag gebruikt nog JSON-bestanden; voor grote schaal wil je uiteindelijk meer data volledig naar Postgres trekken

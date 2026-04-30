@@ -287,6 +287,12 @@ const state = {
     saving: false,
     userId: "",
   },
+  auth: {
+    enabled: false,
+    authenticated: false,
+    email: "",
+    mode: "login",
+  },
   profile: {
     name: "Sarah de Vries",
     handle: "@sarahkookt",
@@ -387,6 +393,11 @@ const profileEditButton = document.getElementById("profileEditButton");
 const shareProfileButton = document.getElementById("shareProfileButton");
 const premiumButton = document.getElementById("premiumButton");
 const profileEditAvatarButton = document.getElementById("profileEditAvatarButton");
+const accountTitle = document.getElementById("accountTitle");
+const accountCopy = document.getElementById("accountCopy");
+const openRegisterButton = document.getElementById("openRegisterButton");
+const openLoginButton = document.getElementById("openLoginButton");
+const logoutButton = document.getElementById("logoutButton");
 const brandHomeButtons = [...document.querySelectorAll("[data-home-link]")];
 const importScreenForm = document.getElementById("importScreenForm");
 const importScreenUrl = document.getElementById("importScreenUrl");
@@ -394,6 +405,15 @@ const importScreenFeedback = document.getElementById("importScreenFeedback");
 const importScreenSubmit = document.getElementById("importScreenSubmit");
 const servingsDown = document.getElementById("servingsDown");
 const servingsUp = document.getElementById("servingsUp");
+const authModal = document.getElementById("authModal");
+const authKicker = document.getElementById("authKicker");
+const authTitle = document.getElementById("authTitle");
+const authForm = document.getElementById("authForm");
+const authEmail = document.getElementById("authEmail");
+const authPassword = document.getElementById("authPassword");
+const submitAuthButton = document.getElementById("submitAuthButton");
+const switchAuthModeButton = document.getElementById("switchAuthModeButton");
+const authFeedback = document.getElementById("authFeedback");
 
 function getSelectedRecipe() {
   return state.recipes.find((recipe) => recipe.id === state.selectedRecipeId) || state.recipes[0];
@@ -458,6 +478,60 @@ function showToast(message) {
   showToast.timeoutId = window.setTimeout(() => {
     toast.classList.add("hidden");
   }, 2800);
+}
+
+function updateAuthUI() {
+  if (!accountTitle || !accountCopy || !openRegisterButton || !openLoginButton || !logoutButton) {
+    return;
+  }
+
+  if (!state.auth.enabled) {
+    accountTitle.textContent = "Account volgt zodra Postgres is gekoppeld";
+    accountCopy.textContent = "De app werkt nu als guest. Voeg straks DATABASE_URL toe om echte login en synchronisatie te activeren.";
+    openRegisterButton.classList.add("hidden");
+    openLoginButton.classList.add("hidden");
+    logoutButton.classList.add("hidden");
+    return;
+  }
+
+  if (state.auth.authenticated) {
+    accountTitle.textContent = `Ingelogd als ${state.profile.name}`;
+    accountCopy.textContent = state.auth.email
+      ? `Je account ${state.auth.email} synchroniseert nu recepten, kookboeken, planning en lijstjes.`
+      : "Je account synchroniseert nu recepten, kookboeken, planning en lijstjes.";
+    openRegisterButton.classList.add("hidden");
+    openLoginButton.classList.add("hidden");
+    logoutButton.classList.remove("hidden");
+    return;
+  }
+
+  accountTitle.textContent = "Gebruik Plately op al je apparaten";
+  accountCopy.textContent = "Maak een account aan of log in om recepten, kookboeken en lijstjes te synchroniseren.";
+  openRegisterButton.classList.remove("hidden");
+  openLoginButton.classList.remove("hidden");
+  logoutButton.classList.add("hidden");
+}
+
+function openAuthModal(mode = "login") {
+  state.auth.mode = mode;
+  authModal.classList.remove("hidden");
+  authModal.setAttribute("aria-hidden", "false");
+  authKicker.textContent = mode === "register" ? "ACCOUNT AANMAKEN" : "INLOGGEN";
+  authTitle.textContent = mode === "register" ? "Maak je Plately account" : "Inloggen bij Plately";
+  submitAuthButton.textContent = mode === "register" ? "Account maken" : "Inloggen";
+  switchAuthModeButton.textContent =
+    mode === "register" ? "Heb je al een account? Inloggen" : "Nog geen account? Registreren";
+  authFeedback.textContent =
+    mode === "register"
+      ? "Maak een account om jouw recepten en kookboeken ook op andere apparaten terug te zien."
+      : "Log in om jouw recepten, kookboeken, planning en lijstjes terug te zien.";
+  authForm.reset();
+  authEmail.focus();
+}
+
+function closeAuthModal() {
+  authModal.classList.add("hidden");
+  authModal.setAttribute("aria-hidden", "true");
 }
 
 function inferPlatformFromUrl(rawUrl) {
@@ -1510,6 +1584,8 @@ function applyPersistedAppState(user) {
   }
 
   state.session.userId = user.id || "";
+  state.auth.authenticated = Boolean(user.authenticated);
+  state.auth.email = user.email || "";
 
   if (user.profile && typeof user.profile === "object") {
     state.profile = {
@@ -1521,12 +1597,9 @@ function applyPersistedAppState(user) {
   const importedRecipes = Array.isArray(user.importedRecipes)
     ? user.importedRecipes.map((recipe) => normalizeImportedRecipe({ ...recipe, platform: recipe.platform || "website" }))
     : [];
+  state.recipes = [...importedRecipes, ...initialRecipes];
 
-  if (importedRecipes.length) {
-    state.recipes = [...importedRecipes, ...initialRecipes];
-  }
-
-  if (Array.isArray(user.cookbooks) && user.cookbooks.length) {
+  if (Array.isArray(user.cookbooks)) {
     state.cookbooks = user.cookbooks.map((cookbook) => ({
       id: cookbook.id,
       name: cookbook.name,
@@ -1545,9 +1618,7 @@ function applyPersistedAppState(user) {
     };
   }
 
-  if (Array.isArray(user.groceryItems)) {
-    state.groceryItems = user.groceryItems.map((item) => ({ ...item }));
-  }
+  state.groceryItems = Array.isArray(user.groceryItems) ? user.groceryItems.map((item) => ({ ...item })) : [];
 
   if (typeof user.featuredRecipeId === "string" && getRecipeById(user.featuredRecipeId)) {
     state.featuredRecipeId = user.featuredRecipeId;
@@ -1568,6 +1639,7 @@ function renderAll() {
   renderGroceryGroups();
   renderMealPlanGrid();
   renderProfileSummary();
+  updateAuthUI();
   closeBasketModal();
 }
 
@@ -1614,6 +1686,11 @@ async function persistAppState() {
     if (payload?.user?.id) {
       state.session.userId = payload.user.id;
     }
+    if (payload?.auth) {
+      state.auth.enabled = Boolean(payload.auth.enabled);
+      state.auth.authenticated = Boolean(payload.auth.authenticated);
+      state.auth.email = payload.auth.email || "";
+    }
   } catch {
     // Keep the app usable when persistence fails temporarily.
   } finally {
@@ -1631,6 +1708,11 @@ function schedulePersistAppState(delay = 350) {
 async function bootstrapSession() {
   try {
     const payload = await fetchJson(`${state.apiBase}/api/session`);
+    if (payload?.auth) {
+      state.auth.enabled = Boolean(payload.auth.enabled);
+      state.auth.authenticated = Boolean(payload.auth.authenticated);
+      state.auth.email = payload.auth.email || "";
+    }
     applyPersistedAppState(payload.user);
   } catch {
     // Fall back to the in-memory demo state if the backend is unreachable.
@@ -1638,6 +1720,46 @@ async function bootstrapSession() {
     state.session.ready = true;
     renderAll();
   }
+}
+
+async function submitAuth(mode, email, password) {
+  const endpoint = mode === "register" ? "/api/auth/register" : "/api/auth/login";
+  const payload = await fetchJson(`${state.apiBase}${endpoint}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email,
+      password,
+      currentState: buildPersistedAppState(),
+    }),
+  });
+
+  if (payload?.auth) {
+    state.auth.enabled = Boolean(payload.auth.enabled);
+    state.auth.authenticated = Boolean(payload.auth.authenticated);
+    state.auth.email = payload.auth.email || "";
+  }
+  applyPersistedAppState(payload.user);
+  renderAll();
+  closeAuthModal();
+  showToast(mode === "register" ? "Account aangemaakt." : "Je bent ingelogd.");
+}
+
+async function logoutAccount() {
+  const payload = await fetchJson(`${state.apiBase}/api/auth/logout`, {
+    method: "POST",
+  });
+
+  if (payload?.auth) {
+    state.auth.enabled = Boolean(payload.auth.enabled);
+    state.auth.authenticated = Boolean(payload.auth.authenticated);
+    state.auth.email = payload.auth.email || "";
+  }
+  applyPersistedAppState(payload.user);
+  renderAll();
+  showToast("Je bent uitgelogd.");
 }
 
 async function handleImport(url, note) {
@@ -1864,6 +1986,13 @@ profileEditButton.addEventListener("click", () => {
 });
 profileEditAvatarButton.addEventListener("click", () => showToast("Avatar aanpassen volgt in de volgende stap."));
 premiumButton.addEventListener("click", () => showToast("Premium preview staat klaar voor later."));
+openRegisterButton.addEventListener("click", () => openAuthModal("register"));
+openLoginButton.addEventListener("click", () => openAuthModal("login"));
+logoutButton.addEventListener("click", () => {
+  logoutAccount().catch(() => {
+    showToast("Uitloggen lukte niet.");
+  });
+});
 shareProfileButton.addEventListener("click", async () => {
   const profileUrl = window.location.href;
   if (navigator.share) {
@@ -2020,6 +2149,35 @@ modal.addEventListener("click", (event) => {
   }
 });
 
+authModal.addEventListener("click", (event) => {
+  const target = event.target;
+  if (target instanceof HTMLElement && target.dataset.closeAuth === "true") {
+    closeAuthModal();
+  }
+});
+
+switchAuthModeButton.addEventListener("click", () => {
+  openAuthModal(state.auth.mode === "register" ? "login" : "register");
+});
+
+authForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const email = authEmail.value.trim();
+  const password = authPassword.value;
+
+  submitAuthButton.disabled = true;
+  submitAuthButton.textContent = state.auth.mode === "register" ? "Account maken..." : "Inloggen...";
+
+  try {
+    await submitAuth(state.auth.mode, email, password);
+  } catch (error) {
+    authFeedback.textContent = error.message;
+  } finally {
+    submitAuthButton.disabled = false;
+    submitAuthButton.textContent = state.auth.mode === "register" ? "Account maken" : "Inloggen";
+  }
+});
+
 mealPlanGrid.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) {
@@ -2058,6 +2216,10 @@ mealPlanGrid.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !modal.classList.contains("hidden")) {
     closeModal();
+    return;
+  }
+  if (event.key === "Escape" && !authModal.classList.contains("hidden")) {
+    closeAuthModal();
     return;
   }
 });

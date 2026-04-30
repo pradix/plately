@@ -345,6 +345,19 @@
             </div>
           </section>
 
+          <section class="account-card" id="accountCard">
+            <div>
+              <p class="section-kicker">ACCOUNT</p>
+              <h2 id="accountTitle">Gebruik Plately op al je apparaten</h2>
+              <p class="account-copy" id="accountCopy">Maak een account aan of log in om recepten, kookboeken en lijstjes te synchroniseren.</p>
+            </div>
+            <div class="account-actions">
+              <button class="primary-button" id="openRegisterButton" type="button">Account maken</button>
+              <button class="secondary-button" id="openLoginButton" type="button">Inloggen</button>
+              <button class="secondary-button hidden" id="logoutButton" type="button">Uitloggen</button>
+            </div>
+          </section>
+
           <section class="premium-card">
             <div class="premium-card__head">
               <span class="premium-card__icon" aria-hidden="true">♛</span>
@@ -518,6 +531,42 @@
     </div>
 
     <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
+    <div class="modal hidden" id="authModal" aria-hidden="true">
+      <div class="modal-backdrop" data-close-auth="true"></div>
+      <section class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <div>
+            <p class="section-kicker" id="authKicker">ACCOUNT</p>
+            <h2 id="authTitle">Inloggen bij Plately</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-auth="true" aria-label="Sluiten">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M6.7 5.3L12 10.58l5.3-5.29l1.4 1.41L13.42 12l5.29 5.3l-1.41 1.4L12 13.42l-5.3 5.29l-1.4-1.41L10.58 12l-5.29-5.3l1.41-1.4Z"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <form id="authForm" class="import-form">
+          <label>
+            E-mail
+            <input id="authEmail" name="email" type="email" placeholder="jij@voorbeeld.nl" required />
+          </label>
+
+          <label>
+            Wachtwoord
+            <input id="authPassword" name="password" type="password" placeholder="Minimaal 8 tekens" required />
+          </label>
+
+          <button class="primary-button" id="submitAuthButton" type="submit">Inloggen</button>
+          <button class="secondary-button" id="switchAuthModeButton" type="button">Nog geen account? Registreren</button>
+          <p class="helper-text" id="authFeedback">Maak een account om jouw recepten en kookboeken ook op andere apparaten terug te zien.</p>
+        </form>
+      </section>
+    </div>
 
     <script src="app.js"></script>
   </body>

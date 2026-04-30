@@ -14,6 +14,7 @@ const PORT = Number(process.env.PORT || 3000);
 const META_APP_ID = process.env.META_APP_ID || "";
 const META_APP_SECRET = process.env.META_APP_SECRET || "";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+const DATABASE_URL = process.env.DATABASE_URL || "";
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -31,7 +32,7 @@ const MIME_TYPES = {
 const HTTP_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type",
-  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "X-Content-Type-Options": "nosniff",
 };
@@ -126,6 +127,8 @@ const DEFAULT_MEAL_PLAN = {
 
 let databaseCache = null;
 let databaseWriteQueue = Promise.resolve();
+let postgresPool = null;
+let postgresReadyPromise = null;
 
 class HttpError extends Error {
   constructor(statusCode, message) {
@@ -139,6 +142,71 @@ function createEmptyDatabase() {
     users: {},
     sessions: {},
   };
+}
+
+function isPostgresEnabled() {
+  return Boolean(DATABASE_URL);
+}
+
+async function getPostgresPool() {
+  if (!isPostgresEnabled()) {
+    return null;
+  }
+
+  if (postgresPool) {
+    return postgresPool;
+  }
+
+  let pgModule;
+  try {
+    pgModule = require("pg");
+  } catch {
+    throw new HttpError(500, "Postgres is geconfigureerd, maar dependency 'pg' ontbreekt.");
+  }
+
+  postgresPool = new pgModule.Pool({
+    connectionString: DATABASE_URL,
+    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
+  });
+  return postgresPool;
+}
+
+async function ensurePostgresSchema() {
+  if (!isPostgresEnabled()) {
+    return;
+  }
+
+  if (!postgresReadyPromise) {
+    postgresReadyPromise = (async () => {
+      const pool = await getPostgresPool();
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS plately_users (
+          id TEXT PRIMARY KEY,
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          password_salt TEXT NOT NULL,
+          profile JSONB NOT NULL,
+          app_state JSONB NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS plately_auth_sessions (
+          token TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES plately_users(id) ON DELETE CASCADE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          expires_at TIMESTAMPTZ NOT NULL
+        );
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_plately_auth_sessions_user_id
+        ON plately_auth_sessions (user_id);
+      `);
+    })();
+  }
+
+  await postgresReadyPromise;
 }
 
 function generateId(prefix) {
@@ -238,6 +306,193 @@ function serializeCookie(name, value, options = {}) {
   return parts.join("; ");
 }
 
+function appendSetCookie(response, cookieValue) {
+  const existing = response.getHeader("Set-Cookie");
+  if (!existing) {
+    response.setHeader("Set-Cookie", cookieValue);
+    return;
+  }
+
+  const nextCookies = Array.isArray(existing) ? [...existing, cookieValue] : [existing, cookieValue];
+  response.setHeader("Set-Cookie", nextCookies);
+}
+
+function createPasswordHash(password, salt = crypto.randomBytes(16).toString("hex")) {
+  const hash = crypto.pbkdf2Sync(password, salt, 150000, 64, "sha512").toString("hex");
+  return { salt, hash };
+}
+
+function isValidPassword(password) {
+  return typeof password === "string" && password.length >= 8;
+}
+
+function sanitizeEmail(value) {
+  return sanitizeText(value || "").toLowerCase();
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function buildAppStateFromUser(user) {
+  const appState = user?.app_state && typeof user.app_state === "object" ? user.app_state : {};
+  return {
+    id: user.id,
+    email: user.email,
+    authenticated: true,
+    profile: appState.profile ? sanitizeProfilePayload(appState.profile) : { ...DEFAULT_PROFILE },
+    importedRecipes: Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [],
+    cookbooks: Array.isArray(appState.cookbooks)
+      ? appState.cookbooks.map((cookbook, index) => sanitizeCookbookForStorage(cookbook, `cookbook-${index + 1}`))
+      : DEFAULT_COOKBOOKS.map((cookbook) => ({ ...cookbook, recipeIds: [...cookbook.recipeIds] })),
+    selectedCookbookId: sanitizeText(appState.selectedCookbookId || "cookbook-1"),
+    mealPlan: {
+      ...DEFAULT_MEAL_PLAN,
+      ...(appState.mealPlan && typeof appState.mealPlan === "object" ? appState.mealPlan : {}),
+    },
+    groceryItems: Array.isArray(appState.groceryItems)
+      ? appState.groceryItems.map((item, index) => sanitizeGroceryItemForStorage(item, index))
+      : [],
+    featuredRecipeId: sanitizeText(appState.featuredRecipeId || "recipe-1"),
+    selectedRecipeId: sanitizeText(appState.selectedRecipeId || "recipe-1"),
+    createdAt: user.created_at,
+    updatedAt: user.updated_at,
+  };
+}
+
+async function createAuthSession(response, userId) {
+  await ensurePostgresSchema();
+  const pool = await getPostgresPool();
+  const token = crypto.randomBytes(24).toString("hex");
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+  await pool.query(
+    `
+      INSERT INTO plately_auth_sessions (token, user_id, expires_at)
+      VALUES ($1, $2, $3)
+    `,
+    [token, userId, expiresAt]
+  );
+  appendSetCookie(
+    response,
+    serializeCookie("plately_auth", token, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 30,
+    })
+  );
+}
+
+async function clearAuthSession(request, response) {
+  if (!isPostgresEnabled()) {
+    appendSetCookie(
+      response,
+      serializeCookie("plately_auth", "", {
+        path: "/",
+        httpOnly: true,
+        sameSite: "Lax",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 1,
+      })
+    );
+    return;
+  }
+
+  const cookies = parseCookies(request.headers.cookie);
+  const authToken = cookies.plately_auth || "";
+  if (authToken) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    await pool.query(`DELETE FROM plately_auth_sessions WHERE token = $1`, [authToken]).catch(() => {});
+  }
+
+  appendSetCookie(
+    response,
+    serializeCookie("plately_auth", "", {
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 1,
+    })
+  );
+}
+
+async function getAuthenticatedUser(request) {
+  if (!isPostgresEnabled()) {
+    return null;
+  }
+
+  const cookies = parseCookies(request.headers.cookie);
+  const authToken = cookies.plately_auth || "";
+  if (!authToken) {
+    return null;
+  }
+
+  await ensurePostgresSchema();
+  const pool = await getPostgresPool();
+  const result = await pool.query(
+    `
+      SELECT u.*
+      FROM plately_auth_sessions s
+      JOIN plately_users u ON u.id = s.user_id
+      WHERE s.token = $1
+        AND s.expires_at > NOW()
+      LIMIT 1
+    `,
+    [authToken]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function createPostgresUser(email, password, currentState) {
+  await ensurePostgresSchema();
+  const pool = await getPostgresPool();
+  const userId = generateId("user");
+  const { salt, hash } = createPasswordHash(password);
+  const appState = sanitizeUserStatePayload(currentState, buildDefaultUserData(userId));
+
+  const result = await pool.query(
+    `
+      INSERT INTO plately_users (id, email, password_hash, password_salt, profile, app_state)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
+      RETURNING *
+    `,
+    [userId, email, hash, salt, JSON.stringify(appState.profile), JSON.stringify(appState)]
+  );
+
+  return result.rows[0];
+}
+
+async function updateAuthenticatedUserState(userId, body) {
+  await ensurePostgresSchema();
+  const pool = await getPostgresPool();
+  const existing = await pool.query(`SELECT * FROM plately_users WHERE id = $1 LIMIT 1`, [userId]);
+  const currentUser = existing.rows[0];
+  if (!currentUser) {
+    throw new HttpError(404, "Gebruiker niet gevonden.");
+  }
+
+  const appState = sanitizeUserStatePayload(body, buildAppStateFromUser(currentUser));
+  const nextProfile = appState.profile;
+
+  const updated = await pool.query(
+    `
+      UPDATE plately_users
+      SET profile = $2::jsonb,
+          app_state = $3::jsonb,
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+    `,
+    [userId, JSON.stringify(nextProfile), JSON.stringify(appState)]
+  );
+
+  return updated.rows[0];
+}
+
 async function ensureUserSession(request, response) {
   const db = await loadDatabase();
   const cookies = parseCookies(request.headers.cookie);
@@ -254,8 +509,8 @@ async function ensureUserSession(request, response) {
   if (!sessionToken || db.sessions[sessionToken] !== userId) {
     sessionToken = crypto.randomBytes(24).toString("hex");
     db.sessions[sessionToken] = userId;
-    response.setHeader(
-      "Set-Cookie",
+    appendSetCookie(
+      response,
       serializeCookie("plately_session", sessionToken, {
         path: "/",
         httpOnly: true,
@@ -2562,14 +2817,17 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, {
         ok: true,
         app: "Plately",
-        env: process.env.NODE_ENV || "development",
-        persistence: {
-          mode: "json-file",
-          dataDir: DATA_DIR,
-        },
-        platforms: {
-          tiktok: { configured: true },
-          instagram: { configured: Boolean(META_APP_ID && META_APP_SECRET) },
+      env: process.env.NODE_ENV || "development",
+      persistence: {
+        mode: "json-file",
+        dataDir: DATA_DIR,
+      },
+      auth: {
+        postgresEnabled: isPostgresEnabled(),
+      },
+      platforms: {
+        tiktok: { configured: true },
+        instagram: { configured: Boolean(META_APP_ID && META_APP_SECRET) },
           website: { configured: true },
         },
       });
@@ -2577,19 +2835,161 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/api/session" && request.method === "GET") {
+      const authUser = await getAuthenticatedUser(request);
+      if (authUser) {
+        sendJson(response, 200, {
+          ok: true,
+          user: buildAppStateFromUser(authUser),
+          auth: {
+            enabled: isPostgresEnabled(),
+            authenticated: true,
+            email: authUser.email,
+          },
+        });
+        return;
+      }
+
       const user = await ensureUserSession(request, response);
-      sendJson(response, 200, { ok: true, user });
+      sendJson(response, 200, {
+        ok: true,
+        user: {
+          ...user,
+          authenticated: false,
+          email: "",
+        },
+        auth: {
+          enabled: isPostgresEnabled(),
+          authenticated: false,
+          email: "",
+        },
+      });
       return;
     }
 
     if (requestUrl.pathname === "/api/app-state" && request.method === "PUT") {
       const body = await readRequestBody(request);
+      const authUser = await getAuthenticatedUser(request);
+      if (authUser) {
+        const updatedUser = await updateAuthenticatedUserState(authUser.id, body);
+        sendJson(response, 200, {
+          ok: true,
+          user: buildAppStateFromUser(updatedUser),
+          auth: {
+            enabled: isPostgresEnabled(),
+            authenticated: true,
+            email: updatedUser.email,
+          },
+        });
+        return;
+      }
+
       const user = await ensureUserSession(request, response);
       const db = await loadDatabase();
       const nextUser = sanitizeUserStatePayload(body, user);
       db.users[nextUser.id] = nextUser;
       await persistDatabase();
-      sendJson(response, 200, { ok: true, user: nextUser });
+      sendJson(response, 200, {
+        ok: true,
+        user: {
+          ...nextUser,
+          authenticated: false,
+          email: "",
+        },
+        auth: {
+          enabled: isPostgresEnabled(),
+          authenticated: false,
+          email: "",
+        },
+      });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/auth/register" && request.method === "POST") {
+      if (!isPostgresEnabled()) {
+        throw new HttpError(400, "Postgres login is nog niet geconfigureerd.");
+      }
+
+      const body = await readRequestBody(request);
+      const email = sanitizeEmail(body.email);
+      const password = String(body.password || "");
+      if (!isValidEmail(email)) {
+        throw new HttpError(400, "Gebruik een geldig e-mailadres.");
+      }
+      if (!isValidPassword(password)) {
+        throw new HttpError(400, "Gebruik een wachtwoord van minimaal 8 tekens.");
+      }
+
+      await ensurePostgresSchema();
+      const pool = await getPostgresPool();
+      const existing = await pool.query(`SELECT id FROM plately_users WHERE email = $1 LIMIT 1`, [email]);
+      if (existing.rows[0]) {
+        throw new HttpError(409, "Er bestaat al een account met dit e-mailadres.");
+      }
+
+      const createdUser = await createPostgresUser(email, password, body.currentState || {});
+      await createAuthSession(response, createdUser.id);
+      sendJson(response, 200, {
+        ok: true,
+        user: buildAppStateFromUser(createdUser),
+        auth: {
+          enabled: true,
+          authenticated: true,
+          email: createdUser.email,
+        },
+      });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/auth/login" && request.method === "POST") {
+      if (!isPostgresEnabled()) {
+        throw new HttpError(400, "Postgres login is nog niet geconfigureerd.");
+      }
+
+      const body = await readRequestBody(request);
+      const email = sanitizeEmail(body.email);
+      const password = String(body.password || "");
+      await ensurePostgresSchema();
+      const pool = await getPostgresPool();
+      const result = await pool.query(`SELECT * FROM plately_users WHERE email = $1 LIMIT 1`, [email]);
+      const user = result.rows[0];
+      if (!user) {
+        throw new HttpError(401, "Onjuiste inloggegevens.");
+      }
+
+      const { hash } = createPasswordHash(password, user.password_salt);
+      if (hash !== user.password_hash) {
+        throw new HttpError(401, "Onjuiste inloggegevens.");
+      }
+
+      await createAuthSession(response, user.id);
+      sendJson(response, 200, {
+        ok: true,
+        user: buildAppStateFromUser(user),
+        auth: {
+          enabled: true,
+          authenticated: true,
+          email: user.email,
+        },
+      });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/auth/logout" && request.method === "POST") {
+      await clearAuthSession(request, response);
+      const guestUser = await ensureUserSession(request, response);
+      sendJson(response, 200, {
+        ok: true,
+        user: {
+          ...guestUser,
+          authenticated: false,
+          email: "",
+        },
+        auth: {
+          enabled: isPostgresEnabled(),
+          authenticated: false,
+          email: "",
+        },
+      });
       return;
     }
 
