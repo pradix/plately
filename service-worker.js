@@ -1,4 +1,4 @@
-const CACHE_NAME = "plately-shell-v1";
+const CACHE_NAME = "plately-shell-v2";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -13,6 +13,14 @@ const APP_SHELL = [
   "/assets/hero-burger.svg",
   "/assets/profile-avatar.svg",
 ];
+
+const NETWORK_FIRST_PATHS = new Set([
+  "/",
+  "/index.html",
+  "/styles.css",
+  "/app.js",
+  "/manifest.webmanifest",
+]);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -51,6 +59,23 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() => caches.match("/index.html"))
+    );
+    return;
+  }
+
+  if (NETWORK_FIRST_PATHS.has(url.pathname)) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (!response || response.status !== 200) {
+            return response;
+          }
+
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          return response;
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }
