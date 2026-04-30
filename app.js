@@ -30,7 +30,138 @@ function createSeedRecipe({
   };
 }
 
-const initialRecipes = [
+const showcaseRecipes = [
+  createSeedRecipe({
+    id: "recipe-home-burger",
+    title: "De Ultieme Avocado Burger",
+    description: "Een heerlijke, vullende burger met verse avocado en een knapperige bun. Perfect voor het weekend.",
+    time: "35 min",
+    servings: "2 personen",
+    mealTag: "Avond",
+    sourceUrl: "https://www.leukerecepten.nl/recepten/avocado-burger/",
+    image: "assets/hero-burger.svg",
+    ingredients: [
+      { quantity: "2", unit: "x", name: "Brioche buns" },
+      { quantity: "2", unit: "x", name: "Runderburgers" },
+      { quantity: "1", unit: "x", name: "Avocado" },
+      { quantity: "1", unit: "x", name: "Tomaat" },
+      { quantity: "4", unit: "plakjes", name: "Pickles" },
+      { quantity: "2", unit: "el", name: "Burgersaus" },
+    ],
+    instructions: [
+      "Bak de burgers goudbruin en toast de broodjes kort.",
+      "Snijd de avocado en tomaat in plakjes.",
+      "Beleg de onderste helft met sla, tomaat, burger en avocado.",
+      "Werk af met saus en serveer direct.",
+    ],
+  }),
+  createSeedRecipe({
+    id: "recipe-home-avocado-smash",
+    title: "Avocado Smash",
+    description: "Snelle avocado toast met citroen en peper.",
+    time: "10 min",
+    servings: "2 stuks",
+    mealTag: "Ontbijt",
+    sourceUrl: "https://www.leukerecepten.nl/recepten/avocado-toast/",
+    image: "https://images.unsplash.com/photo-1541519227354-08fa5d50c44d?w=800&q=80",
+    ingredients: [
+      { quantity: "1", unit: "x", name: "Avocado" },
+      { quantity: "2", unit: "stuks", name: "Zuurdesem toast" },
+      { quantity: "1", unit: "tl", name: "Citroensap" },
+    ],
+    instructions: [
+      "Prak de avocado met citroensap.",
+      "Rooster het brood goudbruin.",
+      "Verdeel de avocado over de toast.",
+    ],
+  }),
+  createSeedRecipe({
+    id: "recipe-home-eggs",
+    title: "Gepofte Eieren Avocado",
+    description: "Zachte eieren met romige avocado op toast.",
+    time: "15 min",
+    servings: "2 stuks",
+    mealTag: "Ontbijt",
+    sourceUrl: "https://www.leukerecepten.nl/recepten/gepocheerde-eieren/",
+    image: "https://images.unsplash.com/photo-1510693206972-df098062cb71?w=800&q=80",
+    ingredients: [
+      { quantity: "2", unit: "x", name: "Eieren" },
+      { quantity: "1", unit: "x", name: "Avocado" },
+      { quantity: "2", unit: "stuks", name: "Toast" },
+    ],
+    instructions: [
+      "Pocheer de eieren zacht.",
+      "Prak de avocado grof.",
+      "Serveer op toast met peper en zout.",
+    ],
+  }),
+  createSeedRecipe({
+    id: "recipe-book-spaghetti",
+    title: "Spaghetti Bolognese",
+    description: "Klassieke spaghetti bolognese met rijke tomatensaus.",
+    time: "60 min",
+    servings: "4 personen",
+    mealTag: "Avond",
+    sourceUrl: "https://www.leukerecepten.nl/recepten/spaghetti-bolognese/",
+    image: "https://images.unsplash.com/photo-1622973536968-3ead9e780960?w=800&q=80",
+    ingredients: [
+      { quantity: "400", unit: "g", name: "Spaghetti" },
+      { quantity: "300", unit: "g", name: "Rundergehakt" },
+      { quantity: "1", unit: "blik", name: "Tomatenblokjes" },
+    ],
+    instructions: ["Kook pasta.", "Bak gehakt.", "Laat saus pruttelen.", "Serveer samen."],
+  }),
+  createSeedRecipe({
+    id: "recipe-book-salmon",
+    title: "Pasta met Zalm en Spinazie",
+    description: "Romige pasta met zalm, spinazie en citroen.",
+    time: "30 min",
+    servings: "4 personen",
+    mealTag: "Avond",
+    sourceUrl: "https://www.leukerecepten.nl/recepten/pasta-zalm-spinazie/",
+    image: "https://images.unsplash.com/photo-1516100882582-96c3a05fe590?w=800&q=80",
+    ingredients: [
+      { quantity: "300", unit: "g", name: "Pasta" },
+      { quantity: "250", unit: "g", name: "Zalmfilet" },
+      { quantity: "200", unit: "g", name: "Spinazie" },
+    ],
+    instructions: ["Kook pasta.", "Bak zalm.", "Voeg spinazie toe.", "Meng alles samen."],
+  }),
+  createSeedRecipe({
+    id: "recipe-book-cake",
+    title: "Aardbeientaart",
+    description: "Luchtige taart met room en verse aardbeien.",
+    time: "65 min",
+    servings: "8 personen",
+    mealTag: "Dessert",
+    sourceUrl: "https://www.leukerecepten.nl/recepten/aardbeientaart/",
+    image: "https://images.unsplash.com/photo-1464306076886-da185f6a9d05?w=800&q=80",
+    ingredients: [
+      { quantity: "1", unit: "x", name: "Taartbodem" },
+      { quantity: "250", unit: "g", name: "Aardbeien" },
+      { quantity: "200", unit: "ml", name: "Slagroom" },
+    ],
+    instructions: ["Bak bodem.", "Klop room.", "Werk af met aardbeien."],
+  }),
+  createSeedRecipe({
+    id: "recipe-book-thai",
+    title: "Thaise Cashew Kip Roerbak",
+    description: "Snelle wok met kip, cashews en limoen.",
+    time: "18 min",
+    servings: "4 personen",
+    mealTag: "Avond",
+    sourceUrl: "https://www.leukerecepten.nl/recepten/thaise-kip/",
+    image: "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800&q=80",
+    ingredients: [
+      { quantity: "400", unit: "g", name: "Kipfilet" },
+      { quantity: "75", unit: "g", name: "Cashewnoten" },
+      { quantity: "1", unit: "x", name: "Limoen" },
+    ],
+    instructions: ["Bak kip.", "Voeg groenten en saus toe.", "Werk af met cashews en limoen."],
+  }),
+];
+
+const initialRecipes = [...showcaseRecipes,
   createSeedRecipe({
     id: "recipe-1",
     title: "Pasta carbonara",
@@ -272,6 +403,15 @@ const initialRecipes = [
   }),
 ];
 
+const HOME_FEATURED_RECIPE_ID = "recipe-home-burger";
+const HOME_QUICK_RECIPE_IDS = ["recipe-home-avocado-smash", "recipe-home-eggs"];
+const COOKBOOK_SHOWCASE_IDS = [
+  "recipe-book-spaghetti",
+  "recipe-book-salmon",
+  "recipe-book-cake",
+  "recipe-book-thai",
+];
+
 const state = {
   apiBase: window.location.protocol === "file:" ? "http://localhost:3000" : "",
   selectedPlatform: "tiktok",
@@ -324,12 +464,10 @@ const state = {
 const SEED_RECIPE_IDS = new Set(initialRecipes.map((recipe) => recipe.id));
 
 const SEED_CHANNELS = [
-  { id: "ch-ah",  initials: "AH", name: "Allerhande",    color: "#0071c2", url: "https://www.ah.nl/allerhande" },
-  { id: "ch-ek",  initials: "EK", name: "Eef Kookt Zo",  color: "#e8887c", url: "https://www.eefkooktzo.nl" },
-  { id: "ch-mj",  initials: "M",  name: "Miljuschka",    color: "#1a1a1a", url: "https://www.tiktok.com/@miljuschka" },
-  { id: "ch-up",  initials: "UP", name: "Uit Paulines Keuken", color: "#c8a03c", url: "https://www.uitpaulineskeuken.nl" },
-  { id: "ch-jk",  initials: "JK", name: "Jamie Kookt",   color: "#5a8a5a", url: "https://www.jamieoliver.com/nl" },
-  { id: "ch-lr",  initials: "LR", name: "Leuke Recepten", color: "#c06080", url: "https://www.leukerecepten.nl" },
+  { id: "ch-ah", initials: "AH", name: "Allerhande", color: "#0071c2", url: "https://www.ah.nl/allerhande", icon: "" },
+  { id: "ch-ek", initials: "EK", name: "Eef Kookt Zo", color: "#ef9fad", url: "https://www.eefkooktzo.nl", icon: "" },
+  { id: "ch-mj", initials: "M", name: "Miljuschka", color: "#1a1a1a", url: "https://miljuschka.nl", icon: "" },
+  { id: "ch-up", initials: "UP", name: "Uit Paulines Keuken", color: "#f8bb47", url: "https://uitpaulineskeuken.nl", icon: "" },
 ];
 
 const homeScreen = document.getElementById("homeScreen");
@@ -350,7 +488,9 @@ const featuredCard = document.getElementById("featuredCard");
 const featuredImage = document.getElementById("featuredImage");
 const featuredSourceIcon = document.getElementById("featuredSourceIcon");
 const featuredTitle = document.getElementById("featuredTitle");
+const featuredDescription = document.getElementById("featuredDescription");
 const featuredTime = document.getElementById("featuredTime");
+const featuredServings = document.getElementById("featuredServings");
 const homeStats = document.getElementById("homeStats");
 const recentImportList = document.getElementById("recentImportList");
 const homeImportForm = document.getElementById("homeImportForm");
@@ -397,6 +537,7 @@ const addSelectedToGroceriesButton = document.getElementById("addSelectedToGroce
 const grocerySubtitle = document.getElementById("grocerySubtitle");
 const groceryGroups = document.getElementById("groceryGroups");
 const grocerySummaryChips = document.getElementById("grocerySummaryChips");
+const groceryQuickInput = document.getElementById("groceryQuickInput");
 const groceryAddButton = document.getElementById("groceryAddButton");
 const clearGroceryListButton = document.getElementById("clearGroceryListButton");
 const addCustomGroceryButton = document.getElementById("addCustomGroceryButton");
@@ -463,7 +604,13 @@ function getSelectedRecipe() {
 }
 
 function getFeaturedRecipe() {
-  return state.recipes.find((recipe) => recipe.id === state.featuredRecipeId) || state.recipes[0];
+  return state.recipes.find((recipe) => recipe.id === state.featuredRecipeId)
+    || state.recipes.find((recipe) => recipe.id === HOME_FEATURED_RECIPE_ID)
+    || state.recipes[0];
+}
+
+function getHomeFeaturedRecipe() {
+  return getRecipeById(HOME_FEATURED_RECIPE_ID) || getFeaturedRecipe();
 }
 
 function getRecipeById(recipeId) {
@@ -545,7 +692,7 @@ function getSourceIconUrl(sourceUrl) {
   if (!host) {
     return "";
   }
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
+  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`;
 }
 
 function getSourceIconMarkup(recipe) {
@@ -1064,7 +1211,10 @@ function getIngredientGroup(name) {
   if (/(avocado|sla|tomaat|ui|koriander|banaan|citroen|limoen|lime|paprika|komkommer|courgette|wortel|spinazie)/.test(value)) {
     return "produce";
   }
-  if (/(burger|kip|tofu|ei|feta|kaas|zalm|vis)/.test(value)) {
+  if (/(zalm|vis|tonijn|garnalen|kabeljauw)/.test(value)) {
+    return "fish";
+  }
+  if (/(burger|kip|gehakt|runder|bacon|guanciale|spek|tofu|ei|feta|kaas)/.test(value)) {
     return "protein";
   }
   if (/(mayo|saus|kruiden|honing|peper|zout|flakes|mosterd|azijn)/.test(value)) {
@@ -1077,17 +1227,24 @@ function getGroupMeta(group) {
   switch (group) {
     case "produce":
       return {
-        title: "Vers & Fruit",
+        title: "Groenten & Fruit",
         icon:
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.2c1.1-1.5 2.7-2.2 4.5-2.2c2.8 0 5 2.2 5 5c0 5-4.4 8.8-9.5 10.4C6.9 17.8 2.5 14 2.5 9c0-2.8 2.2-5 5-5c1.8 0 3.4.7 4.5 2.2ZM12 6.2c-.9-1.7-.8-3.4.7-4.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
         className: "group-icon group-icon--produce",
       };
     case "protein":
       return {
-        title: "Plantaardig",
+        title: "Vlees & Gevogelte",
         icon:
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 4.5c-5.7.4-9.6 3.1-11.7 8.1c-.8 2-.9 3.9-.8 6.9c3-1.4 4.8-2.9 6.1-4.7c2.8-3.7 3-7.4 6.4-10.3Zm-12 15c3-2 5.9-3.3 8.8-3.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
         className: "group-icon group-icon--protein",
+      };
+    case "fish":
+      return {
+        title: "Vis",
+        icon:
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12s-3.5-5-8-5c-3.2 0-5.3 1.8-7 5c1.7 3.2 3.8 5 7 5c4.5 0 8-5 8-5Zm-8 0h.01" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+        className: "group-icon group-icon--fish",
       };
     case "flavour":
       return {
@@ -1098,7 +1255,7 @@ function getGroupMeta(group) {
       };
     default:
       return {
-        title: "Voorraad",
+        title: "Overig",
         icon:
           '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M6.5 6l1 12h9l1-12M9 10v5M12 10v5M15 10v5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
         className: "group-icon group-icon--pantry",
@@ -1155,16 +1312,22 @@ function getImportStatusMeta(recipe) {
 }
 
 function renderFeaturedRecipe() {
-  const recipe = getFeaturedRecipe();
+  const recipe = getHomeFeaturedRecipe();
   featuredImage.src = recipe.image;
   featuredImage.alt = recipe.alt;
   featuredTitle.textContent = recipe.title;
+  if (featuredDescription) {
+    featuredDescription.textContent = recipe.description || "";
+  }
   featuredTime.textContent = recipe.time;
-  const iconUrl = getSourceIconUrl(recipe.sourceUrl || "");
-  const host = getSourceHost(recipe.sourceUrl || "");
-  featuredSourceIcon.innerHTML = iconUrl
-    ? `<span class="source-favicon__inner"><img src="${iconUrl}" alt="" loading="lazy" /></span>`
-    : `<span class="source-favicon__inner"><span>${(host || "•").slice(0, 1).toUpperCase()}</span></span>`;
+  if (featuredServings) {
+    featuredServings.textContent = recipe.servings
+      .replace(/pers\./i, "personen")
+      .replace(/pers/i, "personen");
+  }
+  if (featuredSourceIcon) {
+    featuredSourceIcon.innerHTML = "";
+  }
 }
 
 function getImportedRecipes() {
@@ -1175,60 +1338,14 @@ function renderHomeStats() {
   if (!homeStats) {
     return;
   }
-
-  const importedCount = getImportedRecipes().length;
-  const savedCount = state.cookbooks.reduce((total, cookbook) => total + cookbook.recipeIds.length, 0);
-  const groceryCount = state.groceryItems.filter((item) => !item.checked).length;
-
-  homeStats.innerHTML = `
-    <article class="home-stat-card">
-      <span class="home-stat-card__value">${importedCount}</span>
-      <span class="home-stat-card__label">Geïmporteerd</span>
-    </article>
-    <article class="home-stat-card">
-      <span class="home-stat-card__value">${savedCount}</span>
-      <span class="home-stat-card__label">Bewaard</span>
-    </article>
-    <article class="home-stat-card">
-      <span class="home-stat-card__value">${groceryCount}</span>
-      <span class="home-stat-card__label">Op je lijstje</span>
-    </article>
-  `;
+  homeStats.innerHTML = "";
 }
 
 function renderRecentImports() {
   if (!recentImportList) {
     return;
   }
-
-  const recipes = getImportedRecipes().slice(0, 3);
-  if (!recipes.length) {
-    recentImportList.innerHTML = `
-      <article class="recent-import-card recent-import-card--empty">
-        <p>Nog niets geïmporteerd. Plak hierboven een link van TikTok, Instagram of een website.</p>
-      </article>
-    `;
-    return;
-  }
-
-  recentImportList.innerHTML = recipes
-    .map((recipe) => {
-      const status = getImportStatusMeta(recipe);
-      return `
-        <button class="recent-import-card" type="button" data-review-recipe-id="${recipe.id}">
-          <img src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.alt)}" />
-          <div class="recent-import-card__copy">
-            <div class="recent-import-card__topline">
-              <span class="recent-import-card__kicker">${escapeHtml(getPlatformLabel(recipe.platform))}</span>
-              <span class="import-status-badge import-status-badge--${status.tone}">${escapeHtml(status.label)}</span>
-            </div>
-            <strong>${escapeHtml(recipe.title)}</strong>
-            <span>${escapeHtml(recipe.ingredients.length)} ingrediënten • ${escapeHtml(recipe.instructions.length)} stappen</span>
-          </div>
-        </button>
-      `;
-    })
-    .join("");
+  recentImportList.innerHTML = "";
 }
 
 function parseMinutesLabel(value) {
@@ -1237,6 +1354,9 @@ function parseMinutesLabel(value) {
 }
 
 function getQuickRecipes() {
+  if (!state.searchQuery.trim() && !state.activeCookbookFilter) {
+    return HOME_QUICK_RECIPE_IDS.map((recipeId) => getRecipeById(recipeId)).filter(Boolean);
+  }
   const featuredId = getFeaturedRecipe().id;
   return getVisibleRecipes()
     .filter((recipe) => recipe.id !== featuredId)
@@ -1251,21 +1371,27 @@ function renderQuickRecipeGrid() {
     return;
   }
   quickRecipeGrid.innerHTML = recipes
-    .map((recipe, index) => `
+    .slice(0, 2)
+    .map((recipe) => `
         <button class="quick-card" type="button" data-recipe-id="${recipe.id}">
-          <span class="quick-card__glow quick-card__glow--${(index % 4) + 1}" aria-hidden="true"></span>
           <span class="quick-card__img" aria-hidden="true">${getIngredientVisualMarkup(recipe.ingredients[0]?.name || recipe.title)}</span>
           <span class="quick-card__copy">
-            <span class="quick-card__eyebrow">${escapeHtml(recipe.mealTag)}</span>
             <strong>${escapeHtml(recipe.title)}</strong>
-            <span>${escapeHtml(recipe.time)} • ${escapeHtml(recipe.ingredients.length)} ingrediënten</span>
+            <span class="quick-card__meta">
+              <span>${escapeHtml(recipe.time)}</span>
+              <span>${escapeHtml(recipe.ingredients.length)} stuks</span>
+            </span>
           </span>
+          <span class="quick-card__check" aria-hidden="true"></span>
         </button>
       `)
     .join("");
 }
 
 function renderCategoryGrid() {
+  if (!categoryGrid) {
+    return;
+  }
   const categories = [
     {
       title: "Ontbijt",
@@ -1309,7 +1435,16 @@ function renderChannelRow() {
   if (!row) return;
   row.innerHTML = SEED_CHANNELS.map((ch) => `
     <button class="channel-item" type="button" data-channel-url="${escapeHtml(ch.url)}" aria-label="${escapeHtml(ch.name)} openen">
-      <span class="channel-avatar" style="background:${escapeHtml(ch.color)}">${escapeHtml(ch.initials)}</span>
+      <span class="channel-avatar">
+        <img
+          class="channel-avatar__img"
+          src="${escapeHtml(ch.icon || getSourceIconUrl(ch.url))}"
+          alt=""
+          loading="lazy"
+          onerror="this.hidden=true;this.nextElementSibling.hidden=false;"
+        />
+        <span class="channel-avatar__fallback" hidden>${escapeHtml(ch.initials)}</span>
+      </span>
       <span class="channel-name">${escapeHtml(ch.name)}</span>
     </button>
   `).join("");
@@ -1328,8 +1463,10 @@ function renderCookbookFilterBar() {
 
   const active = state.activeCookbookFilter;
   const chips = [
-    { id: null, label: "Alle recepten" },
-    ...state.cookbooks.map((cb) => ({ id: cb.id, label: cb.name })),
+    { id: null, label: "Alles" },
+    { id: "favorites", label: "Favorieten" },
+    { id: "easy", label: "Makkelijk" },
+    { id: "recent", label: "Meest recent" },
   ];
 
   bar.innerHTML = chips
@@ -1346,9 +1483,23 @@ function renderCookbookFilterBar() {
 }
 
 function renderRecipeGrid() {
-  const featuredId = getFeaturedRecipe().id;
-  const quickIds = new Set(getQuickRecipes().map((recipe) => recipe.id));
-  const recipes = getVisibleRecipes().filter((recipe) => recipe.id !== featuredId && !quickIds.has(recipe.id));
+  let recipes;
+  if (!state.searchQuery.trim() && !state.activeCookbookFilter) {
+    recipes = COOKBOOK_SHOWCASE_IDS.map((recipeId) => getRecipeById(recipeId)).filter(Boolean);
+  } else {
+    recipes = getVisibleRecipes();
+  }
+
+  if (state.activeCookbookFilter === "favorites") {
+    const savedIds = new Set(state.cookbooks.flatMap((cookbook) => cookbook.recipeIds));
+    recipes = recipes.filter((recipe) => savedIds.has(recipe.id));
+  } else if (state.activeCookbookFilter === "easy") {
+    recipes = recipes.filter((recipe) => parseMinutesLabel(recipe.time) <= 30);
+  } else if (state.activeCookbookFilter === "recent") {
+    recipes = [...recipes].reverse();
+  }
+
+  recipes = recipes.slice(0, 4);
   if (!recipes.length) {
     recipeGrid.innerHTML = `
       <article class="recipe-card recipe-card--empty">
@@ -1365,13 +1516,11 @@ function renderRecipeGrid() {
     .map(
       (recipe) => `
         <button class="recipe-card" type="button" data-recipe-id="${recipe.id}">
-          ${getSourceIconMarkup(recipe)}
           <img src="${recipe.image}" alt="${recipe.alt}" />
           <div class="recipe-card__body">
             <h3>${recipe.title}</h3>
             <div class="recipe-card__meta">
-              <span>${recipe.time}</span>
-              <span>${recipe.servings}</span>
+              <span><span class="recipe-card__clock" aria-hidden="true">◔</span>${recipe.time}</span>
             </div>
           </div>
         </button>
@@ -1495,19 +1644,14 @@ function renderGrocerySummary() {
   if (!grocerySummaryChips) {
     return;
   }
-  const total = state.groceryItems.length;
-  const open = state.groceryItems.filter((item) => !item.checked).length;
-  const checked = total - open;
-  grocerySummaryChips.innerHTML = `
-    <span class="summary-chip">${total} totaal</span>
-    <span class="summary-chip">${open} te halen</span>
-    <span class="summary-chip">${checked} gekocht</span>
-  `;
+  grocerySummaryChips.innerHTML = "";
 }
 
 function renderGroceryGroups() {
   const uncheckedCount = state.groceryItems.filter((item) => !item.checked).length;
-  grocerySubtitle.textContent = `${uncheckedCount} items te gaan`;
+  if (grocerySubtitle) {
+    grocerySubtitle.textContent = `${uncheckedCount} items te gaan`;
+  }
   renderNavBadge();
   renderGrocerySummary();
 
@@ -1533,21 +1677,18 @@ function renderGroceryGroups() {
       return `
         <section class="grocery-group">
           <div class="grocery-group__header">
-            <span class="${meta.className}">${meta.icon}</span>
             <h2>${meta.title}</h2>
-            <p class="grocery-group__progress">${bought}/${items.length} gekocht</p>
           </div>
           ${sortedItems
             .map(
               (item) => `
                 <button class="grocery-entry ${item.checked ? "is-checked" : ""}" type="button" data-grocery-id="${item.id}">
-                  <span class="grocery-check">${item.checked ? "✓" : ""}</span>
                   <span class="grocery-entry__img" aria-hidden="true">${getIngredientVisualMarkup(item.title)}</span>
                   <span class="grocery-entry__content">
                     <p class="grocery-entry__title">${item.title}</p>
-                    <p class="grocery-entry__meta">${item.amount}</p>
-                    ${item.recipeTitle ? `<p class="grocery-entry__source">${escapeHtml(item.recipeTitle)}</p>` : ""}
                   </span>
+                  <span class="grocery-entry__amount">${item.amount}</span>
+                  <span class="grocery-check"></span>
                 </button>
               `
             )
@@ -2648,7 +2789,15 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
   }
 }
 
-document.getElementById("openImportButton").addEventListener("click", () => openModal());
+function bindEvent(element, eventName, handler) {
+  if (!element) {
+    return;
+  }
+  element.addEventListener(eventName, handler);
+}
+
+bindEvent(document.getElementById("openImportButton"), "click", () => openModal());
+bindEvent(document.getElementById("openImportButton2"), "click", () => openModal());
 
 platformButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -2664,96 +2813,110 @@ platformCards.forEach((button) => {
   });
 });
 
-openFeaturedRecipeButton.addEventListener("click", () => {
-  state.selectedRecipeId = state.featuredRecipeId;
+bindEvent(openFeaturedRecipeButton, "click", () => {
+  state.selectedRecipeId = getHomeFeaturedRecipe().id;
   renderDetailRecipe(true);
   switchView("detail");
 });
-featuredCard.addEventListener("click", () => {
-  state.selectedRecipeId = state.featuredRecipeId;
+bindEvent(featuredCard, "click", () => {
+  state.selectedRecipeId = getHomeFeaturedRecipe().id;
   renderDetailRecipe(true);
   switchView("detail");
 });
-featuredCard.addEventListener("keydown", (event) => {
+bindEvent(featuredCard, "keydown", (event) => {
   if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
-    state.selectedRecipeId = state.featuredRecipeId;
+    state.selectedRecipeId = getHomeFeaturedRecipe().id;
     renderDetailRecipe(true);
     switchView("detail");
   }
 });
 
-detailBackButton.addEventListener("click", () => switchView("home"));
-groceryAddButton.addEventListener("click", () => addRecipeToGrocery(getSelectedRecipe()));
-addSelectedToGroceriesButton.addEventListener("click", () => {
+bindEvent(detailBackButton, "click", () => switchView("home"));
+bindEvent(groceryAddButton, "click", () => addRecipeToGrocery(getSelectedRecipe()));
+bindEvent(addSelectedToGroceriesButton, "click", () => {
   addRecipeToGrocery(getSelectedRecipe());
   switchView("grocery");
 });
-clearGroceryListButton.addEventListener("click", () => {
+bindEvent(clearGroceryListButton, "click", () => {
   state.groceryItems = [];
   renderGroceryGroups();
   schedulePersistAppState();
   showToast("Boodschappenlijst leeggemaakt.");
 });
-if (addCustomGroceryButton) {
-  addCustomGroceryButton.addEventListener("click", addCustomGroceryItem);
-}
-if (copyGroceryListButton) {
-  copyGroceryListButton.addEventListener("click", () => {
-    copyGroceryList().catch(() => {
-      showToast("Kopiëren lukte niet.");
-    });
+bindEvent(addCustomGroceryButton, "click", addCustomGroceryItem);
+bindEvent(copyGroceryListButton, "click", () => {
+  copyGroceryList().catch(() => {
+    showToast("Kopiëren lukte niet.");
   });
-}
-if (clearGroceryToolbarButton) {
-  clearGroceryToolbarButton.addEventListener("click", () => {
-    state.groceryItems = [];
+});
+if (groceryQuickInput) {
+  groceryQuickInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+    event.preventDefault();
+    const value = groceryQuickInput.value.trim();
+    if (!value) {
+      return;
+    }
+
+    const existingItem = state.groceryItems.find(
+      (item) => !item.checked && normalizeIngredientKey(item.title) === normalizeIngredientKey(value)
+    );
+
+    if (existingItem) {
+      existingItem.amount = mergeAmountLabels(existingItem.amount, "1 stuk");
+    } else {
+      state.groceryItems.unshift({
+        id: `grocery-quick-${Date.now()}`,
+        title: value,
+        amount: "1 stuk",
+        recipeId: "",
+        recipeTitle: "",
+        recipeSourceUrl: "",
+        recipePlatform: "website",
+        group: getIngredientGroup(value),
+        checked: false,
+      });
+    }
+
+    groceryQuickInput.value = "";
     renderGroceryGroups();
     schedulePersistAppState();
-    showToast("Boodschappenlijst leeggemaakt.");
   });
 }
-closeImportSecondaryButton.addEventListener("click", () => closeModal());
-orderAHButton.addEventListener("click", () => openStoreBasket());
-wakeLockButton.addEventListener("click", toggleWakeLock);
-if (cookModeButton) {
-  cookModeButton.addEventListener("click", toggleCookMode);
-}
-if (cookModePrevButton) {
-  cookModePrevButton.addEventListener("click", () => {
-    const recipe = getSelectedRecipe();
-    const progress = getRecipeProgress(recipe.id);
-    setCookModeStep(progress.currentStep - 1);
-  });
-}
-if (cookModeNextButton) {
-  cookModeNextButton.addEventListener("click", () => {
-    const recipe = getSelectedRecipe();
-    const progress = getRecipeProgress(recipe.id);
-    setCookModeStep(progress.currentStep + 1);
-  });
-}
-if (cookModeResetButton) {
-  cookModeResetButton.addEventListener("click", () => {
-    setCookModeStep(0);
-  });
-}
+bindEvent(clearGroceryToolbarButton, "click", () => {
+  state.groceryItems = [];
+  renderGroceryGroups();
+  schedulePersistAppState();
+  showToast("Boodschappenlijst leeggemaakt.");
+});
+bindEvent(closeImportSecondaryButton, "click", () => closeModal());
+bindEvent(orderAHButton, "click", () => openStoreBasket());
+bindEvent(wakeLockButton, "click", toggleWakeLock);
+bindEvent(cookModeButton, "click", toggleCookMode);
+bindEvent(cookModePrevButton, "click", () => {
+  const recipe = getSelectedRecipe();
+  const progress = getRecipeProgress(recipe.id);
+  setCookModeStep(progress.currentStep - 1);
+});
+bindEvent(cookModeNextButton, "click", () => {
+  const recipe = getSelectedRecipe();
+  const progress = getRecipeProgress(recipe.id);
+  setCookModeStep(progress.currentStep + 1);
+});
+bindEvent(cookModeResetButton, "click", () => {
+  setCookModeStep(0);
+});
 brandHomeButtons.forEach((button) => {
   button.addEventListener("click", goHome);
 });
-if (shareRecipeButton) {
-  shareRecipeButton.addEventListener("click", shareSelectedRecipe);
-}
-if (saveRecipeButton) {
-  saveRecipeButton.addEventListener("click", () => saveRecipeToCookbook(getSelectedRecipe().id));
-}
-if (detailSaveHeaderButton) {
-  detailSaveHeaderButton.addEventListener("click", () => saveRecipeToCookbook(getSelectedRecipe().id));
-}
-if (reviewImportButton) {
-  reviewImportButton.addEventListener("click", () => openImportReview(getSelectedRecipe().id));
-}
-profileEditButton.addEventListener("click", () => {
+bindEvent(shareRecipeButton, "click", shareSelectedRecipe);
+bindEvent(saveRecipeButton, "click", () => saveRecipeToCookbook(getSelectedRecipe().id));
+bindEvent(detailSaveHeaderButton, "click", () => saveRecipeToCookbook(getSelectedRecipe().id));
+bindEvent(reviewImportButton, "click", () => openImportReview(getSelectedRecipe().id));
+bindEvent(profileEditButton, "click", () => {
   const nextName = window.prompt("Naam van je profiel", state.profile.name);
   if (nextName === null) {
     return;
@@ -2779,16 +2942,16 @@ profileEditButton.addEventListener("click", () => {
   schedulePersistAppState();
   showToast("Profiel bijgewerkt.");
 });
-profileEditAvatarButton.addEventListener("click", () => showToast("Avatar aanpassen volgt in de volgende stap."));
-premiumButton.addEventListener("click", () => showToast("Premium preview staat klaar voor later."));
-openRegisterButton.addEventListener("click", () => openAuthModal("register"));
-openLoginButton.addEventListener("click", () => openAuthModal("login"));
-logoutButton.addEventListener("click", () => {
+bindEvent(profileEditAvatarButton, "click", () => showToast("Avatar aanpassen volgt in de volgende stap."));
+bindEvent(premiumButton, "click", () => showToast("Premium preview staat klaar voor later."));
+bindEvent(openRegisterButton, "click", () => openAuthModal("register"));
+bindEvent(openLoginButton, "click", () => openAuthModal("login"));
+bindEvent(logoutButton, "click", () => {
   logoutAccount().catch(() => {
     showToast("Uitloggen lukte niet.");
   });
 });
-shareProfileButton.addEventListener("click", async () => {
+bindEvent(shareProfileButton, "click", async () => {
   const profileUrl = window.location.href;
   if (navigator.share) {
     try {
@@ -2828,7 +2991,7 @@ document.getElementById("channelRow")?.addEventListener("click", (event) => {
   }
 });
 
-servingsDown.addEventListener("click", () => {
+bindEvent(servingsDown, "click", () => {
   if (state.currentServings <= 1) {
     return;
   }
@@ -2836,7 +2999,7 @@ servingsDown.addEventListener("click", () => {
   renderDetailRecipe(false);
 });
 
-servingsUp.addEventListener("click", () => {
+bindEvent(servingsUp, "click", () => {
   if (state.currentServings >= 20) {
     return;
   }
@@ -2844,7 +3007,7 @@ servingsUp.addEventListener("click", () => {
   renderDetailRecipe(false);
 });
 
-searchInput.addEventListener("input", (event) => {
+bindEvent(searchInput, "input", (event) => {
   state.searchQuery = event.target.value;
   renderQuickRecipeGrid();
   renderRecipeGrid();
@@ -2859,7 +3022,7 @@ document.getElementById("cookbookFilterBar")?.addEventListener("click", (event) 
   renderRecipeGrid();
 });
 
-recipeGrid.addEventListener("click", (event) => {
+bindEvent(recipeGrid, "click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) {
     return;
@@ -2875,7 +3038,7 @@ recipeGrid.addEventListener("click", (event) => {
   switchView("detail");
 });
 
-quickRecipeGrid.addEventListener("click", (event) => {
+bindEvent(quickRecipeGrid, "click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) {
     return;
@@ -2891,21 +3054,23 @@ quickRecipeGrid.addEventListener("click", (event) => {
   switchView("detail");
 });
 
-recentImportList.addEventListener("click", (event) => {
-  const target = event.target;
-  if (!(target instanceof Element)) {
-    return;
-  }
+if (recentImportList) {
+  recentImportList.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
 
-  const card = target.closest("[data-review-recipe-id]");
-  if (!(card instanceof HTMLElement)) {
-    return;
-  }
+    const card = target.closest("[data-review-recipe-id]");
+    if (!(card instanceof HTMLElement)) {
+      return;
+    }
 
-  openImportReview(card.dataset.reviewRecipeId);
-});
+    openImportReview(card.dataset.reviewRecipeId);
+  });
+}
 
-groceryGroups.addEventListener("click", (event) => {
+bindEvent(groceryGroups, "click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) {
     return;
@@ -2926,7 +3091,7 @@ groceryGroups.addEventListener("click", (event) => {
   schedulePersistAppState();
 });
 
-detailIngredientList.addEventListener("click", (event) => {
+bindEvent(detailIngredientList, "click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) {
     return;
@@ -2940,7 +3105,7 @@ detailIngredientList.addEventListener("click", (event) => {
   toggleIngredientChecked(Number(ingredientButton.dataset.ingredientIndex));
 });
 
-storeAssistant.addEventListener("click", (event) => {
+bindEvent(storeAssistant, "click", (event) => {
   const target = event.target;
   if (!(target instanceof Element) || !state.basketPreview) {
     return;
@@ -2962,7 +3127,7 @@ storeAssistant.addEventListener("click", (event) => {
   renderBasketPreview();
 });
 
-cookbookList.addEventListener("click", (event) => {
+bindEvent(cookbookList, "click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) {
     return;
@@ -2985,25 +3150,25 @@ cookbookList.addEventListener("click", (event) => {
   showToast(`${getCookbookById(state.selectedCookbookId).name} is nu je standaard kookboek.`);
 });
 
-modal.addEventListener("click", (event) => {
+bindEvent(modal, "click", (event) => {
   const target = event.target;
   if (target instanceof HTMLElement && target.dataset.closeModal === "true") {
     closeModal();
   }
 });
 
-authModal.addEventListener("click", (event) => {
+bindEvent(authModal, "click", (event) => {
   const target = event.target;
   if (target instanceof HTMLElement && target.dataset.closeAuth === "true") {
     closeAuthModal();
   }
 });
 
-switchAuthModeButton.addEventListener("click", () => {
+bindEvent(switchAuthModeButton, "click", () => {
   openAuthModal(state.auth.mode === "register" ? "login" : "register");
 });
 
-authForm.addEventListener("submit", async (event) => {
+bindEvent(authForm, "submit", async (event) => {
   event.preventDefault();
   const email = authEmail.value.trim();
   const password = authPassword.value;
@@ -3021,12 +3186,12 @@ authForm.addEventListener("submit", async (event) => {
   }
 });
 
-reviewForm.addEventListener("submit", (event) => {
+bindEvent(reviewForm, "submit", (event) => {
   event.preventDefault();
   saveImportReview();
 });
 
-skipReviewButton.addEventListener("click", () => {
+bindEvent(skipReviewButton, "click", () => {
   const recipe = getReviewRecipe();
   if (!recipe) {
     switchView("home");
@@ -3037,7 +3202,7 @@ skipReviewButton.addEventListener("click", () => {
   switchView("detail");
 });
 
-mealPlanGrid.addEventListener("click", (event) => {
+bindEvent(mealPlanGrid, "click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) {
     return;
@@ -3083,7 +3248,7 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-basketContinueButton.addEventListener("click", async () => {
+bindEvent(basketContinueButton, "click", async () => {
   const preview = state.basketPreview;
   if (!preview) {
     return;
@@ -3111,7 +3276,7 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-importForm.addEventListener("submit", async (event) => {
+bindEvent(importForm, "submit", async (event) => {
   event.preventDefault();
 
   const url = recipeUrlInput.value.trim();
@@ -3139,7 +3304,7 @@ importForm.addEventListener("submit", async (event) => {
   );
 });
 
-homeImportForm.addEventListener("submit", async (event) => {
+bindEvent(homeImportForm, "submit", async (event) => {
   event.preventDefault();
   const url = homeImportUrl.value.trim();
 
@@ -3166,7 +3331,7 @@ homeImportForm.addEventListener("submit", async (event) => {
   );
 });
 
-importScreenForm.addEventListener("submit", async (event) => {
+bindEvent(importScreenForm, "submit", async (event) => {
   event.preventDefault();
   const url = importScreenUrl.value.trim();
 
