@@ -1,10 +1,5 @@
-const CACHE_NAME = "plately-shell-v2";
+const CACHE_NAME = "plately-shell-v6";
 const APP_SHELL = [
-  "/",
-  "/index.html",
-  "/styles.css",
-  "/app.js",
-  "/manifest.webmanifest",
   "/assets/plately.png",
   "/assets/favicon.png",
   "/assets/apple-touch-icon.png",
@@ -52,7 +47,7 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: "no-store" })
         .then((response) => {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put("/index.html", copy));
@@ -65,7 +60,7 @@ self.addEventListener("fetch", (event) => {
 
   if (NETWORK_FIRST_PATHS.has(url.pathname)) {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: "no-store" })
         .then((response) => {
           if (!response || response.status !== 200) {
             return response;
@@ -97,4 +92,10 @@ self.addEventListener("fetch", (event) => {
       });
     })
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });

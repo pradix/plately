@@ -8,6 +8,7 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
+    <meta name="plately-build" content="plately-banani-6" />
     <meta name="theme-color" content="#8da485" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -15,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-5" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-6" />
   </head>
   <body>
     <main class="page">
@@ -246,53 +247,49 @@
               <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
             </button>
             <div class="topbar-actions">
-              <button class="icon-button icon-button--ghost-empty" type="button" aria-label="Leeg"></button>
+              <button class="icon-button icon-button--filled-green" id="groceryQuickAddTopButton" type="button" aria-label="Item toevoegen">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>
+                </svg>
+              </button>
               <button class="home-avatar" type="button" data-view="settings" aria-label="Instellingen"></button>
             </div>
           </header>
 
           <section class="grocery-headline">
-            <h1>Boodschappen</h1>
+            <div class="grocery-headline__title">
+              <h1>Boodschappen</h1>
+              <span class="grocery-headline__chevron" aria-hidden="true">⌄</span>
+            </div>
+            <button class="grocery-headline__more" id="groceryMoreButton" type="button" aria-label="Meer opties">
+              <span></span><span></span><span></span>
+            </button>
           </section>
 
           <section class="grocery-input-card">
+            <span class="grocery-input-card__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M16 16l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </span>
             <input id="groceryQuickInput" class="grocery-quick-input" type="text" placeholder="Voeg items toe..." />
           </section>
 
           <p class="grocery-subtle hidden" id="grocerySubtitle">0 items te gaan</p>
           <section class="grocery-toolbar hidden" id="groceryToolbar">
             <div class="grocery-toolbar__summary" id="grocerySummaryChips"></div>
-            <div class="grocery-toolbar__actions">
-              <button class="soft-action soft-action--pill" id="addCustomGroceryButton" type="button">Voeg item toe</button>
-              <button class="soft-action soft-action--pill" id="copyGroceryListButton" type="button">Kopieer</button>
-              <button class="soft-action soft-action--pill" id="clearGroceryToolbarButton" type="button">Leeg</button>
-            </div>
           </section>
 
           <section class="grocery-order hidden" id="groceryOrder">
-            <section class="order-panel">
-              <div class="order-panel__intro">
-                <span class="order-panel__icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M6.5 7.5h11l.7 9.2c.1 1.23-.87 2.3-2.1 2.3H7.9c-1.23 0-2.2-1.07-2.1-2.3l.7-9.2Z"/>
-                    <path d="M9.2 10.2c.12 1.18 1.06 1.88 2.3 1.88c1.25 0 2.18-.7 2.3-1.88"/>
-                  </svg>
-                </span>
-                <div>
-                  <h2>Bestel online</h2>
-                  <p>Controleer je productmatches en open daarna je Albert Heijn-lijst.</p>
-                </div>
-              </div>
-              <div class="order-panel__stores">
-                <button class="store-cta store-cta--ah" id="orderAHButton" type="button">
-                  <span class="store-cta__logo">AH</span>
-                  <span class="store-cta__text">
-                    <span class="store-cta__name">Albert Heijn</span>
-                    <span class="store-cta__dest">Open lijst</span>
-                  </span>
-                </button>
-              </div>
-            </section>
+            <button class="store-cta store-cta--ah-pill" id="orderAHButton" type="button">
+              <span class="store-cta__logo store-cta__logo--ah-pill">ah</span>
+              <span class="store-cta__text">
+                <span class="store-cta__name">Bestel bij Albert Heijn</span>
+                <span class="store-cta__dest" id="orderAHItemCount">Zet 0 items in je mandje</span>
+              </span>
+              <span class="store-cta__arrow" aria-hidden="true">›</span>
+            </button>
             <section class="store-assistant is-hidden" id="storeAssistant">
               <div class="store-assistant__head">
                 <div>
@@ -707,6 +704,6 @@
       </section>
     </div>
 
-    <script src="app.js?v=plately-banani-3"></script>
+    <script src="app.js?v=plately-banani-6"></script>
   </body>
 </html>

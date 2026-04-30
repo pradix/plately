@@ -542,12 +542,15 @@ const grocerySummaryChips = document.getElementById("grocerySummaryChips");
 const groceryQuickInput = document.getElementById("groceryQuickInput");
 const groceryToolbar = document.getElementById("groceryToolbar");
 const groceryOrder = document.getElementById("groceryOrder");
+const groceryQuickAddTopButton = document.getElementById("groceryQuickAddTopButton");
+const groceryMoreButton = document.getElementById("groceryMoreButton");
 const groceryAddButton = document.getElementById("groceryAddButton");
 const clearGroceryListButton = document.getElementById("clearGroceryListButton");
 const addCustomGroceryButton = document.getElementById("addCustomGroceryButton");
 const copyGroceryListButton = document.getElementById("copyGroceryListButton");
 const clearGroceryToolbarButton = document.getElementById("clearGroceryToolbarButton");
 const orderAHButton = document.getElementById("orderAHButton");
+const orderAHItemCount = document.getElementById("orderAHItemCount");
 const storeAssistant = document.getElementById("storeAssistant");
 const storeAssistantKicker = document.getElementById("storeAssistantKicker");
 const storeAssistantTitle = document.getElementById("storeAssistantTitle");
@@ -1854,6 +1857,9 @@ function renderGroceryGroups() {
   if (groceryOrder) {
     groceryOrder.classList.toggle("hidden", !state.groceryItems.length);
   }
+  if (orderAHItemCount) {
+    orderAHItemCount.textContent = `Zet ${uncheckedCount} items in je mandje`;
+  }
   renderNavBadge();
   renderGrocerySummary();
 
@@ -2969,8 +2975,36 @@ async function registerServiceWorker() {
   }
 
   try {
-    const registration = await navigator.serviceWorker.register("/service-worker.js");
+    const buildVersion =
+      document.querySelector('meta[name="plately-build"]')?.getAttribute("content") || String(Date.now());
+    const registration = await navigator.serviceWorker.register(`/service-worker.js?v=${encodeURIComponent(buildVersion)}`);
     registration.update().catch(() => {});
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (refreshing) {
+        return;
+      }
+      refreshing = true;
+      window.location.reload();
+    });
+
+    if (registration.waiting) {
+      registration.waiting.postMessage({ type: "SKIP_WAITING" });
+    }
+
+    registration.addEventListener("updatefound", () => {
+      const worker = registration.installing;
+      if (!worker) {
+        return;
+      }
+
+      worker.addEventListener("statechange", () => {
+        if (worker.state === "installed" && navigator.serviceWorker.controller) {
+          worker.postMessage({ type: "SKIP_WAITING" });
+        }
+      });
+    });
   } catch {
     // Keep the app silent if service worker registration fails.
   }
@@ -3084,7 +3118,13 @@ bindEvent(clearGroceryListButton, "click", () => {
   showToast("Boodschappenlijst leeggemaakt.");
 });
 bindEvent(addCustomGroceryButton, "click", addCustomGroceryItem);
+bindEvent(groceryQuickAddTopButton, "click", addCustomGroceryItem);
 bindEvent(copyGroceryListButton, "click", () => {
+  copyGroceryList().catch(() => {
+    showToast("Kopiëren lukte niet.");
+  });
+});
+bindEvent(groceryMoreButton, "click", () => {
   copyGroceryList().catch(() => {
     showToast("Kopiëren lukte niet.");
   });
