@@ -85,6 +85,17 @@
             </form>
           </section>
 
+          <section class="home-stats" id="homeStats"></section>
+
+          <section class="section-heading section-heading--compact">
+            <div>
+              <h2>Net geïmporteerd</h2>
+              <p class="section-subcopy">Controleer snel titels, ingrediënten en bereiding voordat je gaat koken.</p>
+            </div>
+          </section>
+
+          <section class="recent-imports" id="recentImportList"></section>
+
           <section class="section-heading">
             <h2>Populair nu</h2>
             <button type="button" class="ghost-link" id="openFeaturedRecipeButton">Bekijk</button>
@@ -162,6 +173,13 @@
             <p class="detail-description" id="detailDescription">
               Een heerlijke vegetarische burger waarbij het broodje is vervangen door perfect rijpe avocado helften.
             </p>
+            <div class="detail-origin" id="detailOriginRow">
+              <div class="detail-origin__meta">
+                <span class="source-favicon detail-origin__icon" id="detailSourceIcon" aria-hidden="true"></span>
+                <span id="detailSourceLabel">Bron</span>
+              </div>
+              <button class="soft-action soft-action--pill hidden" id="reviewImportButton" type="button">Import nalopen</button>
+            </div>
             <div class="cook-tools">
               <button class="cook-toggle" id="wakeLockButton" type="button" aria-pressed="false">Scherm tijdens koken: uit</button>
             </div>
@@ -234,6 +252,15 @@
           <section class="grocery-headline">
             <h1>Boodschappen</h1>
             <p id="grocerySubtitle">0 items te gaan</p>
+          </section>
+
+          <section class="grocery-toolbar">
+            <div class="grocery-toolbar__summary" id="grocerySummaryChips"></div>
+            <div class="grocery-toolbar__actions">
+              <button class="soft-action soft-action--pill" id="addCustomGroceryButton" type="button">Voeg item toe</button>
+              <button class="soft-action soft-action--pill" id="copyGroceryListButton" type="button">Kopieer</button>
+              <button class="soft-action soft-action--pill" id="clearGroceryToolbarButton" type="button">Leeg</button>
+            </div>
           </section>
 
           <section class="grocery-order" id="groceryOrder">
@@ -433,6 +460,75 @@
               <span class="import-tip__num">3</span>
               <p>We halen titel, ingredienten, stappen en een korte omschrijving automatisch op.</p>
             </div>
+          </section>
+        </section>
+
+        <section class="screen review-screen" id="reviewScreen">
+          <header class="topbar">
+            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar home">
+              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
+            </button>
+          </header>
+
+          <section class="review-hero">
+            <p class="section-kicker">IMPORTEER CONTROLE</p>
+            <h1>Maak je recept netjes</h1>
+            <p class="section-copy">Pas titel, omschrijving, ingrediënten en stappen aan voordat je het recept opslaat.</p>
+          </section>
+
+          <section class="review-card">
+            <div class="review-preview">
+              <img id="reviewPreviewImage" src="assets/hero-burger.svg" alt="Recept preview" />
+              <div class="review-preview__copy">
+                <span class="meal-pill" id="reviewPreviewMealTag">Avond</span>
+                <p id="reviewPreviewHost">Geïmporteerde bron</p>
+              </div>
+            </div>
+
+            <form class="review-form" id="reviewForm">
+              <label>
+                Titel
+                <input id="reviewTitleInput" type="text" maxlength="80" placeholder="Naam van het gerecht" required />
+              </label>
+
+              <label>
+                Omschrijving
+                <textarea id="reviewDescriptionInput" rows="3" placeholder="Korte, duidelijke omschrijving van het recept"></textarea>
+              </label>
+
+              <div class="review-meta-grid">
+                <label>
+                  Tijd
+                  <input id="reviewTimeInput" type="text" placeholder="25 min" />
+                </label>
+                <label>
+                  Porties
+                  <input id="reviewServingsInput" type="text" placeholder="2 Pers." />
+                </label>
+              </div>
+
+              <label>
+                Categorie
+                <input id="reviewMealTagInput" type="text" placeholder="Avond" />
+              </label>
+
+              <label>
+                Ingrediënten
+                <textarea id="reviewIngredientsInput" rows="8" placeholder="Eén ingrediënt per regel"></textarea>
+              </label>
+
+              <label>
+                Bereiding
+                <textarea id="reviewInstructionsInput" rows="10" placeholder="Eén stap per regel"></textarea>
+              </label>
+
+              <p class="helper-text" id="reviewFeedback">Maak de import rustig netjes voordat je verdergaat.</p>
+
+              <div class="review-actions">
+                <button class="primary-button" id="saveReviewButton" type="submit">Opslaan en openen</button>
+                <button class="secondary-button" id="skipReviewButton" type="button">Later nalopen</button>
+              </div>
+            </form>
           </section>
         </section>
 

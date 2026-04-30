@@ -279,6 +279,7 @@ const state = {
   recipes: initialRecipes,
   selectedRecipeId: initialRecipes[0].id,
   featuredRecipeId: initialRecipes[0].id,
+  reviewRecipeId: "",
   currentServings: 2,
   keepAwake: false,
   wakeLockSentinel: null,
@@ -326,6 +327,7 @@ const groceryScreen = document.getElementById("groceryScreen");
 const mealPlanScreen = document.getElementById("mealPlanScreen");
 const settingsScreen = document.getElementById("settingsScreen");
 const importScreen = document.getElementById("importScreen");
+const reviewScreen = document.getElementById("reviewScreen");
 const modal = document.getElementById("importModal");
 const toast = document.getElementById("toast");
 const importForm = document.getElementById("importForm");
@@ -338,6 +340,8 @@ const featuredImage = document.getElementById("featuredImage");
 const featuredSourceIcon = document.getElementById("featuredSourceIcon");
 const featuredTitle = document.getElementById("featuredTitle");
 const featuredTime = document.getElementById("featuredTime");
+const homeStats = document.getElementById("homeStats");
+const recentImportList = document.getElementById("recentImportList");
 const homeImportForm = document.getElementById("homeImportForm");
 const homeImportUrl = document.getElementById("homeImportUrl");
 const homeImportSubmit = document.getElementById("homeImportSubmit");
@@ -358,6 +362,9 @@ const detailTime = document.getElementById("detailTime");
 const detailKcal = document.getElementById("detailKcal");
 const detailServings = document.getElementById("detailServings");
 const detailDescription = document.getElementById("detailDescription");
+const detailSourceIcon = document.getElementById("detailSourceIcon");
+const detailSourceLabel = document.getElementById("detailSourceLabel");
+const reviewImportButton = document.getElementById("reviewImportButton");
 const detailSaveHeaderButton = document.getElementById("detailSaveHeaderButton");
 const shareRecipeButton = document.getElementById("shareRecipeButton");
 const saveRecipeButton = document.getElementById("saveRecipeButton");
@@ -370,8 +377,12 @@ const detailStepList = document.getElementById("detailStepList");
 const addSelectedToGroceriesButton = document.getElementById("addSelectedToGroceriesButton");
 const grocerySubtitle = document.getElementById("grocerySubtitle");
 const groceryGroups = document.getElementById("groceryGroups");
+const grocerySummaryChips = document.getElementById("grocerySummaryChips");
 const groceryAddButton = document.getElementById("groceryAddButton");
 const clearGroceryListButton = document.getElementById("clearGroceryListButton");
+const addCustomGroceryButton = document.getElementById("addCustomGroceryButton");
+const copyGroceryListButton = document.getElementById("copyGroceryListButton");
+const clearGroceryToolbarButton = document.getElementById("clearGroceryToolbarButton");
 const orderAHButton = document.getElementById("orderAHButton");
 const orderJumboButton = document.getElementById("orderJumboButton");
 const storeAssistant = document.getElementById("storeAssistant");
@@ -403,6 +414,19 @@ const importScreenForm = document.getElementById("importScreenForm");
 const importScreenUrl = document.getElementById("importScreenUrl");
 const importScreenFeedback = document.getElementById("importScreenFeedback");
 const importScreenSubmit = document.getElementById("importScreenSubmit");
+const reviewPreviewImage = document.getElementById("reviewPreviewImage");
+const reviewPreviewMealTag = document.getElementById("reviewPreviewMealTag");
+const reviewPreviewHost = document.getElementById("reviewPreviewHost");
+const reviewForm = document.getElementById("reviewForm");
+const reviewTitleInput = document.getElementById("reviewTitleInput");
+const reviewDescriptionInput = document.getElementById("reviewDescriptionInput");
+const reviewTimeInput = document.getElementById("reviewTimeInput");
+const reviewServingsInput = document.getElementById("reviewServingsInput");
+const reviewMealTagInput = document.getElementById("reviewMealTagInput");
+const reviewIngredientsInput = document.getElementById("reviewIngredientsInput");
+const reviewInstructionsInput = document.getElementById("reviewInstructionsInput");
+const reviewFeedback = document.getElementById("reviewFeedback");
+const skipReviewButton = document.getElementById("skipReviewButton");
 const servingsDown = document.getElementById("servingsDown");
 const servingsUp = document.getElementById("servingsUp");
 const authModal = document.getElementById("authModal");
@@ -763,9 +787,10 @@ function switchView(view) {
   mealPlanScreen.classList.toggle("screen--active", view === "mealplan");
   settingsScreen.classList.toggle("screen--active", view === "settings");
   importScreen.classList.toggle("screen--active", view === "import");
+  reviewScreen.classList.toggle("screen--active", view === "review");
 
   navItems.forEach((item) => {
-    const isRecipesNav = item.dataset.view === "home" && (view === "home" || view === "detail" || view === "import");
+    const isRecipesNav = item.dataset.view === "home" && (view === "home" || view === "detail" || view === "import" || view === "review");
     item.classList.toggle("nav-item--active", isRecipesNav || item.dataset.view === view);
   });
 
@@ -920,6 +945,66 @@ function renderFeaturedRecipe() {
     : `<span class="source-favicon__inner"><span>${(host || "•").slice(0, 1).toUpperCase()}</span></span>`;
 }
 
+function getImportedRecipes() {
+  return state.recipes.filter((recipe) => !SEED_RECIPE_IDS.has(recipe.id) && !recipe.isSeed);
+}
+
+function renderHomeStats() {
+  if (!homeStats) {
+    return;
+  }
+
+  const importedCount = getImportedRecipes().length;
+  const savedCount = state.cookbooks.reduce((total, cookbook) => total + cookbook.recipeIds.length, 0);
+  const groceryCount = state.groceryItems.filter((item) => !item.checked).length;
+
+  homeStats.innerHTML = `
+    <article class="home-stat-card">
+      <span class="home-stat-card__value">${importedCount}</span>
+      <span class="home-stat-card__label">Geïmporteerd</span>
+    </article>
+    <article class="home-stat-card">
+      <span class="home-stat-card__value">${savedCount}</span>
+      <span class="home-stat-card__label">Bewaard</span>
+    </article>
+    <article class="home-stat-card">
+      <span class="home-stat-card__value">${groceryCount}</span>
+      <span class="home-stat-card__label">Op je lijstje</span>
+    </article>
+  `;
+}
+
+function renderRecentImports() {
+  if (!recentImportList) {
+    return;
+  }
+
+  const recipes = getImportedRecipes().slice(0, 3);
+  if (!recipes.length) {
+    recentImportList.innerHTML = `
+      <article class="recent-import-card recent-import-card--empty">
+        <p>Nog niets geïmporteerd. Plak hierboven een link van TikTok, Instagram of een website.</p>
+      </article>
+    `;
+    return;
+  }
+
+  recentImportList.innerHTML = recipes
+    .map(
+      (recipe) => `
+        <button class="recent-import-card" type="button" data-review-recipe-id="${recipe.id}">
+          <img src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.alt)}" />
+          <div class="recent-import-card__copy">
+            <span class="recent-import-card__kicker">${escapeHtml(getPlatformLabel(recipe.platform))}</span>
+            <strong>${escapeHtml(recipe.title)}</strong>
+            <span>${escapeHtml(recipe.ingredients.length)} ingrediënten • ${escapeHtml(recipe.instructions.length)} stappen</span>
+          </div>
+        </button>
+      `
+    )
+    .join("");
+}
+
 function parseMinutesLabel(value) {
   const match = String(value || "").match(/(\d+)/);
   return match ? Number(match[1]) : 999;
@@ -935,6 +1020,10 @@ function getQuickRecipes() {
 
 function renderQuickRecipeGrid() {
   const recipes = getQuickRecipes();
+  if (!recipes.length) {
+    quickRecipeGrid.innerHTML = "";
+    return;
+  }
   quickRecipeGrid.innerHTML = recipes
     .map(
       (recipe) => `
@@ -972,7 +1061,9 @@ function renderCategoryGrid() {
 }
 
 function renderRecipeGrid() {
-  const recipes = getVisibleRecipes();
+  const featuredId = getFeaturedRecipe().id;
+  const quickIds = new Set(getQuickRecipes().map((recipe) => recipe.id));
+  const recipes = getVisibleRecipes().filter((recipe) => recipe.id !== featuredId && !quickIds.has(recipe.id));
   if (!recipes.length) {
     recipeGrid.innerHTML = `
       <article class="recipe-card recipe-card--empty">
@@ -1021,6 +1112,19 @@ function renderDetailRecipe(resetServings = false) {
   detailServings.textContent = recipe.servings;
   detailDescription.textContent = recipe.description || "";
   detailDescription.classList.toggle("is-hidden", !recipe.description);
+  const iconUrl = getSourceIconUrl(recipe.sourceUrl || "");
+  const host = getSourceHost(recipe.sourceUrl || "");
+  if (detailSourceIcon) {
+    detailSourceIcon.innerHTML = iconUrl
+      ? `<span class="source-favicon__inner"><img src="${iconUrl}" alt="" loading="lazy" /></span>`
+      : `<span class="source-favicon__inner"><span>${(host || "•").slice(0, 1).toUpperCase()}</span></span>`;
+  }
+  if (detailSourceLabel) {
+    detailSourceLabel.textContent = host || getPlatformLabel(recipe.platform || "website");
+  }
+  if (reviewImportButton) {
+    reviewImportButton.classList.toggle("hidden", Boolean(recipe.isSeed || SEED_RECIPE_IDS.has(recipe.id)));
+  }
   if (detailIngredientCount) {
     detailIngredientCount.textContent = `${recipe.ingredients.length} items`;
   }
@@ -1060,9 +1164,24 @@ function renderDetailRecipe(resetServings = false) {
   renderMealPlanCurrentRecipe();
 }
 
+function renderGrocerySummary() {
+  if (!grocerySummaryChips) {
+    return;
+  }
+  const total = state.groceryItems.length;
+  const open = state.groceryItems.filter((item) => !item.checked).length;
+  const checked = total - open;
+  grocerySummaryChips.innerHTML = `
+    <span class="summary-chip">${total} totaal</span>
+    <span class="summary-chip">${open} te halen</span>
+    <span class="summary-chip">${checked} gekocht</span>
+  `;
+}
+
 function renderGroceryGroups() {
   const uncheckedCount = state.groceryItems.filter((item) => !item.checked).length;
   grocerySubtitle.textContent = `${uncheckedCount} items te gaan`;
+  renderGrocerySummary();
 
   if (!state.groceryItems.length) {
     groceryGroups.innerHTML = '<p class="grocery-empty">Je boodschappenlijst is nog leeg. Voeg eerst een recept toe.</p>';
@@ -1108,6 +1227,96 @@ function renderGroceryGroups() {
       `;
     })
     .join("");
+}
+
+function getReviewRecipe() {
+  return getRecipeById(state.reviewRecipeId || state.selectedRecipeId);
+}
+
+function openImportReview(recipeId) {
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) {
+    return;
+  }
+  state.reviewRecipeId = recipe.id;
+  renderImportReview();
+  switchView("review");
+}
+
+function serializeIngredientsForReview(recipe) {
+  return recipe.ingredients
+    .map((ingredient) => `${formatIngredientAmount(ingredient)} ${ingredient.name}`.trim())
+    .join("\n");
+}
+
+function renderImportReview() {
+  const recipe = getReviewRecipe();
+  if (!recipe || !reviewForm) {
+    return;
+  }
+
+  reviewPreviewImage.src = recipe.image;
+  reviewPreviewImage.alt = recipe.alt;
+  reviewPreviewMealTag.textContent = recipe.mealTag;
+  reviewPreviewHost.textContent = getSourceHost(recipe.sourceUrl || "") || getPlatformLabel(recipe.platform || "website");
+  reviewTitleInput.value = recipe.title || "";
+  reviewDescriptionInput.value = recipe.description || "";
+  reviewTimeInput.value = recipe.time || "";
+  reviewServingsInput.value = recipe.servings || "";
+  reviewMealTagInput.value = recipe.mealTag || "";
+  reviewIngredientsInput.value = serializeIngredientsForReview(recipe);
+  reviewInstructionsInput.value = (recipe.instructions || []).join("\n");
+  reviewFeedback.textContent = "Pas de import aan en sla hem daarna op.";
+}
+
+function parseReviewLines(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function saveImportReview() {
+  const recipe = getReviewRecipe();
+  if (!recipe) {
+    return;
+  }
+
+  const nextIngredients = parseReviewLines(reviewIngredientsInput.value).map((line) => parseIngredientInput(line));
+  const nextInstructions = parseReviewLines(reviewInstructionsInput.value);
+
+  if (!reviewTitleInput.value.trim()) {
+    reviewFeedback.textContent = "Geef het gerecht eerst een duidelijke titel.";
+    return;
+  }
+  if (!nextIngredients.length) {
+    reviewFeedback.textContent = "Voeg minimaal één ingrediënt toe.";
+    return;
+  }
+  if (!nextInstructions.length) {
+    reviewFeedback.textContent = "Voeg minimaal één bereidingsstap toe.";
+    return;
+  }
+
+  Object.assign(recipe, {
+    title: normalizeImportedTitle(reviewTitleInput.value.trim()),
+    description: normalizeDescription(reviewDescriptionInput.value.trim(), reviewTitleInput.value.trim()),
+    time: reviewTimeInput.value.trim() || recipe.time || "30 min",
+    servings: parseServingsValue(reviewServingsInput.value.trim() || recipe.servings),
+    mealTag: toDutchMealTag(reviewMealTagInput.value.trim() || recipe.mealTag || "Avond"),
+    alt: normalizeImportedTitle(reviewTitleInput.value.trim()),
+    ingredients: nextIngredients,
+    instructions: nextInstructions,
+  });
+
+  state.selectedRecipeId = recipe.id;
+  state.featuredRecipeId = recipe.id;
+  state.currentServings = parseBaseServings(recipe.servings);
+  renderAll();
+  schedulePersistAppState();
+  reviewFeedback.textContent = "Recept bijgewerkt.";
+  switchView("detail");
+  showToast(`${recipe.title} is bijgewerkt.`);
 }
 
 function renderProfileSummary() {
@@ -1341,6 +1550,39 @@ function addRecipeToGrocery(recipe) {
   renderGroceryGroups();
   schedulePersistAppState();
   showToast(added ? `${recipe.title} toegevoegd aan je boodschappenlijst.` : "Dit recept stond al op je lijst.");
+}
+
+function addCustomGroceryItem() {
+  const title = window.prompt("Welk item wil je toevoegen?");
+  if (title === null) {
+    return;
+  }
+
+  const cleanTitle = title.trim();
+  if (!cleanTitle) {
+    showToast("Vul eerst een naam in.");
+    return;
+  }
+
+  const amount = window.prompt("Hoeveel heb je nodig?", "1 stuk");
+  if (amount === null) {
+    return;
+  }
+
+  state.groceryItems.unshift({
+    id: `grocery-custom-${Date.now()}`,
+    title: cleanTitle,
+    amount: amount.trim() || "1 stuk",
+    recipeId: "",
+    recipeTitle: "",
+    recipeSourceUrl: "",
+    recipePlatform: "website",
+    group: getIngredientGroup(cleanTitle),
+    checked: false,
+  });
+  renderGroceryGroups();
+  schedulePersistAppState();
+  showToast(`${cleanTitle} toegevoegd.`);
 }
 
 function getUncheckedIngredientNames() {
@@ -1630,12 +1872,15 @@ function applyPersistedAppState(user) {
 }
 
 function renderAll() {
+  renderHomeStats();
+  renderRecentImports();
   renderFeaturedRecipe();
   renderQuickRecipeGrid();
   renderCategoryGrid();
   renderRecipeGrid();
   renderCookbookList();
   renderDetailRecipe(true);
+  renderImportReview();
   renderGroceryGroups();
   renderMealPlanGrid();
   renderProfileSummary();
@@ -1881,6 +2126,8 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
     state.featuredRecipeId = importedRecipe.id;
     state.currentServings = parseBaseServings(importedRecipe.servings);
 
+    renderHomeStats();
+    renderRecentImports();
     renderFeaturedRecipe();
     renderQuickRecipeGrid();
     renderCategoryGrid();
@@ -1943,6 +2190,24 @@ clearGroceryListButton.addEventListener("click", () => {
   schedulePersistAppState();
   showToast("Boodschappenlijst leeggemaakt.");
 });
+if (addCustomGroceryButton) {
+  addCustomGroceryButton.addEventListener("click", addCustomGroceryItem);
+}
+if (copyGroceryListButton) {
+  copyGroceryListButton.addEventListener("click", () => {
+    copyGroceryList().catch(() => {
+      showToast("Kopiëren lukte niet.");
+    });
+  });
+}
+if (clearGroceryToolbarButton) {
+  clearGroceryToolbarButton.addEventListener("click", () => {
+    state.groceryItems = [];
+    renderGroceryGroups();
+    schedulePersistAppState();
+    showToast("Boodschappenlijst leeggemaakt.");
+  });
+}
 closeImportSecondaryButton.addEventListener("click", () => closeModal());
 orderAHButton.addEventListener("click", () => openStoreBasket("ah"));
 orderJumboButton.addEventListener("click", () => openStoreBasket("jumbo"));
@@ -1958,6 +2223,9 @@ if (saveRecipeButton) {
 }
 if (detailSaveHeaderButton) {
   detailSaveHeaderButton.addEventListener("click", () => saveRecipeToCookbook(getSelectedRecipe().id));
+}
+if (reviewImportButton) {
+  reviewImportButton.addEventListener("click", () => openImportReview(getSelectedRecipe().id));
 }
 profileEditButton.addEventListener("click", () => {
   const nextName = window.prompt("Naam van je profiel", state.profile.name);
@@ -2077,6 +2345,20 @@ quickRecipeGrid.addEventListener("click", (event) => {
   switchView("detail");
 });
 
+recentImportList.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  const card = target.closest("[data-review-recipe-id]");
+  if (!(card instanceof HTMLElement)) {
+    return;
+  }
+
+  openImportReview(card.dataset.reviewRecipeId);
+});
+
 groceryGroups.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) {
@@ -2179,6 +2461,22 @@ authForm.addEventListener("submit", async (event) => {
   }
 });
 
+reviewForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveImportReview();
+});
+
+skipReviewButton.addEventListener("click", () => {
+  const recipe = getReviewRecipe();
+  if (!recipe) {
+    switchView("home");
+    return;
+  }
+  state.selectedRecipeId = recipe.id;
+  renderDetailRecipe(true);
+  switchView("detail");
+});
+
 mealPlanGrid.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) {
@@ -2275,8 +2573,8 @@ importForm.addEventListener("submit", async (event) => {
       state.selectedPlatform = "tiktok";
       syncPlatformUI();
       closeModal();
-      switchView("detail");
-      showToast(`${importedRecipe.title} geïmporteerd.`);
+      openImportReview(importedRecipe.id);
+      showToast(`${importedRecipe.title} klaar om na te lopen.`);
     }
   );
 });
@@ -2302,8 +2600,8 @@ homeImportForm.addEventListener("submit", async (event) => {
     (importedRecipe) => {
       homeImportForm.reset();
       homeImportFeedback.textContent = "Voeg direct een recept toe vanuit social media of een receptenwebsite.";
-      switchView("detail");
-      showToast(`${importedRecipe.title} geïmporteerd.`);
+      openImportReview(importedRecipe.id);
+      showToast(`${importedRecipe.title} klaar om na te lopen.`);
     }
   );
 });
@@ -2328,8 +2626,8 @@ importScreenForm.addEventListener("submit", async (event) => {
     (importedRecipe) => {
       importScreenForm.reset();
       importScreenFeedback.textContent = "Kopieer de link uit de app of website en plak hem hierboven.";
-      switchView("detail");
-      showToast(`${importedRecipe.title} geïmporteerd.`);
+      openImportReview(importedRecipe.id);
+      showToast(`${importedRecipe.title} klaar om na te lopen.`);
     }
   );
 });

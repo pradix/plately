@@ -2113,6 +2113,250 @@ img { display: block; max-width: 100%; }
   box-shadow: 0 6px 16px rgba(76,85,69,0.05);
 }
 
+/* ── Product pass: home / review / grocery polish ── */
+.section-heading--compact {
+  margin-top: -4px;
+  margin-bottom: 10px;
+}
+
+.home-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 16px 22px;
+}
+
+.home-stat-card {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 22px;
+  background: rgba(255,255,255,0.82);
+  border: 1px solid rgba(171, 183, 171, 0.12);
+  box-shadow: 0 10px 22px rgba(112,106,95,0.04);
+}
+
+.home-stat-card__value {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.home-stat-card__label {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.recent-imports {
+  display: grid;
+  gap: 12px;
+  padding: 0 16px 22px;
+}
+
+.recent-import-card {
+  border: 0;
+  background: rgba(255,255,255,0.9);
+  border-radius: 24px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  text-align: left;
+  padding: 10px;
+  box-shadow: 0 12px 26px rgba(76,85,69,0.05);
+}
+
+.recent-import-card img {
+  width: 88px;
+  height: 88px;
+  object-fit: cover;
+  border-radius: 18px;
+}
+
+.recent-import-card__copy {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.recent-import-card__copy strong {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.recent-import-card__copy span:last-child,
+.recent-import-card--empty p,
+.recent-import-card__kicker {
+  color: var(--muted);
+}
+
+.recent-import-card__kicker {
+  font-size: 0.75rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+.recent-import-card--empty {
+  grid-template-columns: 1fr;
+  padding: 18px;
+}
+
+.recipe-card {
+  box-shadow: 0 14px 28px rgba(76,85,69,0.06);
+}
+
+.recipe-card__meta span:last-child {
+  color: #7f977f;
+  font-weight: 700;
+}
+
+.detail-origin {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  margin-bottom: 8px;
+}
+
+.detail-origin__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--muted-strong);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.detail-origin__icon {
+  position: static;
+  flex: none;
+}
+
+.soft-action--pill {
+  padding: 10px 14px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.grocery-toolbar {
+  display: grid;
+  gap: 12px;
+  padding: 4px 16px 20px;
+}
+
+.grocery-toolbar__summary,
+.grocery-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.summary-chip {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.84);
+  border: 1px solid rgba(35,33,30,0.06);
+  color: #6a665f;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.order-panel {
+  border-radius: 28px;
+}
+
+.review-screen {
+  padding-bottom: 120px;
+}
+
+.review-hero {
+  padding: 0 16px 18px;
+}
+
+.review-hero h1 {
+  margin: 6px 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 7.5vw, 2.8rem);
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+}
+
+.review-card {
+  margin: 0 16px;
+  padding: 14px;
+  background: rgba(255,255,255,0.9);
+  border-radius: 30px;
+  box-shadow: 0 16px 34px rgba(112,106,95,0.08);
+}
+
+.review-preview {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.review-preview img {
+  width: 108px;
+  height: 108px;
+  object-fit: cover;
+  border-radius: 22px;
+}
+
+.review-preview__copy {
+  display: grid;
+  gap: 10px;
+}
+
+.review-preview__copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.review-form {
+  display: grid;
+  gap: 14px;
+}
+
+.review-form label {
+  display: grid;
+  gap: 8px;
+  color: #5e5953;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.review-form input,
+.review-form textarea {
+  width: 100%;
+  border: 1px solid rgba(35,33,30,0.08);
+  background: #fff;
+  padding: 14px 15px;
+  border-radius: 18px;
+  color: var(--text);
+  resize: vertical;
+}
+
+.review-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.review-actions {
+  display: grid;
+  gap: 10px;
+}
+
 /* ── Toast ── */
 .toast {
   position: fixed;
@@ -2139,9 +2383,13 @@ img { display: block; max-width: 100%; }
   .topbar,
   .search-card,
   .import-banner,
+  .home-stats,
+  .recent-imports,
   .section-heading,
   .recipe-grid,
-  .grocery-groups {
+  .grocery-groups,
+  .review-hero,
+  .grocery-toolbar {
     padding-inline: 12px;
   }
 
@@ -2158,7 +2406,9 @@ img { display: block; max-width: 100%; }
 
   .platform-switcher,
   .import-platforms,
-  .grocery-order__stores {
+  .grocery-order__stores,
+  .review-meta-grid,
+  .home-stats {
     grid-template-columns: 1fr;
   }
 
@@ -2178,5 +2428,9 @@ img { display: block; max-width: 100%; }
 
   .import-banner__button {
     width: 100%;
+  }
+
+  .review-preview {
+    grid-template-columns: 1fr;
   }
 }
