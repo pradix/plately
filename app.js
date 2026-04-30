@@ -1311,6 +1311,8 @@ function getImportStatusMeta(recipe) {
   return { label: "Even nalopen", tone: "soft" };
 }
 
+const CLOCK_SVG = `<svg class="recipe-time__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
 function renderFeaturedRecipe() {
   const recipe = getHomeFeaturedRecipe();
   featuredImage.src = recipe.image;
@@ -1319,7 +1321,9 @@ function renderFeaturedRecipe() {
   if (featuredDescription) {
     featuredDescription.textContent = recipe.description || "";
   }
-  featuredTime.textContent = recipe.time;
+  if (featuredTime) {
+    featuredTime.innerHTML = `${CLOCK_SVG}${escapeHtml(recipe.time)}`;
+  }
   if (featuredServings) {
     featuredServings.textContent = recipe.servings
       .replace(/pers\./i, "personen")
@@ -1419,11 +1423,11 @@ function renderCategoryGrid() {
     .map(
       (cat) => `
         <article class="category-card">
-          <img class="category-card__img" src="${escapeHtml(cat.image)}" alt="${escapeHtml(cat.title)}" loading="lazy" />
-          <div class="category-card__overlay">
-            <h3>${escapeHtml(cat.title)}</h3>
-            <p>${cat.count} Recepten</p>
+          <div class="category-card__photo">
+            <img class="category-card__img" src="${escapeHtml(cat.image)}" alt="${escapeHtml(cat.title)}" loading="lazy" />
           </div>
+          <h3>${escapeHtml(cat.title)}</h3>
+          <p>${cat.count} Recepten</p>
         </article>
       `
     )
@@ -1435,15 +1439,8 @@ function renderChannelRow() {
   if (!row) return;
   row.innerHTML = SEED_CHANNELS.map((ch) => `
     <button class="channel-item" type="button" data-channel-url="${escapeHtml(ch.url)}" aria-label="${escapeHtml(ch.name)} openen">
-      <span class="channel-avatar">
-        <img
-          class="channel-avatar__img"
-          src="${escapeHtml(ch.icon || getSourceIconUrl(ch.url))}"
-          alt=""
-          loading="lazy"
-          onerror="this.hidden=true;this.nextElementSibling.hidden=false;"
-        />
-        <span class="channel-avatar__fallback" hidden>${escapeHtml(ch.initials)}</span>
+      <span class="channel-avatar" style="background:${escapeHtml(ch.color)}">
+        <span class="channel-avatar__initials">${escapeHtml(ch.initials)}</span>
       </span>
       <span class="channel-name">${escapeHtml(ch.name)}</span>
     </button>

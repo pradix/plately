@@ -553,14 +553,21 @@ img { display: block; max-width: 100%; }
 
 .category-card {
   position: relative;
-  overflow: hidden;
-  border-radius: 24px;
-  aspect-ratio: 1 / 1;
   border: 0;
   padding: 0;
-  background: #d9e8d9;
-  box-shadow: 0 8px 22px rgba(70,74,66,0.12);
+  background: transparent;
   cursor: pointer;
+  text-align: left;
+}
+
+.category-card__photo {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 22px;
+  background: #d9e8d9;
+  box-shadow: 0 6px 18px rgba(70,74,66,0.10);
+  margin-bottom: 10px;
 }
 
 .category-card__img {
@@ -570,30 +577,21 @@ img { display: block; max-width: 100%; }
   display: block;
 }
 
-.category-card__overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(20,20,15,0.62) 0%, transparent 55%);
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  padding: 14px 16px;
-}
-
 .category-card h3 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.35rem;
-  letter-spacing: -0.03em;
-  color: #fff;
-  line-height: 1;
+  margin: 0 0 2px;
+  font-family: var(--font-body);
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #243c2b;
+  line-height: 1.15;
 }
 
 .category-card p {
-  margin: 4px 0 0;
-  color: rgba(255,255,255,0.75);
+  margin: 0;
+  color: #95a393;
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .featured-image-wrap { margin-bottom: 13px; }
@@ -3020,8 +3018,8 @@ body {
 
 .icon-button,
 .home-avatar {
-  width: 64px;
-  height: 64px;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
   border: 1px solid rgba(120, 147, 111, 0.1);
   background: #fff;
@@ -3030,8 +3028,8 @@ body {
 }
 
 .icon-button svg {
-  width: 32px;
-  height: 32px;
+  width: 22px;
+  height: 22px;
 }
 
 .icon-button--filled-green {
@@ -3086,8 +3084,8 @@ body {
 }
 
 .filter-button {
-  width: 60px;
-  height: 60px;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
   background: #f6f3ed;
   border: 0;
@@ -3164,9 +3162,9 @@ body {
 .grocery-headline h1,
 .kookboek-heading h1 {
   margin: 0;
-  font-size: 1.86rem;
-  line-height: 1.02;
-  letter-spacing: -0.045em;
+  font-size: 1.15rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
   font-weight: 700;
   color: #243c2b;
 }
@@ -3205,11 +3203,21 @@ body {
 .channel-avatar {
   width: 58px;
   height: 58px;
+  border-radius: 999px;
   margin: 0 auto 12px;
   display: grid;
   place-items: center;
-  background: transparent;
+  background: #dce8dc;
   border: 0;
+  flex-shrink: 0;
+}
+
+.channel-avatar__initials {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.03em;
 }
 
 .channel-name {
@@ -3304,16 +3312,16 @@ body {
 }
 
 .featured-copy {
-  display: grid;
-  gap: 18px;
-  padding: 18px 22px 22px;
-  align-items: start;
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .featured-copy h3 {
-  margin: 0 0 10px;
-  font-size: 1.12rem;
-  line-height: 1.15;
+  margin: 0;
+  font-size: 1.18rem;
+  line-height: 1.12;
   letter-spacing: -0.03em;
   font-weight: 700;
   color: #243c2b;
@@ -3338,14 +3346,25 @@ body {
 
 .recipe-time {
   margin: 0;
-  padding: 12px 18px;
+  padding: 10px 16px;
   border-radius: 999px;
   background: #f5f2eb;
   color: #243c2b;
-  font-size: 0.94rem;
+  font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+}
+
+.recipe-time__icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  stroke: #8da485;
+  fill: none;
 }
 
 .quick-list {

@@ -15,24 +15,26 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-2" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-4" />
   </head>
   <body>
     <main class="page">
       <section class="app-shell">
         <section class="screen screen--active" id="homeScreen">
+          <!-- Topbar: logo | bell | avatar -->
           <header class="topbar topbar--home">
             <img class="brand-logo" src="assets/plately.png" alt="Plately" />
             <div class="topbar-actions">
-              <button class="icon-button icon-button--filled-green" type="button" id="openImportButton2" aria-label="Recept toevoegen">
+              <button class="icon-button" type="button" aria-label="Meldingen">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M11 5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6V5Z"/>
+                  <path d="M12 3.75a4.75 4.75 0 0 0-4.75 4.75v1.07c0 .72-.24 1.43-.67 2l-1.1 1.47a2.75 2.75 0 0 0 2.2 4.4h8.64a2.75 2.75 0 0 0 2.2-4.4l-1.1-1.47a3.36 3.36 0 0 1-.67-2V8.5A4.75 4.75 0 0 0 12 3.75Zm0 17a2.74 2.74 0 0 1-2.47-1.55h4.94A2.74 2.74 0 0 1 12 20.75Z"/>
                 </svg>
               </button>
               <button class="home-avatar" type="button" data-view="settings" aria-label="Instellingen"></button>
             </div>
           </header>
 
+          <!-- Zoekbalk -->
           <section class="search-card" aria-label="Zoeken">
             <div class="search-input">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -47,7 +49,8 @@
             </button>
           </section>
 
-          <section class="home-chip-row" id="homeCategoryRow">
+          <!-- Categoriechips -->
+          <section class="home-chip-row" id="homeCategoryRow" aria-label="Categorieën">
             <button class="home-chip home-chip--breakfast" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M7.1 8.2v3.2c0 1.95 1.55 3.5 3.5 3.5h2.95c1.95 0 3.5-1.55 3.5-3.5V8.2" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
@@ -78,18 +81,18 @@
             </button>
           </section>
 
+          <!-- Kanalen -->
           <section class="section-heading">
             <h2>Kanalen</h2>
             <button type="button" class="ghost-link">Bekijk alles</button>
           </section>
-
           <div class="channel-row" id="channelRow"></div>
 
+          <!-- Uitgelicht recept -->
           <section class="section-heading">
             <h2>Uitgelicht Recept</h2>
             <button type="button" class="ghost-link" id="openFeaturedRecipeButton">Bekijk alles</button>
           </section>
-
           <article class="featured-card" id="featuredCard" tabindex="0" role="button" aria-label="Uitgelicht recept openen">
             <div class="featured-image-wrap">
               <span class="featured-badge">POPULAIR</span>
@@ -101,10 +104,8 @@
               </button>
             </div>
             <div class="featured-copy">
-              <div>
-                <h3 id="featuredTitle">Pasta carbonara</h3>
-                <p class="featured-description" id="featuredDescription">Korte omschrijving van het uitgelichte recept.</p>
-              </div>
+              <h3 id="featuredTitle">Pasta carbonara</h3>
+              <p class="featured-description" id="featuredDescription">Korte omschrijving van het uitgelichte recept.</p>
               <div class="featured-meta-pills">
                 <p class="recipe-time" id="featuredTime">35 min</p>
                 <p class="recipe-time" id="featuredServings">2 personen</p>
@@ -112,16 +113,17 @@
             </div>
           </article>
 
+          <!-- Snel & Makkelijk -->
           <section class="section-heading">
             <h2>Snel &amp; Makkelijk</h2>
             <button type="button" class="ghost-link">Bekijk alles</button>
           </section>
-
           <div class="quick-list" id="quickRecipeGrid"></div>
 
-          <section class="import-banner import-banner--bottom">
+          <!-- Import banner -->
+          <section class="import-banner">
             <div class="import-banner__head">
-              <span class="import-banner__icon import-banner__icon--soft" aria-hidden="true"></span>
+              <span class="import-banner__icon" aria-hidden="true"></span>
               <div>
                 <h1>Sla een recept op</h1>
                 <p class="section-copy">Importeer direct een recept vanuit Instagram, TikTok of een website.</p>
@@ -138,6 +140,13 @@
             </form>
           </section>
 
+          <!-- Categorieën -->
+          <section class="section-heading">
+            <h2>Categorieën</h2>
+          </section>
+          <section class="category-grid" id="categoryGrid"></section>
+
+          <!-- Kookboek sectie -->
           <section class="kookboek-heading">
             <h1>Kookboek</h1>
             <button class="kookboek-add" type="button" aria-label="Kookboek toevoegen">
@@ -146,9 +155,7 @@
               </svg>
             </button>
           </section>
-
-          <div class="cookbook-filter-bar cookbook-filter-bar--home" id="cookbookFilterBar" role="group" aria-label="Filter op kookboek"></div>
-
+          <div class="cookbook-filter-bar" id="cookbookFilterBar" role="group" aria-label="Filter op categorie"></div>
           <section class="recipe-grid recipe-grid--cookbook" id="recipeGrid"></section>
         </section>
 

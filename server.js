@@ -2930,7 +2930,7 @@ async function serveStaticFile(requestPath, response) {
     const cacheControl =
       path.basename(resolvedPath) === "service-worker.js"
         ? "no-cache, no-store, must-revalidate"
-        : extension === ".html"
+        : extension === ".html" || extension === ".css" || extension === ".js"
           ? "no-cache"
           : extension === ".png" || extension === ".jpg" || extension === ".jpeg" || extension === ".svg"
             ? "public, max-age=604800, immutable"
