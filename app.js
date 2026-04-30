@@ -1439,8 +1439,16 @@ function renderChannelRow() {
   if (!row) return;
   row.innerHTML = SEED_CHANNELS.map((ch) => `
     <button class="channel-item" type="button" data-channel-url="${escapeHtml(ch.url)}" aria-label="${escapeHtml(ch.name)} openen">
-      <span class="channel-avatar" style="background:${escapeHtml(ch.color)}">
-        <span class="channel-avatar__initials">${escapeHtml(ch.initials)}</span>
+      <span class="channel-avatar">
+        <img
+          class="channel-avatar__img"
+          src="${escapeHtml(ch.icon || getSourceIconUrl(ch.url))}"
+          alt=""
+          loading="lazy"
+          referrerpolicy="no-referrer"
+          onerror="this.hidden=true;this.nextElementSibling.hidden=false;"
+        />
+        <span class="channel-avatar__fallback" hidden>${escapeHtml(ch.initials)}</span>
       </span>
       <span class="channel-name">${escapeHtml(ch.name)}</span>
     </button>
@@ -1556,7 +1564,9 @@ function renderDetailRecipe(resetServings = false) {
   }
   if (reviewImportButton) {
     reviewImportButton.classList.remove("hidden");
-    reviewImportButton.textContent = recipe.needsReview ? "Import herstellen" : "Recept bewerken";
+    const reviewLabel = recipe.needsReview ? "Import herstellen" : "Recept bewerken";
+    reviewImportButton.setAttribute("aria-label", reviewLabel);
+    reviewImportButton.setAttribute("title", reviewLabel);
   }
   if (detailIngredientCount) {
     detailIngredientCount.textContent = `${recipe.ingredients.length} items`;
@@ -1598,7 +1608,10 @@ function renderDetailRecipe(resetServings = false) {
     detailSaveHeaderButton.classList.toggle("is-active", isRecipeSaved(recipe.id));
   }
   if (saveRecipeButton) {
-    saveRecipeButton.textContent = isRecipeSaved(recipe.id) ? "Bewaard" : "Bewaar recept";
+    const saveLabel = isRecipeSaved(recipe.id) ? "Recept bewaard" : "Bewaar recept";
+    saveRecipeButton.setAttribute("aria-label", saveLabel);
+    saveRecipeButton.setAttribute("title", saveLabel);
+    saveRecipeButton.classList.toggle("is-active", isRecipeSaved(recipe.id));
   }
   renderCookMode(recipe, recipeProgress);
   updateWakeLockUI();
