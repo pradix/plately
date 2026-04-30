@@ -448,6 +448,7 @@ const state = {
     { id: "cookbook-4", name: "Ontbijt inspiratie", recipeIds: [initialRecipes[5].id, initialRecipes[7].id] },
   ],
   selectedCookbookId: "cookbook-1",
+  pendingCookbookSaveRecipeId: "",
   mealPlan: {
     maandag: initialRecipes[0].id,
     dinsdag: null,
@@ -521,6 +522,7 @@ const shareRecipeButton = document.getElementById("shareRecipeButton");
 const saveRecipeButton = document.getElementById("saveRecipeButton");
 const cookModeButton = document.getElementById("cookModeButton");
 const wakeLockButton = document.getElementById("wakeLockButton");
+const detailAssist = document.getElementById("detailAssist");
 const cookModePanel = document.getElementById("cookModePanel");
 const cookModeProgress = document.getElementById("cookModeProgress");
 const cookModeStepIndex = document.getElementById("cookModeStepIndex");
@@ -538,6 +540,8 @@ const grocerySubtitle = document.getElementById("grocerySubtitle");
 const groceryGroups = document.getElementById("groceryGroups");
 const grocerySummaryChips = document.getElementById("grocerySummaryChips");
 const groceryQuickInput = document.getElementById("groceryQuickInput");
+const groceryToolbar = document.getElementById("groceryToolbar");
+const groceryOrder = document.getElementById("groceryOrder");
 const groceryAddButton = document.getElementById("groceryAddButton");
 const clearGroceryListButton = document.getElementById("clearGroceryListButton");
 const addCustomGroceryButton = document.getElementById("addCustomGroceryButton");
@@ -577,6 +581,7 @@ const reviewPreviewImage = document.getElementById("reviewPreviewImage");
 const reviewPreviewMealTag = document.getElementById("reviewPreviewMealTag");
 const reviewPreviewHost = document.getElementById("reviewPreviewHost");
 const reviewForm = document.getElementById("reviewForm");
+const reviewSummary = document.getElementById("reviewSummary");
 const reviewInsights = document.getElementById("reviewInsights");
 const reviewTitleInput = document.getElementById("reviewTitleInput");
 const reviewDescriptionInput = document.getElementById("reviewDescriptionInput");
@@ -598,6 +603,10 @@ const authPassword = document.getElementById("authPassword");
 const submitAuthButton = document.getElementById("submitAuthButton");
 const switchAuthModeButton = document.getElementById("switchAuthModeButton");
 const authFeedback = document.getElementById("authFeedback");
+const cookbookSaveModal = document.getElementById("cookbookSaveModal");
+const cookbookSaveList = document.getElementById("cookbookSaveList");
+const cookbookSaveRecipeTitle = document.getElementById("cookbookSaveRecipeTitle");
+const cookbookSaveCreateButton = document.getElementById("cookbookSaveCreateButton");
 
 function getSelectedRecipe() {
   return state.recipes.find((recipe) => recipe.id === state.selectedRecipeId) || state.recipes[0];
@@ -609,8 +618,32 @@ function getFeaturedRecipe() {
     || state.recipes[0];
 }
 
+function getFavoriteRecipe() {
+  const preferredCookbook = getCookbookById(state.selectedCookbookId);
+  const preferredRecipeId = preferredCookbook?.recipeIds?.[0];
+  if (preferredRecipeId) {
+    const preferredRecipe = getRecipeById(preferredRecipeId);
+    if (preferredRecipe) {
+      return preferredRecipe;
+    }
+  }
+
+  for (const cookbook of state.cookbooks) {
+    const recipeId = cookbook.recipeIds?.[0];
+    if (!recipeId) {
+      continue;
+    }
+    const recipe = getRecipeById(recipeId);
+    if (recipe) {
+      return recipe;
+    }
+  }
+
+  return null;
+}
+
 function getHomeFeaturedRecipe() {
-  return getRecipeById(HOME_FEATURED_RECIPE_ID) || getFeaturedRecipe();
+  return getFavoriteRecipe() || getFeaturedRecipe();
 }
 
 function getRecipeById(recipeId) {
@@ -623,6 +656,10 @@ function getCookbookById(cookbookId) {
 
 function isRecipeSaved(recipeId) {
   return state.cookbooks.some((cookbook) => cookbook.recipeIds.includes(recipeId));
+}
+
+function getCookbooksForRecipe(recipeId) {
+  return state.cookbooks.filter((cookbook) => cookbook.recipeIds.includes(recipeId));
 }
 
 function normalizeRecipeProgressState(value) {
@@ -778,6 +815,99 @@ function closeAuthModal() {
   authModal.setAttribute("aria-hidden", "true");
 }
 
+function getCookbookCoverMarkup(cookbook, modifier = "cookbook-save-option__cover") {
+  const recipes = (cookbook?.recipeIds || [])
+    .map((recipeId) => getRecipeById(recipeId))
+    .filter(Boolean);
+  const coverRecipes = recipes.slice(0, 4);
+
+  if (!coverRecipes.length) {
+    return `<span class="${modifier} ${modifier}--empty" aria-hidden="true">＋</span>`;
+  }
+
+  if (coverRecipes.length === 1) {
+    const recipe = coverRecipes[0];
+    return `
+      <span class="${modifier}" aria-hidden="true">
+        <img src="${escapeHtml(recipe.image)}" alt="" loading="lazy" />
+      </span>
+    `;
+  }
+
+  return `
+    <span class="${modifier} ${modifier}--grid" aria-hidden="true">
+      ${coverRecipes
+        .map(
+          (recipe) => `
+            <img src="${escapeHtml(recipe.image)}" alt="" loading="lazy" />
+          `
+        )
+        .join("")}
+    </span>
+  `;
+}
+
+function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
+  if (!cookbookSaveList) {
+    return;
+  }
+
+  cookbookSaveList.innerHTML = state.cookbooks
+    .map((cookbook) => {
+      const recipeCount = cookbook.recipeIds.length;
+      const containsRecipe = cookbook.recipeIds.includes(recipeId);
+      const isDefaultCookbook = cookbook.id === state.selectedCookbookId;
+      const meta = containsRecipe
+        ? "Staat hier al in"
+        : isDefaultCookbook
+          ? `Standaard kookboek • ${recipeCount} recepten`
+          : `${recipeCount} recepten`;
+
+      return `
+        <button
+          class="cookbook-save-option ${isDefaultCookbook ? "is-default" : ""}"
+          type="button"
+          data-save-cookbook-id="${cookbook.id}"
+        >
+          ${getCookbookCoverMarkup(cookbook)}
+          <span class="cookbook-save-option__copy">
+            <strong>${escapeHtml(cookbook.name)}</strong>
+            <span>${escapeHtml(meta)}</span>
+          </span>
+          <span class="cookbook-save-option__indicator" aria-hidden="true">
+            ${containsRecipe ? "✓" : isDefaultCookbook ? "★" : "+"}
+          </span>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function openCookbookSaveModal(recipeId) {
+  const recipe = getRecipeById(recipeId);
+  if (!recipe || !cookbookSaveModal) {
+    return;
+  }
+
+  state.pendingCookbookSaveRecipeId = recipe.id;
+  if (cookbookSaveRecipeTitle) {
+    cookbookSaveRecipeTitle.textContent = `${recipe.title} opslaan in welk kookboek?`;
+  }
+  renderCookbookSaveList(recipe.id);
+  cookbookSaveModal.classList.remove("hidden");
+  cookbookSaveModal.setAttribute("aria-hidden", "false");
+}
+
+function closeCookbookSaveModal() {
+  if (!cookbookSaveModal) {
+    return;
+  }
+
+  cookbookSaveModal.classList.add("hidden");
+  cookbookSaveModal.setAttribute("aria-hidden", "true");
+  state.pendingCookbookSaveRecipeId = "";
+}
+
 function inferPlatformFromUrl(rawUrl) {
   try {
     const url = new URL(rawUrl);
@@ -850,12 +980,44 @@ function closeModal() {
     "De app roept nu een backend importer aan. TikTok werkt direct voor publieke posts, websites ook; Instagram vraagt om een Meta app-token.";
 }
 
-function getStoreLabel() {
-  return "Albert Heijn";
+function getStoreConfig(storeSlug = "albert-heijn") {
+  if (storeSlug === "jumbo") {
+    return {
+      slug: "jumbo",
+      label: "Jumbo",
+      kicker: "JUMBO MANDJE",
+      loadingLabel: "Voorbereiden…",
+      continueLabel: "Open Jumbo",
+      directLabel: "Open Jumbo mandje",
+      helperCopy: "We tonen je beste productmatches en sturen je daarna door naar Jumbo.",
+      defaultUrl: "https://www.jumbo.com/mandje/",
+    };
+  }
+
+  return {
+    slug: "albert-heijn",
+    label: "Albert Heijn",
+    kicker: "ALBERT HEIJN LIJSTJE",
+    loadingLabel: "Voorbereiden…",
+    continueLabel: "Open Albert Heijn",
+    directLabel: "Open Albert Heijn-lijst",
+    helperCopy: "We tonen je beste productmatches. Waar mogelijk openen we direct je Albert Heijn-lijst.",
+    defaultUrl: "https://www.ah.nl/mijnlijst/",
+  };
 }
 
-function buildStoreSearchUrl(terms) {
-  const query = encodeURIComponent(terms.filter(Boolean).join(" "));
+function buildStoreSearchUrl(storeSlug, items) {
+  const query = encodeURIComponent(
+    (Array.isArray(items) ? items : [])
+      .map((item) => String(item?.title || "").trim())
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  if ((storeSlug || "albert-heijn") === "jumbo") {
+    return `https://www.jumbo.com/zoeken/?searchTerms=${query}`;
+  }
+
   return `https://www.ah.nl/zoeken?query=${query}`;
 }
 
@@ -870,10 +1032,11 @@ function getBasketHandoffUrl(preview) {
   if (!preview) {
     return "";
   }
+  const storeConfig = getStoreConfig(preview.store);
   return (
     preview.directUrl ||
     preview.fallbackUrl ||
-    "https://www.ah.nl/mijnlijst/"
+    storeConfig.defaultUrl
   );
 }
 
@@ -885,20 +1048,20 @@ function renderBasketPreview() {
     return;
   }
 
-  const storeLabel = "Albert Heijn";
+  const storeConfig = getStoreConfig(preview.store);
+  const storeLabel = preview.storeLabel || storeConfig.label;
   const itemCount = preview.items.length;
 
-  storeAssistantKicker.textContent = "ALBERT HEIJN LIJSTJE";
+  storeAssistantKicker.textContent = storeConfig.kicker;
   storeAssistantTitle.textContent = `${preview.recipeTitle || "Boodschappenlijst"} voor ${storeLabel}`;
-  storeAssistantCopy.textContent =
-    "We tonen nu je beste productmatches. Waar mogelijk openen we direct je Albert Heijn-lijst.";
+  storeAssistantCopy.textContent = storeConfig.helperCopy;
   basketNote.textContent =
     preview.note ||
     "Plately kiest de beste productmatch per ingrediënt en stuurt je daarna door naar de winkel.";
   basketContinueButton.textContent =
     preview.directUrl && preview.directUrl !== preview.fallbackUrl
-      ? "Open Albert Heijn-lijst"
-      : "Open Albert Heijn";
+      ? storeConfig.directLabel
+      : storeConfig.continueLabel;
 
   basketSummary.innerHTML = `
     <article class="basket-summary__card">
@@ -941,7 +1104,7 @@ function renderBasketPreview() {
           <div class="basket-item__actions">
             <a
               class="basket-item__link"
-              href="${escapeHtml(selectedChoice.url || buildStoreSearchUrl([item.ingredientTitle]))}"
+              href="${escapeHtml(selectedChoice.url || buildStoreSearchUrl(preview.store, [{ title: item.ingredientTitle }]))}"
               target="_blank"
               rel="noreferrer"
             >
@@ -1571,8 +1734,30 @@ function renderDetailRecipe(resetServings = false) {
   if (detailIngredientCount) {
     detailIngredientCount.textContent = `${recipe.ingredients.length} items`;
   }
+  if (detailAssist) {
+    const linkedCookbooks = getCookbooksForRecipe(recipe.id);
+    const assistTone = recipe.needsReview ? "warn" : "good";
+    const assistTitle = recipe.needsReview ? "Controleer deze import nog even" : "Klaar om te koken";
+    const assistCopy = recipe.needsReview
+      ? "Loop titel, ingrediënten en bereidingsstappen nog even na voordat je het recept gebruikt."
+      : linkedCookbooks.length
+        ? `Dit recept staat in ${linkedCookbooks.length} kookboek${linkedCookbooks.length === 1 ? "" : "en"} en is klaar om op je boodschappenlijst te zetten.`
+        : "Sla dit recept op in een kookboek of zet de ingrediënten direct op je boodschappenlijst.";
+    detailAssist.innerHTML = `
+      <article class="detail-assist__card detail-assist__card--${assistTone}">
+        <div class="detail-assist__head">
+          <strong>${escapeHtml(assistTitle)}</strong>
+          <span>${escapeHtml(recipe.platform ? getPlatformLabel(recipe.platform) : "Recept")}</span>
+        </div>
+        <p>${escapeHtml(assistCopy)}</p>
+      </article>
+    `;
+  }
   servingsDisplay.textContent = `${state.currentServings} pers.`;
   detailStepCount.textContent = `${recipe.instructions.length} stappen`;
+  if (addSelectedToGroceriesButton) {
+    addSelectedToGroceriesButton.textContent = `Zet ${recipe.ingredients.length} ingrediënten op boodschappenlijst`;
+  }
 
   detailIngredientList.innerHTML = recipe.ingredients
     .map(
@@ -1661,11 +1846,19 @@ function renderGroceryGroups() {
   const uncheckedCount = state.groceryItems.filter((item) => !item.checked).length;
   if (grocerySubtitle) {
     grocerySubtitle.textContent = `${uncheckedCount} items te gaan`;
+    grocerySubtitle.classList.toggle("hidden", !state.groceryItems.length);
+  }
+  if (groceryToolbar) {
+    groceryToolbar.classList.toggle("hidden", !state.groceryItems.length);
+  }
+  if (groceryOrder) {
+    groceryOrder.classList.toggle("hidden", !state.groceryItems.length);
   }
   renderNavBadge();
   renderGrocerySummary();
 
   if (!state.groceryItems.length) {
+    closeBasketModal();
     groceryGroups.innerHTML = '<p class="grocery-empty">Je boodschappenlijst is nog leeg. Voeg eerst een recept toe.</p>';
     return;
   }
@@ -1746,8 +1939,36 @@ function renderImportReview() {
   reviewMealTagInput.value = recipe.mealTag || "";
   reviewIngredientsInput.value = serializeIngredientsForReview(recipe);
   reviewInstructionsInput.value = (recipe.instructions || []).join("\n");
+  renderReviewSummary(recipe);
   renderReviewInsights(recipe);
   reviewFeedback.textContent = "Pas de import aan en sla hem daarna op.";
+}
+
+function renderReviewSummary(recipe) {
+  if (!reviewSummary) {
+    return;
+  }
+
+  const summaryItems = [
+    { label: getSourceHost(recipe.sourceUrl || "") || getPlatformLabel(recipe.platform || "website"), tone: "muted" },
+    { label: `${(recipe.ingredients || []).length} ingrediënten`, tone: (recipe.ingredients || []).length >= 4 ? "good" : "warn" },
+    { label: `${(recipe.instructions || []).length} stappen`, tone: (recipe.instructions || []).length >= 3 ? "good" : "warn" },
+    { label: recipe.time || "Tijd onbekend", tone: "muted" },
+  ];
+
+  reviewSummary.innerHTML = `
+    <div class="review-summary__row">
+      ${summaryItems
+        .map(
+          (item) => `
+            <span class="review-summary__pill review-summary__pill--${item.tone}">
+              ${escapeHtml(item.label)}
+            </span>
+          `
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function buildReviewInsights(recipe) {
@@ -2044,10 +2265,13 @@ function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId) {
   if (!cookbook.recipeIds.includes(recipeId)) {
     cookbook.recipeIds.unshift(recipeId);
   }
+  state.featuredRecipeId = recipeId;
   renderCookbookList();
   renderCookbookFilterBar();
+  renderFeaturedRecipe();
   renderDetailRecipe(false);
   schedulePersistAppState();
+  renderCookbookSaveList(recipeId);
   showToast(`Opgeslagen in ${cookbook.name}.`);
 }
 
@@ -2055,7 +2279,7 @@ function createCookbook(name) {
   const cleanName = String(name || "").trim();
   if (!cleanName) {
     showToast("Geef je kookboek eerst een naam.");
-    return;
+    return null;
   }
   const cookbook = {
     id: `cookbook-${Date.now()}`,
@@ -2068,6 +2292,7 @@ function createCookbook(name) {
   renderCookbookFilterBar();
   schedulePersistAppState();
   showToast(`${cookbook.name} aangemaakt.`);
+  return cookbook;
 }
 
 function openCreateCookbookPrompt() {
@@ -2263,23 +2488,27 @@ function setStoreButtonLoading(button, isLoading) {
   button.setAttribute("aria-busy", String(isLoading));
 }
 
-async function openStoreBasket() {
+async function openStoreBasket(storeSlug = "albert-heijn") {
   const activeItems = getActiveGroceryItems();
   if (!activeItems.length) {
     showToast("Voeg eerst ingrediënten toe aan je lijst.");
     return;
   }
 
-  const storeSlug = "albert-heijn";
-  const storeName = "Albert Heijn";
+  const storeConfig = getStoreConfig(storeSlug);
+  const storeName = storeConfig.label;
   const button = orderAHButton;
+  if (!button) {
+    showToast(`De knop voor ${storeName} ontbreekt nog.`);
+    return;
+  }
   const destLabel = button.querySelector(".store-cta__dest");
 
   // Loading state
   button.disabled = true;
   const originalLabel = destLabel ? destLabel.textContent : "";
   if (destLabel) {
-    destLabel.textContent = "Zoeken…";
+    destLabel.textContent = storeConfig.loadingLabel;
   }
 
   try {
@@ -2903,7 +3132,7 @@ bindEvent(clearGroceryToolbarButton, "click", () => {
   showToast("Boodschappenlijst leeggemaakt.");
 });
 bindEvent(closeImportSecondaryButton, "click", () => closeModal());
-bindEvent(orderAHButton, "click", () => openStoreBasket());
+bindEvent(orderAHButton, "click", () => openStoreBasket("albert-heijn"));
 bindEvent(wakeLockButton, "click", toggleWakeLock);
 bindEvent(cookModeButton, "click", toggleCookMode);
 bindEvent(cookModePrevButton, "click", () => {
@@ -2923,8 +3152,8 @@ brandHomeButtons.forEach((button) => {
   button.addEventListener("click", goHome);
 });
 bindEvent(shareRecipeButton, "click", shareSelectedRecipe);
-bindEvent(saveRecipeButton, "click", () => saveRecipeToCookbook(getSelectedRecipe().id));
-bindEvent(detailSaveHeaderButton, "click", () => saveRecipeToCookbook(getSelectedRecipe().id));
+bindEvent(saveRecipeButton, "click", () => openCookbookSaveModal(getSelectedRecipe().id));
+bindEvent(detailSaveHeaderButton, "click", () => openCookbookSaveModal(getSelectedRecipe().id));
 bindEvent(reviewImportButton, "click", () => openImportReview(getSelectedRecipe().id));
 bindEvent(profileEditButton, "click", () => {
   const nextName = window.prompt("Naam van je profiel", state.profile.name);
@@ -3174,6 +3403,52 @@ bindEvent(authModal, "click", (event) => {
   }
 });
 
+bindEvent(cookbookSaveModal, "click", (event) => {
+  const target = event.target;
+  if (target instanceof HTMLElement && target.dataset.closeCookbookSave === "true") {
+    closeCookbookSaveModal();
+  }
+});
+
+bindEvent(cookbookSaveList, "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  const cookbookButton = target.closest("[data-save-cookbook-id]");
+  if (!(cookbookButton instanceof HTMLElement)) {
+    return;
+  }
+
+  const recipeId = state.pendingCookbookSaveRecipeId || getSelectedRecipe().id;
+  const cookbookId = cookbookButton.dataset.saveCookbookId;
+  if (!recipeId || !cookbookId) {
+    return;
+  }
+
+  saveRecipeToCookbook(recipeId, cookbookId);
+  closeCookbookSaveModal();
+});
+
+bindEvent(cookbookSaveCreateButton, "click", () => {
+  const cookbookName = window.prompt("Naam van je nieuwe kookboek");
+  if (cookbookName === null) {
+    return;
+  }
+
+  const cookbook = createCookbook(cookbookName);
+  if (!cookbook) {
+    return;
+  }
+
+  const recipeId = state.pendingCookbookSaveRecipeId || getSelectedRecipe().id;
+  if (recipeId) {
+    saveRecipeToCookbook(recipeId, cookbook.id);
+  }
+  closeCookbookSaveModal();
+});
+
 bindEvent(switchAuthModeButton, "click", () => {
   openAuthModal(state.auth.mode === "register" ? "login" : "register");
 });
@@ -3255,6 +3530,9 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !authModal.classList.contains("hidden")) {
     closeAuthModal();
     return;
+  }
+  if (event.key === "Escape" && cookbookSaveModal && !cookbookSaveModal.classList.contains("hidden")) {
+    closeCookbookSaveModal();
   }
 });
 

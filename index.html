@@ -193,6 +193,8 @@
               <button class="cook-toggle" id="wakeLockButton" type="button" aria-pressed="false">Scherm tijdens koken: uit</button>
             </div>
 
+            <section class="detail-assist" id="detailAssist"></section>
+
             <section class="cook-mode-panel hidden" id="cookModePanel">
               <div class="cook-mode-panel__head">
                 <p class="section-kicker">STAP VOOR STAP</p>
@@ -258,7 +260,7 @@
           </section>
 
           <p class="grocery-subtle hidden" id="grocerySubtitle">0 items te gaan</p>
-          <section class="grocery-toolbar hidden">
+          <section class="grocery-toolbar hidden" id="groceryToolbar">
             <div class="grocery-toolbar__summary" id="grocerySummaryChips"></div>
             <div class="grocery-toolbar__actions">
               <button class="soft-action soft-action--pill" id="addCustomGroceryButton" type="button">Voeg item toe</button>
@@ -268,6 +270,29 @@
           </section>
 
           <section class="grocery-order hidden" id="groceryOrder">
+            <section class="order-panel">
+              <div class="order-panel__intro">
+                <span class="order-panel__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M6.5 7.5h11l.7 9.2c.1 1.23-.87 2.3-2.1 2.3H7.9c-1.23 0-2.2-1.07-2.1-2.3l.7-9.2Z"/>
+                    <path d="M9.2 10.2c.12 1.18 1.06 1.88 2.3 1.88c1.25 0 2.18-.7 2.3-1.88"/>
+                  </svg>
+                </span>
+                <div>
+                  <h2>Bestel online</h2>
+                  <p>Controleer je productmatches en open daarna je Albert Heijn-lijst.</p>
+                </div>
+              </div>
+              <div class="order-panel__stores">
+                <button class="store-cta store-cta--ah" id="orderAHButton" type="button">
+                  <span class="store-cta__logo">AH</span>
+                  <span class="store-cta__text">
+                    <span class="store-cta__name">Albert Heijn</span>
+                    <span class="store-cta__dest">Open lijst</span>
+                  </span>
+                </button>
+              </div>
+            </section>
             <section class="store-assistant is-hidden" id="storeAssistant">
               <div class="store-assistant__head">
                 <div>
@@ -469,6 +494,7 @@
             </div>
 
             <form class="review-form" id="reviewForm">
+              <section class="review-summary" id="reviewSummary"></section>
               <section class="review-insights" id="reviewInsights"></section>
 
               <label>
@@ -655,6 +681,32 @@
       </section>
     </div>
 
-    <script src="app.js?v=plately-banani-2"></script>
+    <div class="modal hidden" id="cookbookSaveModal" aria-hidden="true">
+      <div class="modal-backdrop" data-close-cookbook-save="true"></div>
+      <section class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="cookbookSaveTitle">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <div>
+            <p class="section-kicker">KOOKBOEK KIEZEN</p>
+            <h2 id="cookbookSaveTitle">Waar wil je dit recept bewaren?</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-cookbook-save="true" aria-label="Sluiten">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M6.7 5.3L12 10.58l5.3-5.29l1.4 1.41L13.42 12l5.29 5.3l-1.41 1.4L12 13.42l-5.3 5.29l-1.4-1.41L10.58 12l-5.29-5.3l1.41-1.4Z"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <div class="cookbook-save-sheet">
+          <p class="cookbook-save-copy" id="cookbookSaveRecipeTitle">Kies een kookboek voor dit recept.</p>
+          <div class="cookbook-save-list" id="cookbookSaveList"></div>
+          <button class="secondary-button cookbook-save-create" id="cookbookSaveCreateButton" type="button">Nieuw kookboek maken</button>
+        </div>
+      </section>
+    </div>
+
+    <script src="app.js?v=plately-banani-3"></script>
   </body>
 </html>

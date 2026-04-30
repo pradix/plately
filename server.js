@@ -2745,12 +2745,7 @@ function buildJumboDirectAddUrl(results) {
     return `https://www.jumbo.com/mandje/?add=${encodeURIComponent(JSON.stringify(items))}`;
   }
 
-  // Fallback: combined search URL — user can add each product from the results page
-  const allTerms = results
-    .map((r) => sanitizeText(r.ingredient))
-    .filter(Boolean)
-    .join(" ");
-  return `https://www.jumbo.com/zoeken/?searchTerms=${encodeURIComponent(allTerms)}`;
+  return "https://www.jumbo.com/mandje/";
 }
 
 function buildStoreSearchUrl(store, items) {
@@ -2887,7 +2882,7 @@ async function buildStoreBasket(body) {
     recipeTitle,
     sourceUrl,
     directUrl,
-    fallbackUrl: buildStoreSearchUrl(store, items),
+    fallbackUrl: store === "jumbo" ? "https://www.jumbo.com/mandje/" : buildStoreSearchUrl(store, items),
     note:
       foundResults.length
         ? "Plately heeft echte winkelmatches gevonden. Controleer eventueel per ingrediënt en ga daarna door."
