@@ -462,6 +462,7 @@ const state = {
   searchQuery: "",
   activeCookbookFilter: null,
   followedChannelIds: ["ch-ah", "ch-ek", "ch-mj", "ch-up", "ch-clf", "ch-les", "ch-lb"],
+  customChannels: [],
   channelSearchFilter: null,
   channelSearchAllResults: [],
   openCookbookId: null,
@@ -478,6 +479,15 @@ const SEED_CHANNELS = [
   { id: "ch-les", initials: "LS",  name: "Lekker & Simpel",      color: "#4d9e5a", url: "https://www.lekkerensimpel.com" },
   { id: "ch-lb",  initials: "LB",  name: "Laura's Bakery",       color: "#e879a0", url: "https://www.laurasbakery.nl" },
 ];
+
+const CUSTOM_CHANNEL_COLORS = [
+  "#6c63ff", "#e8605a", "#43aa8b", "#f4a261", "#457b9d",
+  "#e9c46a", "#9b5de5", "#00b4d8", "#f15bb5", "#06d6a0",
+];
+
+function getAllChannels() {
+  return [...SEED_CHANNELS, ...state.customChannels];
+}
 
 const homeScreen = document.getElementById("homeScreen");
 const detailScreen = document.getElementById("detailScreen");
@@ -1562,11 +1572,12 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
   }
 
   channelSearchResults.innerHTML = `<div class="ch-result-grid">${filtered.map((r) => {
-    const channelColor = SEED_CHANNELS.find((ch) => ch.id === r.channelId)?.color || "#8da485";
+    const allCh = getAllChannels();
+    const channelColor = allCh.find((ch) => ch.id === r.channelId)?.color || "#8da485";
     const thumbHtml = r.thumbnail
       ? `<img class="ch-card__img" src="${escapeHtml(r.thumbnail)}" alt="${escapeHtml(r.title)}" loading="lazy" onerror="this.parentElement.style.background='${channelColor}33'" />`
       : `<div class="ch-card__img ch-card__img--placeholder" style="background:${escapeHtml(channelColor)}22">
-           <span style="font-size:2rem;opacity:.4">${escapeHtml(SEED_CHANNELS.find(ch => ch.id === r.channelId)?.initials || "?")}</span>
+           <span style="font-size:2rem;opacity:.4">${escapeHtml(allCh.find(ch => ch.id === r.channelId)?.initials || "?")}</span>
          </div>`;
     return `
       <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}" data-ch-card-thumb="${escapeHtml(r.thumbnail || "")}">
@@ -1613,7 +1624,7 @@ function renderChannelFilterChips(results) {
 
   filterRow.innerHTML = [
     `<button class="ch-filter-chip ${!state.channelSearchFilter ? "ch-filter-chip--active" : ""}" data-ch-filter="">Alles</button>`,
-    ...SEED_CHANNELS
+    ...getAllChannels()
       .filter((ch) => present.includes(ch.id))
       .map((ch) => `<button class="ch-filter-chip ${state.channelSearchFilter === ch.id ? "ch-filter-chip--active" : ""}" data-ch-filter="${escapeHtml(ch.id)}" style="--ch-color:${escapeHtml(ch.color)}">${escapeHtml(ch.name)}</button>`)
   ].join("");
@@ -1630,7 +1641,11 @@ async function searchChannels(query) {
   }
   try {
     const channels = state.followedChannelIds.join(",");
-    const resp = await fetch(`/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`);
+    const followedCustomChannels = state.customChannels.filter((ch) => state.followedChannelIds.includes(ch.id));
+    const customChannelsParam = followedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
+    let url = `/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`;
+    if (customChannelsParam) url += `&customChannels=${encodeURIComponent(customChannelsParam)}`;
+    const resp = await fetch(url);
     const data = await resp.json();
     renderChannelSearchResults(data.results || []);
   } catch {
@@ -1652,7 +1667,11 @@ async function searchChannelsOnImportScreen(query) {
   if (orRow) orRow.classList.add("hidden");
   try {
     const channels = state.followedChannelIds.join(",");
-    const resp = await fetch(`/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`);
+    const followedCustomChannels = state.customChannels.filter((ch) => state.followedChannelIds.includes(ch.id));
+    const customChannelsParam = followedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
+    let url = `/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`;
+    if (customChannelsParam) url += `&customChannels=${encodeURIComponent(customChannelsParam)}`;
+    const resp = await fetch(url);
     const data = await resp.json();
     const all = data.results || [];
     if (!all.length) {
@@ -1662,11 +1681,12 @@ async function searchChannelsOnImportScreen(query) {
     }
     if (results) {
       results.innerHTML = `<div class="ch-result-grid">${all.map((r) => {
-        const channelColor = SEED_CHANNELS.find((ch) => ch.id === r.channelId)?.color || "#8da485";
+        const allCh = getAllChannels();
+        const channelColor = allCh.find((ch) => ch.id === r.channelId)?.color || "#8da485";
         const thumbHtml = r.thumbnail
           ? `<img class="ch-card__img" src="${escapeHtml(r.thumbnail)}" alt="${escapeHtml(r.title)}" loading="lazy" onerror="this.parentElement.style.background='${channelColor}33'" />`
           : `<div class="ch-card__img ch-card__img--placeholder" style="background:${escapeHtml(channelColor)}22">
-               <span style="font-size:2rem;opacity:.4">${escapeHtml(SEED_CHANNELS.find(ch => ch.id === r.channelId)?.initials || "?")}</span>
+               <span style="font-size:2rem;opacity:.4">${escapeHtml(allCh.find(ch => ch.id === r.channelId)?.initials || "?")}</span>
              </div>`;
         return `
           <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}">
@@ -1849,7 +1869,7 @@ function renderCategoryGrid() {
 function renderChannelRow() {
   const row = document.getElementById("channelRow");
   if (!row) return;
-  const followed = SEED_CHANNELS.filter((ch) => state.followedChannelIds.includes(ch.id));
+  const followed = getAllChannels().filter((ch) => state.followedChannelIds.includes(ch.id));
   row.innerHTML = followed.map((ch) => `
     <button class="channel-item" type="button" data-channel-url="${escapeHtml(ch.url)}" aria-label="${escapeHtml(ch.name)} openen">
       <span class="channel-avatar" style="background:${escapeHtml(ch.color)}">
@@ -1908,7 +1928,8 @@ function renderNavBadge() {
 function renderChannelSettings() {
   const container = document.getElementById("channelSettingsList");
   if (!container) return;
-  container.innerHTML = SEED_CHANNELS.map((ch) => {
+
+  const seedRows = SEED_CHANNELS.map((ch) => {
     const followed = state.followedChannelIds.includes(ch.id);
     return `
       <label class="channel-toggle-row" data-channel-id="${escapeHtml(ch.id)}">
@@ -1917,6 +1938,25 @@ function renderChannelSettings() {
         <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>
       </label>`;
   }).join("");
+
+  const customRows = state.customChannels.map((ch) => {
+    const followed = state.followedChannelIds.includes(ch.id);
+    return `
+      <div class="channel-toggle-row channel-toggle-row--custom" data-channel-id="${escapeHtml(ch.id)}">
+        <span class="channel-toggle-avatar" style="background:${escapeHtml(ch.color)}">${escapeHtml(ch.initials)}</span>
+        <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
+        <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>
+        <button class="channel-delete-btn" type="button" aria-label="Verwijder ${escapeHtml(ch.name)}" data-delete-channel="${escapeHtml(ch.id)}">×</button>
+      </div>`;
+  }).join("");
+
+  const addButton = `
+    <button class="channel-add-btn" type="button" id="addCustomChannelButton">
+      <span class="channel-add-btn__icon">+</span>
+      Kanaal toevoegen
+    </button>`;
+
+  container.innerHTML = seedRows + customRows + addButton;
 }
 
 function renderCookbookFilterBar() {
@@ -2287,7 +2327,11 @@ function renderGroceryGroups() {
             .map(
               (item) => `
                 <button class="grocery-entry ${item.checked ? "is-checked" : ""}" type="button" data-grocery-id="${item.id}">
-                  <span class="grocery-entry__img" aria-hidden="true">${getIngredientVisualMarkup(item.title)}</span>
+                  <span class="grocery-entry__img" aria-hidden="true">
+                    ${item.imageUrl
+                      ? `<img class="grocery-entry__ah-img" src="${escapeHtml(item.imageUrl)}" alt="" loading="lazy" />`
+                      : getIngredientVisualMarkup(item.title)}
+                  </span>
                   <span class="grocery-entry__content">
                     <p class="grocery-entry__title">${item.title}</p>
                   </span>
@@ -2301,6 +2345,53 @@ function renderGroceryGroups() {
       `;
     })
     .join("");
+
+  // Trigger background photo fetch for items without photos
+  if (state.view === "grocery") {
+    debouncedFetchGroceryPhotos();
+  }
+}
+
+let _groceryPhotoFetchTimer = null;
+function debouncedFetchGroceryPhotos() {
+  if (_groceryPhotoFetchTimer) return;
+  _groceryPhotoFetchTimer = setTimeout(() => {
+    _groceryPhotoFetchTimer = null;
+    fetchGroceryPhotos();
+  }, 5000);
+}
+
+async function fetchGroceryPhotos() {
+  const itemsWithoutPhoto = state.groceryItems
+    .filter((item) => !item.imageUrl && !item.checked)
+    .slice(0, 20);
+  if (!itemsWithoutPhoto.length) return;
+  try {
+    const resp = await fetch("/api/grocery-photos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: itemsWithoutPhoto.map((item) => ({ id: item.id, title: item.title })),
+      }),
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const photos = data.photos || {};
+    let changed = false;
+    for (const [groceryId, url] of Object.entries(photos)) {
+      if (!url) continue;
+      const item = state.groceryItems.find((i) => i.id === groceryId);
+      if (item && !item.imageUrl) {
+        item.imageUrl = url;
+        changed = true;
+      }
+    }
+    if (changed && state.view === "grocery") {
+      renderGroceryGroups();
+    }
+  } catch {
+    // silently ignore
+  }
 }
 
 function getReviewRecipe() {
@@ -3408,6 +3499,7 @@ function buildPersistedAppState() {
     featuredRecipeId: state.featuredRecipeId,
     selectedRecipeId: state.selectedRecipeId,
     followedChannelIds: [...state.followedChannelIds],
+    customChannels: state.customChannels.map((ch) => ({ ...ch })),
   };
 }
 
@@ -3462,9 +3554,15 @@ function applyPersistedAppState(user) {
     state.selectedRecipeId = user.selectedRecipeId;
   }
 
+  if (Array.isArray(user.customChannels)) {
+    state.customChannels = user.customChannels
+      .filter((ch) => ch && typeof ch.id === "string" && typeof ch.name === "string" && typeof ch.url === "string")
+      .map((ch) => ({ ...ch }));
+  }
+
   if (Array.isArray(user.followedChannelIds) && user.followedChannelIds.length) {
     state.followedChannelIds = user.followedChannelIds.filter((id) =>
-      SEED_CHANNELS.some((ch) => ch.id === id)
+      SEED_CHANNELS.some((ch) => ch.id === id) || state.customChannels.some((ch) => ch.id === id)
     );
   }
 }
@@ -3873,18 +3971,20 @@ bindEvent(groceryMoreButton, "click", () => {
 let grocerySuggestTimeout = null;
 let grocerySuggestIndex = -1;
 
-function addGroceryItemByTitle(title, amount = "1 stuk") {
+function addGroceryItemByTitle(title, amount = "1 stuk", imageUrl = "") {
   if (!title) return;
   const existing = state.groceryItems.find(
     (item) => !item.checked && normalizeIngredientKey(item.title) === normalizeIngredientKey(title)
   );
   if (existing) {
     existing.amount = mergeAmountLabels(existing.amount, amount);
+    if (imageUrl && !existing.imageUrl) existing.imageUrl = imageUrl;
   } else {
     state.groceryItems.unshift({
       id: `grocery-quick-${Date.now()}`,
       title,
       amount,
+      imageUrl,
       recipeId: "",
       recipeTitle: "",
       recipeSourceUrl: "",
@@ -3913,7 +4013,7 @@ function renderSuggestDropdown(suggestions, rawQuery) {
   if (!suggestions.length) {
     // Show a "just add it" fallback
     dd.innerHTML = `
-      <button class="suggest-item suggest-item--plain" type="button" data-suggest-title="${escapeHtml(rawQuery)}">
+      <button class="suggest-item suggest-item--plain" type="button" data-suggest-title="${escapeHtml(rawQuery)}" data-suggest-image="">
         <span class="suggest-item__name">${escapeHtml(rawQuery)}</span>
         <span class="suggest-item__meta">Zelf toevoegen</span>
       </button>`;
@@ -3921,13 +4021,14 @@ function renderSuggestDropdown(suggestions, rawQuery) {
     dd.innerHTML = suggestions.map((s, i) => `
       <button class="suggest-item" type="button" role="option"
         data-suggest-title="${escapeHtml(s.name)}"
+        data-suggest-image="${escapeHtml(s.imageUrl || "")}"
         data-suggest-idx="${i}"
         aria-selected="false">
         <span class="suggest-item__badge">ah</span>
         <span class="suggest-item__name">${escapeHtml(s.name)}</span>
         ${s.price ? `<span class="suggest-item__price">${escapeHtml(s.price)}</span>` : ""}
       </button>`).join("") +
-      `<button class="suggest-item suggest-item--plain" type="button" data-suggest-title="${escapeHtml(rawQuery)}">
+      `<button class="suggest-item suggest-item--plain" type="button" data-suggest-title="${escapeHtml(rawQuery)}" data-suggest-image="">
         <span class="suggest-item__name">"${escapeHtml(rawQuery)}" toevoegen</span>
       </button>`;
   }
@@ -3937,7 +4038,7 @@ function renderSuggestDropdown(suggestions, rawQuery) {
   dd.querySelectorAll(".suggest-item").forEach((btn) => {
     btn.addEventListener("mousedown", (e) => {
       e.preventDefault(); // don't blur the input
-      addGroceryItemByTitle(btn.dataset.suggestTitle);
+      addGroceryItemByTitle(btn.dataset.suggestTitle, "1 stuk", btn.dataset.suggestImage || "");
     });
   });
 }
@@ -4608,6 +4709,48 @@ bindEvent(document.getElementById("cookbookDeleteButton"), "click", () => {
 
 // Channel toggle click handler
 bindEvent(document.getElementById("channelSettingsList"), "click", (event) => {
+  // Handle delete button for custom channels
+  const deleteBtn = event.target.closest("[data-delete-channel]");
+  if (deleteBtn instanceof HTMLElement) {
+    event.stopPropagation();
+    const id = deleteBtn.dataset.deleteChannel;
+    if (!id) return;
+    const ch = state.customChannels.find((c) => c.id === id);
+    if (!ch) return;
+    if (!confirm(`"${ch.name}" verwijderen?`)) return;
+    state.customChannels = state.customChannels.filter((c) => c.id !== id);
+    state.followedChannelIds = state.followedChannelIds.filter((c) => c !== id);
+    renderChannelSettings();
+    renderChannelRow();
+    schedulePersistAppState();
+    return;
+  }
+
+  // Handle "Kanaal toevoegen" button
+  if (event.target.closest("#addCustomChannelButton")) {
+    const name = prompt("Website naam (bijv. \"Leuke Recepten\"):");
+    if (!name || !name.trim()) return;
+    const url = prompt("Website URL (bijv. \"https://www.leukerecepten.nl\"):");
+    if (!url || !url.trim()) return;
+    const trimmedName = name.trim();
+    const trimmedUrl = url.trim();
+    const initials = trimmedName.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase() || trimmedName.slice(0, 2).toUpperCase();
+    const color = CUSTOM_CHANNEL_COLORS[state.customChannels.length % CUSTOM_CHANNEL_COLORS.length];
+    const newChannel = {
+      id: `ch-custom-${Date.now()}`,
+      name: trimmedName,
+      url: trimmedUrl,
+      initials,
+      color,
+    };
+    state.customChannels.push(newChannel);
+    state.followedChannelIds.push(newChannel.id);
+    renderChannelSettings();
+    renderChannelRow();
+    schedulePersistAppState();
+    return;
+  }
+
   const row = event.target.closest("[data-channel-id]");
   if (!(row instanceof HTMLElement)) return;
   const id = row.dataset.channelId;

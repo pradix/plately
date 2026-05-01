@@ -5565,3 +5565,64 @@ body {
   letter-spacing: 0.03em;
   white-space: nowrap;
 }
+
+/* ── AH product photo in grocery list ───────────────────────────────────── */
+.grocery-entry__ah-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #f5f9f4;
+}
+
+/* ── Custom channel add/delete controls ─────────────────────────────────── */
+.channel-toggle-row--custom {
+  cursor: default;
+}
+.channel-toggle-row--custom .toggle-switch {
+  cursor: pointer;
+}
+
+.channel-delete-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(200, 60, 60, 0.10);
+  color: #c83c3c;
+  font-size: 1rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.12s;
+  margin-left: 4px;
+}
+.channel-delete-btn:hover {
+  background: rgba(200, 60, 60, 0.22);
+}
+
+.channel-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  background: none;
+  color: #8da485;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+.channel-add-btn:hover {
+  background: #f5f9f4;
+}
+.channel-add-btn__icon {
+  font-size: 1.2rem;
+  line-height: 1;
+  font-weight: 400;
+}

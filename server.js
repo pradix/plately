@@ -3038,11 +3038,13 @@ function parseAHProduct(product) {
   const webshopId = String(product.webshopId || product.id || "");
   const numericId = webshopId.replace(/^wi_?/i, "");
   const priceEuros = product.priceBeforeBonus ?? product.currentPrice ?? 0;
+  const imageUrl = product.images?.[0]?.url || "";
   return {
     id: numericId,
     name: sanitizeText(product.title),
     price: priceEuros ? `€${Number(priceEuros).toFixed(2).replace(".", ",")}` : "",
     url: numericId ? `https://www.ah.nl/producten/product/wi${numericId}` : "",
+    imageUrl,
   };
 }
 
@@ -3502,6 +3504,17 @@ async function searchAHRecipes(query, count = 4) {
   return [];
 }
 
+async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, parser, count, query) {
+  try {
+    const html = await fetchHtml(searchUrl);
+    if (html && html.length > 500) {
+      const scraped = parser(html, baseUrl, channelName, channelId, count);
+      if (scraped.length > 0) return scraped;
+    }
+  } catch { /* fall through */ }
+  return wpRestSearch(baseUrl, channelName, channelId, query || "", count);
+}
+
 async function searchChannelRecipes(query, allowedChannels = null) {
   const q = encodeURIComponent(query);
   // null = all channels; array = only those channel IDs
@@ -3932,6 +3945,7 @@ const server = http.createServer(async (request, response) => {
           name: p.name,
           price: p.price,
           url: p.url,
+          imageUrl: p.imageUrl,
         })),
       });
       return;
@@ -3948,7 +3962,54 @@ const server = http.createServer(async (request, response) => {
         ? channelsParam.split(",").map((s) => s.trim()).filter(Boolean)
         : null;
       const results = await searchChannelRecipes(query, allowedChannels);
+
+      // Handle custom channels
+      const customChannelsParam = requestUrl.searchParams.get("customChannels") || "";
+      if (customChannelsParam) {
+        const customChannelEntries = customChannelsParam.split(",")
+          .map((entry) => {
+            const parts = entry.split("|");
+            if (parts.length < 3) return null;
+            const [id, name, url] = parts;
+            return { id: id.trim(), name: name.trim(), url: url.trim() };
+          })
+          .filter((ch) => ch && ch.id && ch.name && ch.url);
+
+        if (customChannelEntries.length) {
+          const q = encodeURIComponent(query);
+          const customSearches = await Promise.allSettled(
+            customChannelEntries.map((ch) =>
+              scrapeOrRestPublic(ch.url, ch.name, ch.id, `${ch.url}/?s=${q}`, parseWPStandard, 4, query)
+            )
+          );
+          for (const s of customSearches) {
+            if (s.status === "fulfilled" && Array.isArray(s.value)) {
+              results.push(...s.value.slice(0, 4));
+            }
+          }
+        }
+      }
+
       sendJson(response, 200, { ok: true, results });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/grocery-photos" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const items = Array.isArray(body.items) ? body.items.slice(0, 20) : [];
+      const photoResults = await Promise.allSettled(
+        items.map(async (item) => {
+          const products = await findAHProducts(sanitizeText(item.title || ""), 1);
+          return { id: item.id, imageUrl: products[0]?.imageUrl || "" };
+        })
+      );
+      const photos = {};
+      for (const result of photoResults) {
+        if (result.status === "fulfilled" && result.value.imageUrl) {
+          photos[result.value.id] = result.value.imageUrl;
+        }
+      }
+      sendJson(response, 200, { ok: true, photos });
       return;
     }
 
