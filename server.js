@@ -98,7 +98,7 @@ const INGREDIENT_WORD_PATTERN =
 const NON_FOOD_INGREDIENT_PATTERN =
   /\b(keukenpapier|bakpapier|sat[ée]prikkers?|cocktailprikkers?|aluminiumfolie|folie|servetten?|touw|spiesen?|prikker)\b/i;
 const UNIT_PATTERN =
-  "(?:x|g|gr|kg|mg|ml|l|cl|dl|el|tl|tbsp|tsp|cup|cups|oz|lb|stuks?|stuk|krop|bosje|zakje|pot(?:je)?|blik(?:je)?|liter|snuf(?:je)?|teen|teentjes|plak(?:je|jes)?|gram|grams|milliliter|eetlepel(?:s)?|theelepel(?:s)?|handje|scheut(?:je)?|bakje|verpakking|pak|rollen?|bunch|clove|cloves|pinch|slices?)";
+  "(?:x|g|gr|kg|mg|ml|l|cl|dl|el|tl|tbsp|tsp|cup|cups|oz|lb|stuks?|stuk(?:ken)?|krop|kroppen|bosje|bosjes|zakje|zakjes|pot(?:je|jes)?|blik(?:je|jes)?|liter|snuf(?:je|jes)?|teen|tenen|teentjes|plak(?:je|jes)?|gram|grams|milliliter|eetlepel(?:s)?|theelepel(?:s)?|handje|handjes|scheut(?:je)?|bakje|bakjes|verpakking(?:en)?|pak(?:ken)?|rollen?|rol|bunch|clove|cloves|pinch|slices?|stengel|stengels|takje|takjes|blokje|blokjes|blaadje|blaadjes|blad|bladeren|reepje|reepjes|filet|filets)";
 const QUANTITY_PATTERN = "(?:\\d+(?:[.,]\\d+)?|\\d+\\/\\d+|\\d+\\s+\\d+\\/\\d+)";
 const TIKTOK_CAPTION_FIELD_PATTERN = /(desc|description|caption|shareDesc|seoDesc|text|content)/i;
 const TIKTOK_TITLE_FIELD_PATTERN = /(title|shareTitle|seoTitle|recipeName|name)/i;
@@ -1528,23 +1528,148 @@ function extractStructuredSections(text) {
 
 function extractDescription(caption, title) {
   const structured = extractStructuredSections(caption);
-  const lines = structured.intro.filter((line) => {
-    if (!line) {
-      return false;
-    }
-    if (line.toLowerCase() === String(title || "").toLowerCase()) {
-      return false;
-    }
-    if (/^\d+\s?(g|kg|ml|l|el|tl|cup|cups|stuks?|stuk|krop|bosje|zakje|pot|blik)\b/i.test(line)) {
-      return false;
-    }
-    if (/^(ingredients?|ingrediënten|bereiding|instructions?|method|recipe)$/i.test(line)) {
-      return false;
-    }
-    return line.length >= 20;
-  });
+  const lines = structured.intro
+    .map((line) =>
+      sanitizeText(
+        String(line || "")
+          .replace(new RegExp(`^${escapeRegex(String(title || ""))}[!.,:\\s-]*`, "i"), "")
+          .replace(/\b(recept|recipe)\b[:\s-]*/i, "")
+          .replace(/\bvoor\s+\d+\s+personen?.*$/i, "")
+      )
+    )
+    .filter((line) => {
+      if (!line) {
+        return false;
+      }
+      if (line.toLowerCase() === String(title || "").toLowerCase()) {
+        return false;
+      }
+      if (/^\d+\s?(g|kg|ml|l|el|tl|cup|cups|stuks?|stuk|krop|bosje|zakje|pot|blik)\b/i.test(line)) {
+        return false;
+      }
+      if (/^(ingredients?|ingrediënten|bereiding|instructions?|method|recipe)$/i.test(line)) {
+        return false;
+      }
+      return line.length >= 18;
+    });
 
-  return lines[0] ? sanitizeText(lines[0]).slice(0, 180) : "";
+  const description = sanitizeText(lines.slice(0, 2).join(" "));
+  if (!description) {
+    return "";
+  }
+
+  if (description.length <= 180) {
+    return description;
+  }
+
+  const sentenceChunks = description
+    .split(/(?<=[.!?])\s+/)
+    .map((item) => sanitizeText(item))
+    .filter(Boolean);
+  return sanitizeText(sentenceChunks.slice(0, 2).join(" ")).slice(0, 180);
+}
+
+function normalizeSocialRecipeTitle(title) {
+  const clean = normalizeRecipeTitle(title);
+  if (!clean) {
+    return "";
+  }
+
+  return sanitizeText(
+    clean
+      .replace(/\bone pot\b/gi, "One Pot")
+      .replace(/\bmac and cheese\b/gi, "Mac and Cheese")
+      .replace(/\bair fryer\b/gi, "Airfryer")
+  );
+}
+
+function inferIngredientDefaults(name) {
+  const value = sanitizeText(name).toLowerCase();
+  if (!value) {
+    return { quantity: "", unit: "" };
+  }
+  if (/^(verse\s+)?(peterselie|koriander|basilicum|bieslook|munt|dille)$/.test(value)) {
+    return { quantity: "1", unit: "handje" };
+  }
+  if (/^(peper en zout|zout en peper)(?:\s+naar smaak)?$/.test(value)) {
+    return { quantity: "1", unit: "snuf" };
+  }
+  if (/^(olijfolie|zonnebloemolie|sesamolie|bakolie)$/.test(value)) {
+    return { quantity: "1", unit: "scheutje" };
+  }
+  return { quantity: "", unit: "" };
+}
+
+function cleanupIngredientName(name) {
+  const raw = sanitizeText(name);
+  if (!raw) {
+    return "";
+  }
+
+  const withoutPrep = sanitizeText(
+    raw
+      .replace(/\s*\((?:optioneel|naar smaak)\)\s*/gi, " ")
+      .replace(/,\s*(fijn)?gesnipperd\b/gi, "")
+      .replace(/,\s*fijngesneden\b/gi, "")
+      .replace(/,\s*gesneden\b/gi, "")
+      .replace(/,\s*geraspt\b/gi, "")
+      .replace(/,\s*gerist\b/gi, "")
+      .replace(/,\s*in\s+\d+e?\s+gesneden\b/gi, "")
+      .replace(/,\s*in\s+stukken\b/gi, "")
+      .replace(/,\s*in\s+blokjes\b/gi, "")
+      .replace(/,\s*in\s+plakjes\b/gi, "")
+      .replace(/,\s*grof gehakt\b/gi, "")
+      .replace(/,\s*fijngehakt\b/gi, "")
+      .replace(/\s{2,}/g, " ")
+  );
+
+  return sanitizeText(
+    withoutPrep
+      .replace(/^(?:een|één)\s+(kleine|grote|middelgrote|middelgroot)\s+/i, "")
+      .replace(/^(kleine|grote|middelgrote|middelgroot)\s+/i, "")
+  );
+}
+
+function compactSocialDescription(description, title) {
+  const clean = sanitizeText(
+    String(description || "")
+      .replace(new RegExp(`^${escapeRegex(String(title || ""))}[!.,:\\s-]*`, "i"), "")
+      .replace(/\bvoor\s+\d+\s+personen?.*$/i, "")
+      .replace(/\b(?:recept|recipe)\b[:\s-]*/i, "")
+  );
+
+  if (!clean) {
+    return "";
+  }
+
+  const sentences = clean
+    .split(/(?<=[.!?])\s+/)
+    .map((item) => sanitizeText(item))
+    .filter(Boolean);
+  const firstSentence = sanitizeText(sentences[0] || clean);
+  return firstSentence.slice(0, 140);
+}
+
+function normalizeIngredientObject(ingredient) {
+  if (!ingredient?.name) {
+    return ingredient;
+  }
+
+  const normalizedName = cleanupIngredientName(ingredient.name);
+  const defaults = inferIngredientDefaults(normalizedName);
+  return {
+    quantity: sanitizeText(String(ingredient.quantity || defaults.quantity || "")),
+    unit: sanitizeText(String(ingredient.unit || defaults.unit || "")).toLowerCase(),
+    name: normalizedName,
+  };
+}
+
+function normalizeIngredientList(items) {
+  return uniqueByName(
+    items
+      .map((item) => normalizeIngredientObject(item))
+      .filter((item) => item?.name)
+  );
 }
 
 async function extractWithClaude(caption, note) {
@@ -1631,9 +1756,46 @@ function parseIngredientLine(line) {
       .replace(/^voor\s+\d+\s+personen?\s*:?\s*/i, "")
       .replace(/\b(?:instructions?|method|steps?|bereiding|bereidingswijze|werkwijze)\s*:?\s*$/i, "")
   );
+  if (!clean) {
+    return {
+      quantity: "",
+      unit: "",
+      name: "",
+    };
+  }
+
+  const normalizedSimpleName = clean
+    .toLowerCase()
+    .replace(/^(verse|versee|vers|fijngesneden|gesneden|geraspte|geraspt|gehakte|gehakt)\s+/i, "")
+    .trim();
+
+  if (/^peper en zout(?:\s+naar smaak)?$/i.test(clean)) {
+    return {
+      quantity: "1",
+      unit: "snuf",
+      name: clean,
+    };
+  }
+
+  if (/^(verse\s+)?(peterselie|koriander|basilicum|bieslook|munt)$/i.test(clean)) {
+    return {
+      quantity: "1",
+      unit: "handje",
+      name: clean,
+    };
+  }
+
+  if (/^(citroen|limoen)rasp$/i.test(normalizedSimpleName)) {
+    return {
+      quantity: "1",
+      unit: "x",
+      name: clean,
+    };
+  }
+
   const match = clean.match(
     new RegExp(
-      `^(${QUANTITY_PATTERN})(?:\\s*(?:flinke|kleine|grote|halve|half|volle|verse)\\s+)?(?:\\s*(${UNIT_PATTERN})(?=\\s|$))?\\s+(.+)$`,
+      `^(${QUANTITY_PATTERN})(?:\\s*(?:flinke|kleine|grote|halve|half|volle|verse|middelgrote|middelgroot|klein|groot)\\s+)?(?:\\s*(${UNIT_PATTERN})(?=\\s|$))?\\s+(.+)$`,
       "i"
     )
   );
@@ -1646,21 +1808,46 @@ function parseIngredientLine(line) {
   }
 
   const verbalQuantityMatch = clean.match(
-    /^(een|één|halve|half|paar|scheut(?:je)?|handje|snuf(?:je)?)\s+(.+)$/i
+    /^(een|één|halve|half|paar|scheut(?:je)?|handje|handjes|snuf(?:je)?|bosje|takje)\s+(.+)$/i
   );
   if (verbalQuantityMatch) {
     const token = verbalQuantityMatch[1].toLowerCase();
     return {
-      quantity: token === "halve" || token === "half" ? "0.5" : token === "paar" ? "2" : "1",
-      unit: token === "scheutje" || token === "handje" || token === "snufje" ? token : "x",
+      quantity:
+        token === "halve" || token === "half"
+          ? "0.5"
+          : token === "paar"
+            ? "2"
+            : token === "handjes"
+              ? "2"
+              : "1",
+      unit:
+        token === "scheutje" ||
+        token === "handje" ||
+        token === "handjes" ||
+        token === "snufje" ||
+        token === "bosje" ||
+        token === "takje"
+          ? token
+          : "x",
       name: sanitizeText(verbalQuantityMatch[2]),
     };
   }
-  return {
-    quantity: "1",
-    unit: "x",
+
+  const implicitHerbMatch = clean.match(/^(verse\s+)?(peterselie|koriander|basilicum|bieslook|munt|dille)$/i);
+  if (implicitHerbMatch) {
+    return {
+      quantity: "1",
+      unit: "handje",
+      name: clean,
+    };
+  }
+
+  return normalizeIngredientObject({
+    quantity: "",
+    unit: "",
     name: clean,
-  };
+  });
 }
 
 function uniqueByName(items) {
@@ -1698,7 +1885,7 @@ function extractIngredientsFromText(text) {
     ...sourceLines.filter((line) => isLikelyIngredientLine(line)),
   ];
 
-  return uniqueByName(candidates.map(parseIngredientLine)).slice(0, 12);
+  return normalizeIngredientList(candidates.map(parseIngredientLine)).slice(0, 12);
 }
 
 function extractInstructionsFromText(text) {
@@ -1706,7 +1893,37 @@ function extractInstructionsFromText(text) {
   const candidates = structured.instructions.length
     ? structured.instructions
     : mergeInstructionLines(splitCaptionLines(text).filter((line) => isLikelyInstructionLine(line)));
-  return [...new Set(candidates)].slice(0, 8);
+  return finalizeInstructionSteps(candidates).slice(0, 8);
+}
+
+function isLikelyOptionalInstructionStep(step) {
+  const value = sanitizeText(step).toLowerCase();
+  if (!value) {
+    return false;
+  }
+
+  return (
+    /^(tip|tips?|extra tip|sandra[’']?s tip|sandra[’']?s)\b/.test(value) ||
+    /\b(lekker met|ook lekker met|vegetarische variant|voor een vegetarische variant|serveer .* frisse salade)\b/.test(
+      value
+    )
+  );
+}
+
+function finalizeInstructionSteps(steps) {
+  const unique = [...new Set(steps.map((step) => sanitizeInstructionStep(step)).filter(Boolean))];
+  const normalized = unique
+    .map((step) =>
+      sanitizeText(
+        step
+          .replace(/\b(?:tip|tips?|extra tip|sandra'?s tip)\s*:\s*.*$/i, "")
+          .replace(/\bEet smakelijk!?$/i, "")
+      )
+    )
+    .filter(Boolean);
+
+  const shouldTrimOptional = normalized.length >= 5;
+  return normalized.filter((step) => !shouldTrimOptional || !isLikelyOptionalInstructionStep(step));
 }
 
 function estimateTime(text) {
@@ -2174,33 +2391,29 @@ function parseJsonLdInstructions(value) {
     return [];
   }
   if (Array.isArray(value)) {
-    return [
-      ...new Set(
-        value
-          .flatMap((item) => {
-            if (typeof item === "string") {
-              return [sanitizeInstructionStep(item)];
-            }
-            if (item?.itemListElement) {
-              return parseJsonLdInstructions(item.itemListElement);
-            }
-            if (item?.text || item?.name) {
-              return [sanitizeInstructionStep(item.text || item.name)];
-            }
-            return [];
-          })
-          .filter(Boolean)
-      ),
-    ];
+    return finalizeInstructionSteps(
+      value.flatMap((item) => {
+        if (typeof item === "string") {
+          return [sanitizeInstructionStep(item)];
+        }
+        if (item?.itemListElement) {
+          return parseJsonLdInstructions(item.itemListElement);
+        }
+        if (item?.text || item?.name) {
+          return [sanitizeInstructionStep(item.text || item.name)];
+        }
+        return [];
+      })
+    );
   }
   if (typeof value === "string") {
-    return mergeInstructionLines(splitTextUnits(sanitizeInstructionStep(value)));
+    return finalizeInstructionSteps(mergeInstructionLines(splitTextUnits(sanitizeInstructionStep(value))));
   }
   if (value.itemListElement) {
     return parseJsonLdInstructions(value.itemListElement);
   }
   if (value.text || value.name) {
-    return [sanitizeInstructionStep(value.text || value.name)].filter(Boolean);
+    return finalizeInstructionSteps([sanitizeInstructionStep(value.text || value.name)]);
   }
   return [];
 }
@@ -2296,15 +2509,15 @@ function parseWebsiteRecipe(html, url) {
     const recipeName = sanitizeText(recipeSource.name || metaTitle);
     const recipeDescription = sanitizeText(stripTags(recipeSource.description || metaDescription));
     const recipeIngredients = Array.isArray(recipeSource.recipeIngredient)
-      ? uniqueByName(recipeSource.recipeIngredient.map(parseIngredientLine))
+      ? normalizeIngredientList(recipeSource.recipeIngredient.map(parseIngredientLine))
       : [];
     const recipeInstructions = parseJsonLdInstructions(recipeSource.recipeInstructions);
     const mergedIngredients = recipeIngredients.length
       ? recipeIngredients
-      : uniqueByName(fallbackIngredients.map(parseIngredientLine)).slice(0, 16);
+      : normalizeIngredientList(fallbackIngredients.map(parseIngredientLine)).slice(0, 16);
     const mergedInstructions = recipeInstructions.length
-      ? recipeInstructions
-      : mergeInstructionLines(fallbackInstructions).slice(0, 12);
+      ? finalizeInstructionSteps(recipeInstructions)
+      : finalizeInstructionSteps(mergeInstructionLines(fallbackInstructions)).slice(0, 12);
     const recipeYield = Array.isArray(recipeSource.recipeYield)
       ? sanitizeText(recipeSource.recipeYield.find(Boolean) || recipeSource.recipeYield[0])
       : sanitizeText(recipeSource.recipeYield);
@@ -2354,8 +2567,8 @@ function parseWebsiteRecipe(html, url) {
     caption: fallbackDescription,
     image: metaImage,
     author: new URL(url).hostname.replace(/^www\./, ""),
-    ingredients: uniqueByName(fallbackIngredients.map(parseIngredientLine)).slice(0, 12),
-    instructions: fallbackInstructions.slice(0, 10),
+    ingredients: normalizeIngredientList(fallbackIngredients.map(parseIngredientLine)).slice(0, 12),
+    instructions: finalizeInstructionSteps(fallbackInstructions).slice(0, 10),
     time: estimateTime(fallbackDescription),
     servings: "2",
     needsReview: fallbackIngredients.length === 0 || fallbackInstructions.length === 0,
@@ -2381,11 +2594,11 @@ function buildSocialRecipe({ platform, sourceUrl, rawTitle, rawCaption, image, a
     extractDishPhrase(cleanCaption),
   ].filter(Boolean);
   const finalTitle =
-    pickBestTitleCandidate(derivedTitleCandidates) ||
+    normalizeSocialRecipeTitle(pickBestTitleCandidate(derivedTitleCandidates)) ||
     extractDishPhrase(cleanCaption) ||
     (ingredients[0] ? `Recept met ${ingredients[0].name}` : "Geïmporteerd recept");
 
-  const finalDescription = extractDescription(cleanCaption, finalTitle);
+  const finalDescription = compactSocialDescription(extractDescription(cleanCaption, finalTitle), finalTitle);
   const instructions = extractInstructionsFromText(cleanCaption);
 
   return {
@@ -2439,15 +2652,13 @@ async function importTikTok(sourceUrl, note) {
     return {
       platform: "tiktok",
       sourceUrl,
-      title: sanitizeText(claudeResult.title) || "Geïmporteerd recept",
-      description: sanitizeText(claudeResult.description || ""),
+      title: normalizeSocialRecipeTitle(claudeResult.title) || "Geïmporteerd recept",
+      description: compactSocialDescription(claudeResult.description || "", claudeResult.title || ""),
       caption: stripSocialNoise(bestCaption),
       image,
       author,
-      ingredients: uniqueByName(parsedIngredients),
-      instructions: Array.isArray(claudeResult.instructions)
-        ? claudeResult.instructions.map((step) => sanitizeText(step)).filter(Boolean)
-        : [],
+      ingredients: normalizeIngredientList(parsedIngredients),
+      instructions: Array.isArray(claudeResult.instructions) ? finalizeInstructionSteps(claudeResult.instructions) : [],
       time: sanitizeText(claudeResult.time || "30 min"),
       servings: sanitizeText(String(claudeResult.servings || "2")),
       needsReview: parsedIngredients.length === 0,
@@ -2511,15 +2722,13 @@ async function importInstagram(sourceUrl, note) {
       return {
         platform: "instagram",
         sourceUrl,
-        title: sanitizeText(claudeResult.title) || "Geïmporteerd recept",
-        description: sanitizeText(claudeResult.description || ""),
+        title: normalizeSocialRecipeTitle(claudeResult.title) || "Geïmporteerd recept",
+        description: compactSocialDescription(claudeResult.description || "", claudeResult.title || ""),
         caption: stripSocialNoise(bestCaption),
         image,
         author,
-        ingredients: uniqueByName(parsedIngredients),
-        instructions: Array.isArray(claudeResult.instructions)
-          ? claudeResult.instructions.map((step) => sanitizeText(step)).filter(Boolean)
-          : [],
+        ingredients: normalizeIngredientList(parsedIngredients),
+        instructions: Array.isArray(claudeResult.instructions) ? finalizeInstructionSteps(claudeResult.instructions) : [],
         time: sanitizeText(claudeResult.time || "30 min"),
         servings: sanitizeText(String(claudeResult.servings || "2")),
         needsReview: parsedIngredients.length === 0,
