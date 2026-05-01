@@ -3690,8 +3690,13 @@ bindEvent(searchInput, "input", (event) => {
   // Debounced channel search — fires after 600 ms of no typing
   clearTimeout(channelSearchTimeout);
   const query = event.target.value.trim();
-  if (query.length < 2) {
+  if (query.length === 0) {
+    // Only clear results when search bar is fully empty
     renderChannelSearchResults([]);
+    return;
+  }
+  if (query.length < 2) {
+    // Keep existing results visible while user is still typing
     return;
   }
   channelSearchTimeout = setTimeout(() => searchChannels(query), 600);
