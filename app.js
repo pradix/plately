@@ -2645,6 +2645,10 @@ function renderCookbookDetail(cookbookId) {
           `).join("")}
         </div>
       ` : `<p class="cb-detail__empty">Dit kookboek is nog leeg.<br>Sla een recept op om het hier te zien.</p>`}
+      <button class="cb-detail__add-btn" type="button" data-open-recipe-picker="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        Recept toevoegen
+      </button>
     </div>
   `;
 }
@@ -4220,6 +4224,79 @@ bindEvent(storeAssistant, "click", (event) => {
   renderBasketPreview();
 });
 
+// ── Recipe picker (add recipe to open cookbook) ───────────────────────────────
+const recipePicker = document.getElementById("recipePicker");
+const recipePickerList = document.getElementById("recipePickerList");
+const recipePickerSearch = document.getElementById("recipePickerSearch");
+const recipePickerTitle = document.getElementById("recipePickerTitle");
+
+function openRecipePicker(cookbookId) {
+  const cookbook = state.cookbooks.find((cb) => cb.id === cookbookId);
+  if (!cookbook || !recipePicker) return;
+  if (recipePickerTitle) recipePickerTitle.textContent = `Toevoegen aan "${cookbook.name}"`;
+  if (recipePickerSearch) recipePickerSearch.value = "";
+  renderRecipePickerList(cookbookId, "");
+  recipePicker.classList.remove("hidden");
+  recipePicker.setAttribute("aria-hidden", "false");
+  recipePickerSearch?.focus();
+}
+
+function closeRecipePicker() {
+  if (!recipePicker) return;
+  recipePicker.classList.add("hidden");
+  recipePicker.setAttribute("aria-hidden", "true");
+}
+
+function renderRecipePickerList(cookbookId, query) {
+  if (!recipePickerList) return;
+  const cookbook = state.cookbooks.find((cb) => cb.id === cookbookId);
+  const inCookbook = new Set(cookbook?.recipeIds || []);
+  const q = query.trim().toLowerCase();
+
+  const candidates = state.recipes.filter((r) => {
+    if (inCookbook.has(r.id)) return false; // already in cookbook
+    if (!q) return true;
+    return (r.title + " " + (r.description || "")).toLowerCase().includes(q);
+  });
+
+  if (!candidates.length) {
+    recipePickerList.innerHTML = `<li class="recipe-picker__empty">${q ? "Geen recepten gevonden." : "Alle recepten staan al in dit kookboek."}</li>`;
+    return;
+  }
+
+  recipePickerList.innerHTML = candidates.map((r) => `
+    <li>
+      <button class="recipe-picker__item" type="button" data-pick-recipe-id="${escapeHtml(r.id)}">
+        <img class="recipe-picker__thumb" src="${escapeHtml(r.image)}" alt="" loading="lazy" />
+        <span class="recipe-picker__name">${escapeHtml(r.title)}</span>
+        <svg class="recipe-picker__add-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+    </li>
+  `).join("");
+}
+
+bindEvent(document.getElementById("recipePickerClose"), "click", closeRecipePicker);
+bindEvent(document.getElementById("recipePickerBackdrop"), "click", closeRecipePicker);
+
+bindEvent(recipePickerSearch, "input", (e) => {
+  renderRecipePickerList(state.openCookbookId, e.target.value);
+});
+
+bindEvent(recipePickerList, "click", (e) => {
+  const btn = e.target.closest("[data-pick-recipe-id]");
+  if (!(btn instanceof HTMLElement)) return;
+  const recipeId = btn.dataset.pickRecipeId;
+  const cookbook = state.cookbooks.find((cb) => cb.id === state.openCookbookId);
+  if (!cookbook || !recipeId) return;
+  if (!cookbook.recipeIds.includes(recipeId)) {
+    cookbook.recipeIds.push(recipeId);
+    schedulePersistAppState();
+  }
+  closeRecipePicker();
+  renderCookbookDetail(state.openCookbookId);
+  showToast(`Recept toegevoegd aan ${cookbook.name}.`);
+});
+
 bindEvent(cookbookList, "click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) {
@@ -4242,6 +4319,13 @@ bindEvent(cookbookList, "click", (event) => {
     if (deleteBtn) deleteBtn.disabled = state.cookbooks.length <= 1;
     cookbookOptionsSheet?.classList.remove("hidden");
     cookbookOptionsSheet?.setAttribute("aria-hidden", "false");
+    return;
+  }
+
+  // Open recipe picker from detail view
+  const pickerBtn = target.closest("[data-open-recipe-picker]");
+  if (pickerBtn instanceof HTMLElement && state.openCookbookId) {
+    openRecipePicker(state.openCookbookId);
     return;
   }
 

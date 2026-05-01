@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-22" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-23" />
   </head>
   <body>
     <main class="page">
@@ -746,6 +746,22 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-18"></script>
+    <!-- Recipe picker (add to cookbook from detail view) -->
+    <div class="recipe-picker hidden" id="recipePicker" aria-hidden="true">
+      <div class="recipe-picker__backdrop" id="recipePickerBackdrop"></div>
+      <div class="recipe-picker__sheet" role="dialog" aria-modal="true" aria-label="Recept toevoegen aan kookboek">
+        <div class="recipe-picker__header">
+          <p class="section-kicker">RECEPT TOEVOEGEN</p>
+          <h3 class="recipe-picker__title" id="recipePickerTitle">Kies een recept</h3>
+          <button class="icon-button" type="button" id="recipePickerClose" aria-label="Sluiten">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.7 5.3L12 10.58l5.3-5.29l1.4 1.41L13.42 12l5.29 5.3l-1.41 1.4L12 13.42l-5.3 5.29l-1.4-1.41L10.58 12l-5.29-5.3l1.41-1.4Z"/></svg>
+          </button>
+        </div>
+        <input class="recipe-picker__search" id="recipePickerSearch" type="search" placeholder="Zoek recept…" autocomplete="off" />
+        <ul class="recipe-picker__list" id="recipePickerList"></ul>
+      </div>
+    </div>
+
+    <script src="app.js?v=plately-banani-19"></script>
   </body>
 </html>

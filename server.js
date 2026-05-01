@@ -3350,6 +3350,63 @@ function parseLaurasBakery(html, baseUrl, channelName, channelId, count) {
 }
 
 /**
+ * Chicks Love Food structure (server-rendered, no <article> tags):
+ *   <ul class="recipe-list ...">
+ *     <li>
+ *       <div class="recipe-item">
+ *         <div class="recipe-image"><a href="URL"><img src="THUMB" alt="TITLE"></a></div>
+ *         <div class="recipe-content">
+ *           <span class="recipe-info">CATEGORY • TIME</span>
+ *           <h4><a href="URL">TITLE</a></h4>
+ *         </div>
+ *       </div>
+ *     </li>
+ *   </ul>
+ */
+function parseChicksLoveFood(html, _baseUrl, channelName, channelId, count) {
+  const results = [];
+  const seenUrls = new Set();
+
+  // Find the recipe-list section
+  const listStart = html.indexOf('class="recipe-list');
+  if (listStart === -1) return results;
+  const listEnd = html.indexOf("</ul>", listStart);
+  const listHtml = listEnd > listStart ? html.slice(listStart, listEnd) : html.slice(listStart, listStart + 20000);
+
+  // Split by <li> items
+  const items = listHtml.split(/<li[\s>]/).slice(1);
+  for (const item of items) {
+    if (results.length >= count) break;
+
+    // URL from recipe-image link or h4 link
+    const urlMatch = item.match(/<div[^>]*class="[^"]*recipe-image[^"]*"[^>]*>[\s\S]*?href="(https?:\/\/[^"]+)"/i)
+      || item.match(/<h4[^>]*>[\s\S]*?href="(https?:\/\/[^"]+)"/i);
+    if (!urlMatch) continue;
+    const url = urlMatch[1];
+    if (seenUrls.has(url) || !/\/recept\//i.test(url)) continue;
+
+    // Title from h4 link text or img alt
+    const titleMatch = item.match(/<h4[^>]*>[\s\S]*?<a[^>]*>([\s\S]+?)<\/a>/i)
+      || item.match(/alt="([^"]+)"/i);
+    const title = decodeHtmlEntities(stripHtmlTags(titleMatch?.[1] || "")).trim();
+    if (!title) continue;
+
+    // Thumbnail from recipe-image img
+    const thumbMatch = item.match(/<div[^>]*class="[^"]*recipe-image[^"]*"[^>]*>[\s\S]*?src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i)
+      || item.match(/src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i);
+    const thumbnail = thumbMatch?.[1] || "";
+
+    // Time from recipe-info span
+    const timeMatch = item.match(/class="[^"]*recipe-info[^"]*"[^>]*>[\s\S]*?•\s*([^<]+)/i);
+    const time = timeMatch ? timeMatch[1].trim() : "";
+
+    seenUrls.add(url);
+    results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time });
+  }
+  return results;
+}
+
+/**
  * Generic WordPress search HTML parser.
  * Handles standard WP themes where <article> contains <h2 class="entry-title"><a href="...">
  */
@@ -3473,14 +3530,17 @@ async function searchChannelRecipes(query) {
     scrapeOrRest("https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek",
       `https://www.eefkooktzo.nl/?s=${q}`,
       parseWPStandard, 4),
-    // Uit Paulines Keuken — fallback to REST (search page is AJAX)
-    wpRestSearch("https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 4),
+    // Uit Paulines Keuken — AJAX search; REST fallback with recipe-URL filter
+    wpRestSearch("https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 8)
+      .then((items) => items.filter((r) => !/\/\d{4}\/\d{2}\//.test(r.url)).slice(0, 4)),
     // Miljuschka — may block (403), fallback to REST
     scrapeOrRest("https://miljuschka.nl", "Miljuschka", "ch-mj",
       `https://miljuschka.nl/?s=${q}`,
       parseWPStandard, 4),
-    // Chicks Love Food — JS-rendered, use REST
-    wpRestSearch("https://www.chickslovefood.com", "Chicks Love Food", "ch-clf", query, 4),
+    // Chicks Love Food — server-rendered recipe-list, scrape with custom parser
+    scrapeOrRest("https://www.chickslovefood.com", "Chicks Love Food", "ch-clf",
+      `https://www.chickslovefood.com/?s=${q}`,
+      parseChicksLoveFood, 4),
   ]);
 
   // Interleave results from each channel so no single channel dominates
