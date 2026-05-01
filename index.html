@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-17" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-18" />
   </head>
   <body>
     <main class="page">
@@ -398,6 +398,12 @@
           </section>
 
           <section class="profile-section-head">
+            <h2>Mijn kanalen</h2>
+            <p>Kies welke kanalen je wilt volgen</p>
+          </section>
+          <div class="channel-settings-list" id="channelSettingsList"></div>
+
+          <section class="profile-section-head">
             <h2>Mijn kookboeken</h2>
             <p id="profileCookbookCount">0 collecties</p>
           </section>
@@ -702,6 +708,36 @@
       </section>
     </div>
 
-    <script src="app.js?v=plately-banani-13"></script>
+    <!-- Cookbook name modal -->
+    <div class="mini-modal hidden" id="cookbookNameModal" aria-hidden="true">
+      <div class="mini-modal__backdrop" id="cookbookNameModalBackdrop"></div>
+      <div class="mini-modal__box" role="dialog" aria-modal="true" aria-labelledby="cookbookNameModalTitle">
+        <h3 class="mini-modal__title" id="cookbookNameModalTitle">Nieuw kookboek</h3>
+        <input class="mini-modal__input" id="cookbookNameInput" type="text" placeholder="Naam van je kookboek..." maxlength="40" autocomplete="off" />
+        <div class="mini-modal__actions">
+          <button class="secondary-button" type="button" id="cookbookNameCancelButton">Annuleren</button>
+          <button class="primary-button" type="button" id="cookbookNameConfirmButton">Opslaan</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cookbook options action sheet -->
+    <div class="action-sheet hidden" id="cookbookOptionsSheet" aria-hidden="true">
+      <div class="action-sheet__backdrop" id="cookbookOptionsBackdrop"></div>
+      <div class="action-sheet__box">
+        <p class="action-sheet__label" id="cookbookOptionsLabel">Kookboek opties</p>
+        <button class="action-sheet__item" type="button" id="cookbookRenameButton">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.1 5.1a2.5 2.5 0 1 1 3.54 3.54L9.5 17.78L5.75 18.75l.97-3.75L15.1 5.1Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Hernoemen
+        </button>
+        <button class="action-sheet__item action-sheet__item--danger" type="button" id="cookbookDeleteButton">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16m-10 4v6m4-6v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Verwijderen
+        </button>
+        <button class="action-sheet__item action-sheet__item--cancel" type="button" id="cookbookOptionsCloseButton">Annuleren</button>
+      </div>
+    </div>
+
+    <script src="app.js?v=plately-banani-14"></script>
   </body>
 </html>

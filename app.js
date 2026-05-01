@@ -461,15 +461,21 @@ const state = {
   },
   searchQuery: "",
   activeCookbookFilter: null,
+  followedChannelIds: ["ch-ah", "ch-ek", "ch-mj", "ch-up", "ch-clf", "ch-les", "ch-lb"],
+  channelSearchFilter: null,
+  channelSearchAllResults: [],
 };
 
 const SEED_RECIPE_IDS = new Set(initialRecipes.map((recipe) => recipe.id));
 
 const SEED_CHANNELS = [
-  { id: "ch-ah", initials: "AH", name: "Allerhande", color: "#0071c2", url: "https://www.ah.nl/allerhande", icon: "" },
-  { id: "ch-ek", initials: "EK", name: "Eef Kookt Zo", color: "#ef9fad", url: "https://www.eefkooktzo.nl", icon: "" },
-  { id: "ch-mj", initials: "M", name: "Miljuschka", color: "#1a1a1a", url: "https://miljuschka.nl", icon: "" },
-  { id: "ch-up", initials: "UP", name: "Uit Paulines Keuken", color: "#f8bb47", url: "https://uitpaulineskeuken.nl", icon: "" },
+  { id: "ch-ah",  initials: "AH",  name: "Allerhande",          color: "#0071c2", url: "https://www.ah.nl/allerhande" },
+  { id: "ch-ek",  initials: "EK",  name: "Eef Kookt Zo",        color: "#d4789e", url: "https://www.eefkooktzo.nl" },
+  { id: "ch-mj",  initials: "MJ",  name: "Miljuschka",           color: "#2d2d2d", url: "https://miljuschka.nl" },
+  { id: "ch-up",  initials: "UP",  name: "Uit Paulines Keuken",  color: "#e8a020", url: "https://uitpaulineskeuken.nl" },
+  { id: "ch-clf", initials: "CLF", name: "Chicks Love Food",     color: "#e04458", url: "https://www.chickslovefood.com" },
+  { id: "ch-les", initials: "LS",  name: "Lekker & Simpel",      color: "#4d9e5a", url: "https://www.lekkerensimpel.com" },
+  { id: "ch-lb",  initials: "LB",  name: "Laura's Bakery",       color: "#e879a0", url: "https://www.laurasbakery.nl" },
 ];
 
 const homeScreen = document.getElementById("homeScreen");
@@ -614,6 +620,9 @@ const cookbookSaveModal = document.getElementById("cookbookSaveModal");
 const cookbookSaveList = document.getElementById("cookbookSaveList");
 const cookbookSaveRecipeTitle = document.getElementById("cookbookSaveRecipeTitle");
 const cookbookSaveCreateButton = document.getElementById("cookbookSaveCreateButton");
+const cookbookNameModal = document.getElementById("cookbookNameModal");
+const cookbookNameInput = document.getElementById("cookbookNameInput");
+const cookbookOptionsSheet = document.getElementById("cookbookOptionsSheet");
 
 function getSelectedRecipe() {
   return state.recipes.find((recipe) => recipe.id === state.selectedRecipeId) || state.recipes[0];
@@ -1512,17 +1521,27 @@ function getImportedRecipes() {
 
 let channelSearchTimeout = null;
 
-function renderChannelSearchResults(results) {
+function renderChannelSearchResults(results, filter = state.channelSearchFilter) {
   if (!channelSearchSection || !channelSearchResults) return;
 
-  if (!results || results.length === 0) {
+  state.channelSearchAllResults = results ?? state.channelSearchAllResults;
+  state.channelSearchFilter = filter;
+
+  const all = state.channelSearchAllResults;
+
+  if (!all || all.length === 0) {
     channelSearchSection.classList.add("hidden");
     channelSearchResults.innerHTML = "";
+    renderChannelFilterChips([]);
     return;
   }
 
+  const filtered = filter ? all.filter((r) => r.channelId === filter) : all;
+
   channelSearchSection.classList.remove("hidden");
-  channelSearchResults.innerHTML = results
+  renderChannelFilterChips(all);
+
+  channelSearchResults.innerHTML = filtered
     .map((r) => {
       const channelColor = SEED_CHANNELS.find((ch) => ch.id === r.channelId)?.color || "#8da485";
       const thumb = r.thumbnail
@@ -1541,7 +1560,30 @@ function renderChannelSearchResults(results) {
           </button>
         </div>`;
     })
-    .join("");
+    .join(filtered.length ? "" : `<p class="ch-result__loading">Geen resultaten voor dit kanaal.</p>`);
+}
+
+function renderChannelFilterChips(results) {
+  const header = document.querySelector(".channel-search-header");
+  if (!header) return;
+  let filterRow = document.getElementById("channelFilterRow");
+  if (!filterRow) {
+    filterRow = document.createElement("div");
+    filterRow.id = "channelFilterRow";
+    filterRow.className = "channel-filter-row";
+    header.after(filterRow);
+  }
+
+  // Build set of channelIds present in results
+  const present = [...new Set(results.map((r) => r.channelId))];
+  if (present.length <= 1) { filterRow.innerHTML = ""; return; }
+
+  filterRow.innerHTML = [
+    `<button class="ch-filter-chip ${!state.channelSearchFilter ? "ch-filter-chip--active" : ""}" data-ch-filter="">Alles</button>`,
+    ...SEED_CHANNELS
+      .filter((ch) => present.includes(ch.id))
+      .map((ch) => `<button class="ch-filter-chip ${state.channelSearchFilter === ch.id ? "ch-filter-chip--active" : ""}" data-ch-filter="${escapeHtml(ch.id)}" style="--ch-color:${escapeHtml(ch.color)}">${escapeHtml(ch.name)}</button>`)
+  ].join("");
 }
 
 async function searchChannels(query) {
@@ -1691,7 +1733,8 @@ function renderCategoryGrid() {
 function renderChannelRow() {
   const row = document.getElementById("channelRow");
   if (!row) return;
-  row.innerHTML = SEED_CHANNELS.map((ch) => `
+  const followed = SEED_CHANNELS.filter((ch) => state.followedChannelIds.includes(ch.id));
+  row.innerHTML = followed.map((ch) => `
     <button class="channel-item" type="button" data-channel-url="${escapeHtml(ch.url)}" aria-label="${escapeHtml(ch.name)} openen">
       <span class="channel-avatar" style="background:${escapeHtml(ch.color)}">
         <span class="channel-avatar__initials">${escapeHtml(ch.initials)}</span>
@@ -1706,6 +1749,20 @@ function renderNavBadge() {
   if (!badge) return;
   const count = state.groceryItems.filter((item) => !item.checked).length;
   badge.textContent = count > 0 ? String(count) : "";
+}
+
+function renderChannelSettings() {
+  const container = document.getElementById("channelSettingsList");
+  if (!container) return;
+  container.innerHTML = SEED_CHANNELS.map((ch) => {
+    const followed = state.followedChannelIds.includes(ch.id);
+    return `
+      <label class="channel-toggle-row" data-channel-id="${escapeHtml(ch.id)}">
+        <span class="channel-toggle-avatar" style="background:${escapeHtml(ch.color)}">${escapeHtml(ch.initials)}</span>
+        <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
+        <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>
+      </label>`;
+  }).join("");
 }
 
 function renderCookbookFilterBar() {
@@ -2454,6 +2511,7 @@ function renderCookbookList() {
           `;
 
       return `
+        <div class="cookbook-collection-wrap">
         <button
           class="cookbook-collection ${cookbook.id === state.selectedCookbookId ? "is-active" : ""}"
           type="button"
@@ -2468,6 +2526,10 @@ function renderCookbookList() {
             </p>
           </div>
         </button>
+        <button class="cookbook-options-btn" type="button" data-cookbook-options-id="${cookbook.id}" aria-label="Opties voor ${escapeHtml(cookbook.name)}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="19" r="1.5" fill="currentColor"/></svg>
+        </button>
+        </div>
       `;
     }),
   ].join("");
@@ -2572,12 +2634,60 @@ function createCookbook(name) {
   return cookbook;
 }
 
+let cookbookNameModalPurpose = "create"; // "create" or "rename"
+let cookbookNameModalTargetId = null;
+let cookbookOptionsTargetId = null;
+
+function openCookbookNameModal(purpose = "create", existingName = "", cookbookId = null) {
+  cookbookNameModalPurpose = purpose;
+  cookbookNameModalTargetId = cookbookId;
+  const modal = document.getElementById("cookbookNameModal");
+  const titleEl = document.getElementById("cookbookNameModalTitle");
+  const input = document.getElementById("cookbookNameInput");
+  if (!modal || !titleEl || !input) return;
+  titleEl.textContent = purpose === "rename" ? "Hernoem kookboek" : "Nieuw kookboek";
+  input.value = existingName;
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+  setTimeout(() => input.focus(), 80);
+}
+
+function closeCookbookNameModal() {
+  const modal = document.getElementById("cookbookNameModal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
+}
+
 function openCreateCookbookPrompt() {
-  const cookbookName = window.prompt("Naam van je nieuwe kookboek");
-  if (cookbookName === null) {
-    return;
+  openCookbookNameModal("create");
+}
+
+function renameCookbook(cookbookId, newName) {
+  const cleanName = String(newName || "").trim();
+  if (!cleanName) { showToast("Geef een naam op."); return; }
+  const cookbook = getCookbookById(cookbookId);
+  if (!cookbook) return;
+  cookbook.name = cleanName;
+  renderCookbookList();
+  renderCookbookSaveList(state.pendingCookbookSaveRecipeId || "");
+  schedulePersistAppState();
+  showToast(`Hernoemd naar ${cleanName}.`);
+}
+
+function deleteCookbook(cookbookId) {
+  if (state.cookbooks.length <= 1) { showToast("Je moet minimaal één kookboek hebben."); return; }
+  const cookbook = getCookbookById(cookbookId);
+  if (!cookbook) return;
+  const name = cookbook.name;
+  state.cookbooks = state.cookbooks.filter((cb) => cb.id !== cookbookId);
+  if (state.selectedCookbookId === cookbookId) {
+    state.selectedCookbookId = state.cookbooks[0]?.id || "";
   }
-  createCookbook(cookbookName);
+  renderCookbookList();
+  renderCookbookFilterBar();
+  schedulePersistAppState();
+  showToast(`${name} verwijderd.`);
 }
 
 function assignSelectedRecipeToDay(dayKey) {
@@ -3017,6 +3127,7 @@ function renderAll() {
   renderHomeStats();
   renderRecentImports();
   renderChannelRow();
+  renderChannelSettings();
   renderFeaturedRecipe();
   renderQuickRecipeGrid();
   renderCategoryGrid();
@@ -3610,6 +3721,13 @@ bindEvent(document.getElementById("channelSearchClose"), "click", () => {
   renderChannelSearchResults([]);
 });
 
+bindEvent(document.getElementById("channelSearchSection"), "click", (event) => {
+  const chip = event.target.closest("[data-ch-filter]");
+  if (!(chip instanceof HTMLElement) || !chip.hasAttribute("data-ch-filter")) return;
+  const filter = chip.dataset.chFilter || null;
+  renderChannelSearchResults(null, filter);
+});
+
 // Import button inside channel search results
 bindEvent(channelSearchResults, "click", async (event) => {
   const btn = event.target.closest("[data-channel-import-url]");
@@ -3796,6 +3914,19 @@ bindEvent(cookbookList, "click", (event) => {
     return;
   }
 
+  const optionsBtn = target.closest("[data-cookbook-options-id]");
+  if (optionsBtn instanceof HTMLElement) {
+    cookbookOptionsTargetId = optionsBtn.dataset.cookbookOptionsId;
+    const label = document.getElementById("cookbookOptionsLabel");
+    const cb = getCookbookById(cookbookOptionsTargetId);
+    if (label && cb) label.textContent = cb.name;
+    const deleteBtn = document.getElementById("cookbookDeleteButton");
+    if (deleteBtn) deleteBtn.disabled = state.cookbooks.length <= 1;
+    cookbookOptionsSheet?.classList.remove("hidden");
+    cookbookOptionsSheet?.setAttribute("aria-hidden", "false");
+    return;
+  }
+
   const cookbookCard = target.closest("[data-cookbook-id]");
   if (!(cookbookCard instanceof HTMLElement)) {
     return;
@@ -3853,26 +3984,74 @@ bindEvent(cookbookSaveList, "click", (event) => {
 });
 
 bindEvent(cookbookSaveCreateButton, "click", () => {
-  const cookbookName = window.prompt("Naam van je nieuwe kookboek");
-  if (cookbookName === null) {
-    return;
-  }
+  openCookbookNameModal("create");
+});
 
-  const cookbook = createCookbook(cookbookName);
-  if (!cookbook) {
-    return;
+// Cookbook name modal confirm/cancel
+bindEvent(document.getElementById("cookbookNameConfirmButton"), "click", () => {
+  const name = document.getElementById("cookbookNameInput")?.value?.trim() || "";
+  if (!name) { showToast("Geef een naam op."); return; }
+  if (cookbookNameModalPurpose === "rename" && cookbookNameModalTargetId) {
+    renameCookbook(cookbookNameModalTargetId, name);
+  } else {
+    const cookbook = createCookbook(name);
+    if (cookbook && state.pendingCookbookSaveRecipeId) {
+      saveRecipeToCookbook(state.pendingCookbookSaveRecipeId, cookbook.id);
+    }
   }
+  closeCookbookNameModal();
+});
 
-  const recipeId = state.pendingCookbookSaveRecipeId || getSelectedRecipe().id;
-  if (recipeId) {
-    saveRecipeToCookbook(recipeId, cookbook.id);
+bindEvent(document.getElementById("cookbookNameCancelButton"), "click", closeCookbookNameModal);
+bindEvent(document.getElementById("cookbookNameModalBackdrop"), "click", closeCookbookNameModal);
+
+document.getElementById("cookbookNameInput")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("cookbookNameConfirmButton")?.click();
+  if (e.key === "Escape") closeCookbookNameModal();
+});
+
+// Cookbook options sheet (⋯ button)
+bindEvent(document.getElementById("cookbookOptionsBackdrop"), "click", () => {
+  cookbookOptionsSheet?.classList.add("hidden");
+  cookbookOptionsSheet?.setAttribute("aria-hidden", "true");
+});
+bindEvent(document.getElementById("cookbookOptionsCloseButton"), "click", () => {
+  cookbookOptionsSheet?.classList.add("hidden");
+  cookbookOptionsSheet?.setAttribute("aria-hidden", "true");
+});
+
+bindEvent(document.getElementById("cookbookRenameButton"), "click", () => {
+  cookbookOptionsSheet?.classList.add("hidden");
+  cookbookOptionsSheet?.setAttribute("aria-hidden", "true");
+  const cb = getCookbookById(cookbookOptionsTargetId);
+  if (cb) openCookbookNameModal("rename", cb.name, cb.id);
+});
+
+bindEvent(document.getElementById("cookbookDeleteButton"), "click", () => {
+  cookbookOptionsSheet?.classList.add("hidden");
+  cookbookOptionsSheet?.setAttribute("aria-hidden", "true");
+  if (!cookbookOptionsTargetId) return;
+  const cb = getCookbookById(cookbookOptionsTargetId);
+  if (!cb) return;
+  if (!confirm(`"${cb.name}" verwijderen? Recepten blijven bewaard.`)) return;
+  deleteCookbook(cookbookOptionsTargetId);
+});
+
+// Channel toggle click handler
+bindEvent(document.getElementById("channelSettingsList"), "click", (event) => {
+  const row = event.target.closest("[data-channel-id]");
+  if (!(row instanceof HTMLElement)) return;
+  const id = row.dataset.channelId;
+  if (!id) return;
+  if (state.followedChannelIds.includes(id)) {
+    if (state.followedChannelIds.length <= 1) { showToast("Volg minstens één kanaal."); return; }
+    state.followedChannelIds = state.followedChannelIds.filter((c) => c !== id);
+  } else {
+    state.followedChannelIds.push(id);
   }
-  closeCookbookSaveModal();
-  if (recipeId) {
-    state.selectedRecipeId = recipeId;
-    renderDetailRecipe(true);
-    switchView("detail");
-  }
+  renderChannelSettings();
+  renderChannelRow();
+  schedulePersistAppState();
 });
 
 bindEvent(switchAuthModeButton, "click", () => {

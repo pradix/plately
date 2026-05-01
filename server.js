@@ -3202,10 +3202,13 @@ async function searchWordPressRecipes(baseUrl, channelName, channelId, query, co
 
 async function searchChannelRecipes(query) {
   const searches = await Promise.allSettled([
-    searchAHRecipes(query, 4),
+    searchAHRecipes(query, 3),
     searchWordPressRecipes("https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek", query, 2),
     searchWordPressRecipes("https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 2),
     searchWordPressRecipes("https://miljuschka.nl", "Miljuschka", "ch-mj", query, 2),
+    searchWordPressRecipes("https://www.chickslovefood.com", "Chicks Love Food", "ch-clf", query, 2),
+    searchWordPressRecipes("https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les", query, 2),
+    searchWordPressRecipes("https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb", query, 1),
   ]);
   const all = [];
   for (const settled of searches) {

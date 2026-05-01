@@ -2236,6 +2236,14 @@ img { display: block; max-width: 100%; }
   gap: 16px;
 }
 
+.cookbook-collection-wrap {
+  position: relative;
+}
+
+.cookbook-collection-wrap .cookbook-collection {
+  width: 100%;
+}
+
 .cookbook-collection {
   position: relative;
   border: 0;
@@ -4298,6 +4306,300 @@ body {
   place-items: center;
   width: 36px;
   height: 36px;
+}
+
+/* ── Screen transitions ───────────────────────────────────────────────────── */
+@keyframes screenFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes screenSlideInRight {
+  from { opacity: 0.6; transform: translateX(40px); }
+  to   { opacity: 1;   transform: translateX(0); }
+}
+
+/* All screens fade in when activated */
+.screen--active {
+  animation: screenFadeIn 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* Detail screen slides in from the right */
+#detailScreen.screen--active {
+  animation: screenSlideInRight 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Cookbook name modal ──────────────────────────────────────────────────── */
+@keyframes miniModalIn {
+  from { opacity: 0; transform: scale(0.94) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.mini-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.mini-modal.hidden { display: none; }
+
+.mini-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(4px);
+}
+
+.mini-modal__box {
+  position: relative;
+  z-index: 1;
+  background: #fff;
+  border-radius: 20px;
+  padding: 24px 20px 20px;
+  width: 100%;
+  max-width: 340px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.18);
+  animation: miniModalIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mini-modal__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.mini-modal__input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+  background: #f9f9f9;
+  color: #1a1a1a;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.mini-modal__input:focus { border-color: #8da485; background: #fff; }
+
+.mini-modal__actions {
+  display: flex;
+  gap: 10px;
+}
+.mini-modal__actions .secondary-button,
+.mini-modal__actions .primary-button {
+  flex: 1;
+  padding: 11px 0;
+  font-size: 0.92rem;
+}
+
+/* ── Cookbook options action sheet ────────────────────────────────────────── */
+@keyframes actionSheetIn {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.action-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: flex;
+  align-items: flex-end;
+}
+.action-sheet.hidden { display: none; }
+
+.action-sheet__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(3px);
+}
+
+.action-sheet__box {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: #fff;
+  border-radius: 24px 24px 0 0;
+  padding: 16px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  animation: actionSheetIn 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.action-sheet__label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #999;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 8px 8px;
+  margin: 0;
+}
+
+.action-sheet__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 12px;
+  border-radius: 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  font-family: inherit;
+  font-weight: 500;
+  color: #1a1a1a;
+  text-align: left;
+  transition: background 0.12s;
+}
+.action-sheet__item:hover { background: #f5f5f5; }
+.action-sheet__item svg { width: 20px; height: 20px; opacity: 0.7; flex-shrink: 0; }
+.action-sheet__item--danger { color: #d93025; }
+.action-sheet__item--danger svg { opacity: 0.85; }
+.action-sheet__item--cancel {
+  margin-top: 4px;
+  border-top: 1px solid #f0f0f0;
+  color: #666;
+  justify-content: center;
+  font-weight: 600;
+}
+.action-sheet__item:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Cookbook card wrap + options button ─────────────────────────────────── */
+.cookbook-options-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.9);
+  border: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  color: #555;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.cookbook-collection-wrap:hover .cookbook-options-btn,
+.cookbook-options-btn:focus {
+  opacity: 1;
+}
+.cookbook-options-btn svg { width: 16px; height: 16px; }
+
+/* ── Channel settings in profile screen ──────────────────────────────────── */
+.channel-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0 16px 20px;
+  background: #fff;
+  border-radius: 16px;
+  border: 1.5px solid rgba(0,0,0,0.07);
+  overflow: hidden;
+}
+
+.channel-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  transition: background 0.12s;
+}
+.channel-toggle-row:last-child { border-bottom: none; }
+.channel-toggle-row:hover { background: #fafafa; }
+
+.channel-toggle-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+}
+
+.channel-toggle-name {
+  flex: 1;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.toggle-switch {
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: #ddd;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.toggle-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.toggle-switch--on {
+  background: #8da485;
+}
+.toggle-switch--on::after {
+  transform: translateX(18px);
+}
+
+/* ── Channel filter chips in search results ──────────────────────────────── */
+.channel-filter-row {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  -webkit-overflow-scrolling: touch;
+}
+.channel-filter-row:empty { display: none; }
+
+.ch-filter-chip {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1.5px solid #e0e0e0;
+  background: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #555;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.ch-filter-chip--active {
+  background: #8da485;
+  border-color: #8da485;
+  color: #fff;
 }
 
 /* ── Channel search results ───────────────────────────────────────────────── */
