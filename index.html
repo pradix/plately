@@ -16,22 +16,22 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-11" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-13" />
   </head>
   <body>
     <main class="page">
       <section class="app-shell">
         <section class="screen screen--active" id="homeScreen">
-          <!-- Topbar: logo | bell | avatar -->
+          <!-- Topbar: logo | + import | avatar -->
           <header class="topbar topbar--home">
             <img class="brand-logo" src="assets/plately.png" alt="Plately" />
             <div class="topbar-actions">
-              <button class="icon-button" type="button" aria-label="Meldingen">
+              <button class="icon-button icon-button--filled-green" id="openImportButton" type="button" aria-label="Recept importeren">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 3.75a4.75 4.75 0 0 0-4.75 4.75v1.07c0 .72-.24 1.43-.67 2l-1.1 1.47a2.75 2.75 0 0 0 2.2 4.4h8.64a2.75 2.75 0 0 0 2.2-4.4l-1.1-1.47a3.36 3.36 0 0 1-.67-2V8.5A4.75 4.75 0 0 0 12 3.75Zm0 17a2.74 2.74 0 0 1-2.47-1.55h4.94A2.74 2.74 0 0 1 12 20.75Z"/>
+                  <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
                 </svg>
               </button>
-              <button class="home-avatar" type="button" data-view="settings" aria-label="Instellingen"></button>
+              <button class="home-avatar" type="button" data-view="settings" aria-label="Profiel"></button>
             </div>
           </header>
 
@@ -232,45 +232,29 @@
         </section>
 
         <section class="screen grocery-screen" id="groceryScreen">
-          <header class="topbar topbar--std">
-            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar home">
-              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
-            </button>
-            <div class="topbar-actions">
-              <button class="icon-button icon-button--filled-green" id="groceryQuickAddTopButton" type="button" aria-label="Item toevoegen">
+          <!-- Compact header: title + add button + avatar -->
+          <header class="grocery-header">
+            <h1 class="grocery-header__title">Boodschappen</h1>
+            <div class="grocery-header__actions">
+              <button class="grocery-add-btn" id="groceryQuickAddTopButton" type="button" aria-label="Item toevoegen">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>
+                  <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
                 </svg>
               </button>
-              <button class="home-avatar" type="button" data-view="settings" aria-label="Instellingen"></button>
+              <button class="home-avatar grocery-avatar" type="button" data-view="settings" aria-label="Profiel"></button>
             </div>
           </header>
 
-          <section class="grocery-headline">
-            <div class="grocery-headline__title">
-              <h1>Boodschappen</h1>
-              <span class="grocery-headline__chevron" aria-hidden="true">⌄</span>
-            </div>
-            <button class="grocery-headline__more" id="groceryMoreButton" type="button" aria-label="Meer opties">
-              <span></span><span></span><span></span>
-            </button>
-          </section>
+          <!-- Compact search/add input -->
+          <div class="grocery-input-row">
+            <svg class="grocery-input-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+              <path d="M16 16l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+            <input id="groceryQuickInput" class="grocery-quick-input" type="text" placeholder="Zoek of voeg toe..." />
+          </div>
 
-          <section class="grocery-input-card">
-            <span class="grocery-input-card__icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
-                <path d="M16 16l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              </svg>
-            </span>
-            <input id="groceryQuickInput" class="grocery-quick-input" type="text" placeholder="Voeg items toe..." />
-          </section>
-
-          <p class="grocery-subtle hidden" id="grocerySubtitle">0 items te gaan</p>
-          <section class="grocery-toolbar hidden" id="groceryToolbar">
-            <div class="grocery-toolbar__summary" id="grocerySummaryChips"></div>
-          </section>
-
+          <!-- AH order CTA — inline, shown when items exist -->
           <section class="grocery-order hidden" id="groceryOrder">
             <button class="store-cta store-cta--ah-pill" id="orderAHButton" type="button">
               <span class="store-cta__logo store-cta__logo--ah-pill">ah</span>
@@ -299,7 +283,10 @@
             </section>
           </section>
 
-          <section class="grocery-groups" id="groceryGroups"></section>
+          <!-- Grocery items list -->
+          <section class="grocery-groups" id="groceryGroups">
+            <p class="grocery-empty">Je boodschappenlijst is nog leeg. Voeg eerst een recept toe.</p>
+          </section>
         </section>
 
         <section class="screen mealplan-screen" id="mealPlanScreen">
@@ -695,6 +682,6 @@
       </section>
     </div>
 
-    <script src="app.js?v=plately-banani-8"></script>
+    <script src="app.js?v=plately-banani-9"></script>
   </body>
 </html>

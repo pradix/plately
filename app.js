@@ -438,6 +438,7 @@ const state = {
   profile: {
     name: "Sarah de Vries",
     handle: "@sarahkookt",
+    photo: "",
   },
   groceryItems: [],
   basketPreview: null,
@@ -2293,6 +2294,26 @@ function renderProfileSummary() {
   if (profileCookbookCount) {
     profileCookbookCount.textContent = `${state.cookbooks.length} collecties`;
   }
+  renderAvatars();
+}
+
+function renderAvatars() {
+  const photo = state.profile.photo;
+  document.querySelectorAll(".home-avatar, .grocery-avatar").forEach((btn) => {
+    // Clear old content
+    btn.innerHTML = "";
+    if (photo) {
+      const img = document.createElement("img");
+      img.src = photo;
+      img.alt = state.profile.name || "Profiel";
+      img.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:999px;";
+      btn.appendChild(img);
+    } else {
+      // Show first initial
+      const initial = (state.profile.name || "?")[0].toUpperCase();
+      btn.textContent = initial;
+    }
+  });
 }
 
 function renderCookbookList() {
@@ -2912,6 +2933,7 @@ function renderAll() {
   renderGroceryGroups();
   renderMealPlanGrid();
   renderProfileSummary();
+  renderAvatars();
   updateAuthUI();
   closeBasketModal();
 }
