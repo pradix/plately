@@ -3267,8 +3267,6 @@ async function searchWordPressRecipes(baseUrl, channelName, channelId, query, co
   // Helper to map a WP post/recipe object to our result format
   function mapWPItem(r) {
     const thumbnail =
-      r._embedded?.["wp:featuredmedia"]?.[0]?.media_details?.sizes?.large?.source_url ||
-      r._embedded?.["wp:featuredmedia"]?.[0]?.media_details?.sizes?.medium_large?.source_url ||
       r._embedded?.["wp:featuredmedia"]?.[0]?.media_details?.sizes?.medium?.source_url ||
       r._embedded?.["wp:featuredmedia"]?.[0]?.source_url ||
       "";
