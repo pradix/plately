@@ -586,6 +586,7 @@ const reviewPreviewHost = document.getElementById("reviewPreviewHost");
 const reviewForm = document.getElementById("reviewForm");
 const reviewSummary = document.getElementById("reviewSummary");
 const reviewInsights = document.getElementById("reviewInsights");
+const reviewSuggestions = document.getElementById("reviewSuggestions");
 const reviewTitleInput = document.getElementById("reviewTitleInput");
 const reviewDescriptionInput = document.getElementById("reviewDescriptionInput");
 const reviewTimeInput = document.getElementById("reviewTimeInput");
@@ -1945,9 +1946,62 @@ function renderImportReview() {
   reviewMealTagInput.value = recipe.mealTag || "";
   reviewIngredientsInput.value = serializeIngredientsForReview(recipe);
   reviewInstructionsInput.value = (recipe.instructions || []).join("\n");
-  renderReviewSummary(recipe);
-  renderReviewInsights(recipe);
+  renderReviewAnalysis();
   reviewFeedback.textContent = "Pas de import aan en sla hem daarna op.";
+}
+
+function compactReviewDescription(value, title = "") {
+  const clean = normalizeDescription(value, title);
+  if (!clean) {
+    return "";
+  }
+  const firstSentence = clean
+    .split(/(?<=[.!?])\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean)[0];
+  return (firstSentence || clean).slice(0, 140);
+}
+
+function cleanupReviewIngredientLine(line) {
+  const match = String(line || "").trim().match(
+    /^(\d+(?:[.,]\d+)?(?:\s+\d+\/\d+|\/\d+)?\s*(?:g|kg|ml|l|el|tl|tbsp|tsp|cup|cups|oz|dl|stuks?|stuk|krop|bosje|zakje|pot|blik|liter|snuf|teen|tenen|handje|handjes|scheutje|stengels?|takjes?)?)?\s*(.+)$/i
+  );
+  const prefix = (match?.[1] || "").trim();
+  const name = (match?.[2] || String(line || "")).trim();
+  const cleanedName = name
+    .replace(/\s*\((?:optioneel|naar smaak)\)\s*/gi, " ")
+    .replace(/,\s*(fijn)?gesnipperd\b/gi, "")
+    .replace(/,\s*fijngesneden\b/gi, "")
+    .replace(/,\s*gesneden\b/gi, "")
+    .replace(/,\s*geraspt\b/gi, "")
+    .replace(/,\s*gerist\b/gi, "")
+    .replace(/,\s*in\s+\d+e?\s+gesneden\b/gi, "")
+    .replace(/,\s*in\s+stukken\b/gi, "")
+    .replace(/,\s*in\s+blokjes\b/gi, "")
+    .replace(/,\s*in\s+plakjes\b/gi, "")
+    .replace(/^(?:een|één)\s+(kleine|grote|middelgrote|middelgroot)\s+/i, "")
+    .replace(/^(kleine|grote|middelgrote|middelgroot)\s+/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return `${prefix ? `${prefix} ` : ""}${cleanedName}`.trim();
+}
+
+function cleanupReviewInstructionLine(line) {
+  return String(line || "")
+    .replace(/\b(?:tip|tips?|extra tip)\s*:\s*.*$/i, "")
+    .replace(/\bEet smakelijk!?$/i, "")
+    .trim();
+}
+
+function getReviewDraft() {
+  const recipe = getReviewRecipe();
+  const title = reviewTitleInput?.value?.trim() || recipe?.title || "";
+  const description = reviewDescriptionInput?.value?.trim() || recipe?.description || "";
+  const ingredients = parseReviewLines(reviewIngredientsInput?.value || "");
+  const instructions = parseReviewLines(reviewInstructionsInput?.value || "");
+  const time = reviewTimeInput?.value?.trim() || recipe?.time || "";
+  const host = getSourceHost(recipe?.sourceUrl || "") || getPlatformLabel(recipe?.platform || "website");
+  return { recipe, title, description, ingredients, instructions, time, host };
 }
 
 function renderReviewSummary(recipe) {
@@ -2029,6 +2083,97 @@ function renderReviewInsights(recipe) {
     .join("");
 }
 
+function buildReviewSuggestions(draft) {
+  const suggestions = [];
+  const normalizedTitle = normalizeImportedTitle(draft.title);
+  if (normalizedTitle && normalizedTitle !== draft.title) {
+    suggestions.push({
+      key: "title",
+      label: "Gebruik kortere titel",
+      meta: normalizedTitle,
+      value: normalizedTitle,
+    });
+  }
+
+  const compactDescription = compactReviewDescription(draft.description, draft.title);
+  if (compactDescription && compactDescription !== draft.description) {
+    suggestions.push({
+      key: "description",
+      label: "Maak omschrijving compacter",
+      meta: compactDescription,
+      value: compactDescription,
+    });
+  }
+
+  const cleanedIngredients = draft.ingredients.map(cleanupReviewIngredientLine);
+  if (cleanedIngredients.some((line, index) => line !== draft.ingredients[index])) {
+    suggestions.push({
+      key: "ingredients",
+      label: "Ingrediënten opschonen",
+      meta: "Verwijder snij- en prep-tekst uit de namen",
+      value: cleanedIngredients.join("\n"),
+    });
+  }
+
+  const cleanedInstructions = draft.instructions.map(cleanupReviewInstructionLine).filter(Boolean);
+  if (
+    cleanedInstructions.length &&
+    (cleanedInstructions.length !== draft.instructions.length ||
+      cleanedInstructions.some((line, index) => line !== draft.instructions[index]))
+  ) {
+    suggestions.push({
+      key: "instructions",
+      label: "Stappen opschonen",
+      meta: "Haal losse tips en afsluiters uit de bereidingswijze",
+      value: cleanedInstructions.join("\n"),
+    });
+  }
+
+  return suggestions;
+}
+
+function renderReviewSuggestions(draft) {
+  if (!reviewSuggestions) {
+    return;
+  }
+
+  const suggestions = buildReviewSuggestions(draft);
+  reviewSuggestions.innerHTML = suggestions
+    .map(
+      (item) => `
+        <article class="review-suggestion">
+          <div class="review-suggestion__copy">
+            <p class="review-suggestion__title">${escapeHtml(item.label)}</p>
+            <p class="review-suggestion__meta">${escapeHtml(item.meta)}</p>
+          </div>
+          <button class="review-suggestion__action" type="button" data-review-apply="${escapeHtml(item.key)}" data-review-value="${escapeHtml(item.value)}">
+            Toepassen
+          </button>
+        </article>
+      `
+    )
+    .join("");
+}
+
+function renderReviewAnalysis() {
+  const draft = getReviewDraft();
+  renderReviewSummary({
+    sourceUrl: draft.recipe?.sourceUrl,
+    platform: draft.recipe?.platform,
+    ingredients: draft.ingredients,
+    instructions: draft.instructions,
+    time: draft.time,
+  });
+  renderReviewInsights({
+    title: draft.title,
+    description: draft.description,
+    ingredients: draft.ingredients,
+    instructions: draft.instructions,
+    needsReview: draft.ingredients.length < 4 || draft.instructions.length < 3,
+  });
+  renderReviewSuggestions(draft);
+}
+
 function parseReviewLines(value) {
   return String(value || "")
     .split(/\r?\n/)
@@ -2078,6 +2223,23 @@ function saveImportReview() {
   reviewFeedback.textContent = "Recept bijgewerkt.";
   switchView("detail");
   showToast(`${recipe.title} is bijgewerkt.`);
+}
+
+function applyReviewSuggestion(field, value) {
+  if (field === "title" && reviewTitleInput) {
+    reviewTitleInput.value = value;
+  }
+  if (field === "description" && reviewDescriptionInput) {
+    reviewDescriptionInput.value = value;
+  }
+  if (field === "ingredients" && reviewIngredientsInput) {
+    reviewIngredientsInput.value = value;
+  }
+  if (field === "instructions" && reviewInstructionsInput) {
+    reviewInstructionsInput.value = value;
+  }
+  renderReviewAnalysis();
+  reviewFeedback.textContent = "Suggestie toegepast.";
 }
 
 function toggleIngredientChecked(index) {
@@ -3292,6 +3454,14 @@ bindEvent(searchInput, "input", (event) => {
   renderRecipeGrid();
 });
 
+[reviewTitleInput, reviewDescriptionInput, reviewTimeInput, reviewServingsInput, reviewMealTagInput, reviewIngredientsInput, reviewInstructionsInput]
+  .filter(Boolean)
+  .forEach((field) => {
+    field.addEventListener("input", () => {
+      renderReviewAnalysis();
+    });
+  });
+
 document.getElementById("cookbookFilterBar")?.addEventListener("click", (event) => {
   const chip = event.target.closest("[data-cookbook-filter]");
   if (!(chip instanceof HTMLElement)) return;
@@ -3348,6 +3518,20 @@ if (recentImportList) {
     openImportReview(card.dataset.reviewRecipeId);
   });
 }
+
+bindEvent(reviewSuggestions, "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  const action = target.closest("[data-review-apply]");
+  if (!(action instanceof HTMLElement)) {
+    return;
+  }
+
+  applyReviewSuggestion(action.dataset.reviewApply, action.dataset.reviewValue || "");
+});
 
 bindEvent(groceryGroups, "click", (event) => {
   const target = event.target;
