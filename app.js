@@ -1541,26 +1541,44 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
   channelSearchSection.classList.remove("hidden");
   renderChannelFilterChips(all);
 
-  channelSearchResults.innerHTML = filtered
-    .map((r) => {
-      const channelColor = SEED_CHANNELS.find((ch) => ch.id === r.channelId)?.color || "#8da485";
-      const thumb = r.thumbnail
-        ? `<img class="ch-result__thumb" src="${escapeHtml(r.thumbnail)}" alt="" loading="lazy" onerror="this.style.display='none'" />`
-        : `<div class="ch-result__thumb ch-result__thumb--placeholder" style="background:${escapeHtml(channelColor)}"></div>`;
-      return `
-        <div class="ch-result" data-channel-result-url="${escapeHtml(r.url)}">
-          ${thumb}
-          <div class="ch-result__body">
-            <span class="ch-result__badge" style="background:${escapeHtml(channelColor)}">${escapeHtml(r.channel)}</span>
-            <p class="ch-result__title">${escapeHtml(r.title)}</p>
-            ${r.time ? `<span class="ch-result__time">${escapeHtml(r.time)}</span>` : ""}
-          </div>
-          <button class="ch-result__import" type="button" data-channel-import-url="${escapeHtml(r.url)}" aria-label="Importeer ${escapeHtml(r.title)}">
+  if (!filtered.length) {
+    channelSearchResults.innerHTML = `<p class="ch-result__loading">Geen resultaten voor dit kanaal.</p>`;
+    return;
+  }
+
+  channelSearchResults.innerHTML = `<div class="ch-result-grid">${filtered.map((r) => {
+    const channelColor = SEED_CHANNELS.find((ch) => ch.id === r.channelId)?.color || "#8da485";
+    const thumbHtml = r.thumbnail
+      ? `<img class="ch-card__img" src="${escapeHtml(r.thumbnail)}" alt="${escapeHtml(r.title)}" loading="lazy" onerror="this.parentElement.style.background='${channelColor}33'" />`
+      : `<div class="ch-card__img ch-card__img--placeholder" style="background:${escapeHtml(channelColor)}22">
+           <span style="font-size:2rem;opacity:.4">${escapeHtml(SEED_CHANNELS.find(ch => ch.id === r.channelId)?.initials || "?")}</span>
+         </div>`;
+    return `
+      <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}" data-ch-card-thumb="${escapeHtml(r.thumbnail || "")}">
+        <div class="ch-card__visual">
+          ${thumbHtml}
+          <span class="ch-card__badge" style="background:${escapeHtml(channelColor)}">${escapeHtml(r.channel)}</span>
+        </div>
+        <div class="ch-card__body">
+          <p class="ch-card__title">${escapeHtml(r.title)}</p>
+          ${r.description ? `<p class="ch-card__desc">${escapeHtml(r.description)}</p>` : ""}
+          ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
+        </div>
+        <div class="ch-card__actions">
+          <a class="ch-card__view" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer" aria-label="Bekijk ${escapeHtml(r.title)} op ${escapeHtml(r.channel)}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z" fill="currentColor"/></svg>
+            Bekijk
+          </a>
+          <button class="ch-card__import" type="button"
+            data-channel-import-url="${escapeHtml(r.url)}"
+            data-channel-import-thumb="${escapeHtml(r.thumbnail || "")}"
+            aria-label="Importeer ${escapeHtml(r.title)}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            Importeer
           </button>
-        </div>`;
-    })
-    .join(filtered.length ? "" : `<p class="ch-result__loading">Geen resultaten voor dit kanaal.</p>`);
+        </div>
+      </div>`;
+  }).join("")}</div>`;
 }
 
 function renderChannelFilterChips(results) {
@@ -3873,10 +3891,11 @@ bindEvent(document.getElementById("channelSearchSection"), "click", (event) => {
 
 // Import button inside channel search results
 bindEvent(channelSearchResults, "click", async (event) => {
-  const btn = event.target.closest("[data-channel-import-url]");
+  const btn = event.target.closest(".ch-card__import");
   if (!(btn instanceof HTMLElement)) return;
   const url = btn.dataset.channelImportUrl;
   if (!url) return;
+  const imageHint = btn.dataset.channelImportThumb || "";
 
   btn.disabled = true;
   btn.innerHTML = `<svg class="spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
@@ -3886,7 +3905,7 @@ bindEvent(channelSearchResults, "click", async (event) => {
     const resp = await fetch("/api/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, imageHint }),
     });
     const data = await resp.json();
     if (!resp.ok || !data.recipe) throw new Error(data.error || "Importeren mislukt");

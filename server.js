@@ -2981,7 +2981,7 @@ async function importWebsite(sourceUrl) {
   return parseWebsiteRecipe(document.body, document.finalUrl || sourceUrl);
 }
 
-async function importRecipe(url, note) {
+async function importRecipe(url, note, imageHint = "") {
   let parsedUrl;
   try {
     parsedUrl = new URL(url);
@@ -2991,13 +2991,21 @@ async function importRecipe(url, note) {
 
   const platform = detectPlatform(parsedUrl);
 
+  let recipe;
   if (platform === "tiktok") {
-    return importTikTok(parsedUrl.toString(), note);
+    recipe = await importTikTok(parsedUrl.toString(), note);
+  } else if (platform === "instagram") {
+    recipe = await importInstagram(parsedUrl.toString(), note);
+  } else {
+    recipe = await importWebsite(parsedUrl.toString());
   }
-  if (platform === "instagram") {
-    return importInstagram(parsedUrl.toString(), note);
+
+  // Use imageHint as fallback if scraping didn't find an image
+  if (imageHint && (!recipe.image || recipe.image === "assets/hero-burger.svg")) {
+    recipe.image = sanitizeText(imageHint);
   }
-  return importWebsite(parsedUrl.toString());
+
+  return recipe;
 }
 
 /* ── Store product search (AH + Jumbo) ── */
@@ -3256,34 +3264,55 @@ async function searchAHRecipes(query, count = 4) {
 }
 
 async function searchWordPressRecipes(baseUrl, channelName, channelId, query, count = 3) {
+  // Helper to map a WP post/recipe object to our result format
+  function mapWPItem(r) {
+    const thumbnail =
+      r._embedded?.["wp:featuredmedia"]?.[0]?.media_details?.sizes?.large?.source_url ||
+      r._embedded?.["wp:featuredmedia"]?.[0]?.media_details?.sizes?.medium_large?.source_url ||
+      r._embedded?.["wp:featuredmedia"]?.[0]?.media_details?.sizes?.medium?.source_url ||
+      r._embedded?.["wp:featuredmedia"]?.[0]?.source_url ||
+      "";
+    return {
+      title: sanitizeText((r.title?.rendered || "").replace(/&amp;/g, "&").replace(/&#\d+;/g, "").replace(/<[^>]+>/g, "").trim()),
+      url: sanitizeText(r.link || ""),
+      thumbnail,
+      channel: channelName,
+      channelId,
+      description: sanitizeText((r.excerpt?.rendered || r.content?.rendered || "").replace(/<[^>]+>/g, "").replace(/\[.*?\]/g, "").trim().slice(0, 140)),
+      time: r.wprm_total_time ? `${r.wprm_total_time} min` : "",
+    };
+  }
+
+  const params = `search=${encodeURIComponent(query)}&per_page=${count}&_embed=wp:featuredmedia`;
+  const headers = { ...FETCH_HEADERS, accept: "application/json" };
+
+  // Try recipe custom post type first (used by WPRM and similar plugins)
+  const recipeTypes = ["recipe", "recepten", "recipes"];
+  for (const type of recipeTypes) {
+    try {
+      const resp = await fetch(`${baseUrl}/wp-json/wp/v2/${type}?${params}`, {
+        headers,
+        signal: AbortSignal.timeout(7000),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const mapped = (Array.isArray(data) ? data : []).slice(0, count).map(mapWPItem).filter((r) => r.title && r.url);
+        if (mapped.length > 0) return mapped;
+      }
+    } catch {
+      // try next type
+    }
+  }
+
+  // Fallback to standard posts endpoint
   try {
-    const url =
-      `${baseUrl}/wp-json/wp/v2/posts` +
-      `?search=${encodeURIComponent(query)}&per_page=${count}&_embed=wp:featuredmedia`;
-    const resp = await fetch(url, {
-      headers: { ...FETCH_HEADERS, accept: "application/json" },
+    const resp = await fetch(`${baseUrl}/wp-json/wp/v2/posts?${params}`, {
+      headers,
       signal: AbortSignal.timeout(9000),
     });
     if (!resp.ok) return [];
     const data = await resp.json();
-    return (Array.isArray(data) ? data : [])
-      .slice(0, count)
-      .map((r) => {
-        const thumbnail =
-          r._embedded?.["wp:featuredmedia"]?.[0]?.media_details?.sizes?.medium?.source_url ||
-          r._embedded?.["wp:featuredmedia"]?.[0]?.source_url ||
-          "";
-        return {
-          title: sanitizeText((r.title?.rendered || "").replace(/&amp;/g, "&").replace(/<[^>]+>/g, "")),
-          url: sanitizeText(r.link || ""),
-          thumbnail,
-          channel: channelName,
-          channelId,
-          description: sanitizeText((r.excerpt?.rendered || "").replace(/<[^>]+>/g, "").trim().slice(0, 140)),
-          time: "",
-        };
-      })
-      .filter((r) => r.title && r.url);
+    return (Array.isArray(data) ? data : []).slice(0, count).map(mapWPItem).filter((r) => r.title && r.url);
   } catch {
     return [];
   }
@@ -3291,19 +3320,19 @@ async function searchWordPressRecipes(baseUrl, channelName, channelId, query, co
 
 async function searchChannelRecipes(query) {
   const searches = await Promise.allSettled([
-    searchAHRecipes(query, 3),
-    searchWordPressRecipes("https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek", query, 2),
-    searchWordPressRecipes("https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 2),
-    searchWordPressRecipes("https://miljuschka.nl", "Miljuschka", "ch-mj", query, 2),
-    searchWordPressRecipes("https://www.chickslovefood.com", "Chicks Love Food", "ch-clf", query, 2),
-    searchWordPressRecipes("https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les", query, 2),
-    searchWordPressRecipes("https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb", query, 1),
+    searchAHRecipes(query, 4),
+    searchWordPressRecipes("https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek", query, 4),
+    searchWordPressRecipes("https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 4),
+    searchWordPressRecipes("https://miljuschka.nl", "Miljuschka", "ch-mj", query, 4),
+    searchWordPressRecipes("https://www.chickslovefood.com", "Chicks Love Food", "ch-clf", query, 4),
+    searchWordPressRecipes("https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les", query, 4),
+    searchWordPressRecipes("https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb", query, 3),
   ]);
   const all = [];
   for (const settled of searches) {
     if (settled.status === "fulfilled") all.push(...settled.value);
   }
-  return all.slice(0, 10);
+  return all.slice(0, 20);
 }
 
 async function buildStoreBasket(body) {
@@ -3691,7 +3720,7 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === "/api/import" && request.method === "POST") {
       const body = await readRequestBody(request);
-      const recipe = await importRecipe(body.url, body.note || "");
+      const recipe = await importRecipe(body.url, body.note || "", body.imageHint || "");
       sendJson(response, 200, { ok: true, recipe });
       return;
     }
