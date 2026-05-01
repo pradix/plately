@@ -3569,40 +3569,141 @@ bindEvent(groceryMoreButton, "click", () => {
     showToast("Kopiëren lukte niet.");
   });
 });
+// ── Grocery quick-add with real-time AH suggestions ─────────────────────────
+
+let grocerySuggestTimeout = null;
+let grocerySuggestIndex = -1;
+
+function addGroceryItemByTitle(title, amount = "1 stuk") {
+  if (!title) return;
+  const existing = state.groceryItems.find(
+    (item) => !item.checked && normalizeIngredientKey(item.title) === normalizeIngredientKey(title)
+  );
+  if (existing) {
+    existing.amount = mergeAmountLabels(existing.amount, amount);
+  } else {
+    state.groceryItems.unshift({
+      id: `grocery-quick-${Date.now()}`,
+      title,
+      amount,
+      recipeId: "",
+      recipeTitle: "",
+      recipeSourceUrl: "",
+      recipePlatform: "website",
+      group: getIngredientGroup(title),
+      checked: false,
+    });
+  }
+  if (groceryQuickInput) groceryQuickInput.value = "";
+  closeSuggestDropdown();
+  renderGroceryGroups();
+  renderNavBadge();
+  schedulePersistAppState();
+}
+
+function closeSuggestDropdown() {
+  const dd = document.getElementById("grocerySuggestDropdown");
+  if (dd) { dd.classList.add("hidden"); dd.innerHTML = ""; }
+  grocerySuggestIndex = -1;
+}
+
+function renderSuggestDropdown(suggestions, rawQuery) {
+  const dd = document.getElementById("grocerySuggestDropdown");
+  if (!dd) return;
+
+  if (!suggestions.length) {
+    // Show a "just add it" fallback
+    dd.innerHTML = `
+      <button class="suggest-item suggest-item--plain" type="button" data-suggest-title="${escapeHtml(rawQuery)}">
+        <span class="suggest-item__name">${escapeHtml(rawQuery)}</span>
+        <span class="suggest-item__meta">Zelf toevoegen</span>
+      </button>`;
+  } else {
+    dd.innerHTML = suggestions.map((s, i) => `
+      <button class="suggest-item" type="button" role="option"
+        data-suggest-title="${escapeHtml(s.name)}"
+        data-suggest-idx="${i}"
+        aria-selected="false">
+        <span class="suggest-item__badge">ah</span>
+        <span class="suggest-item__name">${escapeHtml(s.name)}</span>
+        ${s.price ? `<span class="suggest-item__price">${escapeHtml(s.price)}</span>` : ""}
+      </button>`).join("") +
+      `<button class="suggest-item suggest-item--plain" type="button" data-suggest-title="${escapeHtml(rawQuery)}">
+        <span class="suggest-item__name">"${escapeHtml(rawQuery)}" toevoegen</span>
+      </button>`;
+  }
+
+  dd.classList.remove("hidden");
+
+  dd.querySelectorAll(".suggest-item").forEach((btn) => {
+    btn.addEventListener("mousedown", (e) => {
+      e.preventDefault(); // don't blur the input
+      addGroceryItemByTitle(btn.dataset.suggestTitle);
+    });
+  });
+}
+
+async function fetchGrocerySuggestions(query) {
+  if (!query || query.length < 2) { closeSuggestDropdown(); return; }
+  try {
+    const resp = await fetch(`/api/grocery-suggest?q=${encodeURIComponent(query)}`);
+    const data = await resp.json();
+    if (document.getElementById("groceryQuickInput")?.value?.trim() === query) {
+      renderSuggestDropdown(data.suggestions || [], query);
+    }
+  } catch {
+    closeSuggestDropdown();
+  }
+}
+
 if (groceryQuickInput) {
+  groceryQuickInput.addEventListener("input", () => {
+    const q = groceryQuickInput.value.trim();
+    clearTimeout(grocerySuggestTimeout);
+    if (!q) { closeSuggestDropdown(); return; }
+    // Show a skeleton immediately so it feels instant
+    const dd = document.getElementById("grocerySuggestDropdown");
+    if (dd) {
+      dd.innerHTML = `<p class="suggest-loading">Zoeken…</p>`;
+      dd.classList.remove("hidden");
+    }
+    grocerySuggestTimeout = setTimeout(() => fetchGrocerySuggestions(q), 350);
+  });
+
   groceryQuickInput.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter") {
+    const dd = document.getElementById("grocerySuggestDropdown");
+    const items = dd ? [...dd.querySelectorAll(".suggest-item")] : [];
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      grocerySuggestIndex = Math.min(grocerySuggestIndex + 1, items.length - 1);
+      items.forEach((el, i) => el.setAttribute("aria-selected", i === grocerySuggestIndex ? "true" : "false"));
       return;
     }
-    event.preventDefault();
-    const value = groceryQuickInput.value.trim();
-    if (!value) {
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      grocerySuggestIndex = Math.max(grocerySuggestIndex - 1, -1);
+      items.forEach((el, i) => el.setAttribute("aria-selected", i === grocerySuggestIndex ? "true" : "false"));
       return;
     }
-
-    const existingItem = state.groceryItems.find(
-      (item) => !item.checked && normalizeIngredientKey(item.title) === normalizeIngredientKey(value)
-    );
-
-    if (existingItem) {
-      existingItem.amount = mergeAmountLabels(existingItem.amount, "1 stuk");
-    } else {
-      state.groceryItems.unshift({
-        id: `grocery-quick-${Date.now()}`,
-        title: value,
-        amount: "1 stuk",
-        recipeId: "",
-        recipeTitle: "",
-        recipeSourceUrl: "",
-        recipePlatform: "website",
-        group: getIngredientGroup(value),
-        checked: false,
-      });
+    if (event.key === "Escape") {
+      closeSuggestDropdown();
+      return;
     }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (grocerySuggestIndex >= 0 && items[grocerySuggestIndex]) {
+        addGroceryItemByTitle(items[grocerySuggestIndex].dataset.suggestTitle);
+      } else {
+        const val = groceryQuickInput.value.trim();
+        if (val) addGroceryItemByTitle(val);
+      }
+    }
+  });
 
-    groceryQuickInput.value = "";
-    renderGroceryGroups();
-    schedulePersistAppState();
+  groceryQuickInput.addEventListener("blur", () => {
+    // Small delay so mousedown on a suggestion can fire first
+    setTimeout(closeSuggestDropdown, 150);
   });
 }
 bindEvent(clearGroceryToolbarButton, "click", () => {

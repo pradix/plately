@@ -110,6 +110,80 @@ function ingredientMatchesProduct(ingredient, productTitle) {
     return true;
   }
 }
+
+// ── Ingredient search normalisation ──────────────────────────────────────────
+// Strips quantities, descriptors and maps variants to the best AH search term.
+function normalizeIngredientForSearch(raw) {
+  let t = (raw || "").toLowerCase().trim();
+
+  // 1. Strip leading numeric quantity + optional unit
+  t = t.replace(
+    /^[\d\s½¼¾.,/]+\s*(?:g|gr|kg|mg|ml|dl|cl|l\b|el|tl|tbsp|tsp|oz|lb|stuks?|stuk(?:ken)?|krop(?:pen)?|bosje[s]?|zakje[s]?|pot(?:je[s]?)?|blik(?:je[s]?)?|eetlepels?|theelepels?|teentje[s]?|teen(?:en)?|scheutje?|plak(?:je[s]?)?|handje[s]?|stengels?|snufje?|takje[s]?|blaadje[s]?|filets?|reepje[s]?|blokje[s]?)?\s+/i,
+    ""
+  );
+
+  // 2. Strip leading colour/state descriptors (repeat for double descriptors)
+  const DESC =
+    /^(vers(?:e|en)?|biologisch(?:e)?|bio|extra\s+vierge?|extra\s+vergine|extra|groot(?:e)?|klein(?:e)?|fijn(?:gesneden)?|grof(?:gesneden)?|gesneden|gehakt(?:e)?|geraspte?|gedroogde?|gezouten?|gepeld(?:e)?|ongepeld(?:e)?|gewassen?|rood(?:e)?|groen(?:e)?|geel(?:e)?|wit(?:te)?|zwart(?:e)?|halve?|half\s+een|volle?|magere?|licht(?:e)?|geroosterd(?:e)?|gebakken|gekookt(?:e)?|rauw(?:e)?|zacht(?:e)?|koud(?:e)?|warm(?:e)?|in\s+reepjes|in\s+blokjes)\s+/i;
+  t = t.replace(DESC, "").replace(DESC, "").trim();
+
+  // 3. Pasta-type normalisation (the big one)
+  if (/\bspaghetti\b/.test(t)) return "spaghetti";
+  if (/\bpenne\b/.test(t))      return "penne";
+  if (/\bfusilli\b/.test(t))    return "fusilli";
+  if (/\bfarfalle\b/.test(t))   return "farfalle";
+  if (/\brigatoni\b/.test(t))   return "rigatoni";
+  if (/\blinguine\b/.test(t))   return "linguine";
+  if (/\btagliatelle\b/.test(t))return "tagliatelle";
+  if (/\bfettuccine\b/.test(t)) return "fettuccine";
+  if (/\bconchiglie\b/.test(t)) return "pasta";
+  if (/\brotini\b/.test(t))     return "pasta";
+  if (/\bmacaroni\b/.test(t))   return "macaroni";
+  if (/\bbucatini\b/.test(t))   return "pasta";
+  if (/\borecchiette\b/.test(t))return "pasta";
+  if (/\btortellini\b/.test(t)) return "tortellini";
+  if (/lasagnebladen?/.test(t)) return "lasagne bladen";
+
+  // 4. Rice
+  if (/\b(basmati|jasmijn|jasmine|zilvervlies|bruine|volkoren)\s*rijst/.test(t)) return "rijst";
+  if (/\b(arborio|carnaroli|risotto\s*rijst)/.test(t)) return "risottorijst";
+
+  // 5. Bouillon / stock
+  const bouillonMatch = t.match(/\b(kip(?:pen)?|groente|vlees|vis|rund(?:er)?)\s*bouillon/);
+  if (bouillonMatch) return `${bouillonMatch[1].replace("pen","").replace("er","")} bouillon`.trim();
+  if (/bouillon(?:\s*blokje)?/.test(t)) return "bouillon";
+
+  // 6. Oils
+  if (/olijfolie/.test(t)) return "olijfolie";
+  if (/zonnebloemolie/.test(t)) return "zonnebloemolie";
+  if (/sesamolie/.test(t)) return "sesamolie";
+  if (/kokosolie/.test(t)) return "kokosolie";
+
+  // 7. Tomato variants
+  if (/kerstomaatje|cherrytomaat/.test(t)) return "cherrytomaten";
+  if (/zongedroogde.*tomaten?/.test(t))     return "zongedroogde tomaten";
+  if (/\b(gezeefde|gepureerde|gehakte|ingeblikte)\s*tomaten?/.test(t)) return "tomaten gepeld";
+
+  // 8. Onion/garlic
+  if (/knoflookteen|teentje.*knoflook/.test(t)) return "knoflook";
+  if (/\b(rode|gele|witte|zilver)\s*ui\b/.test(t)) return "ui";
+  if (/sjalot/.test(t)) return "sjalot";
+  if (/lente.?ui/.test(t)) return "lente-ui";
+
+  // 9. Cheese
+  if (/parmezaan|parmigiano/.test(t)) return "parmezaan";
+  if (/pecorino/.test(t)) return "pecorino";
+  if (/grana\s*padano/.test(t)) return "grana padano";
+  if (/mozzarella/.test(t)) return "mozzarella";
+  if (/burrata/.test(t)) return "burrata";
+
+  // 10. Strip parenthetical notes: "kip (zonder bot)" → "kip"
+  t = t.replace(/\s*\([^)]*\)/g, "").trim();
+
+  // 11. Cap at 3 words to avoid overly specific queries
+  const words = t.split(/\s+/).filter((w) => w.length > 1);
+  return words.slice(0, 3).join(" ");
+}
 const UNIT_PATTERN =
   "(?:x|g|gr|kg|mg|ml|l|cl|dl|el|tl|tbsp|tsp|cup|cups|oz|lb|stuks?|stuk(?:ken)?|krop|kroppen|bosje|bosjes|zakje|zakjes|pot(?:je|jes)?|blik(?:je|jes)?|liter|snuf(?:je|jes)?|teen|tenen|teentjes|plak(?:je|jes)?|gram|grams|milliliter|eetlepel(?:s)?|theelepel(?:s)?|handje|handjes|scheut(?:je)?|bakje|bakjes|verpakking(?:en)?|pak(?:ken)?|rollen?|rol|bunch|clove|cloves|pinch|slices?|stengel|stengels|takje|takjes|blokje|blokjes|blaadje|blaadjes|blad|bladeren|reepje|reepjes|filet|filets)";
 const QUANTITY_PATTERN = "(?:\\d+\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d+(?:[.,]\\d+)?)";
@@ -2972,11 +3046,12 @@ async function findAHProduct(ingredient) {
 
 // Returns up to `count` product matches from AH for a single ingredient
 async function findAHProducts(ingredient, count = 3) {
+  const searchTerm = normalizeIngredientForSearch(ingredient) || ingredient;
   try {
     const token = await fetchAHAnonymousToken();
     const searchUrl =
       `https://api.ah.nl/mobile-services/product/search/v2` +
-      `?query=${encodeURIComponent(ingredient)}&size=${count * 2}&sortOn=RELEVANCE`;
+      `?query=${encodeURIComponent(searchTerm)}&size=${count * 2}&sortOn=RELEVANCE`;
 
     const response = await fetch(searchUrl, {
       headers: {
@@ -2992,7 +3067,7 @@ async function findAHProducts(ingredient, count = 3) {
     const data = await response.json();
     const products = (data.products || [])
       .filter((p) => !NON_FOOD_INGREDIENT_PATTERN.test(sanitizeText(p.title)))
-      .filter((p) => ingredientMatchesProduct(ingredient, sanitizeText(p.title)))
+      .filter((p) => ingredientMatchesProduct(searchTerm, sanitizeText(p.title)))
       .slice(0, count);
 
     return products.map(parseAHProduct);
@@ -3580,6 +3655,25 @@ const server = http.createServer(async (request, response) => {
           authenticated: false,
           email: "",
         },
+      });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/grocery-suggest" && request.method === "GET") {
+      const raw = sanitizeText(requestUrl.searchParams.get("q") || "");
+      if (!raw || raw.length < 2) {
+        sendJson(response, 200, { ok: true, suggestions: [] });
+        return;
+      }
+      const products = await findAHProducts(raw, 5);
+      sendJson(response, 200, {
+        ok: true,
+        suggestions: products.map((p) => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          url: p.url,
+        })),
       });
       return;
     }
