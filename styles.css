@@ -1179,11 +1179,173 @@ img { display: block; max-width: 100%; }
   margin-top: 2px;
 }
 
+.step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
 .step-copy {
   margin: 0;
   color: #4a4643;
   font-size: 0.94rem;
   line-height: 1.55;
+}
+
+/* ── Step timer button ───────────────────────────────────────────────────── */
+.step-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1.5px solid #e0d5c8;
+  background: #faf7f4;
+  color: #7a6a5a;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  width: fit-content;
+}
+.step-timer svg { width: 14px; height: 14px; flex-shrink: 0; }
+.step-timer:hover { background: #f0e8df; border-color: #c8b8a8; color: #5a4a3a; }
+.step-timer--running {
+  background: #fff4e6;
+  border-color: #f0a060;
+  color: #c06020;
+  font-variant-numeric: tabular-nums;
+}
+.step-timer--done {
+  background: #e8f5e9;
+  border-color: #81c784;
+  color: #388e3c;
+}
+
+/* ── Cookbook detail view ────────────────────────────────────────────────── */
+.cb-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.cb-detail__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #8da485;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0 16px;
+  margin-bottom: 4px;
+}
+.cb-detail__back svg { width: 16px; height: 16px; }
+.cb-detail__back:hover { color: #6a7f62; }
+
+.cb-detail__header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.cb-detail__name {
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin: 0;
+  color: #1a1a1a;
+}
+.cb-detail__count {
+  font-size: 0.8rem;
+  color: #999;
+}
+
+.cb-detail__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cb-detail__item {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+}
+
+.cb-detail__card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: none;
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+.cb-detail__card:hover { background: rgba(0,0,0,0.03); }
+
+.cb-detail__img {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.cb-detail__card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cb-detail__card-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.cb-detail__card-time {
+  font-size: 0.75rem;
+  color: #999;
+}
+
+.cb-detail__remove {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  margin-right: 8px;
+  border-radius: 50%;
+  border: none;
+  background: #f5f0ec;
+  color: #aaa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.cb-detail__remove svg { width: 14px; height: 14px; }
+.cb-detail__remove:hover { background: #fde8e8; color: #e05555; }
+
+.cb-detail__empty {
+  text-align: center;
+  color: #aaa;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  padding: 32px 16px;
+  margin: 0;
 }
 
 .detail-cta, .primary-button, .secondary-button {

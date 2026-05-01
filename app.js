@@ -464,6 +464,7 @@ const state = {
   followedChannelIds: ["ch-ah", "ch-ek", "ch-mj", "ch-up", "ch-clf", "ch-les", "ch-lb"],
   channelSearchFilter: null,
   channelSearchAllResults: [],
+  openCookbookId: null,
 };
 
 const SEED_RECIPE_IDS = new Set(initialRecipes.map((recipe) => recipe.id));
@@ -1186,6 +1187,11 @@ function switchView(view) {
     requestWakeLock();
   }
 
+  // Reset cookbook detail view when leaving settings
+  if (view !== "settings" && state.openCookbookId) {
+    state.openCookbookId = null;
+  }
+
   window.scrollTo({ top: 0, behavior: "auto" });
 }
 
@@ -1828,8 +1834,9 @@ function renderCookbookFilterBar() {
 }
 
 function renderRecipeGrid() {
+  const isSearching = !!state.searchQuery.trim();
   let recipes;
-  if (!state.searchQuery.trim() && !state.activeCookbookFilter) {
+  if (!isSearching && !state.activeCookbookFilter) {
     recipes = COOKBOOK_SHOWCASE_IDS.map((recipeId) => getRecipeById(recipeId)).filter(Boolean);
   } else {
     recipes = getVisibleRecipes();
@@ -1844,12 +1851,26 @@ function renderRecipeGrid() {
     recipes = [...recipes].reverse();
   }
 
-  recipes = recipes.slice(0, 4);
+  // Only cap at 4 when not actively searching
+  if (!isSearching) recipes = recipes.slice(0, 4);
+
+  // Update heading to reflect search state
+  const headingEl = document.querySelector(".kookboek-heading h1");
+  if (headingEl) {
+    if (isSearching) {
+      headingEl.textContent = recipes.length
+        ? `${recipes.length} recept${recipes.length === 1 ? "" : "en"} gevonden`
+        : "Geen resultaten";
+    } else {
+      headingEl.textContent = "Kookboek";
+    }
+  }
+
   if (!recipes.length) {
     recipeGrid.innerHTML = `
       <article class="recipe-card recipe-card--empty">
         <div class="recipe-card__body">
-          <h3>Geen resultaten</h3>
+          <h3>Geen recepten gevonden</h3>
           <div class="recipe-card__meta"><span>Probeer een andere zoekterm</span></div>
         </div>
       </article>
@@ -1872,6 +1893,73 @@ function renderRecipeGrid() {
       `
     )
     .join("");
+}
+
+// ── Step timer ────────────────────────────────────────────────────────────────
+const stepTimers = new Map(); // button el → intervalId
+
+function extractStepSeconds(text) {
+  const secMatch = text.match(/(\d+)\s*(?:seconden?|sec\.?)\b/i);
+  if (secMatch) return parseInt(secMatch[1], 10);
+  const minMatch = text.match(/(\d+(?:[.,]\d+)?)\s*(?:minuten?|min\.?)\b/i);
+  if (minMatch) return Math.round(parseFloat(minMatch[1].replace(",", ".")) * 60);
+  if (/\bhalf\s+uur\b/i.test(text)) return 1800;
+  if (/\b1\s*uur\b/i.test(text) || /\béén?\s+uur\b/i.test(text)) return 3600;
+  const hrMatch = text.match(/(\d+)\s*uur\b/i);
+  if (hrMatch) return parseInt(hrMatch[1], 10) * 3600;
+  return 0;
+}
+
+function formatTimerLabel(seconds) {
+  if (seconds >= 3600) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return m > 0 ? `${h}u ${m}m` : `${h}u`;
+  }
+  if (seconds >= 60) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return s > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${m} min`;
+  }
+  return `${seconds}s`;
+}
+
+function startStepTimer(btn, totalSeconds) {
+  // Cancel existing timer on this button
+  if (stepTimers.has(btn)) {
+    clearInterval(stepTimers.get(btn));
+    stepTimers.delete(btn);
+    btn.classList.remove("step-timer--running");
+    btn.dataset.timerOriginal && (btn.innerHTML = btn.dataset.timerOriginal);
+    return;
+  }
+
+  btn.dataset.timerOriginal = btn.innerHTML;
+  btn.classList.add("step-timer--running");
+  let remaining = totalSeconds;
+
+  const tick = () => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(stepTimers.get(btn));
+      stepTimers.delete(btn);
+      btn.classList.remove("step-timer--running");
+      btn.classList.add("step-timer--done");
+      btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg> Klaar!`;
+      showToast("⏰ Timer afgelopen!");
+      setTimeout(() => {
+        btn.classList.remove("step-timer--done");
+        btn.innerHTML = btn.dataset.timerOriginal || "";
+      }, 4000);
+      return;
+    }
+    btn.querySelector(".step-timer__time") && (btn.querySelector(".step-timer__time").textContent = formatTimerLabel(remaining));
+  };
+
+  btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4.5a1 1 0 0 1 3 0v.55A7.5 7.5 0 1 1 9 5.34v-.84Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 9v3.5l2 1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="step-timer__time">${formatTimerLabel(remaining)}</span>`;
+
+  const id = setInterval(tick, 1000);
+  stepTimers.set(btn, id);
 }
 
 function renderDetailRecipe(resetServings = false) {
@@ -1955,15 +2043,28 @@ function renderDetailRecipe(resetServings = false) {
     )
     .join("");
 
+  // Clear any running timers when recipe changes
+  stepTimers.forEach((id) => clearInterval(id));
+  stepTimers.clear();
+
   detailStepList.innerHTML = recipe.instructions
-    .map(
-      (step, index) => `
+    .map((step, index) => {
+      const secs = extractStepSeconds(step);
+      const timerBtn = secs > 0
+        ? `<button class="step-timer" type="button" data-step-seconds="${secs}" aria-label="Start timer ${formatTimerLabel(secs)}">
+             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4.5a1 1 0 0 1 3 0v.55A7.5 7.5 0 1 1 9 5.34v-.84Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 9v3.5l2 1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+             <span class="step-timer__time">${formatTimerLabel(secs)}</span>
+           </button>`
+        : "";
+      return `
         <li class="step-item">
           <span class="step-index">${index + 1}</span>
-          <p class="step-copy">${step}</p>
-        </li>
-      `
-    )
+          <div class="step-body">
+            <p class="step-copy">${escapeHtml(step)}</p>
+            ${timerBtn}
+          </div>
+        </li>`;
+    })
     .join("");
 
   if (detailSaveHeaderButton) {
@@ -2506,7 +2607,55 @@ function renderAvatars() {
   });
 }
 
+function renderCookbookDetail(cookbookId) {
+  const cookbook = state.cookbooks.find((cb) => cb.id === cookbookId);
+  if (!cookbook) {
+    state.openCookbookId = null;
+    renderCookbookList();
+    return;
+  }
+  const recipes = cookbook.recipeIds.map((id) => getRecipeById(id)).filter(Boolean);
+  cookbookList.innerHTML = `
+    <div class="cb-detail">
+      <button class="cb-detail__back" type="button" data-close-cookbook-detail="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.78 5.22a1 1 0 0 1 0 1.41L6.41 11H20a1 1 0 1 1 0 2H6.41l4.37 4.37a1 1 0 0 1-1.41 1.41l-6.08-6.08a1 1 0 0 1 0-1.41l6.08-6.08a1 1 0 0 1 1.41 0Z" fill="currentColor"/></svg>
+        Mijn kookboeken
+      </button>
+      <div class="cb-detail__header">
+        <h2 class="cb-detail__name">${escapeHtml(cookbook.name)}</h2>
+        <span class="cb-detail__count">${recipes.length} recept${recipes.length === 1 ? "" : "en"}</span>
+      </div>
+      ${recipes.length ? `
+        <div class="cb-detail__grid">
+          ${recipes.map((recipe) => `
+            <div class="cb-detail__item">
+              <button class="cb-detail__card" type="button" data-open-recipe-id="${escapeHtml(recipe.id)}">
+                <img class="cb-detail__img" src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.title)}" loading="lazy" />
+                <div class="cb-detail__card-body">
+                  <span class="cb-detail__card-title">${escapeHtml(recipe.title)}</span>
+                  <span class="cb-detail__card-time">${escapeHtml(recipe.time)}</span>
+                </div>
+              </button>
+              <button class="cb-detail__remove" type="button"
+                data-remove-from-cookbook="${escapeHtml(recipe.id)}"
+                aria-label="Verwijder ${escapeHtml(recipe.title)} uit kookboek">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+          `).join("")}
+        </div>
+      ` : `<p class="cb-detail__empty">Dit kookboek is nog leeg.<br>Sla een recept op om het hier te zien.</p>`}
+    </div>
+  `;
+}
+
 function renderCookbookList() {
+  if (state.openCookbookId) {
+    renderCookbookDetail(state.openCookbookId);
+    renderProfileSummary();
+    return;
+  }
+
   cookbookList.innerHTML = [
     `
       <button class="cookbook-collection cookbook-collection--add" type="button" data-create-cookbook="true">
@@ -4028,6 +4177,13 @@ bindEvent(groceryGroups, "click", (event) => {
   schedulePersistAppState();
 });
 
+bindEvent(detailStepList, "click", (event) => {
+  const btn = event.target.closest(".step-timer");
+  if (!(btn instanceof HTMLElement)) return;
+  const secs = parseInt(btn.dataset.stepSeconds || "0", 10);
+  if (secs > 0) startStepTimer(btn, secs);
+});
+
 bindEvent(detailIngredientList, "click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) {
@@ -4089,15 +4245,45 @@ bindEvent(cookbookList, "click", (event) => {
     return;
   }
 
+  // Back button in detail view
+  const backBtn = target.closest("[data-close-cookbook-detail]");
+  if (backBtn instanceof HTMLElement) {
+    state.openCookbookId = null;
+    renderCookbookList();
+    return;
+  }
+
+  // Remove recipe from cookbook (detail view)
+  const removeBtn = target.closest("[data-remove-from-cookbook]");
+  if (removeBtn instanceof HTMLElement) {
+    const recipeId = removeBtn.dataset.removeFromCookbook;
+    const cb = state.cookbooks.find((c) => c.id === state.openCookbookId);
+    if (cb) {
+      cb.recipeIds = cb.recipeIds.filter((id) => id !== recipeId);
+      renderCookbookDetail(state.openCookbookId);
+      schedulePersistAppState();
+      showToast("Recept verwijderd uit kookboek.");
+    }
+    return;
+  }
+
+  // Open recipe from detail view
+  const openRecipeBtn = target.closest("[data-open-recipe-id]");
+  if (openRecipeBtn instanceof HTMLElement) {
+    state.selectedRecipeId = openRecipeBtn.dataset.openRecipeId;
+    switchView("detail");
+    renderDetailRecipe(true);
+    return;
+  }
+
+  // Open cookbook detail
   const cookbookCard = target.closest("[data-cookbook-id]");
   if (!(cookbookCard instanceof HTMLElement)) {
     return;
   }
 
-  state.selectedCookbookId = cookbookCard.dataset.cookbookId;
+  state.openCookbookId = cookbookCard.dataset.cookbookId;
   renderCookbookList();
-  schedulePersistAppState();
-  showToast(`${getCookbookById(state.selectedCookbookId).name} is nu je standaard kookboek.`);
 });
 
 bindEvent(modal, "click", (event) => {
