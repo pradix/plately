@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-23" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-24" />
   </head>
   <body>
     <main class="page">
@@ -92,6 +92,13 @@
             <button type="button" class="ghost-link">Bekijk alles</button>
           </section>
           <div class="channel-row" id="channelRow"></div>
+
+          <!-- Mijn kookboeken strip -->
+          <section class="section-heading" id="homeCookbooksSectionHead">
+            <h2>Mijn kookboeken</h2>
+            <button type="button" class="ghost-link" data-view="settings">Bekijk alles</button>
+          </section>
+          <div class="home-cb-strip" id="homeCbStrip"></div>
 
           <!-- Kookboek sectie -->
           <section class="kookboek-heading">
@@ -388,11 +395,36 @@
         </section>
 
         <section class="screen import-screen" id="importScreen">
-          <header class="topbar">
-            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar home">
-              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
-            </button>
+          <header class="topbar topbar--home">
+            <img class="brand-logo" src="assets/plately.png" alt="Plately" />
+            <div class="topbar-actions">
+              <button class="home-avatar" type="button" data-view="settings" aria-label="Profiel"></button>
+            </div>
           </header>
+
+          <!-- Zoekbalk voor kanalen -->
+          <section class="search-card" aria-label="Zoek recepten op kanalen">
+            <div class="search-input">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10.5 4.75a5.75 5.75 0 1 0 0 11.5a5.75 5.75 0 0 0 0-11.5Zm0 13.5a7.75 7.75 0 1 1 5.01-13.66a7.75 7.75 0 0 1-5.01 13.66Zm10.04 1.38l-4.42-4.42l1.41-1.41l4.42 4.42l-1.41 1.41Z"/>
+              </svg>
+              <input id="importSearchInput" type="search" placeholder="Zoek een recept op kanalen..." autocomplete="off" />
+            </div>
+          </section>
+
+          <!-- Channel search results op import scherm -->
+          <section class="channel-search-section hidden" id="importChannelSearchSection">
+            <div class="channel-search-header">
+              <h2>Gevonden op kanalen</h2>
+              <button type="button" class="ghost-link" id="importChannelSearchClose">Sluiten</button>
+            </div>
+            <div class="channel-search-list" id="importChannelSearchResults"></div>
+          </section>
+
+          <!-- Scheidslijn -->
+          <div class="import-or-row" id="importOrRow">
+            <span class="import-or-label">Of importeer via link</span>
+          </div>
 
           <div class="import-platforms">
             <button class="platform-card platform-card--active" type="button" data-platform-choice="tiktok">
@@ -448,10 +480,11 @@
         </section>
 
         <section class="screen review-screen" id="reviewScreen">
-          <header class="topbar">
-            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar home">
-              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
-            </button>
+          <header class="topbar topbar--home">
+            <img class="brand-logo" src="assets/plately.png" alt="Plately" />
+            <div class="topbar-actions">
+              <button class="home-avatar" type="button" data-view="home" aria-label="Ga naar kookboek"></button>
+            </div>
           </header>
 
           <section class="review-hero">
@@ -762,6 +795,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-20"></script>
+    <script src="app.js?v=plately-banani-21"></script>
   </body>
 </html>

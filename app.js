@@ -1193,6 +1193,15 @@ function switchView(view) {
   }
 
   window.scrollTo({ top: 0, behavior: "auto" });
+
+  // Persist view so refresh restores the same tab
+  try {
+    if (["home", "grocery", "settings", "mealplan"].includes(view)) {
+      sessionStorage.setItem("plately-view", view);
+    } else {
+      sessionStorage.removeItem("plately-view");
+    }
+  } catch { /* ignore */ }
 }
 
 function parseBaseServings(value) {
@@ -1620,11 +1629,75 @@ async function searchChannels(query) {
     if (channelSearchResults) channelSearchResults.innerHTML = `<p class="ch-result__loading">Zoeken…</p>`;
   }
   try {
-    const resp = await fetch(`/api/channel-search?q=${encodeURIComponent(query.trim())}`);
+    const channels = state.followedChannelIds.join(",");
+    const resp = await fetch(`/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`);
     const data = await resp.json();
     renderChannelSearchResults(data.results || []);
   } catch {
     renderChannelSearchResults([]);
+  }
+}
+
+async function searchChannelsOnImportScreen(query) {
+  const section = document.getElementById("importChannelSearchSection");
+  const results = document.getElementById("importChannelSearchResults");
+  const orRow = document.getElementById("importOrRow");
+  if (!query || query.trim().length < 2) {
+    if (section) section.classList.add("hidden");
+    if (orRow) orRow.classList.remove("hidden");
+    return;
+  }
+  if (section) section.classList.remove("hidden");
+  if (results) results.innerHTML = `<p class="ch-result__loading">Zoeken…</p>`;
+  if (orRow) orRow.classList.add("hidden");
+  try {
+    const channels = state.followedChannelIds.join(",");
+    const resp = await fetch(`/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`);
+    const data = await resp.json();
+    const all = data.results || [];
+    if (!all.length) {
+      if (results) results.innerHTML = `<p class="ch-result__loading">Geen resultaten gevonden.</p>`;
+      if (orRow) orRow.classList.remove("hidden");
+      return;
+    }
+    if (results) {
+      results.innerHTML = `<div class="ch-result-grid">${all.map((r) => {
+        const channelColor = SEED_CHANNELS.find((ch) => ch.id === r.channelId)?.color || "#8da485";
+        const thumbHtml = r.thumbnail
+          ? `<img class="ch-card__img" src="${escapeHtml(r.thumbnail)}" alt="${escapeHtml(r.title)}" loading="lazy" onerror="this.parentElement.style.background='${channelColor}33'" />`
+          : `<div class="ch-card__img ch-card__img--placeholder" style="background:${escapeHtml(channelColor)}22">
+               <span style="font-size:2rem;opacity:.4">${escapeHtml(SEED_CHANNELS.find(ch => ch.id === r.channelId)?.initials || "?")}</span>
+             </div>`;
+        return `
+          <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}">
+            <div class="ch-card__visual">
+              ${thumbHtml}
+              <span class="ch-card__badge" style="background:${escapeHtml(channelColor)}">${escapeHtml(r.channel)}</span>
+            </div>
+            <div class="ch-card__body">
+              <p class="ch-card__title">${escapeHtml(r.title)}</p>
+              ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
+            </div>
+            <div class="ch-card__actions">
+              <a class="ch-card__view" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z" fill="currentColor"/></svg>
+                Bekijk
+              </a>
+              <button class="ch-card__import" type="button"
+                data-channel-import-url="${escapeHtml(r.url)}"
+                data-channel-import-thumb="${escapeHtml(r.thumbnail || "")}"
+                aria-label="Importeer ${escapeHtml(r.title)}">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+                Importeer
+              </button>
+            </div>
+          </div>`;
+      }).join("")}</div>`;
+    }
+    if (orRow) orRow.classList.remove("hidden");
+  } catch {
+    if (section) section.classList.add("hidden");
+    if (orRow) orRow.classList.remove("hidden");
   }
 }
 
@@ -1787,6 +1860,44 @@ function renderChannelRow() {
   `).join("");
 }
 
+function renderHomeCookbooks() {
+  const strip = document.getElementById("homeCbStrip");
+  const heading = document.getElementById("homeCookbooksSectionHead");
+  if (!strip) return;
+
+  const top = state.cookbooks.slice(0, 4);
+
+  if (!top.length) {
+    if (heading) heading.classList.add("hidden");
+    strip.innerHTML = "";
+    return;
+  }
+
+  if (heading) heading.classList.remove("hidden");
+
+  strip.innerHTML = top.map((cookbook) => {
+    const recipes = cookbook.recipeIds.map((id) => getRecipeById(id)).filter(Boolean);
+    const coverImg = recipes[0]?.image || "";
+    const count = cookbook.recipeIds.length;
+    const coverHtml = coverImg
+      ? `<div class="home-cb-card__cover home-cb-card__cover--photo" style="background-image:url('${escapeHtml(coverImg)}')">${
+          recipes.length > 1
+            ? `<div class="home-cb-card__cover-grid">${recipes.slice(0, 4).map((r) => `<img src="${escapeHtml(r.image)}" alt="" loading="lazy" />`).join("")}</div>`
+            : ""
+        }</div>`
+      : `<div class="home-cb-card__cover home-cb-card__cover--empty">📚</div>`;
+    return `
+      <button class="home-cb-card" type="button" data-open-cookbook-home="${escapeHtml(cookbook.id)}">
+        ${coverHtml}
+        <div class="home-cb-card__body">
+          <p class="home-cb-card__name">${escapeHtml(cookbook.name)}</p>
+          <p class="home-cb-card__count">${count} recept${count === 1 ? "" : "en"}</p>
+        </div>
+      </button>
+    `;
+  }).join("");
+}
+
 function renderNavBadge() {
   const badge = document.getElementById("groceryNavBadge");
   if (!badge) return;
@@ -1880,9 +1991,15 @@ function renderRecipeGrid() {
 
   recipeGrid.innerHTML = recipes
     .map(
-      (recipe) => `
+      (recipe) => {
+        const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
+        const faviconHtml = faviconUrl
+          ? `<span class="recipe-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" /></span>`
+          : "";
+        return `
         <button class="recipe-card" type="button" data-recipe-id="${recipe.id}">
           <img src="${recipe.image}" alt="${recipe.alt}" />
+          ${faviconHtml}
           <div class="recipe-card__body">
             <h3>${recipe.title}</h3>
             <div class="recipe-card__meta">
@@ -1890,7 +2007,8 @@ function renderRecipeGrid() {
             </div>
           </div>
         </button>
-      `
+      `;
+      }
     )
     .join("");
 }
@@ -3289,6 +3407,7 @@ function buildPersistedAppState() {
     ),
     featuredRecipeId: state.featuredRecipeId,
     selectedRecipeId: state.selectedRecipeId,
+    followedChannelIds: [...state.followedChannelIds],
   };
 }
 
@@ -3342,12 +3461,19 @@ function applyPersistedAppState(user) {
   if (typeof user.selectedRecipeId === "string" && getRecipeById(user.selectedRecipeId)) {
     state.selectedRecipeId = user.selectedRecipeId;
   }
+
+  if (Array.isArray(user.followedChannelIds) && user.followedChannelIds.length) {
+    state.followedChannelIds = user.followedChannelIds.filter((id) =>
+      SEED_CHANNELS.some((ch) => ch.id === id)
+    );
+  }
 }
 
 function renderAll() {
   renderHomeStats();
   renderRecentImports();
   renderChannelRow();
+  renderHomeCookbooks();
   renderChannelSettings();
   renderCookbookFilterBar();
   renderRecipeGrid();
@@ -3667,8 +3793,10 @@ function bindEvent(element, eventName, handler) {
   element.addEventListener(eventName, handler);
 }
 
-bindEvent(document.getElementById("openImportButton"), "click", () => openModal());
-bindEvent(document.getElementById("openImportButton2"), "click", () => openModal());
+// + button and filter button → navigate to import screen (universal import)
+document.querySelectorAll("#openImportButton, #openImportButton2").forEach((btn) => {
+  if (btn) btn.addEventListener("click", () => switchView("import"));
+});
 
 platformButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -4707,8 +4835,102 @@ bindEvent(importScreenForm, "submit", async (event) => {
   );
 });
 
+// ── Import screen search ──────────────────────────────────────────────────────
+let importSearchTimeout = null;
+const importSearchInput = document.getElementById("importSearchInput");
+
+if (importSearchInput) {
+  importSearchInput.addEventListener("input", () => {
+    const q = importSearchInput.value.trim();
+    clearTimeout(importSearchTimeout);
+    const orRow = document.getElementById("importOrRow");
+    const section = document.getElementById("importChannelSearchSection");
+    const results = document.getElementById("importChannelSearchResults");
+    if (q.length < 2) {
+      if (section) section.classList.add("hidden");
+      if (orRow) orRow.classList.remove("hidden");
+      return;
+    }
+    if (results) results.innerHTML = `<p class="ch-result__loading">Zoeken…</p>`;
+    if (section) section.classList.remove("hidden");
+    if (orRow) orRow.classList.add("hidden");
+    importSearchTimeout = setTimeout(() => searchChannelsOnImportScreen(q), 600);
+  });
+}
+
+bindEvent(document.getElementById("importChannelSearchClose"), "click", () => {
+  const section = document.getElementById("importChannelSearchSection");
+  const orRow = document.getElementById("importOrRow");
+  if (section) section.classList.add("hidden");
+  if (orRow) orRow.classList.remove("hidden");
+  if (importSearchInput) importSearchInput.value = "";
+});
+
+// Import button inside import screen channel results
+bindEvent(document.getElementById("importChannelSearchResults"), "click", async (event) => {
+  const btn = event.target.closest(".ch-card__import");
+  if (!(btn instanceof HTMLElement)) return;
+  const url = btn.dataset.channelImportUrl;
+  if (!url) return;
+  const imageHint = btn.dataset.channelImportThumb || "";
+
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+
+  try {
+    showToast("Recept importeren…");
+    const resp = await fetch("/api/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, imageHint }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.recipe) throw new Error(data.error || "Importeren mislukt");
+    const recipe = normalizeImportedRecipe({ ...data.recipe, needsReview: true });
+    state.recipes = [recipe, ...state.recipes];
+    renderRecipeGrid();
+    renderRecentImports();
+    renderHomeCookbooks();
+    // Clear search and go to review
+    if (importSearchInput) importSearchInput.value = "";
+    const section = document.getElementById("importChannelSearchSection");
+    if (section) section.classList.add("hidden");
+    openImportReview(recipe.id);
+  } catch (err) {
+    showToast(err.message || "Importeren mislukt");
+    btn.disabled = false;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg> Importeer`;
+  }
+});
+
+// ── Cookbook strip on home screen ──────────────────────────────────────────────
+bindEvent(document.getElementById("homeCbStrip"), "click", (event) => {
+  const btn = event.target.closest("[data-open-cookbook-home]");
+  if (!(btn instanceof HTMLElement)) return;
+  const cookbookId = btn.dataset.openCookbookHome;
+  state.openCookbookId = cookbookId;
+  switchView("settings");
+  renderCookbookList();
+});
+
+// "Bekijk alles" in cookbook strip heading
+bindEvent(document.getElementById("homeCookbooksSectionHead"), "click", (event) => {
+  const link = event.target.closest("[data-view]");
+  if (!(link instanceof HTMLElement)) return;
+  switchView(link.dataset.view);
+});
+
 syncPlatformUI();
 renderAll();
+
+// Restore last view the user was on before a page refresh
+try {
+  const savedView = sessionStorage.getItem("plately-view");
+  if (savedView && ["home", "grocery", "settings", "mealplan"].includes(savedView) && savedView !== "home") {
+    switchView(savedView);
+  }
+} catch { /* ignore */ }
+
 refreshBackendStatus();
 registerServiceWorker();
 bootstrapSession();

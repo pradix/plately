@@ -3502,8 +3502,10 @@ async function searchAHRecipes(query, count = 4) {
   return [];
 }
 
-async function searchChannelRecipes(query) {
+async function searchChannelRecipes(query, allowedChannels = null) {
   const q = encodeURIComponent(query);
+  // null = all channels; array = only those channel IDs
+  const allow = allowedChannels && allowedChannels.length ? new Set(allowedChannels) : null;
 
   async function scrapeOrRest(baseUrl, channelName, channelId, searchUrl, parser, count) {
     try {
@@ -3516,31 +3518,36 @@ async function searchChannelRecipes(query) {
     return wpRestSearch(baseUrl, channelName, channelId, query, count);
   }
 
+  function maybeSearch(channelId, fn) {
+    if (allow && !allow.has(channelId)) return Promise.resolve([]);
+    return fn();
+  }
+
   const searches = await Promise.allSettled([
-    searchAHRecipes(query, 4),
+    maybeSearch("ch-ah", () => searchAHRecipes(query, 4)),
     // Lekker & Simpel — confirmed working HTML scraper
-    scrapeOrRest("https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les",
+    maybeSearch("ch-les", () => scrapeOrRest("https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les",
       `https://www.lekkerensimpel.com/?s=${q}&maaltijd=all&gerecht=all`,
-      parseLekkerSimpel, 4),
+      parseLekkerSimpel, 4)),
     // Laura's Bakery — confirmed working HTML scraper
-    scrapeOrRest("https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb",
+    maybeSearch("ch-lb", () => scrapeOrRest("https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb",
       `https://www.laurasbakery.nl/zoeken/?_search=${q}`,
-      parseLaurasBakery, 4),
+      parseLaurasBakery, 4)),
     // Eef Kookt Zo — may block (403), fallback to REST
-    scrapeOrRest("https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek",
+    maybeSearch("ch-ek", () => scrapeOrRest("https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek",
       `https://www.eefkooktzo.nl/?s=${q}`,
-      parseWPStandard, 4),
+      parseWPStandard, 4)),
     // Uit Paulines Keuken — AJAX search; REST fallback with recipe-URL filter
-    wpRestSearch("https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 8)
-      .then((items) => items.filter((r) => !/\/\d{4}\/\d{2}\//.test(r.url)).slice(0, 4)),
+    maybeSearch("ch-up", () => wpRestSearch("https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 8)
+      .then((items) => items.filter((r) => !/\/\d{4}\/\d{2}\//.test(r.url)).slice(0, 4))),
     // Miljuschka — may block (403), fallback to REST
-    scrapeOrRest("https://miljuschka.nl", "Miljuschka", "ch-mj",
+    maybeSearch("ch-mj", () => scrapeOrRest("https://miljuschka.nl", "Miljuschka", "ch-mj",
       `https://miljuschka.nl/?s=${q}`,
-      parseWPStandard, 4),
+      parseWPStandard, 4)),
     // Chicks Love Food — server-rendered recipe-list, scrape with custom parser
-    scrapeOrRest("https://www.chickslovefood.com", "Chicks Love Food", "ch-clf",
+    maybeSearch("ch-clf", () => scrapeOrRest("https://www.chickslovefood.com", "Chicks Love Food", "ch-clf",
       `https://www.chickslovefood.com/?s=${q}`,
-      parseChicksLoveFood, 4),
+      parseChicksLoveFood, 4)),
   ]);
 
   // Interleave results from each channel so no single channel dominates
@@ -3936,7 +3943,11 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 200, { ok: true, results: [] });
         return;
       }
-      const results = await searchChannelRecipes(query);
+      const channelsParam = sanitizeText(requestUrl.searchParams.get("channels") || "");
+      const allowedChannels = channelsParam
+        ? channelsParam.split(",").map((s) => s.trim()).filter(Boolean)
+        : null;
+      const results = await searchChannelRecipes(query, allowedChannels);
       sendJson(response, 200, { ok: true, results });
       return;
     }
