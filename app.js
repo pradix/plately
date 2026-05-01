@@ -502,6 +502,8 @@ const homeImportFeedback = document.getElementById("homeImportFeedback");
 const recipeUrlInput = document.getElementById("recipeUrl");
 const recipeNoteInput = document.getElementById("recipeNote");
 const searchInput = document.getElementById("searchInput");
+const channelSearchSection = document.getElementById("channelSearchSection");
+const channelSearchResults = document.getElementById("channelSearchResults");
 const closeImportSecondaryButton = document.getElementById("closeImportSecondaryButton");
 const openFeaturedRecipeButton = document.getElementById("openFeaturedRecipeButton");
 const platformButtons = [...document.querySelectorAll(".platform-button[data-platform-choice]")];
@@ -1504,6 +1506,60 @@ function renderFeaturedRecipe() {
 
 function getImportedRecipes() {
   return state.recipes.filter((recipe) => !SEED_RECIPE_IDS.has(recipe.id) && !recipe.isSeed);
+}
+
+// ── Channel recipe search ─────────────────────────────────────────────────────
+
+let channelSearchTimeout = null;
+
+function renderChannelSearchResults(results) {
+  if (!channelSearchSection || !channelSearchResults) return;
+
+  if (!results || results.length === 0) {
+    channelSearchSection.classList.add("hidden");
+    channelSearchResults.innerHTML = "";
+    return;
+  }
+
+  channelSearchSection.classList.remove("hidden");
+  channelSearchResults.innerHTML = results
+    .map((r) => {
+      const channelColor = SEED_CHANNELS.find((ch) => ch.id === r.channelId)?.color || "#8da485";
+      const thumb = r.thumbnail
+        ? `<img class="ch-result__thumb" src="${escapeHtml(r.thumbnail)}" alt="" loading="lazy" onerror="this.style.display='none'" />`
+        : `<div class="ch-result__thumb ch-result__thumb--placeholder" style="background:${escapeHtml(channelColor)}"></div>`;
+      return `
+        <div class="ch-result" data-channel-result-url="${escapeHtml(r.url)}">
+          ${thumb}
+          <div class="ch-result__body">
+            <span class="ch-result__badge" style="background:${escapeHtml(channelColor)}">${escapeHtml(r.channel)}</span>
+            <p class="ch-result__title">${escapeHtml(r.title)}</p>
+            ${r.time ? `<span class="ch-result__time">${escapeHtml(r.time)}</span>` : ""}
+          </div>
+          <button class="ch-result__import" type="button" data-channel-import-url="${escapeHtml(r.url)}" aria-label="Importeer ${escapeHtml(r.title)}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          </button>
+        </div>`;
+    })
+    .join("");
+}
+
+async function searchChannels(query) {
+  if (!query || query.trim().length < 2) {
+    renderChannelSearchResults([]);
+    return;
+  }
+  if (channelSearchSection) {
+    channelSearchSection.classList.remove("hidden");
+    if (channelSearchResults) channelSearchResults.innerHTML = `<p class="ch-result__loading">Zoeken…</p>`;
+  }
+  try {
+    const resp = await fetch(`/api/channel-search?q=${encodeURIComponent(query.trim())}`);
+    const data = await resp.json();
+    renderChannelSearchResults(data.results || []);
+  } catch {
+    renderChannelSearchResults([]);
+  }
 }
 
 function renderHomeStats() {
@@ -3519,6 +3575,77 @@ bindEvent(searchInput, "input", (event) => {
   state.searchQuery = event.target.value;
   renderQuickRecipeGrid();
   renderRecipeGrid();
+
+  // Debounced channel search — fires after 600 ms of no typing
+  clearTimeout(channelSearchTimeout);
+  const query = event.target.value.trim();
+  if (query.length < 2) {
+    renderChannelSearchResults([]);
+    return;
+  }
+  channelSearchTimeout = setTimeout(() => searchChannels(query), 600);
+});
+
+bindEvent(searchInput, "keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    clearTimeout(channelSearchTimeout);
+    searchChannels(searchInput?.value || "");
+  }
+  if (event.key === "Escape") {
+    searchInput.value = "";
+    state.searchQuery = "";
+    renderQuickRecipeGrid();
+    renderRecipeGrid();
+    renderChannelSearchResults([]);
+  }
+});
+
+// Close channel search panel
+bindEvent(document.getElementById("channelSearchClose"), "click", () => {
+  if (searchInput) searchInput.value = "";
+  state.searchQuery = "";
+  renderQuickRecipeGrid();
+  renderRecipeGrid();
+  renderChannelSearchResults([]);
+});
+
+// Import button inside channel search results
+bindEvent(channelSearchResults, "click", async (event) => {
+  const btn = event.target.closest("[data-channel-import-url]");
+  if (!(btn instanceof HTMLElement)) return;
+  const url = btn.dataset.channelImportUrl;
+  if (!url) return;
+
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+
+  try {
+    showToast("Recept importeren…");
+    const resp = await fetch("/api/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.recipe) throw new Error(data.error || "Importeren mislukt");
+    const recipe = data.recipe;
+    recipe.needsReview = true;
+    state.recipes = [recipe, ...state.recipes];
+    renderRecipeGrid();
+    renderRecentImports();
+
+    // Open review screen so user can confirm details before saving
+    openImportReview(recipe.id);
+    // Clear search
+    if (searchInput) searchInput.value = "";
+    state.searchQuery = "";
+    renderChannelSearchResults([]);
+  } catch (err) {
+    showToast(err.message || "Importeren mislukt");
+    btn.disabled = false;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+  }
 });
 
 [reviewTitleInput, reviewDescriptionInput, reviewTimeInput, reviewServingsInput, reviewMealTagInput, reviewIngredientsInput, reviewInstructionsInput]
@@ -3853,7 +3980,21 @@ bindEvent(basketContinueButton, "click", async () => {
     return;
   }
 
-  const url = getBasketHandoffUrl(preview);
+  let url = getBasketHandoffUrl(preview);
+
+  // For AH: rebuild the add-multiple URL from the currently selected choice per item
+  // so swapping an alternative product is reflected in the handoff link.
+  if (preview.store === "albert-heijn") {
+    const selectedIds = (preview.items || [])
+      .map((item) => item.choices?.[item.selectedChoiceIndex || 0]?.productId)
+      .filter(Boolean);
+    if (selectedIds.length) {
+      url = `https://www.ah.nl/mijnlijst/add-multiple?${selectedIds
+        .map((id) => `p=${encodeURIComponent(id)}:1`)
+        .join("&")}`;
+    }
+  }
+
   if (!url) {
     showToast("Kon geen supermarktlink opbouwen.");
     return;

@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-16" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-17" />
   </head>
   <body>
     <main class="page">
@@ -48,6 +48,15 @@
                 <path d="M4 7.25A1.25 1.25 0 0 1 5.25 6h13.5a1.25 1.25 0 1 1 0 2.5H5.25A1.25 1.25 0 0 1 4 7.25Zm3.5 4.75A1.25 1.25 0 0 1 8.75 10.75h6.5a1.25 1.25 0 1 1 0 2.5h-6.5A1.25 1.25 0 0 1 7.5 12Zm-2 4.75A1.25 1.25 0 0 1 6.75 15.5h10.5a1.25 1.25 0 1 1 0 2.5H6.75A1.25 1.25 0 0 1 5.5 16.75Z"/>
               </svg>
             </button>
+          </section>
+
+          <!-- Channel search results (shown when user searches) -->
+          <section class="channel-search-section hidden" id="channelSearchSection">
+            <div class="channel-search-header">
+              <h2>Gevonden op kanalen</h2>
+              <button type="button" class="ghost-link" id="channelSearchClose">Sluiten</button>
+            </div>
+            <div class="channel-search-list" id="channelSearchResults"></div>
           </section>
 
           <!-- Import banner -->
@@ -693,6 +702,6 @@
       </section>
     </div>
 
-    <script src="app.js?v=plately-banani-12"></script>
+    <script src="app.js?v=plately-banani-13"></script>
   </body>
 </html>

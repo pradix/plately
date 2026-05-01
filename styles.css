@@ -4299,3 +4299,124 @@ body {
   width: 36px;
   height: 36px;
 }
+
+/* ── Channel search results ───────────────────────────────────────────────── */
+
+.channel-search-section {
+  margin: 4px 16px 8px;
+  background: #fff;
+  border-radius: 18px;
+  border: 1.5px solid rgba(0,0,0,0.07);
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.channel-search-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+
+.channel-search-header h2 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0;
+  color: #1a1a1a;
+}
+
+.channel-search-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.ch-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ch-result:last-child { border-bottom: none; }
+.ch-result:hover { background: rgba(0,0,0,0.025); }
+
+.ch-result__thumb {
+  width: 54px;
+  height: 54px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #eee;
+}
+.ch-result__thumb--placeholder {
+  display: block;
+  opacity: 0.55;
+}
+
+.ch-result__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ch-result__badge {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.01em;
+}
+
+.ch-result__title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ch-result__time {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.ch-result__import {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: #8da485;
+  border: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  transition: background 0.15s, transform 0.12s;
+}
+.ch-result__import:hover { background: #78936f; transform: scale(1.08); }
+.ch-result__import svg { width: 18px; height: 18px; }
+.ch-result__import:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+.ch-result__loading {
+  padding: 14px 16px;
+  font-size: 0.88rem;
+  color: #888;
+  margin: 0;
+}
+
+/* spinner for import button while loading */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin { animation: spin 0.8s linear infinite; }

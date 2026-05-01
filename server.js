@@ -2938,12 +2938,32 @@ async function fetchAHAnonymousToken() {
   return ahTokenCache.token;
 }
 
+function parseAHProduct(product) {
+  // AH webshopId can be "wi123456" or "wi_123456" — strip prefix correctly
+  const webshopId = String(product.webshopId || product.id || "");
+  const numericId = webshopId.replace(/^wi_?/i, "");
+  const priceEuros = product.priceBeforeBonus ?? product.currentPrice ?? 0;
+  return {
+    id: numericId,
+    name: sanitizeText(product.title),
+    price: priceEuros ? `€${Number(priceEuros).toFixed(2).replace(".", ",")}` : "",
+    url: numericId ? `https://www.ah.nl/producten/product/wi${numericId}` : "",
+  };
+}
+
+// Returns the best single match (for backward compat with buildMatchedChoiceFromProduct)
 async function findAHProduct(ingredient) {
+  const results = await findAHProducts(ingredient, 1);
+  return results[0] ?? null;
+}
+
+// Returns up to `count` product matches from AH for a single ingredient
+async function findAHProducts(ingredient, count = 3) {
   try {
     const token = await fetchAHAnonymousToken();
     const searchUrl =
       `https://api.ah.nl/mobile-services/product/search/v2` +
-      `?query=${encodeURIComponent(ingredient)}&size=5&sortOn=RELEVANCE`;
+      `?query=${encodeURIComponent(ingredient)}&size=${count * 2}&sortOn=RELEVANCE`;
 
     const response = await fetch(searchUrl, {
       headers: {
@@ -2954,37 +2974,16 @@ async function findAHProduct(ingredient) {
       signal: AbortSignal.timeout(8000),
     });
 
-    if (!response.ok) {
-      return null;
-    }
+    if (!response.ok) return [];
 
     const data = await response.json();
-    const products = data.products || [];
-    // Prefer a product that isn't non-food
-    const product =
-      products.find((p) => !NON_FOOD_INGREDIENT_PATTERN.test(sanitizeText(p.title))) ||
-      products[0];
+    const products = (data.products || [])
+      .filter((p) => !NON_FOOD_INGREDIENT_PATTERN.test(sanitizeText(p.title)))
+      .slice(0, count);
 
-    if (!product) {
-      return null;
-    }
-
-    // webshopId is "wi123456" — the add-multiple URL wants the numeric part only
-    const webshopId = String(product.webshopId || product.id || "");
-    const numericId = webshopId.replace(/^wi/i, "");
-
-    // AH returns prices already in euros (e.g. 3.9 = €3,90), not eurocents
-    const priceEuros = product.priceBeforeBonus ?? product.currentPrice ?? 0;
-
-    return {
-      id: numericId,
-      name: sanitizeText(product.title),
-      price: priceEuros
-        ? `€${Number(priceEuros).toFixed(2).replace(".", ",")}`
-        : "",
-    };
+    return products.map(parseAHProduct);
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -3137,6 +3136,84 @@ function extractFoodInfluencersDirectUrl(html, store) {
   return buildFoodInfluencersUrl(recipeId, store, biaIds);
 }
 
+// ── Channel recipe search ─────────────────────────────────────────────────────
+
+async function searchAHRecipes(query, count = 4) {
+  try {
+    const url =
+      `https://api.ah.nl/mobile-services/recipes/v2` +
+      `?query=${encodeURIComponent(query)}&size=${count}`;
+    const resp = await fetch(url, {
+      headers: { ...FETCH_HEADERS },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return (data.recipes || [])
+      .slice(0, count)
+      .map((r) => ({
+        title: sanitizeText(r.title || ""),
+        url: r.webPath ? `https://www.ah.nl${r.webPath}` : "",
+        thumbnail: r.images?.[0]?.url || r.image?.url || "",
+        channel: "Allerhande",
+        channelId: "ch-ah",
+        description: sanitizeText((r.description || "").slice(0, 140)),
+        time: r.cookTime ? `${r.cookTime} min` : "",
+      }))
+      .filter((r) => r.title && r.url);
+  } catch {
+    return [];
+  }
+}
+
+async function searchWordPressRecipes(baseUrl, channelName, channelId, query, count = 3) {
+  try {
+    const url =
+      `${baseUrl}/wp-json/wp/v2/posts` +
+      `?search=${encodeURIComponent(query)}&per_page=${count}&_embed=wp:featuredmedia`;
+    const resp = await fetch(url, {
+      headers: { ...FETCH_HEADERS, accept: "application/json" },
+      signal: AbortSignal.timeout(9000),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return (Array.isArray(data) ? data : [])
+      .slice(0, count)
+      .map((r) => {
+        const thumbnail =
+          r._embedded?.["wp:featuredmedia"]?.[0]?.media_details?.sizes?.medium?.source_url ||
+          r._embedded?.["wp:featuredmedia"]?.[0]?.source_url ||
+          "";
+        return {
+          title: sanitizeText((r.title?.rendered || "").replace(/&amp;/g, "&").replace(/<[^>]+>/g, "")),
+          url: sanitizeText(r.link || ""),
+          thumbnail,
+          channel: channelName,
+          channelId,
+          description: sanitizeText((r.excerpt?.rendered || "").replace(/<[^>]+>/g, "").trim().slice(0, 140)),
+          time: "",
+        };
+      })
+      .filter((r) => r.title && r.url);
+  } catch {
+    return [];
+  }
+}
+
+async function searchChannelRecipes(query) {
+  const searches = await Promise.allSettled([
+    searchAHRecipes(query, 4),
+    searchWordPressRecipes("https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek", query, 2),
+    searchWordPressRecipes("https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 2),
+    searchWordPressRecipes("https://miljuschka.nl", "Miljuschka", "ch-mj", query, 2),
+  ]);
+  const all = [];
+  for (const settled of searches) {
+    if (settled.status === "fulfilled") all.push(...settled.value);
+  }
+  return all.slice(0, 10);
+}
+
 async function buildStoreBasket(body) {
   const store = normalizeStoreSlug(body.store);
   const items = Array.isArray(body.items) ? body.items : [];
@@ -3171,22 +3248,50 @@ async function buildStoreBasket(body) {
     }
   }
 
-  const searchResults = await searchProductsForStore(
-    store,
-    items.map((item) => sanitizeText(item.title || "")).filter(Boolean)
-  ).catch(() => []);
+  // For AH: fetch up to 3 real product matches per ingredient so the user can pick alternatives.
+  // For other stores: keep single-match behaviour.
+  let searchResults;
+  if (store === "albert-heijn") {
+    searchResults = await Promise.all(
+      items.map(async (item) => {
+        const name = sanitizeText(item.title || "");
+        if (!name) return { ingredient: name, product: null, products: [] };
+        const products = await findAHProducts(name, 3);
+        return { ingredient: name, product: products[0] ?? null, products };
+      })
+    ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
+  } else {
+    const raw = await searchProductsForStore(
+      store,
+      items.map((item) => sanitizeText(item.title || "")).filter(Boolean)
+    ).catch(() => []);
+    searchResults = raw.map((r) => ({ ...r, products: r.product ? [r.product] : [] }));
+  }
 
   const matchedItems = items.map((item, index) => {
-    const result = searchResults[index];
-    const directChoice = result?.product ? buildMatchedChoiceFromProduct(store, item, result.product) : null;
-    const fallbackChoices = buildStoreProductChoices(store, item);
-    const choices = directChoice ? [directChoice, ...fallbackChoices.filter((choice) => choice.title !== directChoice.title)] : fallbackChoices;
+    const result = searchResults[index] || { product: null, products: [] };
+    let choices;
+
+    if (store === "albert-heijn" && result.products.length) {
+      const ahChoices = result.products
+        .map((product, i) =>
+          buildMatchedChoiceFromProduct(store, item, product, i === 0 ? "Beste match" : "Alternatief")
+        )
+        .filter(Boolean);
+      choices = ahChoices.length ? ahChoices : buildStoreProductChoices(store, item);
+    } else {
+      const directChoice = result.product ? buildMatchedChoiceFromProduct(store, item, result.product) : null;
+      const fallbackChoices = buildStoreProductChoices(store, item);
+      choices = directChoice
+        ? [directChoice, ...fallbackChoices.filter((c) => c.title !== directChoice.title)]
+        : fallbackChoices;
+    }
 
     return {
       id: `basket-item-${index}`,
       ingredientTitle: sanitizeText(item.title || "Ingrediënt"),
       ingredientAmount: sanitizeText(item.amount || "1 verpakking"),
-      confidence: result?.product ? "Gevonden in winkel" : getMatchConfidenceLabel(item.title || ""),
+      confidence: result.product ? "Gevonden in winkel" : getMatchConfidenceLabel(item.title || ""),
       choices: choices.slice(0, 3),
       selectedChoiceIndex: 0,
     };
@@ -3459,6 +3564,17 @@ const server = http.createServer(async (request, response) => {
           email: "",
         },
       });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/channel-search" && request.method === "GET") {
+      const query = sanitizeText(requestUrl.searchParams.get("q") || "");
+      if (!query || query.length < 2) {
+        sendJson(response, 200, { ok: true, results: [] });
+        return;
+      }
+      const results = await searchChannelRecipes(query);
+      sendJson(response, 200, { ok: true, results });
       return;
     }
 
