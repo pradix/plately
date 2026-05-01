@@ -4552,13 +4552,23 @@ bindEvent(document.getElementById("cookbookNameConfirmButton"), "click", () => {
   if (!name) { showToast("Geef een naam op."); return; }
   if (cookbookNameModalPurpose === "rename" && cookbookNameModalTargetId) {
     renameCookbook(cookbookNameModalTargetId, name);
+    closeCookbookNameModal();
   } else {
     const cookbook = createCookbook(name);
-    if (cookbook && state.pendingCookbookSaveRecipeId) {
-      saveRecipeToCookbook(state.pendingCookbookSaveRecipeId, cookbook.id);
+    const pendingId = state.pendingCookbookSaveRecipeId;
+    if (cookbook && pendingId) {
+      saveRecipeToCookbook(pendingId, cookbook.id);
+      closeCookbookNameModal();
+      closeCookbookSaveModal();
+      renderHomeCookbooks();
+      // Navigate to the recipe detail so the user can start cooking
+      state.selectedRecipeId = pendingId;
+      renderDetailRecipe(true);
+      switchView("detail");
+    } else {
+      closeCookbookNameModal();
     }
   }
-  closeCookbookNameModal();
 });
 
 bindEvent(document.getElementById("cookbookNameCancelButton"), "click", closeCookbookNameModal);

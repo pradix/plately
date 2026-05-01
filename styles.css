@@ -2797,7 +2797,40 @@ img { display: block; max-width: 100%; }
 }
 
 .cookbook-save-create {
-  margin-top: 4px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  border: 1.5px dashed rgba(141, 164, 133, 0.55);
+  border-radius: 20px;
+  background: rgba(220, 232, 220, 0.18);
+  color: var(--sage-deep);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  margin-top: 2px;
+}
+.cookbook-save-create:hover,
+.cookbook-save-create:focus-visible {
+  background: rgba(220, 232, 220, 0.38);
+  border-color: var(--sage-deep);
+}
+.cookbook-save-create::before {
+  content: "+";
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--sage-deep);
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .basket-sheet {
