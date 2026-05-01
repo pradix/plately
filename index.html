@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-6" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-11" />
   </head>
   <body>
     <main class="page">
@@ -50,45 +50,6 @@
             </button>
           </section>
 
-          <!-- Kanalen -->
-          <section class="section-heading">
-            <h2>Kanalen</h2>
-            <button type="button" class="ghost-link">Bekijk alles</button>
-          </section>
-          <div class="channel-row" id="channelRow"></div>
-
-          <!-- Uitgelicht recept -->
-          <section class="section-heading">
-            <h2>Uitgelicht Recept</h2>
-            <button type="button" class="ghost-link" id="openFeaturedRecipeButton">Bekijk alles</button>
-          </section>
-          <article class="featured-card" id="featuredCard" tabindex="0" role="button" aria-label="Uitgelicht recept openen">
-            <div class="featured-image-wrap">
-              <span class="featured-badge">POPULAIR</span>
-              <img id="featuredImage" class="featured-image" src="assets/hero-burger.svg" alt="Uitgelicht recept" />
-              <button class="featured-favorite" type="button" aria-label="Bewaren">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 20.2l-1.1-1C5.1 14.1 2 11.3 2 7.8C2 5 4.2 2.8 7 2.8c1.6 0 3.1.7 4 1.9c.9-1.2 2.4-1.9 4-1.9c2.8 0 5 2.2 5 5c0 3.5-3.1 6.3-8.9 11.4l-1.1 1Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
-            </div>
-            <div class="featured-copy">
-              <h3 id="featuredTitle">Pasta carbonara</h3>
-              <p class="featured-description" id="featuredDescription">Korte omschrijving van het uitgelichte recept.</p>
-              <div class="featured-meta-pills">
-                <p class="recipe-time" id="featuredTime">35 min</p>
-                <p class="recipe-time" id="featuredServings">2 personen</p>
-              </div>
-            </div>
-          </article>
-
-          <!-- Snel & Makkelijk -->
-          <section class="section-heading">
-            <h2>Snel &amp; Makkelijk</h2>
-            <button type="button" class="ghost-link">Bekijk alles</button>
-          </section>
-          <div class="quick-list" id="quickRecipeGrid"></div>
-
           <!-- Import banner -->
           <section class="import-banner">
             <div class="import-banner__head">
@@ -108,6 +69,35 @@
               </p>
             </form>
           </section>
+
+          <!-- Kanalen -->
+          <section class="section-heading">
+            <h2>Kanalen</h2>
+            <button type="button" class="ghost-link">Bekijk alles</button>
+          </section>
+          <div class="channel-row" id="channelRow"></div>
+
+          <!-- Nu Populair -->
+          <section class="section-heading">
+            <h2>Nu Populair</h2>
+          </section>
+          <article class="featured-card" id="featuredCard" tabindex="0" role="button" aria-label="Uitgelicht recept openen">
+            <div class="featured-image-wrap">
+              <span class="featured-badge">UITGELICHT</span>
+              <img id="featuredImage" class="featured-image" src="assets/hero-burger.svg" alt="Uitgelicht recept" />
+            </div>
+            <div class="featured-copy">
+              <h3 id="featuredTitle">Pasta carbonara</h3>
+              <p class="recipe-time" id="featuredTime">35 min</p>
+            </div>
+          </article>
+
+          <!-- Snel & Makkelijk -->
+          <section class="section-heading">
+            <h2>Snel &amp; Makkelijk</h2>
+            <button type="button" class="ghost-link">Bekijk alles</button>
+          </section>
+          <div class="quick-list" id="quickRecipeGrid"></div>
 
           <!-- Categorieën -->
           <section class="section-heading">
@@ -705,6 +695,6 @@
       </section>
     </div>
 
-    <script src="app.js?v=plately-banani-6"></script>
+    <script src="app.js?v=plately-banani-8"></script>
   </body>
 </html>

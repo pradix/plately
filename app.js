@@ -1567,7 +1567,7 @@ function renderCategoryGrid() {
     {
       title: "Ontbijt",
       count: state.recipes.filter((r) => /ontbijt/i.test(r.mealTag)).length || 12,
-      image: "https://images.unsplash.com/photo-1533089860892-a9b5ac525b19?w=400&q=80",
+      image: "https://images.unsplash.com/photo-1484723091739-30a097e8f929?w=400&q=80",
     },
     {
       title: "Salades",
@@ -1606,16 +1606,8 @@ function renderChannelRow() {
   if (!row) return;
   row.innerHTML = SEED_CHANNELS.map((ch) => `
     <button class="channel-item" type="button" data-channel-url="${escapeHtml(ch.url)}" aria-label="${escapeHtml(ch.name)} openen">
-      <span class="channel-avatar">
-        <img
-          class="channel-avatar__img"
-          src="${escapeHtml(ch.icon || getSourceIconUrl(ch.url))}"
-          alt=""
-          loading="lazy"
-          referrerpolicy="no-referrer"
-          onerror="this.hidden=true;this.nextElementSibling.hidden=false;"
-        />
-        <span class="channel-avatar__fallback" hidden>${escapeHtml(ch.initials)}</span>
+      <span class="channel-avatar" style="background:${escapeHtml(ch.color)}">
+        <span class="channel-avatar__initials">${escapeHtml(ch.initials)}</span>
       </span>
       <span class="channel-name">${escapeHtml(ch.name)}</span>
     </button>

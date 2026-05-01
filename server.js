@@ -99,7 +99,7 @@ const NON_FOOD_INGREDIENT_PATTERN =
   /\b(keukenpapier|bakpapier|sat[ée]prikkers?|cocktailprikkers?|aluminiumfolie|folie|servetten?|touw|spiesen?|prikker)\b/i;
 const UNIT_PATTERN =
   "(?:x|g|gr|kg|mg|ml|l|cl|dl|el|tl|tbsp|tsp|cup|cups|oz|lb|stuks?|stuk(?:ken)?|krop|kroppen|bosje|bosjes|zakje|zakjes|pot(?:je|jes)?|blik(?:je|jes)?|liter|snuf(?:je|jes)?|teen|tenen|teentjes|plak(?:je|jes)?|gram|grams|milliliter|eetlepel(?:s)?|theelepel(?:s)?|handje|handjes|scheut(?:je)?|bakje|bakjes|verpakking(?:en)?|pak(?:ken)?|rollen?|rol|bunch|clove|cloves|pinch|slices?|stengel|stengels|takje|takjes|blokje|blokjes|blaadje|blaadjes|blad|bladeren|reepje|reepjes|filet|filets)";
-const QUANTITY_PATTERN = "(?:\\d+(?:[.,]\\d+)?|\\d+\\/\\d+|\\d+\\s+\\d+\\/\\d+)";
+const QUANTITY_PATTERN = "(?:\\d+\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d+(?:[.,]\\d+)?)";
 const TIKTOK_CAPTION_FIELD_PATTERN = /(desc|description|caption|shareDesc|seoDesc|text|content)/i;
 const TIKTOK_TITLE_FIELD_PATTERN = /(title|shareTitle|seoTitle|recipeName|name)/i;
 
@@ -1069,7 +1069,10 @@ function splitTextUnits(text) {
 }
 
 function normalizeFractions(value) {
-  return String(value || "").replace(/[¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]/g, (match) => FRACTION_MAP[match] || match);
+  return String(value || "").replace(/(\d+)?([¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])/g, (_, whole, fraction) => {
+    const normalizedFraction = FRACTION_MAP[fraction] || fraction;
+    return whole ? `${whole} ${normalizedFraction}` : normalizedFraction;
+  });
 }
 
 function stripSocialNoise(text) {
@@ -1753,6 +1756,9 @@ async function extractWithClaude(caption, note) {
 function parseIngredientLine(line) {
   const clean = sanitizeText(
     cleanListLine(stripSocialNoise(line))
+      .replace(/\*\*([^*]+)\*\*(?=[\p{L}])/gu, "$1 ")
+      .replace(/[_*`]+/g, "")
+      .replace(/^\[\s*[x ]\s*\]\s*/i, "")
       .replace(/^voor\s+\d+\s+personen?\s*:?\s*/i, "")
       .replace(/\b(?:instructions?|method|steps?|bereiding|bereidingswijze|werkwijze)\s*:?\s*$/i, "")
   );
@@ -2448,16 +2454,43 @@ function parseParagraphsAfterHeading(html, headingPattern) {
     .filter(Boolean);
 }
 
+function extractMarkdownSection(text, headingPattern, stopPattern) {
+  const regex = new RegExp(`(?:^|\\n)#{2,3}\\s*(?:${headingPattern})\\s*\\n([\\s\\S]*?)(?=\\n#{2,3}\\s*(?:${stopPattern})\\b|$)`, "gi");
+  const matches = [...String(text || "").matchAll(regex)];
+  return matches.length ? matches[matches.length - 1][1].trim() : "";
+}
+
 function parseTextRecipeDocument(text, url) {
   const cleanedText = String(text || "")
+    .replace(/\*\*([^*]+)\*\*(?=[\p{L}])/gu, "$1 ")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__(?=[\p{L}])/gu, "$1 ")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, "$1")
+    .replace(/^\*\s+-\s+\[[x ]\]\s+/gim, "")
+    .replace(/^\*\s+/gim, "")
+    .replace(/^Title:\s.*$/gim, "")
+    .replace(/^URL Source:\s.*$/gim, "")
+    .replace(/^Markdown Content:\s*$/gim, "")
     .replace(/\r/g, "\n")
     .replace(/\t/g, " ")
     .replace(/\n{3,}/g, "\n\n");
 
   const lines = cleanedText
     .split(/\n+/)
-    .map((line) => sanitizeText(line))
+    .map((line) => sanitizeText(line.replace(/^#{1,6}\s*/, "")))
     .filter(Boolean);
+
+  const ingredientSection = extractMarkdownSection(
+    cleanedText,
+    "ingredi[eë]nten|ingredienten|ingredients?",
+    "dit heb je nodig|aan de slag|bereiding|voedingswaarden|boodschappen|allerhande|services|albert heijn"
+  );
+  const instructionSection = extractMarkdownSection(
+    cleanedText,
+    "aan de slag|bereiding|bereidingswijze|instructions?|method",
+    "voedingswaarden|ingredi[eë]nten|ingredienten|boodschappen|allerhande|services|albert heijn"
+  );
 
   const title =
     normalizeRecipeTitle(lines.find((line) => looksLikeRecipeTitle(line) && RECIPE_TITLE_HINT_PATTERN.test(line))) ||
@@ -2469,8 +2502,8 @@ function parseTextRecipeDocument(text, url) {
     sanitizeText(lines.find((line) => line.length >= 30 && !INGREDIENT_HEADING_PATTERN.test(line) && !INSTRUCTION_HEADING_PATTERN.test(line))) ||
     "";
 
-  const ingredients = extractIngredientsFromText(cleanedText);
-  const instructions = extractInstructionsFromText(cleanedText);
+  const ingredients = extractIngredientsFromText(ingredientSection || cleanedText);
+  const instructions = extractInstructionsFromText(instructionSection || cleanedText);
   const time =
     estimateTime(cleanedText) ||
     "35 min";
@@ -2490,6 +2523,51 @@ function parseTextRecipeDocument(text, url) {
     needsReview: ingredients.length === 0 || instructions.length === 0,
     sourceLabel: "Imported from Website",
   };
+}
+
+function parseMarkdownIngredientSection(text) {
+  const ingredientSection = extractMarkdownSection(
+    text,
+    "ingredi[eë]nten|ingredienten|ingredients?",
+    "dit heb je nodig|aan de slag|bereiding|voedingswaarden|boodschappen|allerhande|services|albert heijn"
+  );
+
+  if (!ingredientSection) {
+    return [];
+  }
+
+  return normalizeIngredientList(
+    ingredientSection
+      .split(/\n+/)
+      .map((line) => sanitizeText(line))
+      .filter((line) => line && !/^\(.*personen.*\)$/i.test(line))
+      .map((line) => parseIngredientLine(line))
+  );
+}
+
+function parseMarkdownInstructionSection(text) {
+  const instructionSection = extractMarkdownSection(
+    text,
+    "aan de slag|bereiding|bereidingswijze|instructions?|method",
+    "voedingswaarden|ingredi[eë]nten|ingredienten|boodschappen|allerhande|services|albert heijn"
+  );
+
+  if (!instructionSection) {
+    return [];
+  }
+
+  return finalizeInstructionSteps(
+    instructionSection
+      .split(/\n+/)
+      .map((line) => sanitizeText(line.replace(/^\d+\.\s*\d*\s*/i, "").replace(/^\*\s*/i, "")))
+      .filter((line) => !/^(algemeen:|lekker van albert heijn:)/i.test(line))
+      .filter(Boolean)
+  );
+}
+
+function parseMarkdownServings(text) {
+  const match = String(text || "").match(/\(Op basis van\s+(\d+)\s+personen?\)/i);
+  return match ? match[1] : "";
 }
 
 function parseWebsiteRecipe(html, url) {
@@ -2771,6 +2849,44 @@ async function importInstagram(sourceUrl, note) {
 }
 
 async function importWebsite(sourceUrl) {
+  const parsedUrl = new URL(sourceUrl);
+  const isAllerhande = /(^|\.)ah\.nl$/i.test(parsedUrl.hostname) && /\/allerhande\//i.test(parsedUrl.pathname);
+
+  if (isAllerhande) {
+    const [document, readerDocument] = await Promise.all([
+      fetchWebsiteDocument(sourceUrl),
+      fetchReaderFallback(sourceUrl).catch(() => null),
+    ]);
+
+    const primaryRecipe =
+      document.kind === "text"
+        ? parseTextRecipeDocument(document.body, document.finalUrl || sourceUrl)
+        : parseWebsiteRecipe(document.body, document.finalUrl || sourceUrl);
+
+    if (readerDocument?.kind === "text") {
+      const readerRecipe = parseTextRecipeDocument(readerDocument.body, readerDocument.finalUrl || sourceUrl);
+      const readerIngredients = parseMarkdownIngredientSection(readerDocument.body);
+      const readerInstructions = parseMarkdownInstructionSection(readerDocument.body);
+      const readerServings = parseMarkdownServings(readerDocument.body);
+      return {
+        ...primaryRecipe,
+        ingredients: readerIngredients.length ? readerIngredients : readerRecipe.ingredients.length ? readerRecipe.ingredients : primaryRecipe.ingredients,
+        instructions:
+          readerInstructions.length ? readerInstructions : readerRecipe.instructions.length ? readerRecipe.instructions : primaryRecipe.instructions,
+        title: primaryRecipe.title,
+        description: primaryRecipe.description,
+        servings: readerServings || readerRecipe.servings || primaryRecipe.servings,
+        needsReview:
+          !(readerIngredients.length || readerRecipe.ingredients.length) ||
+          !(readerInstructions.length || readerRecipe.instructions.length) ||
+          (readerIngredients.length || readerRecipe.ingredients.length) < 4 ||
+          (readerInstructions.length || readerRecipe.instructions.length) < 3,
+      };
+    }
+
+    return primaryRecipe;
+  }
+
   const document = await fetchWebsiteDocument(sourceUrl);
   if (document.kind === "text") {
     return parseTextRecipeDocument(document.body, document.finalUrl || sourceUrl);
