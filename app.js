@@ -3720,6 +3720,9 @@ bindEvent(cookbookSaveList, "click", (event) => {
 
   saveRecipeToCookbook(recipeId, cookbookId);
   closeCookbookSaveModal();
+  state.selectedRecipeId = recipeId;
+  renderDetailRecipe(true);
+  switchView("detail");
 });
 
 bindEvent(cookbookSaveCreateButton, "click", () => {
@@ -3738,6 +3741,11 @@ bindEvent(cookbookSaveCreateButton, "click", () => {
     saveRecipeToCookbook(recipeId, cookbook.id);
   }
   closeCookbookSaveModal();
+  if (recipeId) {
+    state.selectedRecipeId = recipeId;
+    renderDetailRecipe(true);
+    switchView("detail");
+  }
 });
 
 bindEvent(switchAuthModeButton, "click", () => {
