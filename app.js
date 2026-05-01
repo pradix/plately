@@ -4062,8 +4062,7 @@ bindEvent(channelSearchResults, "click", async (event) => {
     });
     const data = await resp.json();
     if (!resp.ok || !data.recipe) throw new Error(data.error || "Importeren mislukt");
-    const recipe = data.recipe;
-    recipe.needsReview = true;
+    const recipe = normalizeImportedRecipe({ ...data.recipe, needsReview: true });
     state.recipes = [recipe, ...state.recipes];
     renderRecipeGrid();
     renderRecentImports();
