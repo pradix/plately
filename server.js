@@ -3235,58 +3235,173 @@ function extractFoodInfluencersDirectUrl(html, store) {
 
 // ── Channel recipe search ─────────────────────────────────────────────────────
 
-async function searchAHRecipes(query, count = 4) {
-  try {
-    const url =
-      `https://api.ah.nl/mobile-services/recipes/v2` +
-      `?query=${encodeURIComponent(query)}&size=${count}`;
-    const resp = await fetch(url, {
-      headers: { ...FETCH_HEADERS },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    return (data.recipes || [])
-      .slice(0, count)
-      .map((r) => ({
-        title: sanitizeText(r.title || ""),
-        url: r.webPath ? `https://www.ah.nl${r.webPath}` : "",
-        thumbnail: r.images?.[0]?.url || r.image?.url || "",
-        channel: "Allerhande",
-        channelId: "ch-ah",
-        description: sanitizeText((r.description || "").slice(0, 140)),
-        time: r.cookTime ? `${r.cookTime} min` : "",
-      }))
-      .filter((r) => r.title && r.url);
-  } catch {
-    return [];
-  }
+// ── HTML helpers for search scraping ──────────────────────────────────────
+function decodeHtmlEntities(str) {
+  return (str || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&[a-z]+;/g, "");
 }
 
-async function searchWordPressRecipes(baseUrl, channelName, channelId, query, count = 3) {
-  // Helper to map a WP post/recipe object to our result format
+function stripHtmlTags(str) {
+  return (str || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** Split HTML into top-level <article> blocks, handling nesting. */
+function extractArticleBlocks(html) {
+  const blocks = [];
+  let i = 0;
+  while (i < html.length) {
+    const start = html.indexOf("<article", i);
+    if (start === -1) break;
+    let depth = 1, pos = start + 8;
+    while (depth > 0 && pos < html.length) {
+      const nextOpen = html.indexOf("<article", pos);
+      const nextClose = html.indexOf("</article>", pos);
+      if (nextClose === -1) { pos = html.length; break; }
+      if (nextOpen !== -1 && nextOpen < nextClose) { depth++; pos = nextOpen + 8; }
+      else { depth--; pos = nextClose + 10; if (depth === 0) blocks.push(html.slice(start, pos)); }
+    }
+    i = pos;
+  }
+  return blocks;
+}
+
+/**
+ * Lekker & Simpel structure:
+ *   <article class="post-item ...">
+ *     <a href="URL" class="post-item__anchor"></a>
+ *     <div class="post-item__image"><picture><img data-src="THUMB" src="[base64 placeholder]"></picture></div>
+ *     <div class="post-item__inner"><h2 class="post-item__title ...">TITLE</h2></div>
+ *   </article>
+ */
+function parseLekkerSimpel(html, baseUrl, channelName, channelId, count) {
+  const results = [];
+  const seenUrls = new Set();
+  const blocks = extractArticleBlocks(html);
+
+  for (const block of blocks) {
+    if (results.length >= count) break;
+
+    const anchorMatch = block.match(/class="[^"]*post-item__anchor[^"]*"[^>]*href="(https?:\/\/[^"]+)"/i)
+      || block.match(/href="(https?:\/\/[^"]+)"[^>]*class="[^"]*post-item__anchor[^"]*"/i);
+    if (!anchorMatch) continue;
+    const url = anchorMatch[1];
+    if (seenUrls.has(url) || /\/(tag|categor|author|page)\//i.test(url)) continue;
+
+    const titleMatch = block.match(/class="[^"]*post-item__title[^"]*"[^>]*>([^<]+)</i);
+    const title = decodeHtmlEntities(titleMatch?.[1] || "").trim();
+    if (!title) continue;
+
+    // data-src preferred (real URL), src may be a base64 placeholder
+    const thumbMatch = block.match(/data-src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i)
+      || block.match(/src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i);
+    const thumbnail = thumbMatch?.[1] || "";
+
+    seenUrls.add(url);
+    results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
+  }
+  return results;
+}
+
+/**
+ * Laura's Bakery structure:
+ *   <div class="column column-block item ...">
+ *     <div class="post">
+ *       <div class="image" data-src="THUMB"><img src="THUMB" alt="TITLE"></div>
+ *       <div class="content"><h3>TITLE</h3></div>
+ *       <a href="URL" class="link">...</a>
+ *     </div>
+ *   </div>
+ */
+function parseLaurasBakery(html, baseUrl, channelName, channelId, count) {
+  const results = [];
+  const seenUrls = new Set();
+  const chunks = html.split(/(?=<div[^>]+class="[^"]*column[^"]*\bitem\b[^"]*")/i);
+
+  for (const chunk of chunks.slice(1)) {
+    if (results.length >= count) break;
+    const block = chunk.slice(0, 1500); // first ~1500 chars is enough
+
+    const linkMatch = block.match(/href="(https?:\/\/[^"]+)"[^>]*class="[^"]*\blink\b[^"]*"/i)
+      || block.match(/class="[^"]*\blink\b[^"]*"[^>]*href="(https?:\/\/[^"]+)"/i);
+    if (!linkMatch) continue;
+    const url = linkMatch[1];
+    if (seenUrls.has(url)) continue;
+
+    const h3Match = block.match(/<h3[^>]*>([^<]+)<\/h3>/i);
+    const altMatch = block.match(/alt="([^"]+)"/i);
+    const title = decodeHtmlEntities(h3Match?.[1] || altMatch?.[1] || "").trim();
+    if (!title) continue;
+
+    // data-src on .image div is the real thumbnail
+    const thumbMatch = block.match(/class="[^"]*\bimage\b[^"]*"[^>]*data-src="(https?:\/\/[^"]+)"/i)
+      || block.match(/data-src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i)
+      || block.match(/src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i);
+    const thumbnail = thumbMatch?.[1] || "";
+
+    seenUrls.add(url);
+    results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
+  }
+  return results;
+}
+
+/**
+ * Generic WordPress search HTML parser.
+ * Handles standard WP themes where <article> contains <h2 class="entry-title"><a href="...">
+ */
+function parseWPStandard(html, _baseUrl, channelName, channelId, count) {
+  const results = [];
+  const seenUrls = new Set();
+  const blocks = extractArticleBlocks(html);
+
+  for (const block of blocks) {
+    if (results.length >= count) break;
+
+    const headingLink =
+      block.match(/<h[1-5][^>]*>[\s\S]{0,300}?<a[^>]+href="(https?:\/\/[^"]+)"[^>]*>([\s\S]+?)<\/a>/i);
+    if (!headingLink) continue;
+
+    const url = headingLink[1];
+    const title = decodeHtmlEntities(stripHtmlTags(headingLink[2])).trim();
+    if (!title || title.length < 3 || seenUrls.has(url)) continue;
+    if (/\/(tag|category|categorie|auteur|author|page)\//.test(url)) continue;
+
+    const imgMatch =
+      block.match(/data-src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i) ||
+      block.match(/src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i);
+    const thumbnail = imgMatch?.[1] || "";
+
+    seenUrls.add(url);
+    results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
+  }
+  return results;
+}
+
+/** WP REST API fallback — returns results mapped to our format. */
+async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
+  const params = `search=${encodeURIComponent(query)}&per_page=${count}&_embed=wp:featuredmedia`;
+  const headers = { ...FETCH_HEADERS, accept: "application/json" };
+
   function mapWPItem(r) {
     const thumbnail =
       r._embedded?.["wp:featuredmedia"]?.[0]?.media_details?.sizes?.medium?.source_url ||
-      r._embedded?.["wp:featuredmedia"]?.[0]?.source_url ||
-      "";
+      r._embedded?.["wp:featuredmedia"]?.[0]?.source_url || "";
     return {
-      title: sanitizeText((r.title?.rendered || "").replace(/&amp;/g, "&").replace(/&#\d+;/g, "").replace(/<[^>]+>/g, "").trim()),
+      title: sanitizeText(decodeHtmlEntities(stripHtmlTags(r.title?.rendered || ""))),
       url: sanitizeText(r.link || ""),
       thumbnail,
       channel: channelName,
       channelId,
-      description: sanitizeText((r.excerpt?.rendered || r.content?.rendered || "").replace(/<[^>]+>/g, "").replace(/\[.*?\]/g, "").trim().slice(0, 140)),
-      time: r.wprm_total_time ? `${r.wprm_total_time} min` : "",
+      description: sanitizeText(stripHtmlTags(r.excerpt?.rendered || "").slice(0, 140)),
+      time: "",
     };
   }
 
-  const params = `search=${encodeURIComponent(query)}&per_page=${count}&_embed=wp:featuredmedia`;
-  const headers = { ...FETCH_HEADERS, accept: "application/json" };
-
-  // Try recipe custom post type first (used by WPRM and similar plugins)
-  const recipeTypes = ["recipe", "recepten", "recipes"];
-  for (const type of recipeTypes) {
+  for (const type of ["recipe", "recepten", "recipes", "posts"]) {
     try {
       const resp = await fetch(`${baseUrl}/wp-json/wp/v2/${type}?${params}`, {
         headers,
@@ -3297,38 +3412,88 @@ async function searchWordPressRecipes(baseUrl, channelName, channelId, query, co
         const mapped = (Array.isArray(data) ? data : []).slice(0, count).map(mapWPItem).filter((r) => r.title && r.url);
         if (mapped.length > 0) return mapped;
       }
-    } catch {
-      // try next type
-    }
+    } catch { /* try next */ }
   }
+  return [];
+}
 
-  // Fallback to standard posts endpoint
+/**
+ * Search AH Allerhande — tries the API with anonymous token.
+ */
+async function searchAHRecipes(query, count = 4) {
   try {
-    const resp = await fetch(`${baseUrl}/wp-json/wp/v2/posts?${params}`, {
-      headers,
-      signal: AbortSignal.timeout(9000),
+    const token = await fetchAHAnonymousToken();
+    const url = `https://api.ah.nl/mobile-services/recipes/v2?query=${encodeURIComponent(query)}&size=${count}`;
+    const resp = await fetch(url, {
+      headers: { ...FETCH_HEADERS, authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(8000),
     });
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    return (Array.isArray(data) ? data : []).slice(0, count).map(mapWPItem).filter((r) => r.title && r.url);
-  } catch {
-    return [];
-  }
+    if (resp.ok) {
+      const data = await resp.json();
+      const mapped = (data.recipes || []).slice(0, count).map((r) => ({
+        title: sanitizeText(r.title || ""),
+        url: r.webPath ? `https://www.ah.nl${r.webPath}` : "",
+        thumbnail: r.images?.[0]?.url || r.image?.url || "",
+        channel: "Allerhande",
+        channelId: "ch-ah",
+        description: sanitizeText((r.description || "").slice(0, 140)),
+        time: r.cookTime ? `${r.cookTime} min` : "",
+      })).filter((r) => r.title && r.url);
+      if (mapped.length > 0) return mapped;
+    }
+  } catch { /* noop */ }
+  return [];
 }
 
 async function searchChannelRecipes(query) {
+  const q = encodeURIComponent(query);
+
+  async function scrapeOrRest(baseUrl, channelName, channelId, searchUrl, parser, count) {
+    try {
+      const html = await fetchHtml(searchUrl);
+      if (html && html.length > 500) {
+        const scraped = parser(html, baseUrl, channelName, channelId, count);
+        if (scraped.length > 0) return scraped;
+      }
+    } catch { /* fall through */ }
+    return wpRestSearch(baseUrl, channelName, channelId, query, count);
+  }
+
   const searches = await Promise.allSettled([
     searchAHRecipes(query, 4),
-    searchWordPressRecipes("https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek", query, 4),
-    searchWordPressRecipes("https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 4),
-    searchWordPressRecipes("https://miljuschka.nl", "Miljuschka", "ch-mj", query, 4),
-    searchWordPressRecipes("https://www.chickslovefood.com", "Chicks Love Food", "ch-clf", query, 4),
-    searchWordPressRecipes("https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les", query, 4),
-    searchWordPressRecipes("https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb", query, 3),
+    // Lekker & Simpel — confirmed working HTML scraper
+    scrapeOrRest("https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les",
+      `https://www.lekkerensimpel.com/?s=${q}&maaltijd=all&gerecht=all`,
+      parseLekkerSimpel, 4),
+    // Laura's Bakery — confirmed working HTML scraper
+    scrapeOrRest("https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb",
+      `https://www.laurasbakery.nl/zoeken/?_search=${q}`,
+      parseLaurasBakery, 4),
+    // Eef Kookt Zo — may block (403), fallback to REST
+    scrapeOrRest("https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek",
+      `https://www.eefkooktzo.nl/?s=${q}`,
+      parseWPStandard, 4),
+    // Uit Paulines Keuken — fallback to REST (search page is AJAX)
+    wpRestSearch("https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 4),
+    // Miljuschka — may block (403), fallback to REST
+    scrapeOrRest("https://miljuschka.nl", "Miljuschka", "ch-mj",
+      `https://miljuschka.nl/?s=${q}`,
+      parseWPStandard, 4),
+    // Chicks Love Food — JS-rendered, use REST
+    wpRestSearch("https://www.chickslovefood.com", "Chicks Love Food", "ch-clf", query, 4),
   ]);
+
+  // Interleave results from each channel so no single channel dominates
+  const channelResults = searches
+    .filter((s) => s.status === "fulfilled")
+    .map((s) => s.value.slice(0, 4)); // max 4 per channel
+
   const all = [];
-  for (const settled of searches) {
-    if (settled.status === "fulfilled") all.push(...settled.value);
+  const maxLen = Math.max(...channelResults.map((r) => r.length));
+  for (let i = 0; i < maxLen; i++) {
+    for (const ch of channelResults) {
+      if (ch[i]) all.push(ch[i]);
+    }
   }
   return all.slice(0, 20);
 }
