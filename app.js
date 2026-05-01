@@ -5084,6 +5084,12 @@ try {
   }
 } catch { /* ignore */ }
 
+// Logo altijd terug naar home
+document.querySelectorAll(".brand-logo").forEach((logo) => {
+  logo.style.cursor = "pointer";
+  logo.addEventListener("click", () => switchView("home"));
+});
+
 refreshBackendStatus();
 registerServiceWorker();
 bootstrapSession();
