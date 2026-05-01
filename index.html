@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-13" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-16" />
   </head>
   <body>
     <main class="page">
@@ -69,6 +69,13 @@
               </p>
             </form>
           </section>
+
+          <!-- Recentelijk toegevoegd -->
+          <section class="section-heading hidden" id="recentImportsHeading">
+            <h2>Recentelijk</h2>
+            <button type="button" class="ghost-link" id="viewAllImportsButton">Bekijk alles</button>
+          </section>
+          <div class="recent-imports-grid" id="recentImportsGrid"></div>
 
           <!-- Kanalen -->
           <section class="section-heading">
@@ -236,6 +243,11 @@
           <header class="grocery-header">
             <h1 class="grocery-header__title">Boodschappen</h1>
             <div class="grocery-header__actions">
+              <button class="grocery-clear-btn hidden" id="groceryClearButton" type="button" aria-label="Lijst leegmaken">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
               <button class="grocery-add-btn" id="groceryQuickAddTopButton" type="button" aria-label="Item toevoegen">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
@@ -453,9 +465,7 @@
           </header>
 
           <section class="review-hero">
-            <p class="section-kicker">IMPORTEER CONTROLE</p>
-            <h1>Maak je recept netjes</h1>
-            <p class="section-copy">Pas titel, omschrijving, ingrediënten en stappen aan voordat je het recept opslaat.</p>
+            <h1>Recept controleren</h1>
           </section>
 
           <section class="review-card">
@@ -493,10 +503,18 @@
                 </label>
               </div>
 
-              <label>
-                Categorie
-                <input id="reviewMealTagInput" type="text" placeholder="Avond" />
-              </label>
+              <div class="review-field">
+                <span class="review-label">Categorie</span>
+                <div class="meal-tag-chips" id="mealTagChips" role="group" aria-label="Kies categorie">
+                  <button type="button" class="meal-chip meal-chip--active" data-tag="Avond">🍽️ Avond</button>
+                  <button type="button" class="meal-chip" data-tag="Ontbijt">🌅 Ontbijt</button>
+                  <button type="button" class="meal-chip" data-tag="Lunch">🥗 Lunch</button>
+                  <button type="button" class="meal-chip" data-tag="Snack">🍎 Snack</button>
+                  <button type="button" class="meal-chip" data-tag="Dessert">🍮 Dessert</button>
+                  <button type="button" class="meal-chip" data-tag="Bakken">🥐 Bakken</button>
+                </div>
+                <input type="hidden" id="reviewMealTagInput" value="Avond" />
+              </div>
 
               <label>
                 Ingrediënten
@@ -525,13 +543,6 @@
               <path d="M7.2 16.7h9.6" stroke-width="1.7" stroke-linecap="round"/>
             </svg>
             <span class="nav-label">Kookboek</span>
-          </button>
-          <button type="button" class="nav-item" data-view="mealplan">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6.6 5.4h10.8c1.27 0 2.3 1.03 2.3 2.3v9c0 1.27-1.03 2.3-2.3 2.3H6.6a2.3 2.3 0 0 1-2.3-2.3v-9c0-1.27 1.03-2.3 2.3-2.3Z" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M8 3.5v3M16 3.5v3M4.9 9.1h14.2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span class="nav-label">Maaltijdplan</span>
           </button>
           <button type="button" class="nav-item" data-view="grocery">
             <span class="nav-icon-wrap">
@@ -682,6 +693,6 @@
       </section>
     </div>
 
-    <script src="app.js?v=plately-banani-9"></script>
+    <script src="app.js?v=plately-banani-11"></script>
   </body>
 </html>

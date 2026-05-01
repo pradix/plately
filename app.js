@@ -1514,10 +1514,40 @@ function renderHomeStats() {
 }
 
 function renderRecentImports() {
-  if (!recentImportList) {
+  const heading = document.getElementById("recentImportsHeading");
+  const grid = document.getElementById("recentImportsGrid");
+  if (!heading || !grid) return;
+
+  // Take the 4 most recently added recipes (last in array = newest for seeded, first for imported)
+  const recent = [...state.recipes].reverse().slice(0, 4);
+
+  if (!recent.length) {
+    heading.classList.add("hidden");
+    grid.innerHTML = "";
     return;
   }
-  recentImportList.innerHTML = "";
+
+  heading.classList.remove("hidden");
+  grid.innerHTML = recent.map((recipe) => `
+    <button class="recent-card" type="button" data-recipe-id="${escapeHtml(recipe.id)}">
+      <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title)}" loading="lazy" />
+      <div class="recent-card__body">
+        <p class="recent-card__title">${escapeHtml(recipe.title)}</p>
+        <p class="recent-card__meta">${escapeHtml(recipe.time || "")}</p>
+      </div>
+    </button>
+  `).join("");
+
+  // Click handler
+  grid.querySelectorAll(".recent-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      const id = card.dataset.recipeId;
+      if (!id) return;
+      state.selectedRecipeId = id;
+      renderDetailRecipe(true);
+      switchView("detail");
+    });
+  });
 }
 
 function parseMinutesLabel(value) {
@@ -1848,6 +1878,8 @@ function renderGroceryGroups() {
   if (groceryToolbar) {
     groceryToolbar.classList.toggle("hidden", !state.groceryItems.length);
   }
+  const clearBtn = document.getElementById("groceryClearButton");
+  if (clearBtn) clearBtn.classList.toggle("hidden", !state.groceryItems.length);
   if (groceryOrder) {
     groceryOrder.classList.toggle("hidden", !state.groceryItems.length);
   }
@@ -1936,7 +1968,15 @@ function renderImportReview() {
   reviewDescriptionInput.value = recipe.description || "";
   reviewTimeInput.value = recipe.time || "";
   reviewServingsInput.value = recipe.servings || "";
-  reviewMealTagInput.value = recipe.mealTag || "";
+  reviewMealTagInput.value = recipe.mealTag || "Avond";
+  // Sync chips to current mealTag
+  const chipsContainer = document.getElementById("mealTagChips");
+  if (chipsContainer) {
+    const activeTag = recipe.mealTag || "Avond";
+    chipsContainer.querySelectorAll(".meal-chip").forEach((chip) => {
+      chip.classList.toggle("meal-chip--active", chip.dataset.tag === activeTag);
+    });
+  }
   reviewIngredientsInput.value = serializeIngredientsForReview(recipe);
   reviewInstructionsInput.value = (recipe.instructions || []).join("\n");
   renderReviewAnalysis();
@@ -2214,8 +2254,8 @@ function saveImportReview() {
   renderAll();
   schedulePersistAppState();
   reviewFeedback.textContent = "Recept bijgewerkt.";
-  switchView("detail");
-  showToast(`${recipe.title} is bijgewerkt.`);
+  showToast(`${recipe.title} is opgeslagen.`);
+  openCookbookSaveModal(recipe.id);
 }
 
 function applyReviewSuggestion(field, value) {
@@ -3295,6 +3335,19 @@ bindEvent(clearGroceryListButton, "click", () => {
 });
 bindEvent(addCustomGroceryButton, "click", addCustomGroceryItem);
 bindEvent(groceryQuickAddTopButton, "click", addCustomGroceryItem);
+bindEvent(document.getElementById("viewAllImportsButton"), "click", () => {
+  switchView("home");
+  document.getElementById("recipeGrid")?.scrollIntoView({ behavior: "smooth" });
+});
+bindEvent(document.getElementById("groceryClearButton"), "click", () => {
+  if (!state.groceryItems.length) return;
+  if (!confirm("Wil je de hele boodschappenlijst leegmaken?")) return;
+  state.groceryItems = [];
+  renderGroceryGroups();
+  renderNavBadge();
+  schedulePersistAppState();
+  showToast("Boodschappenlijst is leeggemaakt.");
+});
 bindEvent(copyGroceryListButton, "click", () => {
   copyGroceryList().catch(() => {
     showToast("Kopiëren lukte niet.");
@@ -3712,6 +3765,18 @@ bindEvent(authForm, "submit", async (event) => {
 bindEvent(reviewForm, "submit", (event) => {
   event.preventDefault();
   saveImportReview();
+});
+
+bindEvent(document.getElementById("mealTagChips"), "click", (event) => {
+  const chip = event.target.closest(".meal-chip");
+  if (!chip) return;
+  const tag = chip.dataset.tag;
+  // Update hidden input
+  const hidden = document.getElementById("reviewMealTagInput");
+  if (hidden) hidden.value = tag;
+  // Update active chip
+  document.querySelectorAll(".meal-chip").forEach((c) => c.classList.remove("meal-chip--active"));
+  chip.classList.add("meal-chip--active");
 });
 
 bindEvent(skipReviewButton, "click", () => {
