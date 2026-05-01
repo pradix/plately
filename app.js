@@ -1204,6 +1204,11 @@ function switchView(view) {
 
   window.scrollTo({ top: 0, behavior: "auto" });
 
+  // When entering grocery screen, kick off a photo fetch for items that don't have one yet
+  if (view === "grocery") {
+    debouncedFetchGroceryPhotos();
+  }
+
   // Persist view so refresh restores the same tab
   try {
     if (["home", "grocery", "settings", "mealplan"].includes(view)) {
@@ -2346,19 +2351,17 @@ function renderGroceryGroups() {
     })
     .join("");
 
-  // Trigger background photo fetch for items without photos
-  if (state.view === "grocery") {
-    debouncedFetchGroceryPhotos();
-  }
+  // Trigger background photo fetch for items without photos (debounced, safe to call always)
+  debouncedFetchGroceryPhotos();
 }
 
 let _groceryPhotoFetchTimer = null;
 function debouncedFetchGroceryPhotos() {
-  if (_groceryPhotoFetchTimer) return;
+  if (_groceryPhotoFetchTimer) clearTimeout(_groceryPhotoFetchTimer);
   _groceryPhotoFetchTimer = setTimeout(() => {
     _groceryPhotoFetchTimer = null;
     fetchGroceryPhotos();
-  }, 5000);
+  }, 1500);
 }
 
 async function fetchGroceryPhotos() {
@@ -4636,9 +4639,10 @@ bindEvent(cookbookSaveList, "click", (event) => {
     return;
   }
 
+  // Set selectedRecipeId first so every subsequent render uses the right recipe
+  state.selectedRecipeId = recipeId;
   saveRecipeToCookbook(recipeId, cookbookId);
   closeCookbookSaveModal();
-  state.selectedRecipeId = recipeId;
   renderDetailRecipe(true);
   switchView("detail");
 });
@@ -4658,12 +4662,12 @@ bindEvent(document.getElementById("cookbookNameConfirmButton"), "click", () => {
     const cookbook = createCookbook(name);
     const pendingId = state.pendingCookbookSaveRecipeId;
     if (cookbook && pendingId) {
+      // Set selectedRecipeId first so every render targets the right recipe
+      state.selectedRecipeId = pendingId;
       saveRecipeToCookbook(pendingId, cookbook.id);
       closeCookbookNameModal();
       closeCookbookSaveModal();
       renderHomeCookbooks();
-      // Navigate to the recipe detail so the user can start cooking
-      state.selectedRecipeId = pendingId;
       renderDetailRecipe(true);
       switchView("detail");
     } else {

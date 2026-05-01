@@ -3441,6 +3441,22 @@ function parseWPStandard(html, _baseUrl, channelName, channelId, count) {
 }
 
 /** WP REST API fallback — returns results mapped to our format. */
+// URL patterns that strongly suggest a non-recipe (blog/article/tip/news) post
+const BLOG_POST_URL_RE = /\/(blog|artikel|artikelen|nieuws|tips?|advies|inspiratie|over-ons|contact|vacature|actie|winactie|review|test|colofon)\//i;
+// URL patterns that strongly suggest a recipe post
+const RECIPE_URL_RE = /\/(recept|recepten|recipe|recipes|gerecht|gerechten|bakken|koken|lekker|snack|ontbijt|lunch|diner|avondeten|dessert|taart|cake|soep|salade|pasta|vlees|vis|vegetarisch|vegan)\//i;
+
+/**
+ * Returns true when a WP post URL looks like a recipe (not a blog/tip/news article).
+ * - If the URL matches a known-recipe pattern → keep
+ * - If the URL matches a known-blog pattern → drop
+ * - Otherwise → keep (safer than dropping valid recipes)
+ */
+function urlLooksLikeRecipe(url) {
+  if (BLOG_POST_URL_RE.test(url)) return false;
+  return true; // keep by default; recipe-type endpoints don't need this filter
+}
+
 async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
   const params = `search=${encodeURIComponent(query)}&per_page=${count}&_embed=wp:featuredmedia`;
   const headers = { ...FETCH_HEADERS, accept: "application/json" };
@@ -3468,7 +3484,12 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
       });
       if (resp.ok) {
         const data = await resp.json();
-        const mapped = (Array.isArray(data) ? data : []).slice(0, count).map(mapWPItem).filter((r) => r.title && r.url);
+        const mapped = (Array.isArray(data) ? data : [])
+          .map(mapWPItem)
+          .filter((r) => r.title && r.url)
+          // For the generic "posts" endpoint, filter out blog articles
+          .filter((r) => type !== "posts" || urlLooksLikeRecipe(r.url))
+          .slice(0, count);
         if (mapped.length > 0) return mapped;
       }
     } catch { /* try next */ }
