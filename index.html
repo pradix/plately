@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-18" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-19" />
   </head>
   <body>
     <main class="page">
@@ -92,34 +92,6 @@
             <button type="button" class="ghost-link">Bekijk alles</button>
           </section>
           <div class="channel-row" id="channelRow"></div>
-
-          <!-- Nu Populair -->
-          <section class="section-heading">
-            <h2>Nu Populair</h2>
-          </section>
-          <article class="featured-card" id="featuredCard" tabindex="0" role="button" aria-label="Uitgelicht recept openen">
-            <div class="featured-image-wrap">
-              <span class="featured-badge">UITGELICHT</span>
-              <img id="featuredImage" class="featured-image" src="assets/hero-burger.svg" alt="Uitgelicht recept" />
-            </div>
-            <div class="featured-copy">
-              <h3 id="featuredTitle">Pasta carbonara</h3>
-              <p class="recipe-time" id="featuredTime">35 min</p>
-            </div>
-          </article>
-
-          <!-- Snel & Makkelijk -->
-          <section class="section-heading">
-            <h2>Snel &amp; Makkelijk</h2>
-            <button type="button" class="ghost-link">Bekijk alles</button>
-          </section>
-          <div class="quick-list" id="quickRecipeGrid"></div>
-
-          <!-- Categorieën -->
-          <section class="section-heading">
-            <h2>Categorieën</h2>
-          </section>
-          <section class="category-grid" id="categoryGrid"></section>
 
           <!-- Kookboek sectie -->
           <section class="kookboek-heading">
@@ -579,6 +551,39 @@
       </section>
     </main>
 
+    <!-- Share card overlay -->
+    <div class="share-card-overlay hidden" id="shareCardOverlay" aria-hidden="true">
+      <div class="share-card" id="shareCard">
+        <div class="share-card__image-wrap">
+          <img class="share-card__image" id="shareCardImage" src="" alt="" />
+          <div class="share-card__image-fade"></div>
+        </div>
+        <div class="share-card__body">
+          <span class="share-card__tag" id="shareCardTag"></span>
+          <h2 class="share-card__title" id="shareCardTitle"></h2>
+          <div class="share-card__meta">
+            <span class="share-card__time" id="shareCardTime"></span>
+            <span class="share-card__servings" id="shareCardServings"></span>
+          </div>
+          <ul class="share-card__ingredients" id="shareCardIngredients"></ul>
+          <div class="share-card__brand">
+            <img src="assets/plately.png" alt="Plately" class="share-card__brand-logo" />
+            <span>plately.app</span>
+          </div>
+        </div>
+      </div>
+      <div class="share-card__actions">
+        <p class="share-card__hint">📸 Maak een screenshot om dit te delen</p>
+        <div class="share-card__buttons">
+          <button class="secondary-button" type="button" id="shareCardClose">Sluiten</button>
+          <button class="primary-button" type="button" id="shareCardNativeShare">
+            <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;vertical-align:-3px;margin-right:5px"><path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z" fill="currentColor"/></svg>
+            Delen
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal hidden" id="importModal" aria-hidden="true">
       <div class="modal-backdrop" data-close-modal="true"></div>
       <section class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="importTitle">
@@ -738,6 +743,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-14"></script>
+    <script src="app.js?v=plately-banani-15"></script>
   </body>
 </html>

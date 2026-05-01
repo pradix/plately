@@ -1616,17 +1616,13 @@ function renderRecentImports() {
   const grid = document.getElementById("recentImportsGrid");
   if (!heading || !grid) return;
 
-  // Take the 4 most recently added recipes (last in array = newest for seeded, first for imported)
-  const recent = [...state.recipes].reverse().slice(0, 4);
-
-  if (!recent.length) {
-    heading.classList.add("hidden");
-    grid.innerHTML = "";
-    return;
-  }
+  // Only show user-imported recipes (not seed content), newest first
+  const imported = getImportedRecipes().slice(0, 4);
 
   heading.classList.remove("hidden");
-  grid.innerHTML = recent.map((recipe) => `
+
+  // Recipe cards + fill remaining slots with an "add" card (up to 4 total)
+  const cards = imported.map((recipe) => `
     <button class="recent-card" type="button" data-recipe-id="${escapeHtml(recipe.id)}">
       <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title)}" loading="lazy" />
       <div class="recent-card__body">
@@ -1634,10 +1630,28 @@ function renderRecentImports() {
         <p class="recent-card__meta">${escapeHtml(recipe.time || "")}</p>
       </div>
     </button>
-  `).join("");
+  `);
 
-  // Click handler
-  grid.querySelectorAll(".recent-card").forEach((card) => {
+  // Add a + import card in the empty slots
+  const slotsLeft = Math.max(0, 4 - imported.length);
+  for (let i = 0; i < Math.min(slotsLeft, imported.length === 0 ? 1 : 1); i++) {
+    cards.push(`
+      <button class="recent-card recent-card--add" type="button" id="recentAddButton">
+        <div class="recent-card__add-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="recent-card__body">
+          <p class="recent-card__title">Recept toevoegen</p>
+          <p class="recent-card__meta">Importeer via link</p>
+        </div>
+      </button>
+    `);
+  }
+
+  grid.innerHTML = cards.join("");
+
+  // Recipe card clicks → detail
+  grid.querySelectorAll(".recent-card[data-recipe-id]").forEach((card) => {
     card.addEventListener("click", () => {
       const id = card.dataset.recipeId;
       if (!id) return;
@@ -1645,6 +1659,11 @@ function renderRecentImports() {
       renderDetailRecipe(true);
       switchView("detail");
     });
+  });
+
+  // + card → open import modal
+  document.getElementById("recentAddButton")?.addEventListener("click", () => {
+    document.getElementById("openImportButton")?.click();
   });
 }
 
@@ -2607,7 +2626,6 @@ function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId) {
   state.featuredRecipeId = recipeId;
   renderCookbookList();
   renderCookbookFilterBar();
-  renderFeaturedRecipe();
   renderDetailRecipe(false);
   schedulePersistAppState();
   renderCookbookSaveList(recipeId);
@@ -2698,31 +2716,63 @@ function assignSelectedRecipeToDay(dayKey) {
   showToast(`${recipe.title} gepland op ${dayKey[0].toUpperCase()}${dayKey.slice(1)}.`);
 }
 
-async function shareSelectedRecipe() {
-  const recipe = getSelectedRecipe();
-  const shareUrl = recipe.sourceUrl || window.location.href;
-  const shareText = `${recipe.title} • ${recipe.time}`;
+function openShareCard(recipe) {
+  const overlay = document.getElementById("shareCardOverlay");
+  if (!overlay || !recipe) return;
 
-  if (navigator.share) {
-    try {
-      await navigator.share({
-        title: recipe.title,
-        text: shareText,
-        url: shareUrl,
-      });
-      return;
-    } catch {
-      // user cancelled or not supported
-    }
+  // Populate card
+  const img = document.getElementById("shareCardImage");
+  if (img) { img.src = recipe.image || ""; img.alt = recipe.alt || recipe.title; }
+  const titleEl = document.getElementById("shareCardTitle");
+  if (titleEl) titleEl.textContent = recipe.title || "";
+  const tagEl = document.getElementById("shareCardTag");
+  if (tagEl) tagEl.textContent = recipe.mealTag || "";
+  const timeEl = document.getElementById("shareCardTime");
+  if (timeEl) timeEl.textContent = recipe.time ? `⏱ ${recipe.time}` : "";
+  const servEl = document.getElementById("shareCardServings");
+  if (servEl) servEl.textContent = recipe.servings ? `👥 ${recipe.servings}` : "";
+  const ingEl = document.getElementById("shareCardIngredients");
+  if (ingEl) {
+    const top = (recipe.ingredients || []).slice(0, 5);
+    ingEl.innerHTML = top.map((i) => `<li>${escapeHtml(i.name)}</li>`).join("");
   }
 
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function closeShareCard() {
+  const overlay = document.getElementById("shareCardOverlay");
+  if (!overlay) return;
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+async function shareSelectedRecipe() {
+  const recipe = getSelectedRecipe();
+  openShareCard(recipe);
+}
+
+bindEvent(document.getElementById("shareCardClose"), "click", closeShareCard);
+
+bindEvent(document.getElementById("shareCardNativeShare"), "click", async () => {
+  const recipe = getSelectedRecipe();
+  const url = recipe?.sourceUrl || window.location.href;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: recipe?.title || "Recept", url });
+      return;
+    } catch { /* cancelled */ }
+  }
   try {
-    await navigator.clipboard.writeText(`${recipe.title}\n${shareUrl}`);
-    showToast("Receptlink gekopieerd.");
+    await navigator.clipboard.writeText(url);
+    showToast("Link gekopieerd.");
   } catch {
     showToast("Delen lukte niet in deze browser.");
   }
-}
+});
 
 function addRecipeToGrocery(recipe) {
   let added = 0;
@@ -3128,9 +3178,6 @@ function renderAll() {
   renderRecentImports();
   renderChannelRow();
   renderChannelSettings();
-  renderFeaturedRecipe();
-  renderQuickRecipeGrid();
-  renderCategoryGrid();
   renderCookbookFilterBar();
   renderRecipeGrid();
   renderCookbookList();
@@ -3430,9 +3477,6 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
 
     renderHomeStats();
     renderRecentImports();
-    renderFeaturedRecipe();
-    renderQuickRecipeGrid();
-    renderCategoryGrid();
     renderRecipeGrid();
     renderDetailRecipe(true);
     schedulePersistAppState();
@@ -3684,7 +3728,6 @@ bindEvent(servingsUp, "click", () => {
 
 bindEvent(searchInput, "input", (event) => {
   state.searchQuery = event.target.value;
-  renderQuickRecipeGrid();
   renderRecipeGrid();
 
   // Debounced channel search — fires after 600 ms of no typing
@@ -3706,7 +3749,6 @@ bindEvent(searchInput, "keydown", (event) => {
   if (event.key === "Escape") {
     searchInput.value = "";
     state.searchQuery = "";
-    renderQuickRecipeGrid();
     renderRecipeGrid();
     renderChannelSearchResults([]);
   }
