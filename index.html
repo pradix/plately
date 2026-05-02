@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-34" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-35" />
   </head>
   <body>
     <main class="page">
@@ -265,16 +265,13 @@
             <div class="grocery-suggest-dropdown hidden" id="grocerySuggestDropdown" role="listbox"></div>
           </div>
 
-          <!-- AH order CTA — inline, shown when items exist -->
-          <section class="grocery-order hidden" id="groceryOrder">
+          <!-- AH order CTA pill — shown when items exist -->
+          <div class="grocery-order hidden" id="groceryOrder">
             <button class="store-cta store-cta--ah-pill" id="orderAHButton" type="button">
               <span class="store-cta__logo store-cta__logo--ah-pill">
-                <!-- Albert Heijn logo mark: rounded-pentagon + open 'ah' letterforms -->
                 <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-label="Albert Heijn" role="img" style="width:44px;height:44px">
                   <path d="M28,8 Q8,10 6,30 L6,155 Q6,192 43,192 L157,192 Q194,192 194,155 L194,78 Q194,56 178,42 L112,8 Q96,-1 80,4 Z" fill="#00AEEF"/>
-                  <!-- 'a' — open circle form -->
                   <path d="M55,130 Q35,130 35,108 L35,88 Q35,66 55,66 Q70,66 76,78 L76,68 L90,68 L90,130 L76,130 L76,120 Q70,132 55,130 Z M57,118 Q72,118 76,104 L76,92 Q72,78 57,78 Q47,78 47,88 L47,108 Q47,118 57,118 Z" fill="#ffffff"/>
-                  <!-- 'h' -->
                   <path d="M100,50 L114,50 L114,80 Q120,66 136,66 Q155,66 155,86 L155,130 L141,130 L141,90 Q141,78 132,78 Q121,78 114,90 L114,130 L100,130 Z" fill="#ffffff"/>
                 </svg>
               </span>
@@ -284,24 +281,7 @@
               </span>
               <span class="store-cta__arrow" aria-hidden="true">›</span>
             </button>
-            <section class="store-assistant is-hidden" id="storeAssistant">
-              <div class="store-assistant__head">
-                <div>
-                  <p class="section-kicker" id="storeAssistantKicker">PLATELY LIJSTJE</p>
-                  <h2 id="storeAssistantTitle">Klaar voor je supermarkt</h2>
-                  <p class="store-assistant__copy" id="storeAssistantCopy">
-                    We houden je selectie op deze pagina en sturen je daarna door naar de supermarkt.
-                  </p>
-                </div>
-              </div>
-              <div class="basket-summary" id="basketSummary"></div>
-              <div class="basket-list" id="basketList"></div>
-              <div class="basket-footer">
-                <p class="basket-note" id="basketNote"></p>
-                <button class="primary-button" id="basketContinueButton" type="button">Open supermarkt</button>
-              </div>
-            </section>
-          </section>
+          </div>
 
           <!-- Grocery items list -->
           <section class="grocery-groups" id="groceryGroups">
@@ -589,6 +569,49 @@
       </section>
     </main>
 
+    <!-- Basket modal overlay (AH-style) -->
+    <div class="basket-overlay hidden" id="basketOverlay" role="dialog" aria-modal="true" aria-labelledby="basketOverlayTitle" hidden>
+      <div class="basket-sheet" id="basketSheet">
+        <!-- Header -->
+        <div class="basket-sheet__header">
+          <button class="basket-sheet__close" id="basketOverlayClose" type="button" aria-label="Sluiten">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+          <span class="basket-sheet__title" id="basketOverlayTitle">Boodschappen</span>
+          <span class="basket-sheet__header-spacer"></span>
+        </div>
+
+        <!-- Recipe title + servings -->
+        <div class="basket-sheet__recipe-head">
+          <h2 class="basket-sheet__recipe-name" id="basketRecipeName">Boodschappenlijst</h2>
+          <div class="basket-sheet__servings" id="basketServingsRow">
+            <button class="basket-qty-btn basket-qty-btn--minus" id="basketServingsMinus" type="button" aria-label="Minder porties">−</button>
+            <span class="basket-sheet__servings-label" id="basketServingsLabel">4 porties</span>
+            <button class="basket-qty-btn basket-qty-btn--plus" id="basketServingsPlus" type="button" aria-label="Meer porties">+</button>
+          </div>
+        </div>
+
+        <!-- Scrollable product list -->
+        <div class="basket-sheet__list" id="basketSheetList"></div>
+
+        <!-- Footer: total + CTA -->
+        <div class="basket-sheet__footer">
+          <div class="basket-sheet__total-row">
+            <span class="basket-sheet__total" id="basketSheetTotal">€ 0,00</span>
+            <span class="basket-sheet__total-note">Prijzen kunnen lokaal afwijken</span>
+          </div>
+          <button class="basket-sheet__cta" id="basketSheetCta" type="button">
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:28px;height:28px;flex-shrink:0">
+              <path d="M28,8 Q8,10 6,30 L6,155 Q6,192 43,192 L157,192 Q194,192 194,155 L194,78 Q194,56 178,42 L112,8 Q96,-1 80,4 Z" fill="#fff" fill-opacity="0.3"/>
+              <path d="M55,130 Q35,130 35,108 L35,88 Q35,66 55,66 Q70,66 76,78 L76,68 L90,68 L90,130 L76,130 L76,120 Q70,132 55,130 Z M57,118 Q72,118 76,104 L76,92 Q72,78 57,78 Q47,78 47,88 L47,108 Q47,118 57,118 Z" fill="#ffffff"/>
+              <path d="M100,50 L114,50 L114,80 Q120,66 136,66 Q155,66 155,86 L155,130 L141,130 L141,90 Q141,78 132,78 Q121,78 114,90 L114,130 L100,130 Z" fill="#ffffff"/>
+            </svg>
+            Zet op je lijst
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Share card overlay -->
     <div class="share-card-overlay hidden" id="shareCardOverlay" aria-hidden="true">
       <div class="share-card" id="shareCard">
@@ -810,6 +833,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-28"></script>
+    <script src="app.js?v=plately-banani-29"></script>
   </body>
 </html>

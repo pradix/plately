@@ -1050,8 +1050,10 @@ function buildStoreSearchUrl(storeSlug, items) {
 }
 
 function closeBasketModal() {
-  if (storeAssistant) {
-    storeAssistant.classList.add("is-hidden");
+  const overlay = document.getElementById("basketOverlay");
+  if (overlay) {
+    overlay.classList.add("hidden");
+    overlay.hidden = true;
   }
   state.basketPreview = null;
 }
@@ -1070,104 +1072,79 @@ function getBasketHandoffUrl(preview) {
 
 function renderBasketPreview() {
   const preview = state.basketPreview;
-  if (!preview) {
-    basketSummary.innerHTML = "";
-    basketList.innerHTML = "";
-    return;
-  }
+  const nameEl = document.getElementById("basketRecipeName");
+  const listEl = document.getElementById("basketSheetList");
+  const totalEl = document.getElementById("basketSheetTotal");
+  const ctaBtn = document.getElementById("basketSheetCta");
+  if (!preview || !listEl) return;
 
-  const storeConfig = getStoreConfig(preview.store);
-  const storeLabel = preview.storeLabel || storeConfig.label;
-  const itemCount = preview.items.length;
+  if (nameEl) nameEl.textContent = preview.recipeTitle || "Boodschappenlijst";
 
-  storeAssistantKicker.textContent = storeConfig.kicker;
-  storeAssistantTitle.textContent = `${preview.recipeTitle || "Boodschappenlijst"} voor ${storeLabel}`;
-  storeAssistantCopy.textContent = storeConfig.helperCopy;
-  basketNote.textContent =
-    preview.note ||
-    "Plately kiest de beste productmatch per ingrediënt en stuurt je daarna door naar de winkel.";
-  basketContinueButton.textContent =
-    preview.directUrl && preview.directUrl !== preview.fallbackUrl
-      ? storeConfig.directLabel
-      : storeConfig.continueLabel;
+  let totalCents = 0;
 
-  basketSummary.innerHTML = `
-    <article class="basket-summary__card">
-      <div class="basket-summary__copy">
-        <p class="basket-summary__eyebrow">${escapeHtml(storeLabel)}</p>
-        <p class="basket-summary__title">${escapeHtml(preview.recipeTitle || "Plately selectie")}</p>
+  listEl.innerHTML = preview.items.map((item, itemIndex) => {
+    const choice = item.choices?.[item.selectedChoiceIndex || 0];
+    if (!choice) return "";
+
+    const priceNum = parseFloat((choice.price || "0").replace("€", "").replace(",", ".")) || 0;
+    const qty = item.qty || 1;
+    totalCents += Math.round(priceNum * qty * 100);
+
+    const img = choice.imageUrl
+      ? `<img class="basket-product__img" src="${escapeHtml(choice.imageUrl)}" alt="" loading="lazy" />`
+      : `<span class="basket-product__img basket-product__img--placeholder">${escapeHtml(choice.emoji || "🛒")}</span>`;
+
+    const altCount = (item.choices || []).length;
+    const partnerBadge = choice.badge && choice.badge !== "Beste match" && choice.badge !== "Gevonden"
+      ? `<span class="basket-product__partner">PARTNER</span>` : "";
+
+    return `
+      <div class="basket-product" data-basket-item="${itemIndex}">
+        <div class="basket-product__img-wrap">
+          ${img}
+          ${altCount > 1 ? `<button class="basket-product__swap" type="button" aria-label="Wissel product" data-basket-swap="${itemIndex}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+          </button>` : ""}
+        </div>
+        <div class="basket-product__info">
+          <p class="basket-product__name">${escapeHtml(choice.title)}</p>
+          <p class="basket-product__meta">${escapeHtml(choice.price || "")}${choice.subtitle ? ` · ${escapeHtml(choice.subtitle)}` : ""}${partnerBadge}</p>
+          <p class="basket-product__for">voor ${escapeHtml(item.ingredientAmount || "")} ${escapeHtml(item.ingredientTitle || "")}</p>
+        </div>
+        <div class="basket-product__right">
+          <button class="basket-product__delete" type="button" aria-label="Verwijder" data-basket-delete="${itemIndex}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+          </button>
+          <div class="basket-product__qty">
+            <button class="basket-qty-btn basket-qty-btn--minus" type="button" data-basket-qty-minus="${itemIndex}">−</button>
+            <span class="basket-product__qty-num" id="basket-qty-${itemIndex}">${qty}</span>
+            <button class="basket-qty-btn basket-qty-btn--plus" type="button" data-basket-qty-plus="${itemIndex}">+</button>
+          </div>
+        </div>
       </div>
-      <span class="basket-summary__badge">
-        ${itemCount} matches
-      </span>
-    </article>
-  `;
+    `;
+  }).join("");
 
-  basketList.innerHTML = preview.items
-    .map((item, itemIndex) => {
-      const selectedChoice = item.choices?.[item.selectedChoiceIndex || 0];
-      if (!selectedChoice) {
-        return "";
-      }
+  // Calculate total
+  const totalEur = (totalCents / 100).toFixed(2).replace(".", ",");
+  if (totalEl) totalEl.textContent = `€ ${totalEur}`;
 
-      return `
-        <article class="basket-item">
-          <div class="basket-item__head">
-            <div>
-              <p class="basket-item__ingredient">${escapeHtml(item.ingredientTitle)}</p>
-              <p class="basket-item__amount">${escapeHtml(item.ingredientAmount)}</p>
-            </div>
-            <p class="basket-item__confidence">${escapeHtml(item.confidence || "Slimme match")}</p>
-          </div>
-
-          <div class="basket-item__product">
-            <span class="basket-item__emoji" aria-hidden="true">${escapeHtml(selectedChoice.emoji || "🛒")}</span>
-            <div>
-              <p class="basket-item__product-title">${escapeHtml(selectedChoice.title)}</p>
-              <p class="basket-item__product-meta">${escapeHtml(selectedChoice.subtitle || "")}</p>
-            </div>
-            <p class="basket-item__price">${escapeHtml(selectedChoice.price || "")}</p>
-          </div>
-
-          <div class="basket-item__actions">
-            <a
-              class="basket-item__link"
-              href="${escapeHtml(selectedChoice.url || buildStoreSearchUrl(preview.store, [{ title: item.ingredientTitle }]))}"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Bekijk in winkel
-            </a>
-          </div>
-
-          <div class="basket-item__choices">
-            ${item.choices
-              .map(
-                (choice, choiceIndex) => `
-                  <button
-                    class="basket-choice-pill ${choiceIndex === (item.selectedChoiceIndex || 0) ? "is-selected" : ""}"
-                    type="button"
-                    data-basket-item-index="${itemIndex}"
-                    data-basket-choice-index="${choiceIndex}"
-                  >
-                    ${escapeHtml(choice.badge || `Optie ${choiceIndex + 1}`)}
-                  </button>
-                `
-              )
-              .join("")}
-          </div>
-        </article>
-      `;
-    })
-    .join("");
+  // CTA button
+  if (ctaBtn) {
+    ctaBtn.onclick = () => {
+      const url = preview.directUrl || preview.fallbackUrl || "";
+      if (url) window.open(url, "_blank", "noreferrer");
+    };
+  }
 }
 
 function openBasketModal(preview) {
   state.basketPreview = preview;
   renderBasketPreview();
-  if (storeAssistant) {
-    storeAssistant.classList.remove("is-hidden");
-    storeAssistant.scrollIntoView({ block: "start", behavior: "smooth" });
+  const overlay = document.getElementById("basketOverlay");
+  if (overlay) {
+    overlay.hidden = false;
+    overlay.classList.remove("hidden");
   }
 }
 
@@ -3388,11 +3365,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
       store: storeSlug,
       storeLabel: storeName,
     };
-    renderBasketPreview();
-    if (storeAssistant) {
-      storeAssistant.classList.remove("is-hidden");
-      storeAssistant.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    openBasketModal(state.basketPreview);
     showToast(`Selectie klaar voor ${storeName}.`);
   } catch {
     showToast(`Kon ${storeName} niet voorbereiden.`);
@@ -4509,26 +4482,64 @@ bindEvent(detailIngredientList, "click", (event) => {
   toggleIngredientChecked(Number(ingredientButton.dataset.ingredientIndex));
 });
 
-bindEvent(storeAssistant, "click", (event) => {
-  const target = event.target;
-  if (!(target instanceof Element) || !state.basketPreview) {
+// Basket overlay close
+bindEvent(document.getElementById("basketOverlayClose"), "click", closeBasketModal);
+bindEvent(document.getElementById("basketOverlay"), "click", (e) => {
+  if (e.target === document.getElementById("basketOverlay")) closeBasketModal();
+});
+
+// Basket product interactions (delete, qty, swap)
+bindEvent(document.getElementById("basketSheetList"), "click", (e) => {
+  const target = e.target;
+  if (!(target instanceof Element) || !state.basketPreview) return;
+
+  const btn = target.closest("[data-basket-delete],[data-basket-qty-minus],[data-basket-qty-plus],[data-basket-swap]");
+  if (!btn) return;
+
+  // Delete item
+  if (btn.dataset.basketDelete !== undefined) {
+    const idx = parseInt(btn.dataset.basketDelete, 10);
+    state.basketPreview.items.splice(idx, 1);
+    if (!state.basketPreview.items.length) { closeBasketModal(); return; }
+    renderBasketPreview();
     return;
   }
 
-  const choiceButton = target.closest("[data-basket-item-index]");
-  if (!(choiceButton instanceof HTMLElement)) {
+  // Qty minus
+  if (btn.dataset.basketQtyMinus !== undefined) {
+    const idx = parseInt(btn.dataset.basketQtyMinus, 10);
+    const item = state.basketPreview.items[idx];
+    if (item) {
+      item.qty = Math.max(1, (item.qty || 1) - 1);
+      const qtyEl = document.getElementById(`basket-qty-${idx}`);
+      if (qtyEl) qtyEl.textContent = item.qty;
+      renderBasketPreview();
+    }
     return;
   }
 
-  const itemIndex = Number(choiceButton.dataset.basketItemIndex);
-  const choiceIndex = Number(choiceButton.dataset.basketChoiceIndex);
-  const previewItem = state.basketPreview.items[itemIndex];
-  if (!previewItem || !previewItem.choices?.[choiceIndex]) {
+  // Qty plus
+  if (btn.dataset.basketQtyPlus !== undefined) {
+    const idx = parseInt(btn.dataset.basketQtyPlus, 10);
+    const item = state.basketPreview.items[idx];
+    if (item) {
+      item.qty = (item.qty || 1) + 1;
+      const qtyEl = document.getElementById(`basket-qty-${idx}`);
+      if (qtyEl) qtyEl.textContent = item.qty;
+      renderBasketPreview();
+    }
     return;
   }
 
-  previewItem.selectedChoiceIndex = choiceIndex;
-  renderBasketPreview();
+  // Swap (cycle to next alternative choice)
+  if (btn.dataset.basketSwap !== undefined) {
+    const idx = parseInt(btn.dataset.basketSwap, 10);
+    const item = state.basketPreview.items[idx];
+    if (item && item.choices?.length > 1) {
+      item.selectedChoiceIndex = ((item.selectedChoiceIndex || 0) + 1) % item.choices.length;
+      renderBasketPreview();
+    }
+  }
 });
 
 // ── Recipe picker (add recipe to open cookbook) ───────────────────────────────

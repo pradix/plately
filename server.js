@@ -1105,6 +1105,7 @@ function buildMatchedChoiceFromProduct(store, item, product, badge = "Gevonden")
     emoji: getBasketEmoji(ingredientTitle),
     searchTerm: ingredientTitle,
     productId,
+    imageUrl: sanitizeText(product.imageUrl || ""),
   };
 
   choice.url = buildStoreChoiceUrl(store, choice);
