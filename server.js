@@ -829,6 +829,7 @@ function detectPlatform(inputUrl) {
   const hostname = inputUrl.hostname.replace(/^www\./, "");
   if (hostname.endsWith("tiktok.com")) return "tiktok";
   if (hostname.endsWith("instagram.com")) return "instagram";
+  if (hostname.endsWith("facebook.com") || hostname.endsWith("fb.com") || hostname.endsWith("fb.watch")) return "facebook";
   if (hostname.endsWith("pinterest.com") || hostname.endsWith("pinterest.nl") || hostname === "pin.it") return "pinterest";
   return "website";
 }
@@ -1761,45 +1762,9 @@ function normalizeIngredientList(items) {
   );
 }
 
-async function extractWithClaude(caption, note) {
-  if (!ANTHROPIC_API_KEY || !caption) {
-    return null;
-  }
-
-  const systemPrompt =
-    "Je bent een culinaire data-extractor. Je output is altijd alleen geldige JSON, nooit markdown, nooit uitleg.";
-
-  const userPrompt = [
-    "Extraheer gestructureerde receptdata uit onderstaande social media caption (TikTok/Instagram).",
-    "",
-    "Caption:",
-    caption.slice(0, 1800),
-    note ? `\nExtra context: ${note}` : "",
-    "",
-    "Geef precies dit JSON-object terug:",
-    '{',
-    '  "title": "Recept naam in het Nederlands (3-7 woorden, geen hashtags, geen liedjestitels, geen @users)",',
-    '  "description": "1-2 zinnen omschrijving van het gerecht in het Nederlands",',
-    '  "ingredients": [',
-    '    {"quantity": "2", "unit": "x", "name": "avocado"},',
-    '    {"quantity": "200", "unit": "g", "name": "gehakt"}',
-    '  ],',
-    '  "instructions": [',
-    '    "Stap één kookactie in het Nederlands.",',
-    '    "Stap twee kookactie in het Nederlands."',
-    '  ],',
-    '  "time": "25 min",',
-    '  "servings": "2"',
-    '}',
-    "",
-    "Regels:",
-    "- title: de werkelijke naam van het gerecht (bv. 'Avocado Burger', 'Pasta Carbonara'). NOOIT 'TikTok', liedjestitels, of hashtags.",
-    "- unit: gebruik g, kg, ml, l, el, tl, x, stuks, krop, bosje, zakje, teen, snuf, handje.",
-    "- instructions: 3-8 duidelijke stappen. Elke stap = één kookhandeling. Splits samengestelde zinnen. Schrijf in het Nederlands.",
-    "- Als informatie ontbreekt: maak een redelijke culinaire schatting.",
-    "- time: schat in minuten als niet vermeld.",
-  ].join("\n");
-
+// Shared Claude API caller — returns raw parsed JSON or null
+async function callClaudeApi(systemPrompt, userPrompt, maxTokens = 2048) {
+  if (!ANTHROPIC_API_KEY) return null;
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -1810,33 +1775,157 @@ async function extractWithClaude(caption, note) {
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
+        max_tokens: maxTokens,
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
       }),
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(30000),
     });
-
-    if (!response.ok) {
-      return null;
-    }
-
+    if (!response.ok) return null;
     const data = await response.json();
     const rawText = data.content?.[0]?.text || "";
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return null;
-    }
-
+    if (!jsonMatch) return null;
     const result = JSON.parse(jsonMatch[0]);
-    if (!result.title || !Array.isArray(result.ingredients) || !Array.isArray(result.instructions)) {
-      return null;
-    }
-
+    if (!result.title || !Array.isArray(result.ingredients) || !Array.isArray(result.instructions)) return null;
     return result;
   } catch {
     return null;
   }
+}
+
+// Extract clean readable text from HTML for Claude input
+function extractReadableTextFromHtml(html, maxLength = 6000) {
+  // Remove script, style, nav, footer, aside, header blocks
+  let cleaned = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
+    .replace(/<aside[\s\S]*?<\/aside>/gi, " ")
+    .replace(/<header[\s\S]*?<\/header>/gi, " ")
+    .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ");
+  // Convert block elements to newlines
+  cleaned = cleaned
+    .replace(/<\/?(?:p|li|h[1-6]|div|section|article|br)[^>]*>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#\d+;/g, " ")
+    .replace(/&[a-z]+;/gi, " ");
+  // Collapse whitespace
+  cleaned = cleaned
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return cleaned.slice(0, maxLength);
+}
+
+// Social media caption → structured recipe via Claude
+// If caption has little info, Claude will infer a complete recipe from the dish name
+async function extractWithClaude(caption, note) {
+  if (!ANTHROPIC_API_KEY || !caption) return null;
+
+  const systemPrompt =
+    "Je bent een culinaire assistent die receptdata extraheert én aanvult. " +
+    "Als de tekst ingrediënten en stappen bevat, extraheer je ze. " +
+    "Als de tekst alleen een gerechtnaam bevat, genereer je zelf een compleet realistisch recept. " +
+    "Je output is altijd alleen geldige JSON, nooit markdown, nooit uitleg.";
+
+  const captionText = caption.slice(0, 4000);
+  const noteText = note ? `\nExtra context van de gebruiker: ${note}` : "";
+
+  const userPrompt = [
+    "Maak een gestructureerd recept op basis van onderstaande tekst (social media post of video-omschrijving).",
+    "Als de tekst expliciete ingrediënten en bereidingsstappen bevat, extraheer die dan letterlijk.",
+    "Als de tekst alleen een gerechtnaam of korte beschrijving bevat, genereer dan zelf een volledig en realistisch recept.",
+    "",
+    "Tekst:",
+    captionText,
+    noteText,
+    "",
+    "Geef precies dit JSON-object terug:",
+    '{',
+    '  "title": "Naam van het gerecht in het Nederlands (3-7 woorden, geen hashtags, geen @users)",',
+    '  "description": "1-2 zinnen smakelijke omschrijving in het Nederlands",',
+    '  "ingredients": [',
+    '    {"quantity": "2", "unit": "x", "name": "avocado"},',
+    '    {"quantity": "200", "unit": "g", "name": "kipfilet"},',
+    '    {"quantity": "3", "unit": "el", "name": "sojasaus"}',
+    '  ],',
+    '  "instructions": [',
+    '    "Verhit olie in een pan op middelhoog vuur.",',
+    '    "Voeg de ui toe en bak 3 minuten tot glazig.",',
+    '    "Voeg de kip toe en bak 5-7 minuten tot goudbruin."',
+    '  ],',
+    '  "time": "25 min",',
+    '  "servings": "4"',
+    '}',
+    "",
+    "Strikte regels:",
+    "- title: NOOIT 'TikTok', 'Instagram', liedjestitels, hashtags of @-namen.",
+    "- ingredients: minimaal 4, maximaal 16. Gebruik units: g, kg, ml, l, el, tl, x, stuks, krop, bosje, zakje, teen, snuf, handje.",
+    "- instructions: 4-8 stappen. Elke stap = precies één kookhandeling. Schrijf in het Nederlands. Wees concreet (tijden, temperaturen).",
+    "- Als informatie ontbreekt of onduidelijk is: genereer zelf een authentiek, realistisch recept voor dit gerecht.",
+    "- time: totale bereidingstijd in minuten (schat als niet vermeld).",
+    "- servings: aantal porties als getal-string ('2', '4', etc.).",
+  ].join("\n");
+
+  return callClaudeApi(systemPrompt, userPrompt, 2048);
+}
+
+// Website/Facebook page text → structured recipe via Claude
+// Used as fallback when JSON-LD parsing fails or is incomplete
+async function extractWithClaudeFromWebPage(pageText, title, url, note) {
+  if (!ANTHROPIC_API_KEY || (!pageText && !title)) return null;
+
+  const systemPrompt =
+    "Je bent een culinaire data-extractor. Extraheer receptinformatie uit webpaginatekst. " +
+    "Je output is altijd alleen geldige JSON, nooit markdown, nooit uitleg.";
+
+  const contextText = [title ? `Paginatitel: ${title}` : "", pageText ? pageText.slice(0, 5000) : ""]
+    .filter(Boolean)
+    .join("\n\n");
+  const noteText = note ? `\nExtra context: ${note}` : "";
+
+  const userPrompt = [
+    "Extraheer een compleet recept uit onderstaande webpaginatekst.",
+    "Als de tekst een volledig recept bevat, extraheer ingrediënten en stappen zo letterlijk mogelijk.",
+    "Als details ontbreken, vul ze aan met realistische culinaire kennis.",
+    "",
+    "Paginatekst:",
+    contextText,
+    noteText,
+    "",
+    "Geef precies dit JSON-object terug:",
+    '{',
+    '  "title": "Naam van het gerecht in het Nederlands",',
+    '  "description": "1-2 zinnen omschrijving",',
+    '  "ingredients": [',
+    '    {"quantity": "200", "unit": "g", "name": "pasta"},',
+    '    {"quantity": "2", "unit": "x", "name": "ei"}',
+    '  ],',
+    '  "instructions": [',
+    '    "Kook de pasta volgens de verpakking.",',
+    '    "Klop de eieren los met kaas."',
+    '  ],',
+    '  "time": "30 min",',
+    '  "servings": "2"',
+    '}',
+    "",
+    "Regels:",
+    "- ingredients: minimaal 3, maximaal 20. Units: g, kg, ml, l, el, tl, x, stuks, krop, bosje, zakje, teen, snuf, handje.",
+    "- instructions: 3-10 stappen in het Nederlands. Elke stap = één handeling.",
+    "- Gebruik informatie van de pagina zo veel mogelijk letterlijk.",
+  ].join("\n");
+
+  return callClaudeApi(systemPrompt, userPrompt, 2048);
 }
 
 function parseIngredientLine(line) {
@@ -2939,6 +3028,64 @@ async function importInstagram(sourceUrl, note) {
   });
 }
 
+async function importFacebook(sourceUrl, note) {
+  const document = await fetchWebsiteDocument(sourceUrl).catch(() => null);
+  const html = document?.kind === "html" ? document.body : "";
+  const textFallback = document?.kind === "text" ? document.body : "";
+
+  const ogTitle = html ? parseMetaTag(html, "og:title") : "";
+  const ogDescription = html ? parseMetaTag(html, "og:description") : "";
+  const twitterDesc = html ? parseMetaTag(html, "twitter:description", "name") : "";
+  const ogImage = html ? parseMetaTag(html, "og:image") : "";
+
+  // Facebook often puts the full post text in og:description or twitter:description
+  const bestCaption = [ogDescription, twitterDesc, textFallback]
+    .filter((s) => s && isUsefulCaptionCandidate(s))
+    .sort((a, b) => b.length - a.length)[0] || "";
+
+  const pageText = html ? extractReadableTextFromHtml(html, 5000) : textFallback;
+
+  // Try Claude with the caption + page text
+  const claudeInput = [bestCaption, pageText].filter(Boolean).join("\n\n").slice(0, 5000);
+  if (claudeInput || ogTitle) {
+    const claudeResult = await extractWithClaude(claudeInput || ogTitle, note || "");
+    if (claudeResult) {
+      const parsedIngredients = Array.isArray(claudeResult.ingredients)
+        ? claudeResult.ingredients.map((ingredient) =>
+            typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient
+          )
+        : [];
+      return {
+        platform: "facebook",
+        sourceUrl,
+        title: normalizeSocialRecipeTitle(claudeResult.title) || "Geïmporteerd recept",
+        description: compactSocialDescription(claudeResult.description || "", claudeResult.title || ""),
+        caption: stripSocialNoise(bestCaption),
+        image: ogImage || "",
+        author: "",
+        ingredients: normalizeIngredientList(parsedIngredients),
+        instructions: Array.isArray(claudeResult.instructions) ? finalizeInstructionSteps(claudeResult.instructions) : [],
+        time: sanitizeText(claudeResult.time || "30 min"),
+        servings: sanitizeText(String(claudeResult.servings || "2")),
+        needsReview: parsedIngredients.length === 0,
+        sourceLabel: "Imported from Facebook",
+      };
+    }
+  }
+
+  // Fallback: basic heuristic
+  return buildSocialRecipe({
+    platform: "facebook",
+    sourceUrl,
+    rawTitle: ogTitle || "",
+    rawCaption: bestCaption || ogTitle || "",
+    image: ogImage || "",
+    author: "",
+    titleCandidates: [ogTitle],
+    captionCandidates: [bestCaption, twitterDesc],
+  });
+}
+
 async function importPinterest(sourceUrl) {
   // For pin.it short URLs, follow redirect first
   let finalUrl = sourceUrl;
@@ -3020,9 +3167,69 @@ async function importWebsite(sourceUrl) {
 
   const document = await fetchWebsiteDocument(sourceUrl);
   if (document.kind === "text") {
-    return parseTextRecipeDocument(document.body, document.finalUrl || sourceUrl);
+    const textRecipe = parseTextRecipeDocument(document.body, document.finalUrl || sourceUrl);
+    // Claude fallback for text documents missing ingredients or instructions
+    if (textRecipe.needsReview && ANTHROPIC_API_KEY) {
+      const claudeResult = await extractWithClaudeFromWebPage(
+        document.body.slice(0, 5000),
+        textRecipe.title,
+        sourceUrl,
+        ""
+      );
+      if (claudeResult) {
+        const parsedIngredients = normalizeIngredientList(
+          (claudeResult.ingredients || []).map((i) =>
+            typeof i === "string" ? parseIngredientLine(i) : i
+          )
+        );
+        const parsedInstructions = finalizeInstructionSteps(claudeResult.instructions || []);
+        return {
+          ...textRecipe,
+          title: claudeResult.title || textRecipe.title,
+          description: claudeResult.description || textRecipe.description,
+          ingredients: parsedIngredients.length ? parsedIngredients : textRecipe.ingredients,
+          instructions: parsedInstructions.length ? parsedInstructions : textRecipe.instructions,
+          time: claudeResult.time || textRecipe.time,
+          servings: claudeResult.servings || textRecipe.servings,
+          needsReview: parsedIngredients.length < 2 || parsedInstructions.length < 1,
+        };
+      }
+    }
+    return textRecipe;
   }
-  return parseWebsiteRecipe(document.body, document.finalUrl || sourceUrl);
+
+  const htmlRecipe = parseWebsiteRecipe(document.body, document.finalUrl || sourceUrl);
+
+  // Claude fallback for HTML pages missing ingredients or instructions
+  if (htmlRecipe.needsReview && ANTHROPIC_API_KEY) {
+    const pageText = extractReadableTextFromHtml(document.body, 5000);
+    const claudeResult = await extractWithClaudeFromWebPage(
+      pageText,
+      htmlRecipe.title,
+      sourceUrl,
+      ""
+    );
+    if (claudeResult) {
+      const parsedIngredients = normalizeIngredientList(
+        (claudeResult.ingredients || []).map((i) =>
+          typeof i === "string" ? parseIngredientLine(i) : i
+        )
+      );
+      const parsedInstructions = finalizeInstructionSteps(claudeResult.instructions || []);
+      return {
+        ...htmlRecipe,
+        title: claudeResult.title || htmlRecipe.title,
+        description: claudeResult.description || htmlRecipe.description,
+        ingredients: parsedIngredients.length ? parsedIngredients : htmlRecipe.ingredients,
+        instructions: parsedInstructions.length ? parsedInstructions : htmlRecipe.instructions,
+        time: claudeResult.time || htmlRecipe.time,
+        servings: claudeResult.servings || htmlRecipe.servings,
+        needsReview: parsedIngredients.length < 2 || parsedInstructions.length < 1,
+      };
+    }
+  }
+
+  return htmlRecipe;
 }
 
 async function importRecipe(url, note, imageHint = "") {
@@ -3055,6 +3262,8 @@ async function importRecipe(url, note, imageHint = "") {
     recipe = await importTikTok(parsedUrl.toString(), note);
   } else if (platform === "instagram") {
     recipe = await importInstagram(parsedUrl.toString(), note);
+  } else if (platform === "facebook") {
+    recipe = await importFacebook(parsedUrl.toString(), note);
   } else if (platform === "pinterest") {
     recipe = await importPinterest(parsedUrl.toString());
   } else {
