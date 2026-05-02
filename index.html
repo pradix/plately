@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-45" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-46" />
   </head>
   <body>
     <main class="page">
@@ -916,40 +916,63 @@
 
     <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
 
-    <div class="modal hidden" id="authModal" aria-hidden="true">
-      <div class="modal-backdrop" data-close-auth="true"></div>
-      <section class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-        <div class="modal-handle"></div>
-        <div class="modal-header">
-          <div>
-            <p class="section-kicker" id="authKicker">ACCOUNT</p>
-            <h2 id="authTitle">Inloggen bij Plately</h2>
+    <!-- ══ Auth screen (full-screen panel) ══ -->
+    <div class="auth-screen hidden" id="authModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <!-- Back / close -->
+      <header class="topbar--sub auth-screen__topbar">
+        <button class="topbar-back-btn" type="button" data-close-auth="true" aria-label="Sluiten">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span class="topbar-spacer"></span>
+        <span class="topbar-spacer"></span>
+      </header>
+
+      <div class="auth-screen__body">
+        <!-- Logo + tagline -->
+        <div class="auth-screen__brand">
+          <img class="auth-screen__logo" src="assets/plately.png" alt="Plately" />
+          <p class="auth-screen__tagline" id="authKicker">Inloggen</p>
+        </div>
+
+        <form id="authForm" class="auth-screen__form">
+          <!-- Name field (register only) -->
+          <div class="auth-field" id="authNameField" style="display:none">
+            <label class="auth-field__label" for="authName">Naam</label>
+            <input class="auth-field__input" id="authName" name="name" type="text" placeholder="Jouw naam" autocomplete="name" />
           </div>
-          <button class="icon-button" type="button" data-close-auth="true" aria-label="Sluiten">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M6.7 5.3L12 10.58l5.3-5.29l1.4 1.41L13.42 12l5.29 5.3l-1.41 1.4L12 13.42l-5.3 5.29l-1.4-1.41L10.58 12l-5.29-5.3l1.41-1.4Z"
-              />
-            </svg>
+
+          <div class="auth-field">
+            <label class="auth-field__label" for="authEmail">E-mailadres</label>
+            <input class="auth-field__input" id="authEmail" name="email" type="email" placeholder="jij@voorbeeld.nl" autocomplete="email" required />
+          </div>
+
+          <div class="auth-field">
+            <label class="auth-field__label" for="authPassword">Wachtwoord</label>
+            <div class="auth-field__password-wrap">
+              <input class="auth-field__input" id="authPassword" name="password" type="password" placeholder="Minimaal 8 tekens" autocomplete="current-password" required />
+              <button class="auth-field__eye" type="button" id="authPasswordToggle" aria-label="Wachtwoord tonen">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <p class="auth-screen__feedback" id="authFeedback" aria-live="polite"></p>
+
+          <button class="auth-screen__submit" id="submitAuthButton" type="submit">Inloggen</button>
+        </form>
+
+        <div class="auth-screen__switch">
+          <button class="auth-screen__switch-btn" id="switchAuthModeButton" type="button">
+            Nog geen account? <strong>Account aanmaken</strong>
           </button>
         </div>
 
-        <form id="authForm" class="import-form">
-          <label>
-            E-mail
-            <input id="authEmail" name="email" type="email" placeholder="jij@voorbeeld.nl" required />
-          </label>
+        <div class="auth-screen__divider"><span>of</span></div>
 
-          <label>
-            Wachtwoord
-            <input id="authPassword" name="password" type="password" placeholder="Minimaal 8 tekens" required />
-          </label>
-
-          <button class="primary-button" id="submitAuthButton" type="submit">Inloggen</button>
-          <button class="secondary-button" id="switchAuthModeButton" type="button">Nog geen account? Registreren</button>
-          <p class="helper-text" id="authFeedback">Maak een account om jouw recepten en kookboeken ook op andere apparaten terug te zien.</p>
-        </form>
-      </section>
+        <button class="auth-screen__guest-btn" type="button" data-close-auth="true">
+          Doorgaan zonder account
+        </button>
+      </div>
     </div>
 
     <div class="modal hidden" id="cookbookSaveModal" aria-hidden="true">
@@ -1037,6 +1060,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-42"></script>
+    <script src="app.js?v=plately-banani-43"></script>
   </body>
 </html>

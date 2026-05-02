@@ -828,25 +828,46 @@ function updateAuthUI() {
 
 function openAuthModal(mode = "login") {
   state.auth.mode = mode;
+  const isRegister = mode === "register";
+
   authModal.classList.remove("hidden");
   authModal.setAttribute("aria-hidden", "false");
-  authKicker.textContent = mode === "register" ? "ACCOUNT AANMAKEN" : "INLOGGEN";
-  authTitle.textContent = mode === "register" ? "Maak je Plately account" : "Inloggen bij Plately";
-  submitAuthButton.textContent = mode === "register" ? "Account maken" : "Inloggen";
-  switchAuthModeButton.textContent =
-    mode === "register" ? "Heb je al een account? Inloggen" : "Nog geen account? Registreren";
-  authFeedback.textContent =
-    mode === "register"
-      ? "Maak een account om jouw recepten en kookboeken ook op andere apparaten terug te zien."
-      : "Log in om jouw recepten, kookboeken, planning en lijstjes terug te zien.";
+
+  // Tagline (used as the title now)
+  if (authKicker) authKicker.textContent = isRegister ? "Account aanmaken" : "Welkom terug";
+
+  // Show/hide name field
+  const nameField = document.getElementById("authNameField");
+  if (nameField) nameField.style.display = isRegister ? "" : "none";
+
+  // Submit button text
+  if (submitAuthButton) submitAuthButton.textContent = isRegister ? "Account aanmaken" : "Inloggen";
+
+  // Switch button
+  if (switchAuthModeButton) {
+    switchAuthModeButton.innerHTML = isRegister
+      ? 'Al een account? <strong>Inloggen</strong>'
+      : 'Nog geen account? <strong>Account aanmaken</strong>';
+  }
+
+  // Clear feedback
+  if (authFeedback) authFeedback.textContent = "";
+
   authForm.reset();
-  authEmail.focus();
+  setTimeout(() => authEmail?.focus(), 100);
 }
 
 function closeAuthModal() {
   authModal.classList.add("hidden");
   authModal.setAttribute("aria-hidden", "true");
 }
+
+// Password show/hide toggle
+bindEvent(document.getElementById("authPasswordToggle"), "click", () => {
+  const input = document.getElementById("authPassword");
+  if (!input) return;
+  input.type = input.type === "password" ? "text" : "password";
+});
 
 function getCookbookCoverMarkup(cookbook, modifier = "cookbook-save-option__cover") {
   const recipes = (cookbook?.recipeIds || [])
@@ -5409,15 +5430,23 @@ bindEvent(authForm, "submit", async (event) => {
   const password = authPassword.value;
 
   submitAuthButton.disabled = true;
-  submitAuthButton.textContent = state.auth.mode === "register" ? "Account maken..." : "Inloggen...";
+  submitAuthButton.textContent = state.auth.mode === "register" ? "Account aanmaken..." : "Inloggen...";
+  if (authFeedback) authFeedback.textContent = "";
+
+  // Grab name for registration
+  const nameInput = document.getElementById("authName");
+  const name = (nameInput?.value || "").trim();
+  if (state.auth.mode === "register" && name) {
+    state.profile.name = name;
+  }
 
   try {
     await submitAuth(state.auth.mode, email, password);
   } catch (error) {
-    authFeedback.textContent = error.message;
+    if (authFeedback) authFeedback.textContent = error.message;
   } finally {
     submitAuthButton.disabled = false;
-    submitAuthButton.textContent = state.auth.mode === "register" ? "Account maken" : "Inloggen";
+    submitAuthButton.textContent = state.auth.mode === "register" ? "Account aanmaken" : "Inloggen";
   }
 });
 
