@@ -3151,6 +3151,33 @@ img { display: block; max-width: 100%; }
   background: #5e7857;
 }
 
+.profile-subpanel__avatar-hint {
+  text-align: center;
+  font-size: 0.78rem;
+  color: #9ca3af;
+  margin: 6px 0 0;
+}
+
+.profile-subpanel__remove-photo-btn {
+  display: block;
+  width: calc(100% - 28px);
+  margin: 10px 14px 0;
+  padding: 13px;
+  background: transparent;
+  color: #e05252;
+  border: 1.5px solid #f3c5c5;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+
+.profile-subpanel__remove-photo-btn:active {
+  background: #fff0f0;
+}
+
 /* Language checkmark */
 .lang-check {
   width: 20px;
@@ -3194,6 +3221,8 @@ img { display: block; max-width: 100%; }
   padding: 0;
   background: transparent;
   text-align: left;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .cookbook-collection__cover {
@@ -3262,7 +3291,7 @@ img { display: block; max-width: 100%; }
   font-size: 1.7rem;
   line-height: 1;
   letter-spacing: -0.04em;
-  color: #1a1a1a;
+  color: #1a1a1a !important;
 }
 
 .cookbook-collection__meta {

@@ -4514,13 +4514,81 @@ function closeProfileSubPanel(id) {
   panel.setAttribute("aria-hidden", "true");
 }
 
+// Helper: resize an image File/Blob to a compact JPEG data URL
+function resizeImageToDataUrl(file, maxSize = 320) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Update "foto verwijderen" button visibility
+function syncRemovePhotoBtn() {
+  const btn = document.getElementById("profileRemovePhotoBtn");
+  if (btn) btn.style.display = state.profile.photo ? "" : "none";
+}
+
 // "Mijn account" – open panel and pre-fill fields
 bindEvent(profileEditButton, "click", () => {
   const nameInput = document.getElementById("profileSubNameInput");
   const emailInput = document.getElementById("profileSubEmailInput");
   if (nameInput) nameInput.value = state.profile.name || "";
   if (emailInput) emailInput.value = state.profile.email || state.profile.handle?.replace(/^@/, "") || "";
+  syncRemovePhotoBtn();
   openProfileSubPanel("profileSubAccount");
+});
+
+// Camera button → trigger file picker
+bindEvent(document.getElementById("profileSubAvatarBtn"), "click", () => {
+  document.getElementById("profileAvatarFileInput")?.click();
+});
+
+// Also allow tapping the avatar itself
+bindEvent(document.getElementById("profileSubAvatarDisplay"), "click", () => {
+  document.getElementById("profileAvatarFileInput")?.click();
+});
+
+// File chosen → resize + store
+bindEvent(document.getElementById("profileAvatarFileInput"), "change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    const dataUrl = await resizeImageToDataUrl(file, 320);
+    state.profile.photo = dataUrl;
+    renderAvatars();
+    syncRemovePhotoBtn();
+    schedulePersistAppState();
+    showToast("Foto bijgewerkt.");
+  } catch {
+    showToast("Foto laden mislukt.");
+  }
+  // Reset so same file can be picked again
+  e.target.value = "";
+});
+
+// Remove photo
+bindEvent(document.getElementById("profileRemovePhotoBtn"), "click", () => {
+  state.profile.photo = "";
+  renderAvatars();
+  syncRemovePhotoBtn();
+  schedulePersistAppState();
+  showToast("Foto verwijderd.");
 });
 
 // Save "Mijn account" changes
@@ -4562,6 +4630,11 @@ bindEvent(document.getElementById("profileSubLanguage"), "click", (e) => {
 });
 
 bindEvent(profileEditAvatarButton, "click", () => {
+  const nameInput = document.getElementById("profileSubNameInput");
+  const emailInput = document.getElementById("profileSubEmailInput");
+  if (nameInput) nameInput.value = state.profile.name || "";
+  if (emailInput) emailInput.value = state.profile.email || state.profile.handle?.replace(/^@/, "") || "";
+  syncRemovePhotoBtn();
   openProfileSubPanel("profileSubAccount");
 });
 bindEvent(premiumButton, "click", () => showToast("Premium preview staat klaar voor later."));

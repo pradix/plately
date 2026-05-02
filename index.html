@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-42" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-43" />
   </head>
   <body>
     <main class="page">
@@ -463,6 +463,8 @@
               <h1 class="topbar-title">Mijn account</h1>
             </header>
             <div class="profile-subpanel__body">
+              <!-- Hidden file input for photo upload -->
+              <input type="file" id="profileAvatarFileInput" accept="image/*" style="display:none" aria-hidden="true" />
               <div class="profile-subpanel__avatar-section">
                 <div class="profile2-avatar-wrap">
                   <div class="profile2-avatar" id="profileSubAvatarDisplay">
@@ -474,6 +476,7 @@
                     </svg>
                   </button>
                 </div>
+                <p class="profile-subpanel__avatar-hint">Tik op de foto om te wijzigen</p>
               </div>
               <div class="profile2-card profile-subpanel__form-card">
                 <div class="profile-subpanel__field">
@@ -487,6 +490,7 @@
                 </div>
               </div>
               <button class="profile-subpanel__save-btn" id="profileSubAccountSave" type="button">Opslaan</button>
+              <button class="profile-subpanel__remove-photo-btn" id="profileRemovePhotoBtn" type="button" style="display:none">Foto verwijderen</button>
             </div>
           </div>
 
@@ -1031,6 +1035,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-39"></script>
+    <script src="app.js?v=plately-banani-40"></script>
   </body>
 </html>
