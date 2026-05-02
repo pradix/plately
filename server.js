@@ -2685,13 +2685,18 @@ function parseWebsiteRecipe(html, url) {
     const recipeYield = Array.isArray(recipeSource.recipeYield)
       ? sanitizeText(recipeSource.recipeYield.find(Boolean) || recipeSource.recipeYield[0])
       : sanitizeText(recipeSource.recipeYield);
-    const recipeImage = Array.isArray(jsonLd?.image)
-      ? typeof jsonLd.image[0] === "string"
-        ? jsonLd.image[0]
-        : jsonLd.image[0]?.url || metaImage
-      : typeof jsonLd?.image === "string"
-        ? jsonLd.image
-        : jsonLd?.image?.url || metaImage;
+    // Pick the first non-empty image URL from the ld+json (arrays like ["", "url"] are common on AH)
+    const recipeImage = (() => {
+      if (Array.isArray(jsonLd?.image)) {
+        const first = jsonLd.image.find((img) => typeof img === "string" && img.startsWith("http"));
+        if (first) return first;
+        const firstObj = jsonLd.image.find((img) => img?.url);
+        if (firstObj) return firstObj.url;
+        return metaImage;
+      }
+      if (typeof jsonLd?.image === "string" && jsonLd.image) return jsonLd.image;
+      return jsonLd?.image?.url || metaImage;
+    })();
 
     return {
       platform: "website",
@@ -3681,6 +3686,7 @@ async function searchChannelRecipes(query, allowedChannels = null) {
 async function buildStoreBasket(body) {
   const store = normalizeStoreSlug(body.store);
   const items = Array.isArray(body.items) ? body.items : [];
+  const bio = Boolean(body.bio); // when true, prefix "biologisch" to all AH searches
 
   if (!items.length) {
     throw new HttpError(400, "Er staan geen boodschappen klaar om te bestellen.");
@@ -3713,15 +3719,17 @@ async function buildStoreBasket(body) {
   }
 
   // For AH: fetch up to 3 real product matches per ingredient so the user can pick alternatives.
+  // When bio=true, prefix "biologisch" to each search so AH returns organic versions.
   // For other stores: keep single-match behaviour.
   let searchResults;
   if (store === "albert-heijn") {
     searchResults = await Promise.all(
       items.map(async (item) => {
-        const name = sanitizeText(item.title || "");
-        if (!name) return { ingredient: name, product: null, products: [] };
-        const products = await findAHProducts(name, 3);
-        return { ingredient: name, product: products[0] ?? null, products };
+        const rawName = sanitizeText(item.title || "");
+        if (!rawName) return { ingredient: rawName, product: null, products: [] };
+        const searchName = bio ? `biologisch ${rawName}` : rawName;
+        const products = await findAHProducts(searchName, 3);
+        return { ingredient: rawName, product: products[0] ?? null, products };
       })
     ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
   } else {
@@ -4117,7 +4125,11 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === "/api/import" && request.method === "POST") {
       const body = await readRequestBody(request);
-      const recipe = await importRecipe(body.url, body.note || "", body.imageHint || "");
+      // Strip surrounding text — extract the first http(s) URL from whatever was pasted
+      const rawInput = String(body.url || "").trim();
+      const urlMatch = rawInput.match(/https?:\/\/[^\s]+/);
+      const cleanUrl = urlMatch ? urlMatch[0] : rawInput;
+      const recipe = await importRecipe(cleanUrl, body.note || "", body.imageHint || "");
       sendJson(response, 200, { ok: true, recipe });
       return;
     }

@@ -438,13 +438,15 @@ const state = {
   profile: {
     name: "Sarah de Vries",
     handle: "@sarahkookt",
+    email: "",
     photo: "",
   },
+  language: "nl",
   groceryItems: [],
   basketPreview: null,
   basketServings: 2, // current persons
   basketBaseServings: 2, // base when basket was opened
-  basketFilter: { vega: false, bio: false },
+  basketFilter: { bio: false },
   cookbooks: [
     { id: "cookbook-1", name: "Gezond & Fit", recipeIds: [initialRecipes[2].id, initialRecipes[8].id] },
     { id: "cookbook-2", name: "Snelle avonden", recipeIds: [initialRecipes[0].id, initialRecipes[1].id, initialRecipes[6].id] },
@@ -1088,8 +1090,7 @@ function renderBasketPreview() {
   const servLabel = document.getElementById("basketServingsLabel");
   if (servLabel) servLabel.textContent = `${state.basketServings} pers.`;
 
-  // Update filter chip active states
-  document.getElementById("basketFilterVega")?.classList.toggle("is-active", state.basketFilter.vega);
+  // Update filter chip active state
   document.getElementById("basketFilterBio")?.classList.toggle("is-active", state.basketFilter.bio);
 
   let totalCents = 0;
@@ -1111,6 +1112,11 @@ function renderBasketPreview() {
 
     const altCount = (item.choices || []).length;
 
+    const bioActive = state.basketFilter.bio;
+    const displayTitle = bioActive
+      ? `🌱 Biologisch ${choice.title}`
+      : choice.title;
+
     return `
       <div class="basket-product" data-basket-item="${itemIndex}">
         <div class="basket-product__img-wrap">
@@ -1120,7 +1126,7 @@ function renderBasketPreview() {
           </button>` : ""}
         </div>
         <div class="basket-product__info">
-          <p class="basket-product__name">${escapeHtml(choice.title)}</p>
+          <p class="basket-product__name">${escapeHtml(displayTitle)}</p>
           <p class="basket-product__meta">${escapeHtml(choice.price || "")}${choice.subtitle ? ` · ${escapeHtml(choice.subtitle)}` : ""}</p>
           <p class="basket-product__for">voor ${escapeHtml(item.ingredientAmount || "")} ${escapeHtml(item.ingredientTitle || "")}</p>
         </div>
@@ -1158,7 +1164,7 @@ function openBasketModal(preview) {
   const base = recipe ? parseBaseServings(recipe.servings) : 2;
   state.basketBaseServings = base;
   state.basketServings = base;
-  state.basketFilter = { vega: false, bio: false };
+  state.basketFilter = { bio: false };
   renderBasketPreview();
   const overlay = document.getElementById("basketOverlay");
   if (overlay) {
@@ -2030,8 +2036,8 @@ function renderRecipeGrid() {
     recipes = [...recipes].reverse();
   }
 
-  // Cap at 8 when not actively searching
-  if (!isSearching) recipes = recipes.slice(0, 8);
+  // Cap at 20 when not actively searching/filtering
+  if (!isSearching && !state.activeCookbookFilter) recipes = recipes.slice(0, 20);
 
   // Update heading to reflect search state
   const headingEl = document.getElementById("recipeGridHeading") || document.querySelector(".kookboek-heading h1, .kookboek-heading h2");
@@ -2041,7 +2047,7 @@ function renderRecipeGrid() {
         ? `${recipes.length} recept${recipes.length === 1 ? "" : "en"} gevonden`
         : "Geen resultaten";
     } else {
-      headingEl.textContent = "Alle recepten";
+      headingEl.textContent = "Mijn recepten";
     }
   }
 
@@ -2851,13 +2857,96 @@ function toggleCookMode() {
   schedulePersistAppState();
 }
 
+const LANG_LABELS = { nl: "Nederlands", en: "English" };
+
+// ── Changelog (user-facing release notes) ───────────────────────────────────
+const PLATELY_CHANGELOG = [
+  {
+    version: "1.4",
+    date: "mei 2026",
+    highlights: [
+      "Profiel pagina volledig vernieuwd met eigen sub-pagina's",
+      "Mijn account: naam en e-mail aanpassen",
+      "Gekoppelde kanalen: overzicht en beheer van jouw kanalen",
+      "Taal instelling: Nederlands of Engels",
+      "Biologisch filter bij boodschappenlijst AH",
+    ],
+  },
+  {
+    version: "1.3",
+    date: "april 2026",
+    highlights: [
+      "Kookboeken als eigen tab in de navigatie",
+      "Boodschappenlijst: personen instellen via +/−",
+      "Mijn recepten als horizontale slider op de homepage",
+      "Importeer recept: groter invoerveld en groenere knop",
+    ],
+  },
+  {
+    version: "1.2",
+    date: "april 2026",
+    highlights: [
+      "Zoekresultaten filteren op kanaal",
+      "Betere herkenning van recept-URL's (blog-pagina's worden uitgefilterd)",
+      "Boodschappenlijst blijft correct leeg na wissen",
+    ],
+  },
+  {
+    version: "1.1",
+    date: "april 2026",
+    highlights: [
+      "Profiel pagina met statistieken (recepten, boeken, kanalen)",
+      "Nieuw: Kookboeken aanmaken en beheren",
+      "Maaltijdplanner toegevoegd",
+    ],
+  },
+];
+
+function renderChangelog() {
+  const body = document.getElementById("changelogBody");
+  if (!body) return;
+  body.innerHTML = PLATELY_CHANGELOG.map((release) => `
+    <div class="changelog-release">
+      <div class="changelog-release__header">
+        <span class="changelog-release__version">v${escapeHtml(release.version)}</span>
+        <span class="changelog-release__date">${escapeHtml(release.date)}</span>
+      </div>
+      <ul class="changelog-release__list">
+        ${release.highlights.map((h) => `<li class="changelog-release__item">${escapeHtml(h)}</li>`).join("")}
+      </ul>
+    </div>
+  `).join("");
+}
+
+function updateLanguagePanel() {
+  const active = state.language || "nl";
+  document.querySelectorAll(".language-option").forEach((btn) => {
+    const lang = btn.dataset.lang;
+    const check = btn.querySelector(".lang-check");
+    if (check) check.style.display = lang === active ? "" : "none";
+  });
+  const metaEl = document.getElementById("profileLanguageMeta");
+  if (metaEl) metaEl.textContent = LANG_LABELS[active] || "Nederlands";
+}
+
 function renderProfileSummary() {
+  const isAuth = state.auth.authenticated;
+
+  // Toggle login banner vs full profile hero
+  const loginBanner = document.getElementById("profileLoginBanner");
+  const profileHero = document.getElementById("profileHero");
+  const logoutCard = document.getElementById("logoutCard");
+  if (loginBanner) loginBanner.style.display = isAuth ? "none" : "";
+  if (profileHero) profileHero.style.display = isAuth ? "" : "none";
+  if (logoutCard) logoutCard.style.display = isAuth ? "" : "none";
+
   if (profileName) {
     profileName.textContent = state.profile.name;
   }
   if (profileHandle) {
-    // Show email or handle
-    profileHandle.textContent = state.profile.email || state.profile.handle || "";
+    // Prefer verified email from auth, then profile email, then handle
+    const displayEmail = state.auth.email || state.profile.email || state.profile.handle || "";
+    profileHandle.textContent = displayEmail;
   }
   if (profileRecipeCount) {
     profileRecipeCount.textContent = String(state.recipes.length);
@@ -2870,6 +2959,7 @@ function renderProfileSummary() {
   if (channelCountEl) channelCountEl.textContent = String(state.followedChannelIds.length);
   const channelMetaEl = document.getElementById("profileChannelMeta");
   if (channelMetaEl) channelMetaEl.textContent = `${state.followedChannelIds.length} gekoppeld`;
+  updateLanguagePanel();
   renderAvatars();
 }
 
@@ -2891,9 +2981,10 @@ function renderAvatars() {
     }
   });
 
-  // Update the new profile2 avatar
-  const p2avatar = document.getElementById("profileAvatarDisplay");
-  if (p2avatar) {
+  // Update profile2 avatars (main + sub-panel)
+  ["profileAvatarDisplay", "profileSubAvatarDisplay"].forEach((id) => {
+    const p2avatar = document.getElementById(id);
+    if (!p2avatar) return;
     const img = p2avatar.querySelector(".profile2-avatar__img");
     if (photo) {
       if (img) { img.src = photo; img.alt = state.profile.name || ""; }
@@ -2904,7 +2995,15 @@ function renderAvatars() {
       p2avatar.style.fontSize = "2.2rem";
       if (!img) p2avatar.textContent = initial;
     }
-  }
+  });
+}
+
+function setCookbooksScreenMode(mode) {
+  // mode: "list" | "detail"
+  const listHeader = document.getElementById("cookbooksTopbarList");
+  const detailHeader = document.getElementById("cookbooksTopbarDetail");
+  if (listHeader) listHeader.style.display = mode === "detail" ? "none" : "";
+  if (detailHeader) detailHeader.style.display = mode === "detail" ? "" : "none";
 }
 
 function renderCookbookDetail(cookbookId) {
@@ -2914,14 +3013,11 @@ function renderCookbookDetail(cookbookId) {
     renderCookbookList();
     return;
   }
+  setCookbooksScreenMode("detail");
   const recipes = cookbook.recipeIds.map((id) => getRecipeById(id)).filter(Boolean);
   const _cbScreenGrid = document.getElementById("cookbooksScreenGrid");
   const _detailHtml = `
     <div class="cb-detail">
-      <button class="cb-detail__back" type="button" data-close-cookbook-detail="true">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.78 5.22a1 1 0 0 1 0 1.41L6.41 11H20a1 1 0 1 1 0 2H6.41l4.37 4.37a1 1 0 0 1-1.41 1.41l-6.08-6.08a1 1 0 0 1 0-1.41l6.08-6.08a1 1 0 0 1 1.41 0Z" fill="currentColor"/></svg>
-        Mijn kookboeken
-      </button>
       <div class="cb-detail__header">
         <h2 class="cb-detail__name">${escapeHtml(cookbook.name)}</h2>
         <span class="cb-detail__count">${recipes.length} recept${recipes.length === 1 ? "" : "en"}</span>
@@ -2963,6 +3059,7 @@ function renderCookbookList() {
     return;
   }
 
+  setCookbooksScreenMode("list");
   const cookbooksScreenGrid = document.getElementById("cookbooksScreenGrid");
   const html = [
     `
@@ -3464,6 +3561,51 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
   }
 }
 
+async function refetchBasketWithBio() {
+  const preview = state.basketPreview;
+  if (!preview || preview.store !== "albert-heijn") {
+    renderBasketPreview();
+    return;
+  }
+
+  // Show loading indicator in the list
+  const listEl = document.getElementById("basketSheetList");
+  if (listEl) {
+    listEl.innerHTML =
+      '<p style="text-align:center;padding:32px 24px;color:#aaa;font-size:0.95rem">🌱 Biologische producten zoeken…</p>';
+  }
+
+  try {
+    const activeItems = getActiveGroceryItems();
+    const payload = await fetchJson(`${state.apiBase}/api/store-basket`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        store: "albert-heijn",
+        sourceUrl: preview.sourceUrl || getSingleRecipeContext(activeItems)?.sourceUrl || "",
+        recipeTitle: preview.recipeTitle || getSingleRecipeContext(activeItems)?.recipeTitle || "Boodschappenlijst",
+        bio: state.basketFilter.bio,
+        items: activeItems.map((item) => ({
+          title: item.title,
+          amount: item.amount,
+          recipeTitle: item.recipeTitle,
+        })),
+      }),
+    });
+
+    if (payload?.items?.length) {
+      state.basketPreview = {
+        ...state.basketPreview,
+        items: payload.items,
+      };
+    }
+  } catch {
+    // Keep existing items on failure — renderBasketPreview will show them
+  }
+
+  renderBasketPreview();
+}
+
 async function copyGroceryList() {
   const text = getGroceryText();
   if (!text) {
@@ -3593,6 +3735,7 @@ function buildPersistedAppState() {
     selectedRecipeId: state.selectedRecipeId,
     followedChannelIds: [...state.followedChannelIds],
     customChannels: state.customChannels.map((ch) => ({ ...ch })),
+    language: state.language || "nl",
   };
 }
 
@@ -3609,7 +3752,12 @@ function applyPersistedAppState(user) {
     state.profile = {
       name: user.profile.name || state.profile.name,
       handle: user.profile.handle || state.profile.handle,
+      email: user.profile.email || state.profile.email || "",
+      photo: user.profile.photo || state.profile.photo || "",
     };
+  }
+  if (typeof user.language === "string" && user.language) {
+    state.language = user.language;
   }
 
   const importedRecipes = Array.isArray(user.importedRecipes)
@@ -3673,7 +3821,14 @@ function renderRecipeSlider() {
   const imported = getImportedRecipes();
   // If user has imports use those, otherwise fall back to showcase seeds
   const seeds = COOKBOOK_SHOWCASE_IDS.map((id) => getRecipeById(id)).filter(Boolean);
-  const recipes = (imported.length ? imported : seeds).slice(0, 8);
+  const allRecipes = imported.length ? imported : seeds;
+  const recipes = allRecipes.slice(0, 8);
+  const hasMore = allRecipes.length > 8;
+
+  // Show/hide "Bekijk alles" button depending on overflow
+  const viewAllBtn = document.getElementById("viewAllMyRecipesBtn");
+  if (viewAllBtn) viewAllBtn.style.display = hasMore ? "" : "none";
+
   if (!recipes.length) {
     slider.innerHTML = `<p class="recipe-slider__empty">Importeer je eerste recept via de link hierboven.</p>`;
     return;
@@ -4109,7 +4264,7 @@ bindEvent(document.getElementById("viewAllMyRecipesBtn"), "click", () => {
   document.getElementById("recipeGridSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
-// Close recipe grid
+// Close recipe grid → scroll back to slider
 bindEvent(document.getElementById("closeRecipeGridBtn"), "click", () => {
   const section = document.getElementById("recipeGridSection");
   if (section) section.style.display = "none";
@@ -4117,6 +4272,7 @@ bindEvent(document.getElementById("closeRecipeGridBtn"), "click", () => {
   state.searchQuery = "";
   renderCookbookFilterBar();
   renderRecipeGrid();
+  document.getElementById("recipeSlider")?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
 bindEvent(document.getElementById("viewAllImportsButton"), "click", () => {
@@ -4128,6 +4284,10 @@ bindEvent(document.getElementById("viewAllImportsButton"), "click", () => {
 });
 bindEvent(document.getElementById("viewAllChannelsButton"), "click", () => {
   switchView("settings");
+});
+// "Mijn kookboeken > Bekijk alles" → go to Kookboeken tab
+bindEvent(document.getElementById("viewAllCookbooksBtn"), "click", () => {
+  switchView("cookbooks");
 });
 bindEvent(document.getElementById("groceryClearButton"), "click", () => {
   if (!state.groceryItems.length) return;
@@ -4338,36 +4498,78 @@ bindEvent(document.getElementById("deleteRecipeButton"), "click", () => {
   switchView("home");
   showToast(`"${recipe.title}" is verwijderd.`);
 });
+// ── Profile sub-panels ──────────────────────────────────────────────────────
+
+function openProfileSubPanel(id) {
+  const panel = document.getElementById(id);
+  if (!panel) return;
+  panel.classList.add("profile-subpanel--active");
+  panel.setAttribute("aria-hidden", "false");
+}
+
+function closeProfileSubPanel(id) {
+  const panel = document.getElementById(id);
+  if (!panel) return;
+  panel.classList.remove("profile-subpanel--active");
+  panel.setAttribute("aria-hidden", "true");
+}
+
+// "Mijn account" – open panel and pre-fill fields
 bindEvent(profileEditButton, "click", () => {
-  const nextName = window.prompt("Naam van je profiel", state.profile.name);
-  if (nextName === null) {
-    return;
-  }
+  const nameInput = document.getElementById("profileSubNameInput");
+  const emailInput = document.getElementById("profileSubEmailInput");
+  if (nameInput) nameInput.value = state.profile.name || "";
+  if (emailInput) emailInput.value = state.profile.email || state.profile.handle?.replace(/^@/, "") || "";
+  openProfileSubPanel("profileSubAccount");
+});
 
-  const nextHandle = window.prompt("Gebruikersnaam", state.profile.handle);
-  if (nextHandle === null) {
-    return;
-  }
-
-  state.profile = {
-    name: String(nextName || "").trim() || state.profile.name,
-    handle: String(nextHandle || "")
-      .trim()
-      .replace(/\s+/g, "") || state.profile.handle,
-  };
-
-  if (!state.profile.handle.startsWith("@")) {
-    state.profile.handle = `@${state.profile.handle}`;
-  }
-
+// Save "Mijn account" changes
+bindEvent(document.getElementById("profileSubAccountSave"), "click", () => {
+  const nameInput = document.getElementById("profileSubNameInput");
+  const emailInput = document.getElementById("profileSubEmailInput");
+  const newName = (nameInput?.value || "").trim();
+  const newEmail = (emailInput?.value || "").trim();
+  if (newName) state.profile.name = newName;
+  if (newEmail) state.profile.email = newEmail;
   renderProfileSummary();
   schedulePersistAppState();
+  closeProfileSubPanel("profileSubAccount");
   showToast("Profiel bijgewerkt.");
 });
-bindEvent(profileEditAvatarButton, "click", () => showToast("Avatar aanpassen volgt in de volgende stap."));
+
+// Back buttons
+bindEvent(document.getElementById("profileSubAccountBack"), "click", () => closeProfileSubPanel("profileSubAccount"));
+bindEvent(document.getElementById("profileSubChannelsBack"), "click", () => closeProfileSubPanel("profileSubChannels"));
+bindEvent(document.getElementById("profileSubChannelsSave"), "click", () => {
+  schedulePersistAppState();
+  closeProfileSubPanel("profileSubChannels");
+  showToast("Kanalen opgeslagen.");
+});
+bindEvent(document.getElementById("profileSubLanguageBack"), "click", () => closeProfileSubPanel("profileSubLanguage"));
+bindEvent(document.getElementById("profileSubChangelogBack"), "click", () => closeProfileSubPanel("profileSubChangelog"));
+
+// Language option selection
+bindEvent(document.getElementById("profileSubLanguage"), "click", (e) => {
+  const btn = e.target.closest(".language-option");
+  if (!btn) return;
+  const lang = btn.dataset.lang;
+  if (lang) {
+    state.language = lang;
+    updateLanguagePanel();
+    schedulePersistAppState();
+    showToast(lang === "nl" ? "Taal: Nederlands" : "Language: English");
+  }
+});
+
+bindEvent(profileEditAvatarButton, "click", () => {
+  openProfileSubPanel("profileSubAccount");
+});
 bindEvent(premiumButton, "click", () => showToast("Premium preview staat klaar voor later."));
 bindEvent(openRegisterButton, "click", () => openAuthModal("register"));
 bindEvent(openLoginButton, "click", () => openAuthModal("login"));
+// Profile login banner buttons
+bindEvent(document.getElementById("profileLoginBtn"), "click", () => openAuthModal("login"));
+bindEvent(document.getElementById("profileRegisterBtn"), "click", () => openAuthModal("register"));
 bindEvent(logoutButton, "click", () => {
   logoutAccount().catch(() => {
     showToast("Uitloggen lukte niet.");
@@ -4648,9 +4850,8 @@ bindEvent(document.getElementById("basketFilterRow"), "click", (e) => {
   const chip = e.target.closest("[data-filter]");
   if (!chip) return;
   const f = chip.dataset.filter;
-  if (f === "vega") state.basketFilter.vega = !state.basketFilter.vega;
   if (f === "bio") state.basketFilter.bio = !state.basketFilter.bio;
-  renderBasketPreview();
+  refetchBasketWithBio();
 });
 
 // Basket overlay close
@@ -4788,11 +4989,36 @@ bindEvent(recipePickerList, "click", (e) => {
 
 // Cookbooks screen add button
 bindEvent(document.getElementById("cookbooksAddBtn"), "click", () => openCreateCookbookPrompt());
+// Detail topbar back button → back to cookbook list
+bindEvent(document.getElementById("cookbooksDetailBackBtn"), "click", () => {
+  state.openCookbookId = null;
+  renderCookbookList();
+});
 
-// "Gekoppelde kanalen" on profile → show channel settings
+// "Gekoppelde kanalen" on profile → open sub-panel
 bindEvent(document.getElementById("goToChannelsBtn"), "click", () => {
-  const cl = document.getElementById("channelSettingsList");
-  if (cl) { cl.style.display = ""; cl.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  renderChannelSettings();
+  openProfileSubPanel("profileSubChannels");
+});
+
+// "Taal" on profile → open language sub-panel
+bindEvent(document.getElementById("goToLanguageBtn"), "click", () => {
+  updateLanguagePanel();
+  openProfileSubPanel("profileSubLanguage");
+});
+
+// "Nieuw in Plately" → changelog sub-panel
+// Profile stat buttons → navigate to relevant screen/panel
+bindEvent(document.getElementById("profileStatRecipes"), "click", () => switchView("home"));
+bindEvent(document.getElementById("profileStatCookbooks"), "click", () => switchView("cookbooks"));
+bindEvent(document.getElementById("profileStatChannels"), "click", () => {
+  renderChannelSettings();
+  openProfileSubPanel("profileSubChannels");
+});
+
+bindEvent(document.getElementById("goToChangelogBtn"), "click", () => {
+  renderChangelog();
+  openProfileSubPanel("profileSubChangelog");
 });
 
 // Shared handler for cookbook grid interactions (works for both settings and cookbooks screen)
@@ -5233,7 +5459,7 @@ document.addEventListener("visibilitychange", () => {
 bindEvent(importForm, "submit", async (event) => {
   event.preventDefault();
 
-  const url = recipeUrlInput.value.trim();
+  const url = extractUrl(recipeUrlInput.value.trim());
   const note = recipeNoteInput.value.trim();
   const submitButton = document.getElementById("submitImport");
 
@@ -5399,22 +5625,37 @@ bindEvent(document.getElementById("homeCookbooksSectionHead"), "click", (event) 
 syncPlatformUI();
 
 // ── Onboarding ───────────────────────────────────────────────────────────────
-const ONBOARDING_KEY = "plately-onboarding-v1";
+const ONBOARDING_KEY = "plately-onboarding-v2";
 
 const ONBOARDING_STEPS = [
   {
-    selector: ".import-banner",
-    text: "Plak hier een link van TikTok, Instagram of een receptwebsite — we importeren het recept automatisch voor je.",
+    selector: ".import-banner__input--full",
+    text: "Plak hier een link van TikTok, Instagram of een receptwebsite — we importeren het recept automatisch voor je. 🍳",
     dir: "below",
   },
   {
+    selector: ".kookboek-heading",
+    text: "Al je opgeslagen recepten staan hier. Tik op een recept om het stap voor stap te koken.",
+    dir: "below",
+  },
+  {
+    selector: ".cookbook-filter-bar",
+    text: "Filter op favorieten, snelle recepten of nieuwste toevoegingen.",
+    dir: "below",
+  },
+  {
+    selector: '[data-view="cookbooks"].nav-item',
+    text: "Maak kookboeken om recepten te sorteren — handig voor weekmenu's of speciale gelegenheden. 📚",
+    dir: "above",
+  },
+  {
     selector: '[data-view="grocery"].nav-item',
-    text: "Voeg ingrediënten van recepten toe aan je boodschappenlijst en bestel ze direct bij Albert Heijn.",
+    text: "Voeg ingrediënten van recepten toe aan je boodschappenlijst en bestel ze direct bij Albert Heijn. 🛒",
     dir: "above",
   },
   {
     selector: '[data-view="settings"].nav-item',
-    text: "Volg hier je favoriete kookkanalen en ontdek altijd nieuwe recepten.",
+    text: "Stel hier je account in, volg kookkanalen en kies je voorkeurstaal. 👤",
     dir: "above",
   },
 ];
