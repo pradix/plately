@@ -1631,7 +1631,10 @@ function renderChannelFilterChips(results) {
     `<button class="ch-filter-chip ${!state.channelSearchFilter ? "ch-filter-chip--active" : ""}" data-ch-filter="">Alles</button>`,
     ...getAllChannels()
       .filter((ch) => present.includes(ch.id))
-      .map((ch) => `<button class="ch-filter-chip ${state.channelSearchFilter === ch.id ? "ch-filter-chip--active" : ""}" data-ch-filter="${escapeHtml(ch.id)}" style="--ch-color:${escapeHtml(ch.color)}">${escapeHtml(ch.name)}</button>`)
+      .map((ch) => {
+        const fav = getSourceIconUrl(ch.url);
+        return `<button class="ch-filter-chip ${state.channelSearchFilter === ch.id ? "ch-filter-chip--active" : ""}" data-ch-filter="${escapeHtml(ch.id)}" style="--ch-color:${escapeHtml(ch.color)}">${fav ? `<img class="ch-filter-chip__favicon" src="${escapeHtml(fav)}" alt="" loading="lazy" onerror="this.style.display='none'" />` : ""}${escapeHtml(ch.name)}</button>`;
+      })
   ].join("");
 }
 
@@ -1875,14 +1878,18 @@ function renderChannelRow() {
   const row = document.getElementById("channelRow");
   if (!row) return;
   const followed = getAllChannels().filter((ch) => state.followedChannelIds.includes(ch.id));
-  row.innerHTML = followed.map((ch) => `
+  row.innerHTML = followed.map((ch) => {
+    const faviconUrl = getSourceIconUrl(ch.url);
+    return `
     <button class="channel-item" type="button" data-channel-url="${escapeHtml(ch.url)}" aria-label="${escapeHtml(ch.name)} openen">
-      <span class="channel-avatar" style="background:${escapeHtml(ch.color)}">
-        <span class="channel-avatar__initials">${escapeHtml(ch.initials)}</span>
+      <span class="channel-avatar" style="background:${escapeHtml(ch.color)}22; border: 1.5px solid ${escapeHtml(ch.color)}44">
+        ${faviconUrl
+          ? `<img class="channel-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><span class="channel-avatar__initials" style="display:none">${escapeHtml(ch.initials)}</span>`
+          : `<span class="channel-avatar__initials">${escapeHtml(ch.initials)}</span>`}
       </span>
       <span class="channel-name">${escapeHtml(ch.name)}</span>
     </button>
-  `).join("");
+  `}).join("");
 }
 
 function renderHomeCookbooks() {
@@ -1936,9 +1943,12 @@ function renderChannelSettings() {
 
   const seedRows = SEED_CHANNELS.map((ch) => {
     const followed = state.followedChannelIds.includes(ch.id);
+    const faviconUrl = getSourceIconUrl(ch.url);
     return `
       <label class="channel-toggle-row" data-channel-id="${escapeHtml(ch.id)}">
-        <span class="channel-toggle-avatar" style="background:${escapeHtml(ch.color)}">${escapeHtml(ch.initials)}</span>
+        <span class="channel-toggle-avatar" style="background:${escapeHtml(ch.color)}22; border:1.5px solid ${escapeHtml(ch.color)}44">
+          ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;color:${escapeHtml(ch.color)};font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="color:${escapeHtml(ch.color)};font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
+        </span>
         <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
         <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>
       </label>`;
@@ -1946,9 +1956,12 @@ function renderChannelSettings() {
 
   const customRows = state.customChannels.map((ch) => {
     const followed = state.followedChannelIds.includes(ch.id);
+    const faviconUrl = getSourceIconUrl(ch.url);
     return `
       <div class="channel-toggle-row channel-toggle-row--custom" data-channel-id="${escapeHtml(ch.id)}">
-        <span class="channel-toggle-avatar" style="background:${escapeHtml(ch.color)}">${escapeHtml(ch.initials)}</span>
+        <span class="channel-toggle-avatar" style="background:${escapeHtml(ch.color)}22; border:1.5px solid ${escapeHtml(ch.color)}44">
+          ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;color:${escapeHtml(ch.color)};font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="color:${escapeHtml(ch.color)};font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
+        </span>
         <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
         <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>
         <button class="channel-delete-btn" type="button" aria-label="Verwijder ${escapeHtml(ch.name)}" data-delete-channel="${escapeHtml(ch.id)}">×</button>

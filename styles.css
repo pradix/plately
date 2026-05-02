@@ -5652,3 +5652,51 @@ body {
   line-height: 1;
   font-weight: 400;
 }
+
+/* ── Channel favicon in avatar ───────────────────────────────────────────── */
+.channel-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.channel-avatar__favicon {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 6px;
+  border-radius: 999px;
+}
+
+.channel-toggle-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.channel-toggle-avatar__favicon {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 5px;
+}
+
+.ch-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ch-filter-chip__favicon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* ── Grocery screen: use standard topbar instead of custom grocery-header ── */
+.grocery-header { display: none; }

@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-29" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-30" />
   </head>
   <body>
     <main class="page">
@@ -228,20 +228,22 @@
 
         <section class="screen grocery-screen" id="groceryScreen">
           <!-- Compact header: title + add button + avatar -->
-          <header class="grocery-header">
-            <h1 class="grocery-header__title">Boodschappen</h1>
-            <div class="grocery-header__actions">
+          <header class="topbar topbar--home">
+            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar recepten">
+              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
+            </button>
+            <div class="topbar-actions">
               <button class="grocery-clear-btn hidden" id="groceryClearButton" type="button" aria-label="Lijst leegmaken">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </button>
-              <button class="grocery-add-btn" id="groceryQuickAddTopButton" type="button" aria-label="Item toevoegen">
+              <button class="icon-button" id="groceryQuickAddTopButton" type="button" aria-label="Item toevoegen">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
                 </svg>
               </button>
-              <button class="home-avatar grocery-avatar" type="button" data-view="settings" aria-label="Profiel"></button>
+              <button class="home-avatar" type="button" data-view="settings" aria-label="Profiel"></button>
             </div>
           </header>
 
@@ -804,6 +806,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-23"></script>
+    <script src="app.js?v=plately-banani-24"></script>
   </body>
 </html>
