@@ -2034,14 +2034,14 @@ function renderRecipeGrid() {
   if (!isSearching) recipes = recipes.slice(0, 8);
 
   // Update heading to reflect search state
-  const headingEl = document.querySelector(".kookboek-heading h1");
+  const headingEl = document.getElementById("recipeGridHeading") || document.querySelector(".kookboek-heading h1, .kookboek-heading h2");
   if (headingEl) {
     if (isSearching) {
       headingEl.textContent = recipes.length
         ? `${recipes.length} recept${recipes.length === 1 ? "" : "en"} gevonden`
         : "Geen resultaten";
     } else {
-      headingEl.textContent = "Kookboek";
+      headingEl.textContent = "Alle recepten";
     }
   }
 
@@ -3669,12 +3669,15 @@ function persistGroceryItemsLocally() {
 function renderRecipeSlider() {
   const slider = document.getElementById("recipeSlider");
   if (!slider) return;
-  const imported = getImportedRecipes().slice(0, 8);
-  if (!imported.length) {
-    slider.innerHTML = `<p class="recipe-slider__empty">Importeer je eerste recept via de zoekbalk hierboven.</p>`;
+  const imported = getImportedRecipes();
+  // If user has imports use those, otherwise fall back to showcase seeds
+  const seeds = COOKBOOK_SHOWCASE_IDS.map((id) => getRecipeById(id)).filter(Boolean);
+  const recipes = (imported.length ? imported : seeds).slice(0, 8);
+  if (!recipes.length) {
+    slider.innerHTML = `<p class="recipe-slider__empty">Importeer je eerste recept via de link hierboven.</p>`;
     return;
   }
-  slider.innerHTML = imported.map((recipe) => `
+  slider.innerHTML = recipes.map((recipe) => `
     <button class="recipe-slider__card" type="button" data-recipe-id="${recipe.id}">
       <img src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.title)}" loading="lazy" />
       <div class="recipe-slider__body">
