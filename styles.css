@@ -327,12 +327,13 @@ img { display: block; max-width: 100%; }
   padding: 14px;
   border-radius: 14px;
   border: none;
-  background: #2d332d;
+  background: #78936f;
   color: #fff;
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
   letter-spacing: -0.01em;
+  box-shadow: 0 4px 12px rgba(120, 147, 111, 0.25);
 }
 
 .import-banner__row {
