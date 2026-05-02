@@ -908,6 +908,7 @@ function createStoreChoice(store, choice) {
     searchTerm: normalizedChoice.searchTerm,
     url: normalizedChoice.url,
     productId: normalizedChoice.productId || "",
+    imageUrl: normalizedChoice.imageUrl || "",
   };
 }
 
