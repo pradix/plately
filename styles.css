@@ -1905,17 +1905,15 @@ img { display: block; max-width: 100%; }
   display: grid;
   place-items: center;
   border-radius: 999px;
-  background: #fff;
-  color: #0069b4;
-  font-size: 1.9rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  background: transparent;
   flex-shrink: 0;
   overflow: hidden;
 }
 
 .store-cta__logo svg {
   display: block;
+  width: 50px;
+  height: 50px;
 }
 
 .store-cta__text {
@@ -2682,7 +2680,8 @@ img { display: block; max-width: 100%; }
   margin: 0 auto;
   background: #f8f7f2;
   border-radius: 24px 24px 0 0;
-  padding: 12px 16px 22px;
+  /* Extra bottom padding so content clears the fixed nav bar (~80 px) */
+  padding: 12px 16px calc(22px + 82px);
   box-shadow: 0 -16px 44px rgba(33,37,30,0.18);
   max-height: 90vh;
   overflow: hidden;
@@ -2716,7 +2715,7 @@ img { display: block; max-width: 100%; }
   flex-direction: column;
   gap: 14px;
   /* cap the sheet so the create-button stays visible above the nav bar */
-  max-height: min(72vh, 560px);
+  max-height: min(52vh, 440px);
 }
 
 .cookbook-save-copy {
