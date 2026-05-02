@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-27" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-28" />
   </head>
   <body>
     <main class="page">
@@ -260,7 +260,13 @@
           <!-- AH order CTA — inline, shown when items exist -->
           <section class="grocery-order hidden" id="groceryOrder">
             <button class="store-cta store-cta--ah-pill" id="orderAHButton" type="button">
-              <span class="store-cta__logo store-cta__logo--ah-pill">ah</span>
+              <span class="store-cta__logo store-cta__logo--ah-pill">
+                <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" aria-label="Albert Heijn" role="img" style="width:42px;height:42px">
+                  <!-- AH house mark -->
+                  <polygon points="40,6 74,28 74,74 6,74 6,28" fill="#0069b4" rx="4"/>
+                  <text x="40" y="58" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="34" fill="#ffffff" letter-spacing="-1">ah</text>
+                </svg>
+              </span>
               <span class="store-cta__text">
                 <span class="store-cta__name">Bestel bij Albert Heijn</span>
                 <span class="store-cta__dest" id="orderAHItemCount">Zet 0 items in je mandje</span>

@@ -1906,11 +1906,16 @@ img { display: block; max-width: 100%; }
   place-items: center;
   border-radius: 999px;
   background: #fff;
-  color: #0a71d6;
+  color: #0069b4;
   font-size: 1.9rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.store-cta__logo svg {
+  display: block;
 }
 
 .store-cta__text {

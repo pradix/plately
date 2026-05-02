@@ -3038,7 +3038,9 @@ function parseAHProduct(product) {
   const webshopId = String(product.webshopId || product.id || "");
   const numericId = webshopId.replace(/^wi_?/i, "");
   const priceEuros = product.priceBeforeBonus ?? product.currentPrice ?? 0;
-  const imageUrl = product.images?.[0]?.url || "";
+  // Prefer the 200×200 rendition for thumbnails — index 2 in the standard AH image array
+  const images = product.images || [];
+  const imageUrl = images.find((i) => i.width === 200)?.url || images[0]?.url || "";
   return {
     id: numericId,
     name: sanitizeText(product.title),
