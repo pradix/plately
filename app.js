@@ -1748,15 +1748,19 @@ function renderRecentImports() {
   heading.classList.remove("hidden");
 
   // Recipe cards + fill remaining slots with an "add" card (up to 4 total)
-  const cards = imported.map((recipe) => `
+  const cards = imported.map((recipe) => {
+    const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
+    return `
     <button class="recent-card" type="button" data-recipe-id="${escapeHtml(recipe.id)}">
       <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title)}" loading="lazy" />
+      ${faviconUrl ? `<span class="recent-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" /></span>` : ""}
       <div class="recent-card__body">
         <p class="recent-card__title">${escapeHtml(recipe.title)}</p>
         <p class="recent-card__meta">${escapeHtml(recipe.time || "")}</p>
       </div>
     </button>
-  `);
+  `;
+  });
 
   // Add a + import card in the empty slots
   const slotsLeft = Math.max(0, 4 - imported.length);
@@ -2007,7 +2011,10 @@ function renderRecipeGrid() {
   const isSearching = !!state.searchQuery.trim();
   let recipes;
   if (!isSearching && !state.activeCookbookFilter) {
-    recipes = COOKBOOK_SHOWCASE_IDS.map((recipeId) => getRecipeById(recipeId)).filter(Boolean);
+    // Show user-imported recipes first, then fill with seed recipes
+    const imported = getImportedRecipes();
+    const seeds = COOKBOOK_SHOWCASE_IDS.map((id) => getRecipeById(id)).filter(Boolean);
+    recipes = imported.length ? [...imported, ...seeds] : seeds;
   } else {
     recipes = getVisibleRecipes();
   }
@@ -2021,8 +2028,8 @@ function renderRecipeGrid() {
     recipes = [...recipes].reverse();
   }
 
-  // Only cap at 4 when not actively searching
-  if (!isSearching) recipes = recipes.slice(0, 4);
+  // Cap at 8 when not actively searching
+  if (!isSearching) recipes = recipes.slice(0, 8);
 
   // Update heading to reflect search state
   const headingEl = document.querySelector(".kookboek-heading h1");
@@ -2389,6 +2396,7 @@ async function fetchGroceryPhotos() {
     .filter((item) => !item.imageUrl && !item.checked)
     .slice(0, 20);
   if (!itemsWithoutPhoto.length) return;
+  document.getElementById("groceryScreen")?.classList.add("grocery--loading");
   try {
     const resp = await fetch("/api/grocery-photos", {
       method: "POST",
@@ -2414,6 +2422,8 @@ async function fetchGroceryPhotos() {
     }
   } catch {
     // silently ignore
+  } finally {
+    document.getElementById("groceryScreen")?.classList.remove("grocery--loading");
   }
 }
 
@@ -3779,6 +3789,17 @@ function validateUrl(url) {
   }
 }
 
+function extractUrl(raw) {
+  if (!raw) return raw;
+  // Extract first https:// or http:// URL from pasted text
+  const httpsMatch = raw.match(/https?:\/\/[^\s]+/);
+  if (httpsMatch) return httpsMatch[0];
+  // Support www. prefix without protocol
+  const wwwMatch = raw.match(/(?:^|\s)(www\.[^\s]+)/);
+  if (wwwMatch) return "https://" + wwwMatch[1].trim();
+  return raw;
+}
+
 async function requestWakeLock() {
   if (!("wakeLock" in navigator)) {
     showToast("Scherm-aan functie wordt niet ondersteund op dit apparaat.");
@@ -3977,8 +3998,14 @@ bindEvent(clearGroceryListButton, "click", () => {
 bindEvent(addCustomGroceryButton, "click", addCustomGroceryItem);
 bindEvent(groceryQuickAddTopButton, "click", addCustomGroceryItem);
 bindEvent(document.getElementById("viewAllImportsButton"), "click", () => {
-  switchView("home");
-  document.getElementById("recipeGrid")?.scrollIntoView({ behavior: "smooth" });
+  state.activeCookbookFilter = null;
+  state.searchQuery = "";
+  renderCookbookFilterBar();
+  renderRecipeGrid();
+  document.getElementById("recipeGrid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+bindEvent(document.getElementById("viewAllChannelsButton"), "click", () => {
+  switchView("settings");
 });
 bindEvent(document.getElementById("groceryClearButton"), "click", () => {
   if (!state.groceryItems.length) return;
@@ -4990,7 +5017,7 @@ bindEvent(importForm, "submit", async (event) => {
 
 bindEvent(homeImportForm, "submit", async (event) => {
   event.preventDefault();
-  const url = homeImportUrl.value.trim();
+  const url = extractUrl(homeImportUrl.value.trim());
 
   await submitImport(
     url,
@@ -5017,7 +5044,7 @@ bindEvent(homeImportForm, "submit", async (event) => {
 
 bindEvent(importScreenForm, "submit", async (event) => {
   event.preventDefault();
-  const url = importScreenUrl.value.trim();
+  const url = extractUrl(importScreenUrl.value.trim());
 
   await submitImport(
     url,

@@ -827,12 +827,9 @@ function escapeRegex(value) {
 
 function detectPlatform(inputUrl) {
   const hostname = inputUrl.hostname.replace(/^www\./, "");
-  if (hostname.endsWith("tiktok.com")) {
-    return "tiktok";
-  }
-  if (hostname.endsWith("instagram.com")) {
-    return "instagram";
-  }
+  if (hostname.endsWith("tiktok.com")) return "tiktok";
+  if (hostname.endsWith("instagram.com")) return "instagram";
+  if (hostname.endsWith("pinterest.com") || hostname.endsWith("pinterest.nl") || hostname === "pin.it") return "pinterest";
   return "website";
 }
 
@@ -2935,6 +2932,46 @@ async function importInstagram(sourceUrl, note) {
   });
 }
 
+async function importPinterest(sourceUrl) {
+  // For pin.it short URLs, follow redirect first
+  let finalUrl = sourceUrl;
+  if (/pin\.it/.test(sourceUrl)) {
+    try {
+      const res = await fetch(sourceUrl, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(8000), headers: FETCH_HEADERS });
+      if (res.url) finalUrl = res.url;
+    } catch { /* keep original */ }
+  }
+
+  // Try Pinterest oembed to get the linked URL
+  try {
+    const oembedUrl = `https://www.pinterest.com/oembed.json?url=${encodeURIComponent(finalUrl)}`;
+    const res = await fetch(oembedUrl, { headers: FETCH_HEADERS, signal: AbortSignal.timeout(8000) });
+    if (res.ok) {
+      const data = await res.json();
+      // Pinterest oembed has a url field pointing to the pin page
+      // The actual recipe is at the "url" the pin links to — try to extract from HTML
+    }
+  } catch { /* ignore */ }
+
+  // Fall back to scraping the Pinterest pin page directly
+  const doc = await fetchWebsiteDocument(finalUrl);
+  if (doc.kind === "text") {
+    return parseTextRecipeDocument(doc.body, doc.finalUrl || finalUrl);
+  }
+
+  // Pinterest's HTML has a structured data script with the linked URL
+  const linkedUrlMatch = doc.body.match(/"url"\s*:\s*"(https?:\/\/(?!www\.pinterest)[^"]+)"/);
+  if (linkedUrlMatch) {
+    try {
+      const linkedDoc = await fetchWebsiteDocument(linkedUrlMatch[1]);
+      if (linkedDoc.kind === "text") return parseTextRecipeDocument(linkedDoc.body, linkedUrlMatch[1]);
+      return parseWebsiteRecipe(linkedDoc.body, linkedUrlMatch[1]);
+    } catch { /* fall through */ }
+  }
+
+  return parseWebsiteRecipe(doc.body, doc.finalUrl || finalUrl);
+}
+
 async function importWebsite(sourceUrl) {
   const parsedUrl = new URL(sourceUrl);
   const isAllerhande = /(^|\.)ah\.nl$/i.test(parsedUrl.hostname) && /\/allerhande\//i.test(parsedUrl.pathname);
@@ -2989,6 +3026,21 @@ async function importRecipe(url, note, imageHint = "") {
     throw new HttpError(400, "Voer een geldige URL in.");
   }
 
+  // Expand AH short URLs (ah.nl/r/XXXXXX) by following the redirect
+  if (/(^|\.)ah\.nl$/i.test(parsedUrl.hostname) && /^\/r\/\d+/.test(parsedUrl.pathname)) {
+    try {
+      const expandRes = await fetch(parsedUrl.toString(), {
+        method: "HEAD",
+        redirect: "follow",
+        signal: AbortSignal.timeout(8000),
+        headers: FETCH_HEADERS,
+      });
+      if (expandRes.url && expandRes.url !== parsedUrl.toString()) {
+        parsedUrl = new URL(expandRes.url);
+      }
+    } catch { /* keep original */ }
+  }
+
   const platform = detectPlatform(parsedUrl);
 
   let recipe;
@@ -2996,6 +3048,8 @@ async function importRecipe(url, note, imageHint = "") {
     recipe = await importTikTok(parsedUrl.toString(), note);
   } else if (platform === "instagram") {
     recipe = await importInstagram(parsedUrl.toString(), note);
+  } else if (platform === "pinterest") {
+    recipe = await importPinterest(parsedUrl.toString());
   } else {
     recipe = await importWebsite(parsedUrl.toString());
   }
