@@ -628,9 +628,17 @@ function sanitizeProfilePayload(profile) {
   if (!handle.startsWith("@")) {
     handle = `@${handle}`;
   }
+  const email = sanitizeText(profile?.email || "").slice(0, 200);
+  // photo is a base64 data URL or https URL — allow up to 400KB
+  const rawPhoto = String(profile?.photo || "");
+  const photo = (rawPhoto.startsWith("data:image/") || rawPhoto.startsWith("https://") || rawPhoto.startsWith("http://"))
+    ? rawPhoto.slice(0, 400_000)
+    : "";
   return {
     name,
     handle: handle.slice(0, 40),
+    email,
+    photo,
   };
 }
 
