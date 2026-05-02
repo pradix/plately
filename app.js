@@ -3663,6 +3663,7 @@ function applyPersistedAppState(user) {
 function persistGroceryItemsLocally() {
   try {
     localStorage.setItem("plately-grocery-items", JSON.stringify(state.groceryItems));
+    localStorage.setItem("plately-grocery-ts", String(Date.now()));
   } catch {}
 }
 
@@ -3797,11 +3798,18 @@ async function bootstrapSession() {
       state.auth.email = payload.auth.email || "";
     }
     applyPersistedAppState(payload.user);
-  } catch {
-    // Server unreachable — restore groceryItems from localStorage so list stays intact
+    // localStorage is always written synchronously on changes, so it reflects the
+    // most recent user action — even if the async server-persist hadn't completed.
+    // Always overlay server state with the local grocery snapshot.
     try {
       const saved = localStorage.getItem("plately-grocery-items");
-      if (saved) state.groceryItems = JSON.parse(saved);
+      if (saved !== null) state.groceryItems = JSON.parse(saved);
+    } catch {}
+  } catch {
+    // Server unreachable — restore groceryItems from localStorage
+    try {
+      const saved = localStorage.getItem("plately-grocery-items");
+      if (saved !== null) state.groceryItems = JSON.parse(saved);
     } catch {}
   } finally {
     state.session.ready = true;
