@@ -77,7 +77,7 @@
               </div>
             </div>
             <form class="import-banner__form" id="homeImportForm">
-              <input id="homeImportUrl" type="url" class="import-banner__input--full" placeholder="Plak een link..." autocomplete="off" />
+              <input id="homeImportUrl" type="text" inputmode="url" class="import-banner__input--full" placeholder="Plak een link..." autocomplete="off" />
               <button class="import-banner__button--full" id="homeImportSubmit" type="submit">Importeer</button>
               <p class="import-banner__feedback" id="homeImportFeedback" aria-live="polite"></p>
             </form>
@@ -603,7 +603,8 @@
             <div class="import-url-row">
               <input
                 id="importScreenUrl"
-                type="url"
+                type="text"
+                inputmode="url"
                 class="import-url-input"
                 placeholder="Plak een link van TikTok, Instagram of een website..."
                 autocomplete="off"
@@ -881,9 +882,9 @@
             <input
               id="recipeUrl"
               name="recipeUrl"
-              type="url"
+              type="text"
+              inputmode="url"
               placeholder="https://www.tiktok.com/@creator/video/123..."
-              required
             />
           </label>
 
@@ -1030,6 +1031,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-38"></script>
+    <script src="app.js?v=plately-banani-39"></script>
   </body>
 </html>
