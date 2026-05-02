@@ -3080,6 +3080,11 @@ async function findAHProducts(ingredient, count = 3) {
     const products = (data.products || [])
       .filter((p) => !NON_FOOD_INGREDIENT_PATTERN.test(sanitizeText(p.title)))
       .filter((p) => ingredientMatchesProduct(searchTerm, sanitizeText(p.title)))
+      .sort((a, b) => {
+        const pa = a.currentPrice ?? a.priceBeforeBonus ?? 9999;
+        const pb = b.currentPrice ?? b.priceBeforeBonus ?? 9999;
+        return pa - pb;
+      })
       .slice(0, count);
 
     return products.map(parseAHProduct);

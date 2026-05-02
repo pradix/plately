@@ -2297,6 +2297,7 @@ function renderGrocerySummary() {
 }
 
 function renderGroceryGroups() {
+  persistGroceryItemsLocally();
   const uncheckedCount = state.groceryItems.filter((item) => !item.checked).length;
   if (grocerySubtitle) {
     grocerySubtitle.textContent = `${uncheckedCount} items te gaan`;
@@ -3583,6 +3584,12 @@ function applyPersistedAppState(user) {
   }
 }
 
+function persistGroceryItemsLocally() {
+  try {
+    localStorage.setItem("plately-grocery-items", JSON.stringify(state.groceryItems));
+  } catch {}
+}
+
 function renderAll() {
   renderHomeStats();
   renderRecentImports();
@@ -3692,7 +3699,11 @@ async function bootstrapSession() {
     }
     applyPersistedAppState(payload.user);
   } catch {
-    // Fall back to the in-memory demo state if the backend is unreachable.
+    // Server unreachable — restore groceryItems from localStorage so list stays intact
+    try {
+      const saved = localStorage.getItem("plately-grocery-items");
+      if (saved) state.groceryItems = JSON.parse(saved);
+    } catch {}
   } finally {
     state.session.ready = true;
     renderAll();
@@ -5091,7 +5102,110 @@ bindEvent(document.getElementById("homeCookbooksSectionHead"), "click", (event) 
 });
 
 syncPlatformUI();
+
+// ── Onboarding ───────────────────────────────────────────────────────────────
+const ONBOARDING_KEY = "plately-onboarding-v1";
+
+const ONBOARDING_STEPS = [
+  {
+    selector: ".import-banner",
+    text: "Plak hier een link van TikTok, Instagram of een receptwebsite — we importeren het recept automatisch voor je.",
+    dir: "below",
+  },
+  {
+    selector: '[data-view="grocery"].nav-item',
+    text: "Voeg ingrediënten van recepten toe aan je boodschappenlijst en bestel ze direct bij Albert Heijn.",
+    dir: "above",
+  },
+  {
+    selector: '[data-view="settings"].nav-item',
+    text: "Volg hier je favoriete kookkanalen en ontdek altijd nieuwe recepten.",
+    dir: "above",
+  },
+];
+
+let _obStep = 0;
+
+function _obShow(index) {
+  const overlay = document.getElementById("onboardingOverlay");
+  const spotlight = document.getElementById("onboardingSpotlight");
+  const bubble = document.getElementById("onboardingBubble");
+  const textEl = document.getElementById("onboardingText");
+  const progressEl = document.getElementById("onboardingProgress");
+  const nextBtn = document.getElementById("onboardingNext");
+  if (!overlay) return;
+
+  if (index >= ONBOARDING_STEPS.length) {
+    _obFinish();
+    return;
+  }
+
+  const step = ONBOARDING_STEPS[index];
+  const target = document.querySelector(step.selector);
+  if (!target) { _obShow(index + 1); return; }
+
+  overlay.hidden = false;
+  overlay.removeAttribute("aria-hidden");
+
+  const PAD = 8;
+  const rect = target.getBoundingClientRect();
+
+  // Spotlight
+  spotlight.style.left = `${rect.left - PAD}px`;
+  spotlight.style.top = `${rect.top - PAD}px`;
+  spotlight.style.width = `${rect.width + PAD * 2}px`;
+  spotlight.style.height = `${rect.height + PAD * 2}px`;
+  spotlight.style.borderRadius = window.getComputedStyle(target).borderRadius || "16px";
+
+  // Content
+  textEl.textContent = step.text;
+  progressEl.innerHTML = ONBOARDING_STEPS.map((_, i) =>
+    `<span class="onboarding-dot ${i === index ? "onboarding-dot--active" : ""}"></span>`
+  ).join("");
+  nextBtn.textContent = index === ONBOARDING_STEPS.length - 1 ? "Klaar ✓" : "Volgende →";
+
+  // Bubble position
+  const BW = 270;
+  const MARGIN = 14;
+  let bLeft = rect.left + rect.width / 2 - BW / 2;
+  bLeft = Math.max(12, Math.min(bLeft, window.innerWidth - BW - 12));
+
+  const arrowX = rect.left + rect.width / 2 - bLeft;
+  bubble.style.setProperty("--arrow-x", `${Math.max(20, Math.min(arrowX, BW - 20))}px`);
+  bubble.style.left = `${bLeft}px`;
+  bubble.style.width = `${BW}px`;
+
+  if (step.dir === "above") {
+    bubble.style.top = "auto";
+    bubble.style.bottom = `${window.innerHeight - rect.top + MARGIN}px`;
+    bubble.dataset.arrow = "down";
+  } else {
+    bubble.style.bottom = "auto";
+    bubble.style.top = `${rect.bottom + MARGIN}px`;
+    bubble.dataset.arrow = "up";
+  }
+}
+
+function _obFinish() {
+  const overlay = document.getElementById("onboardingOverlay");
+  if (overlay) { overlay.hidden = true; overlay.setAttribute("aria-hidden", "true"); }
+  try { localStorage.setItem(ONBOARDING_KEY, "1"); } catch {}
+}
+
+function startOnboarding() {
+  try { if (localStorage.getItem(ONBOARDING_KEY)) return; } catch {}
+  _obStep = 0;
+  setTimeout(() => _obShow(0), 600);
+}
+
+document.getElementById("onboardingNext")?.addEventListener("click", () => {
+  _obStep++;
+  _obShow(_obStep);
+});
+document.getElementById("onboardingSkip")?.addEventListener("click", _obFinish);
+
 renderAll();
+startOnboarding();
 
 // Restore last view the user was on before a page refresh
 try {

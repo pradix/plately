@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-31" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-32" />
   </head>
   <body>
     <main class="page">
@@ -792,6 +792,19 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-25"></script>
+    <!-- Onboarding tooltips -->
+    <div id="onboardingOverlay" class="onboarding-overlay" aria-hidden="true" hidden>
+      <div id="onboardingSpotlight" class="onboarding-spotlight"></div>
+      <div id="onboardingBubble" class="onboarding-bubble" role="dialog">
+        <div class="onboarding-bubble__progress" id="onboardingProgress"></div>
+        <p class="onboarding-bubble__text" id="onboardingText"></p>
+        <div class="onboarding-bubble__footer">
+          <button class="onboarding-skip-btn" id="onboardingSkip" type="button">Overslaan</button>
+          <button class="onboarding-next-btn" id="onboardingNext" type="button">Volgende →</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js?v=plately-banani-26"></script>
   </body>
 </html>
