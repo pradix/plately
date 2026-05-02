@@ -2171,7 +2171,6 @@ function renderDetailRecipe(resetServings = false) {
       <article class="detail-assist__card detail-assist__card--${assistTone}">
         <div class="detail-assist__head">
           <strong>${escapeHtml(assistTitle)}</strong>
-          <span>${escapeHtml(recipe.platform ? getPlatformLabel(recipe.platform) : "Recept")}</span>
         </div>
         <p>${escapeHtml(assistCopy)}</p>
       </article>
