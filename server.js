@@ -3491,6 +3491,7 @@ function parseWPStandard(html, _baseUrl, channelName, channelId, count) {
     const title = decodeHtmlEntities(stripHtmlTags(headingLink[2])).trim();
     if (!title || title.length < 3 || seenUrls.has(url)) continue;
     if (/\/(tag|category|categorie|auteur|author|page)\//.test(url)) continue;
+    if (!urlLooksLikeRecipe(url)) continue;
 
     const imgMatch =
       block.match(/data-src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i) ||
@@ -3505,9 +3506,9 @@ function parseWPStandard(html, _baseUrl, channelName, channelId, count) {
 
 /** WP REST API fallback — returns results mapped to our format. */
 // URL patterns that strongly suggest a non-recipe (blog/article/tip/news) post
-const BLOG_POST_URL_RE = /\/(blog|artikel|artikelen|nieuws|tips?|advies|inspiratie|over-ons|contact|vacature|actie|winactie|review|test|colofon)\//i;
+const BLOG_POST_URL_RE = /\/(blog|artikel|artikelen|nieuws|tips?|advies|inspiratie|over-ons|contact|vacature|actie|winactie|review|test|colofon|interviews?|winnen|video|videos|podcast|categorie|category|tag|author|auteur|page|zoeken|search)\//i;
 // URL patterns that strongly suggest a recipe post
-const RECIPE_URL_RE = /\/(recept|recepten|recipe|recipes|gerecht|gerechten|bakken|koken|lekker|snack|ontbijt|lunch|diner|avondeten|dessert|taart|cake|soep|salade|pasta|vlees|vis|vegetarisch|vegan)\//i;
+const RECIPE_URL_RE = /\/(recept|recepten|recipe|recipes|gerecht|gerechten|bakken|koken|lekker|snack|ontbijt|lunch|diner|avondeten|dessert|taart|cake|soep|salade|pasta|vlees|vis|vegetarisch|vegan|borrelhap|hapje|saus|dressing)\//i;
 
 /**
  * Returns true when a WP post URL looks like a recipe (not a blog/tip/news article).
@@ -3516,8 +3517,21 @@ const RECIPE_URL_RE = /\/(recept|recepten|recipe|recipes|gerecht|gerechten|bakke
  * - Otherwise → keep (safer than dropping valid recipes)
  */
 function urlLooksLikeRecipe(url) {
-  if (BLOG_POST_URL_RE.test(url)) return false;
-  return true; // keep by default; recipe-type endpoints don't need this filter
+  if (RECIPE_URL_RE.test(url)) return true; // explicit recipe path → keep
+  if (BLOG_POST_URL_RE.test(url)) return false; // explicit blog path → drop
+  return true; // keep by default
+}
+
+/**
+ * Returns true when at least one word from the query appears in the title.
+ * Helps filter out off-topic results returned by a general WP search.
+ */
+function titleMatchesQuery(title, query) {
+  if (!title || !query) return true; // can't determine — keep
+  const t = title.toLowerCase();
+  const words = query.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+  if (!words.length) return true;
+  return words.some((w) => t.includes(w));
 }
 
 async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
@@ -3550,8 +3564,10 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
         const mapped = (Array.isArray(data) ? data : [])
           .map(mapWPItem)
           .filter((r) => r.title && r.url)
-          // For the generic "posts" endpoint, filter out blog articles
-          .filter((r) => type !== "posts" || urlLooksLikeRecipe(r.url))
+          // Filter out blog/non-recipe URLs for all endpoint types
+          .filter((r) => urlLooksLikeRecipe(r.url))
+          // Filter out results whose title has no overlap with the query
+          .filter((r) => titleMatchesQuery(r.title, query))
           .slice(0, count);
         if (mapped.length > 0) return mapped;
       }
@@ -4068,7 +4084,9 @@ const server = http.createServer(async (request, response) => {
           );
           for (const s of customSearches) {
             if (s.status === "fulfilled" && Array.isArray(s.value)) {
-              results.push(...s.value.slice(0, 4));
+              results.push(
+                ...s.value.filter((r) => titleMatchesQuery(r.title, query)).slice(0, 4)
+              );
             }
           }
         }

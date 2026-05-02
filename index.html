@@ -2,13 +2,13 @@
 <html lang="nl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Plately</title>
     <meta
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="plately-banani-6" />
+    <meta name="plately-build" content="plately-banani-7" />
     <meta name="theme-color" content="#8da485" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-36" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-37" />
   </head>
   <body>
     <main class="page">
@@ -56,6 +56,8 @@
               <h2>Gevonden op kanalen</h2>
               <button type="button" class="ghost-link" id="channelSearchClose">Sluiten</button>
             </div>
+            <!-- Channel filter pills -->
+            <div class="channel-search-filters" id="channelSearchFilters"></div>
             <div class="channel-search-list" id="channelSearchResults"></div>
           </section>
 
@@ -75,13 +77,9 @@
               </div>
             </div>
             <form class="import-banner__form" id="homeImportForm">
-              <div class="import-banner__row">
-                <input id="homeImportUrl" type="url" class="import-banner__input" placeholder="Plak een link..." />
-                <button class="import-banner__button" id="homeImportSubmit" type="submit">Importeer</button>
-              </div>
-              <p class="import-banner__feedback" id="homeImportFeedback">
-                Voeg direct een recept toe vanuit social media of een receptenwebsite.
-              </p>
+              <input id="homeImportUrl" type="url" class="import-banner__input import-banner__input--full" placeholder="Plak een link..." autocomplete="off" />
+              <button class="import-banner__button import-banner__button--full" id="homeImportSubmit" type="submit">Importeer</button>
+              <p class="import-banner__feedback" id="homeImportFeedback" aria-live="polite"></p>
             </form>
           </section>
 
@@ -106,9 +104,17 @@
           </section>
           <div class="home-cb-strip" id="homeCbStrip"></div>
 
-          <!-- Recepten sectie -->
-          <section class="kookboek-heading">
+          <!-- Mijn recepten slider -->
+          <section class="section-heading" id="myRecipesHeading">
             <h2>Mijn recepten</h2>
+            <button type="button" class="ghost-link" id="viewAllMyRecipesBtn">Bekijk alles</button>
+          </section>
+          <div class="recipe-slider" id="recipeSlider"></div>
+
+          <!-- Recepten sectie (zoek/filter) -->
+          <section class="kookboek-heading" id="recipeGridSection" style="display:none">
+            <h2 id="recipeGridHeading">Recepten</h2>
+            <button type="button" class="ghost-link" id="closeRecipeGridBtn">Sluiten</button>
           </section>
           <div class="cookbook-filter-bar" id="cookbookFilterBar" role="group" aria-label="Filter op categorie"></div>
           <section class="recipe-grid recipe-grid--cookbook" id="recipeGrid"></section>
@@ -314,80 +320,140 @@
         </section>
 
         <section class="screen profile-screen" id="settingsScreen">
-          <header class="topbar topbar--std">
-            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar recepten">
-              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
-            </button>
-            <div class="topbar-actions">
-              <button class="icon-button" type="button" aria-label="Meldingen">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 3.75a4.75 4.75 0 0 0-4.75 4.75v1.07c0 .72-.24 1.43-.67 2l-1.1 1.47a2.75 2.75 0 0 0 2.2 4.4h8.64a2.75 2.75 0 0 0 2.2-4.4l-1.1-1.47a3.36 3.36 0 0 1-.67-2V8.5A4.75 4.75 0 0 0 12 3.75Zm0 17a2.74 2.74 0 0 1-2.47-1.55h4.94A2.74 2.74 0 0 1 12 20.75Z"/>
+
+          <!-- Profile header: avatar + name + stats -->
+          <div class="profile2-hero">
+            <div class="profile2-avatar-wrap">
+              <div class="profile2-avatar" id="profileAvatarDisplay">
+                <img src="assets/profile-avatar.svg" alt="" class="profile2-avatar__img" aria-hidden="true" />
+              </div>
+              <button class="profile2-camera-btn" id="profileEditAvatarButton" type="button" aria-label="Profielfoto wijzigen">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
                 </svg>
               </button>
-              <button class="home-avatar" type="button" data-view="home" aria-label="Ga naar kookboek"></button>
+            </div>
+            <h1 class="profile2-name" id="profileName">Sarah de Vries</h1>
+            <p class="profile2-email" id="profileHandle">sarah@example.com</p>
+
+            <div class="profile2-stats">
+              <div class="profile2-stat">
+                <span class="profile2-stat__num" id="profileRecipeCount">0</span>
+                <span class="profile2-stat__lbl">RECEPTEN</span>
+              </div>
+              <div class="profile2-stat-divider"></div>
+              <div class="profile2-stat">
+                <span class="profile2-stat__num" id="profileCookbookCount">0</span>
+                <span class="profile2-stat__lbl">BOEKEN</span>
+              </div>
+              <div class="profile2-stat-divider"></div>
+              <div class="profile2-stat">
+                <span class="profile2-stat__num" id="profileChannelCount">0</span>
+                <span class="profile2-stat__lbl">KANALEN</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ACCOUNT section -->
+          <p class="profile2-section-label">ACCOUNT</p>
+          <div class="profile2-card" id="accountCard">
+            <button class="profile2-row" id="profileEditButton" type="button">
+              <span class="profile2-row__icon" style="background:#fde8d8">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#e0784a" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.58-7 8-7s8 3 8 7"/></svg>
+              </span>
+              <span class="profile2-row__label">Mijn account</span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <div class="profile2-row-divider"></div>
+            <button class="profile2-row" type="button" id="goToChannelsBtn">
+              <span class="profile2-row__icon" style="background:#ede9fe">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              </span>
+              <span class="profile2-row__label">Gekoppelde kanalen</span>
+              <span class="profile2-row__meta" id="profileChannelMeta"></span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <div class="profile2-row-divider"></div>
+            <button class="profile2-row" type="button">
+              <span class="profile2-row__icon" style="background:#e0f2f1">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#0f766e" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 8l4 4-4 4"/><path d="M12 16h7"/></svg>
+              </span>
+              <span class="profile2-row__label">Taal</span>
+              <span class="profile2-row__meta">Nederlands</span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          </div>
+
+          <!-- PLATELY section -->
+          <p class="profile2-section-label">PLATELY</p>
+          <div class="profile2-card">
+            <button class="profile2-row" type="button">
+              <span class="profile2-row__icon" style="background:#fef9c3">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#ca8a04" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+              </span>
+              <span class="profile2-row__label">Nieuw in Plately</span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <div class="profile2-row-divider"></div>
+            <button class="profile2-row" type="button">
+              <span class="profile2-row__icon" style="background:#f3f4f6">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+              </span>
+              <span class="profile2-row__label">FAQ &amp; Contact</span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <div class="profile2-row-divider"></div>
+            <button class="profile2-row" type="button">
+              <span class="profile2-row__icon" style="background:#f3f4f6">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </span>
+              <span class="profile2-row__label">Privacy</span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          </div>
+
+          <!-- Logout -->
+          <div class="profile2-card">
+            <button class="profile2-row profile2-row--danger" id="logoutButton" type="button">
+              <span class="profile2-row__icon" style="background:#fee2e2">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              </span>
+              <span class="profile2-row__label">Uitloggen</span>
+            </button>
+          </div>
+
+          <!-- Hidden elements kept for JS compatibility -->
+          <div hidden aria-hidden="true">
+            <button id="openRegisterButton" type="button"></button>
+            <button id="openLoginButton" type="button"></button>
+            <button id="premiumButton" type="button"></button>
+            <button id="shareProfileButton" type="button"></button>
+            <span id="accountTitle"></span>
+            <span id="accountCopy"></span>
+          </div>
+
+          <!-- Kanalen settings (hidden, scrollable section) -->
+          <div class="channel-settings-list" id="channelSettingsList" style="display:none"></div>
+
+          <!-- Kookboeken (settings copy, hidden) -->
+          <section class="cookbook-grid" id="cookbookList" style="display:none"></section>
+          <div class="profile-space"></div>
+        </section>
+
+        <!-- Kookboeken screen -->
+        <section class="screen cookbooks-screen" id="cookbooksScreen">
+          <header class="topbar topbar--std">
+            <h1 class="topbar-title">Kookboeken</h1>
+            <div class="topbar-actions">
+              <button class="icon-button" type="button" id="cookbooksAddBtn" aria-label="Nieuw kookboek aanmaken">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+              </button>
             </div>
           </header>
-
-          <section class="profile-hero">
-            <div class="profile-avatar-wrap">
-              <div class="profile-avatar">
-                <img src="assets/profile-avatar.svg" alt="Sarah de Vries" class="profile-avatar__image" />
-              </div>
-              <button class="profile-avatar-edit" id="profileEditAvatarButton" type="button" aria-label="Profiel bewerken">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M15.1 5.1a2.5 2.5 0 1 1 3.54 3.54L9.5 17.78L5.75 18.75l.97-3.75L15.1 5.1Zm-8.34 9.89l2.35 2.35"/>
-                </svg>
-              </button>
-            </div>
-            <h1 id="profileName">Sarah de Vries</h1>
-            <p class="profile-meta">
-              <span id="profileHandle">@sarahkookt</span>
-              <span id="profileRecipeCount">0 recepten</span>
-            </p>
-            <div class="profile-actions">
-              <button class="secondary-button profile-actions__main" id="profileEditButton" type="button">Profiel bewerken</button>
-              <button class="icon-button icon-button--soft" id="shareProfileButton" type="button" aria-label="Profiel delen">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z"/>
-                </svg>
-              </button>
-            </div>
-          </section>
-
-          <section class="account-card" id="accountCard">
-            <div>
-              <p class="section-kicker">ACCOUNT</p>
-              <h2 id="accountTitle">Gebruik Plately op al je apparaten</h2>
-              <p class="account-copy" id="accountCopy">Maak een account aan of log in om recepten, kookboeken en lijstjes te synchroniseren.</p>
-            </div>
-            <div class="account-actions">
-              <button class="primary-button" id="openRegisterButton" type="button">Account maken</button>
-              <button class="secondary-button" id="openLoginButton" type="button">Inloggen</button>
-              <button class="secondary-button hidden" id="logoutButton" type="button">Uitloggen</button>
-            </div>
-          </section>
-
-          <section class="premium-card">
-            <div class="premium-card__head">
-              <span class="premium-card__icon" aria-hidden="true">♛</span>
-              <h2>Plately Premium</h2>
-            </div>
-            <p>Ontgrendel chef-collecties, slimme importchecks en automatisch opgebouwde weekmenu&apos;s.</p>
-            <button class="premium-card__button" id="premiumButton" type="button">Ontdek Premium</button>
-          </section>
-
-          <section class="profile-section-head">
-            <h2>Mijn kanalen</h2>
-            <p>Kies welke kanalen je wilt volgen</p>
-          </section>
-          <div class="channel-settings-list" id="channelSettingsList"></div>
-
-          <section class="profile-section-head">
-            <h2>Mijn kookboeken</h2>
-            <p id="profileCookbookCount">0 collecties</p>
-          </section>
-
-          <section class="cookbook-grid" id="cookbookList"></section>
+          <section class="cookbook-grid" id="cookbooksScreenGrid"></section>
           <div class="profile-space"></div>
         </section>
 
@@ -549,6 +615,15 @@
             </svg>
             <span class="nav-label">Home</span>
           </button>
+          <button type="button" class="nav-item" data-view="cookbooks">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h7a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4V4Z"/>
+              <path d="M12 5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7"/>
+              <path d="M7 8h2M7 12h2M7 16h2"/>
+              <path d="M15 8h2M15 12h2"/>
+            </svg>
+            <span class="nav-label">Kookboeken</span>
+          </button>
           <button type="button" class="nav-item" data-view="grocery">
             <span class="nav-icon-wrap">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -560,10 +635,11 @@
             <span class="nav-label">Boodschappen</span>
           </button>
           <button type="button" class="nav-item" data-view="settings">
-            <span class="nav-icon-wrap nav-icon-wrap--settings">
-              <img class="nav-icon-image nav-icon-image--settings" src="assets/settings-cog.svg" alt="" aria-hidden="true" />
-            </span>
-            <span class="nav-label">Instellingen</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="8" r="3.5"/>
+              <path d="M4 20c0-4 3.58-7 8-7s8 3 8 7"/>
+            </svg>
+            <span class="nav-label">Profiel</span>
           </button>
         </nav>
       </section>
@@ -585,10 +661,20 @@
         <div class="basket-sheet__recipe-head">
           <h2 class="basket-sheet__recipe-name" id="basketRecipeName">Boodschappenlijst</h2>
           <div class="basket-sheet__servings" id="basketServingsRow">
-            <button class="basket-qty-btn basket-qty-btn--minus" id="basketServingsMinus" type="button" aria-label="Minder porties">−</button>
-            <span class="basket-sheet__servings-label" id="basketServingsLabel">4 porties</span>
-            <button class="basket-qty-btn basket-qty-btn--plus" id="basketServingsPlus" type="button" aria-label="Meer porties">+</button>
+            <button class="basket-qty-btn basket-qty-btn--minus" id="basketServingsMinus" type="button" aria-label="Minder personen">−</button>
+            <span class="basket-sheet__servings-label" id="basketServingsLabel">2 pers.</span>
+            <button class="basket-qty-btn basket-qty-btn--plus" id="basketServingsPlus" type="button" aria-label="Meer personen">+</button>
           </div>
+        </div>
+
+        <!-- Diet filter chips -->
+        <div class="basket-filter-row" id="basketFilterRow">
+          <button class="basket-filter-chip" id="basketFilterVega" type="button" data-filter="vega">
+            🌿 Vega
+          </button>
+          <button class="basket-filter-chip" id="basketFilterBio" type="button" data-filter="bio">
+            🌱 Biologisch
+          </button>
         </div>
 
         <!-- Scrollable product list -->
@@ -833,6 +919,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-31"></script>
+    <script src="app.js?v=plately-banani-32"></script>
   </body>
 </html>

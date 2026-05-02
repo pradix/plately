@@ -442,6 +442,9 @@ const state = {
   },
   groceryItems: [],
   basketPreview: null,
+  basketServings: 2, // current persons
+  basketBaseServings: 2, // base when basket was opened
+  basketFilter: { vega: false, bio: false },
   cookbooks: [
     { id: "cookbook-1", name: "Gezond & Fit", recipeIds: [initialRecipes[2].id, initialRecipes[8].id] },
     { id: "cookbook-2", name: "Snelle avonden", recipeIds: [initialRecipes[0].id, initialRecipes[1].id, initialRecipes[6].id] },
@@ -494,6 +497,7 @@ const detailScreen = document.getElementById("detailScreen");
 const groceryScreen = document.getElementById("groceryScreen");
 const mealPlanScreen = document.getElementById("mealPlanScreen");
 const settingsScreen = document.getElementById("settingsScreen");
+const cookbooksScreen = document.getElementById("cookbooksScreen");
 const importScreen = document.getElementById("importScreen");
 const reviewScreen = document.getElementById("reviewScreen");
 const modal = document.getElementById("importModal");
@@ -1080,14 +1084,25 @@ function renderBasketPreview() {
 
   if (nameEl) nameEl.textContent = preview.recipeTitle || "Boodschappenlijst";
 
+  // Update servings label
+  const servLabel = document.getElementById("basketServingsLabel");
+  if (servLabel) servLabel.textContent = `${state.basketServings} pers.`;
+
+  // Update filter chip active states
+  document.getElementById("basketFilterVega")?.classList.toggle("is-active", state.basketFilter.vega);
+  document.getElementById("basketFilterBio")?.classList.toggle("is-active", state.basketFilter.bio);
+
   let totalCents = 0;
+  const servScale = state.basketBaseServings > 0
+    ? state.basketServings / state.basketBaseServings
+    : 1;
 
   listEl.innerHTML = preview.items.map((item, itemIndex) => {
     const choice = item.choices?.[item.selectedChoiceIndex || 0];
     if (!choice) return "";
 
     const priceNum = parseFloat((choice.price || "0").replace("€", "").replace(",", ".")) || 0;
-    const qty = item.qty || 1;
+    const qty = Math.max(1, Math.round((item.qty || 1) * servScale));
     totalCents += Math.round(priceNum * qty * 100);
 
     const img = choice.imageUrl
@@ -1138,6 +1153,12 @@ function renderBasketPreview() {
 
 function openBasketModal(preview) {
   state.basketPreview = preview;
+  // Derive base servings from the recipe that was active when basket was built
+  const recipe = state.selectedRecipeId ? getRecipeById(state.selectedRecipeId) : null;
+  const base = recipe ? parseBaseServings(recipe.servings) : 2;
+  state.basketBaseServings = base;
+  state.basketServings = base;
+  state.basketFilter = { vega: false, bio: false };
   renderBasketPreview();
   const overlay = document.getElementById("basketOverlay");
   if (overlay) {
@@ -1159,6 +1180,7 @@ function switchView(view) {
   groceryScreen.classList.toggle("screen--active", view === "grocery");
   mealPlanScreen.classList.toggle("screen--active", view === "mealplan");
   settingsScreen.classList.toggle("screen--active", view === "settings");
+  if (cookbooksScreen) cookbooksScreen.classList.toggle("screen--active", view === "cookbooks");
   importScreen.classList.toggle("screen--active", view === "import");
   reviewScreen.classList.toggle("screen--active", view === "review");
 
@@ -1185,9 +1207,14 @@ function switchView(view) {
     debouncedFetchGroceryPhotos();
   }
 
+  // When entering cookbooks screen, re-render the list
+  if (view === "cookbooks") {
+    renderCookbookList();
+  }
+
   // Persist view so refresh restores the same tab
   try {
-    if (["home", "grocery", "settings", "mealplan"].includes(view)) {
+    if (["home", "grocery", "settings", "mealplan", "cookbooks"].includes(view)) {
       sessionStorage.setItem("plately-view", view);
     } else {
       sessionStorage.removeItem("plately-view");
@@ -1589,27 +1616,20 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
 }
 
 function renderChannelFilterChips(results) {
-  const header = document.querySelector(".channel-search-header");
-  if (!header) return;
-  let filterRow = document.getElementById("channelFilterRow");
-  if (!filterRow) {
-    filterRow = document.createElement("div");
-    filterRow.id = "channelFilterRow";
-    filterRow.className = "channel-filter-row";
-    header.after(filterRow);
-  }
+  const filterRow = document.getElementById("channelSearchFilters");
+  if (!filterRow) return;
 
   // Build set of channelIds present in results
   const present = [...new Set(results.map((r) => r.channelId))];
   if (present.length <= 1) { filterRow.innerHTML = ""; return; }
 
   filterRow.innerHTML = [
-    `<button class="ch-filter-chip ${!state.channelSearchFilter ? "ch-filter-chip--active" : ""}" data-ch-filter="">Alles</button>`,
+    `<button class="channel-filter-pill ${!state.channelSearchFilter ? "" : "is-off"}" data-ch-filter="">Alles</button>`,
     ...getAllChannels()
       .filter((ch) => present.includes(ch.id))
       .map((ch) => {
         const fav = getSourceIconUrl(ch.url);
-        return `<button class="ch-filter-chip ${state.channelSearchFilter === ch.id ? "ch-filter-chip--active" : ""}" data-ch-filter="${escapeHtml(ch.id)}" style="--ch-color:${escapeHtml(ch.color)}">${fav ? `<img class="ch-filter-chip__favicon" src="${escapeHtml(fav)}" alt="" loading="lazy" onerror="this.style.display='none'" />` : ""}${escapeHtml(ch.name)}</button>`;
+        return `<button class="channel-filter-pill ${state.channelSearchFilter === ch.id ? "" : "is-off"}" data-ch-filter="${escapeHtml(ch.id)}">${fav ? `<img src="${escapeHtml(fav)}" alt="" loading="lazy" onerror="this.style.display='none'" />` : ""}${escapeHtml(ch.name)}</button>`;
       })
   ].join("");
 }
@@ -1984,6 +2004,13 @@ function renderCookbookFilterBar() {
 
 function renderRecipeGrid() {
   const isSearching = !!state.searchQuery.trim();
+  const gridSection = document.getElementById("recipeGridSection");
+
+  // Show grid section when actively searching or filtering
+  if (isSearching || state.activeCookbookFilter) {
+    if (gridSection) gridSection.style.display = "";
+  }
+
   let recipes;
   if (!isSearching && !state.activeCookbookFilter) {
     // Show user-imported recipes first, then fill with seed recipes
@@ -2310,47 +2337,83 @@ function renderGroceryGroups() {
     return;
   }
 
-  const groups = state.groceryItems.reduce((accumulator, item) => {
-    if (!accumulator[item.group]) {
-      accumulator[item.group] = [];
-    }
-    accumulator[item.group].push(item);
-    return accumulator;
-  }, {});
+  // Determine unique recipes in the list
+  const uniqueRecipes = [...new Set(state.groceryItems.map((i) => i.recipeTitle || "Overig").filter(Boolean))];
+  const multiRecipe = uniqueRecipes.length > 1;
 
-  groceryGroups.innerHTML = Object.entries(groups)
-    .map(([group, items]) => {
-      const meta = getGroupMeta(group);
-      const bought = items.filter((item) => item.checked).length;
-      const sortedItems = [...items].sort((left, right) => Number(left.checked) - Number(right.checked));
+  function renderGroceryItem(item) {
+    return `
+      <button class="grocery-entry ${item.checked ? "is-checked" : ""}" type="button" data-grocery-id="${item.id}">
+        <span class="grocery-entry__img" aria-hidden="true">
+          ${item.imageUrl
+            ? `<img class="grocery-entry__ah-img" src="${escapeHtml(item.imageUrl)}" alt="" loading="lazy" />`
+            : getIngredientVisualMarkup(item.title)}
+        </span>
+        <span class="grocery-entry__content">
+          <p class="grocery-entry__title">${item.title}</p>
+          ${multiRecipe && item.recipeTitle && item.recipeTitle.includes(",")
+            ? `<p class="grocery-entry__overlap">Gedeeld ingrediënt</p>` : ""}
+        </span>
+        <span class="grocery-entry__amount">${item.amount}</span>
+        <span class="grocery-check"></span>
+      </button>
+    `;
+  }
 
-      return `
+  let html = "";
+
+  if (multiRecipe) {
+    // Group by recipe, then sort unchecked first
+    for (const recipeTitle of uniqueRecipes) {
+      const items = state.groceryItems
+        .filter((i) => (i.recipeTitle || "Overig") === recipeTitle)
+        .sort((a, b) => Number(a.checked) - Number(b.checked));
+      html += `
         <section class="grocery-group">
-          <div class="grocery-group__header">
-            <h2>${meta.title}</h2>
+          <div class="grocery-group__header grocery-group__header--recipe">
+            <h2>${escapeHtml(recipeTitle)}</h2>
+            <span class="grocery-group__count">${items.filter((i) => !i.checked).length} over</span>
           </div>
-          ${sortedItems
-            .map(
-              (item) => `
-                <button class="grocery-entry ${item.checked ? "is-checked" : ""}" type="button" data-grocery-id="${item.id}">
-                  <span class="grocery-entry__img" aria-hidden="true">
-                    ${item.imageUrl
-                      ? `<img class="grocery-entry__ah-img" src="${escapeHtml(item.imageUrl)}" alt="" loading="lazy" />`
-                      : getIngredientVisualMarkup(item.title)}
-                  </span>
-                  <span class="grocery-entry__content">
-                    <p class="grocery-entry__title">${item.title}</p>
-                  </span>
-                  <span class="grocery-entry__amount">${item.amount}</span>
-                  <span class="grocery-check"></span>
-                </button>
-              `
-            )
-            .join("")}
+          ${items.map(renderGroceryItem).join("")}
         </section>
       `;
-    })
-    .join("");
+    }
+    // Shared/overlap items (recipeTitle contains ",")
+    const shared = state.groceryItems.filter((i) => i.recipeTitle && i.recipeTitle.includes(","));
+    if (shared.length) {
+      html = `
+        <section class="grocery-group">
+          <div class="grocery-group__header grocery-group__header--shared">
+            <h2>Gedeelde ingrediënten</h2>
+          </div>
+          ${shared.sort((a, b) => Number(a.checked) - Number(b.checked)).map(renderGroceryItem).join("")}
+        </section>
+      ` + html.replace(shared.map((i) => `data-grocery-id="${i.id}"`).join("|____|"), ""); // keep shared items only in shared section
+    }
+  } else {
+    // Single recipe — group by ingredient category as before
+    const groups = state.groceryItems.reduce((acc, item) => {
+      if (!acc[item.group]) acc[item.group] = [];
+      acc[item.group].push(item);
+      return acc;
+    }, {});
+
+    html = Object.entries(groups)
+      .map(([group, items]) => {
+        const meta = getGroupMeta(group);
+        const sortedItems = [...items].sort((l, r) => Number(l.checked) - Number(r.checked));
+        return `
+          <section class="grocery-group">
+            <div class="grocery-group__header">
+              <h2>${meta.title}</h2>
+            </div>
+            ${sortedItems.map(renderGroceryItem).join("")}
+          </section>
+        `;
+      }).join("");
+  }
+
+  groceryGroups.innerHTML = html;
 
   // Trigger background photo fetch for items without photos (debounced, safe to call always)
   debouncedFetchGroceryPhotos();
@@ -2793,14 +2856,20 @@ function renderProfileSummary() {
     profileName.textContent = state.profile.name;
   }
   if (profileHandle) {
-    profileHandle.textContent = state.profile.handle;
+    // Show email or handle
+    profileHandle.textContent = state.profile.email || state.profile.handle || "";
   }
   if (profileRecipeCount) {
-    profileRecipeCount.textContent = `${state.recipes.length} recepten`;
+    profileRecipeCount.textContent = String(state.recipes.length);
   }
   if (profileCookbookCount) {
-    profileCookbookCount.textContent = `${state.cookbooks.length} collecties`;
+    profileCookbookCount.textContent = String(state.cookbooks.length);
   }
+  // Channel count
+  const channelCountEl = document.getElementById("profileChannelCount");
+  if (channelCountEl) channelCountEl.textContent = String(state.followedChannelIds.length);
+  const channelMetaEl = document.getElementById("profileChannelMeta");
+  if (channelMetaEl) channelMetaEl.textContent = `${state.followedChannelIds.length} gekoppeld`;
   renderAvatars();
 }
 
@@ -2821,6 +2890,21 @@ function renderAvatars() {
       btn.textContent = initial;
     }
   });
+
+  // Update the new profile2 avatar
+  const p2avatar = document.getElementById("profileAvatarDisplay");
+  if (p2avatar) {
+    const img = p2avatar.querySelector(".profile2-avatar__img");
+    if (photo) {
+      if (img) { img.src = photo; img.alt = state.profile.name || ""; }
+      p2avatar.style.fontSize = "";
+    } else {
+      if (img) { img.src = ""; img.alt = ""; }
+      const initial = (state.profile.name || "?")[0].toUpperCase();
+      p2avatar.style.fontSize = "2.2rem";
+      if (!img) p2avatar.textContent = initial;
+    }
+  }
 }
 
 function renderCookbookDetail(cookbookId) {
@@ -2831,7 +2915,8 @@ function renderCookbookDetail(cookbookId) {
     return;
   }
   const recipes = cookbook.recipeIds.map((id) => getRecipeById(id)).filter(Boolean);
-  cookbookList.innerHTML = `
+  const _cbScreenGrid = document.getElementById("cookbooksScreenGrid");
+  const _detailHtml = `
     <div class="cb-detail">
       <button class="cb-detail__back" type="button" data-close-cookbook-detail="true">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.78 5.22a1 1 0 0 1 0 1.41L6.41 11H20a1 1 0 1 1 0 2H6.41l4.37 4.37a1 1 0 0 1-1.41 1.41l-6.08-6.08a1 1 0 0 1 0-1.41l6.08-6.08a1 1 0 0 1 1.41 0Z" fill="currentColor"/></svg>
@@ -2867,6 +2952,8 @@ function renderCookbookDetail(cookbookId) {
       </button>
     </div>
   `;
+  cookbookList.innerHTML = _detailHtml;
+  if (_cbScreenGrid) _cbScreenGrid.innerHTML = _detailHtml;
 }
 
 function renderCookbookList() {
@@ -2876,7 +2963,8 @@ function renderCookbookList() {
     return;
   }
 
-  cookbookList.innerHTML = [
+  const cookbooksScreenGrid = document.getElementById("cookbooksScreenGrid");
+  const html = [
     `
       <button class="cookbook-collection cookbook-collection--add" type="button" data-create-cookbook="true">
         <div class="cookbook-collection__cover cookbook-collection__cover--empty">
@@ -2939,6 +3027,8 @@ function renderCookbookList() {
       `;
     }),
   ].join("");
+  cookbookList.innerHTML = html;
+  if (cookbooksScreenGrid) cookbooksScreenGrid.innerHTML = html;
   renderProfileSummary();
 }
 
@@ -3576,6 +3666,25 @@ function persistGroceryItemsLocally() {
   } catch {}
 }
 
+function renderRecipeSlider() {
+  const slider = document.getElementById("recipeSlider");
+  if (!slider) return;
+  const imported = getImportedRecipes().slice(0, 8);
+  if (!imported.length) {
+    slider.innerHTML = `<p class="recipe-slider__empty">Importeer je eerste recept via de zoekbalk hierboven.</p>`;
+    return;
+  }
+  slider.innerHTML = imported.map((recipe) => `
+    <button class="recipe-slider__card" type="button" data-recipe-id="${recipe.id}">
+      <img src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.title)}" loading="lazy" />
+      <div class="recipe-slider__body">
+        <p class="recipe-slider__title">${escapeHtml(recipe.title)}</p>
+        ${recipe.time ? `<p class="recipe-slider__time">⏱ ${escapeHtml(recipe.time)}</p>` : ""}
+      </div>
+    </button>
+  `).join("");
+}
+
 function renderAll() {
   renderHomeStats();
   renderRecentImports();
@@ -3583,6 +3692,7 @@ function renderAll() {
   renderHomeCookbooks();
   renderChannelSettings();
   renderCookbookFilterBar();
+  renderRecipeSlider();
   renderRecipeGrid();
   renderCookbookList();
   renderNavBadge();
@@ -3962,11 +4072,42 @@ bindEvent(addSelectedToGroceriesButton, "click", () => {
 bindEvent(clearGroceryListButton, "click", () => {
   state.groceryItems = [];
   renderGroceryGroups();
-  schedulePersistAppState();
+  persistGroceryItemsLocally(); // save [] to localStorage immediately
+  persistAppState();            // save to server immediately (no delay)
   showToast("Boodschappenlijst leeggemaakt.");
 });
 bindEvent(addCustomGroceryButton, "click", addCustomGroceryItem);
 bindEvent(groceryQuickAddTopButton, "click", addCustomGroceryItem);
+// Recipe slider clicks
+bindEvent(document.getElementById("recipeSlider"), "click", (event) => {
+  const card = event.target.closest("[data-recipe-id]");
+  if (!card) return;
+  state.selectedRecipeId = card.dataset.recipeId;
+  switchView("detail");
+  renderDetailRecipe(true);
+});
+
+// "Bekijk alles" on recipe slider → show full recipe grid
+bindEvent(document.getElementById("viewAllMyRecipesBtn"), "click", () => {
+  const section = document.getElementById("recipeGridSection");
+  if (section) section.style.display = "";
+  state.activeCookbookFilter = null;
+  state.searchQuery = "";
+  renderCookbookFilterBar();
+  renderRecipeGrid();
+  document.getElementById("recipeGridSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+// Close recipe grid
+bindEvent(document.getElementById("closeRecipeGridBtn"), "click", () => {
+  const section = document.getElementById("recipeGridSection");
+  if (section) section.style.display = "none";
+  state.activeCookbookFilter = null;
+  state.searchQuery = "";
+  renderCookbookFilterBar();
+  renderRecipeGrid();
+});
+
 bindEvent(document.getElementById("viewAllImportsButton"), "click", () => {
   state.activeCookbookFilter = null;
   state.searchQuery = "";
@@ -3983,7 +4124,8 @@ bindEvent(document.getElementById("groceryClearButton"), "click", () => {
   state.groceryItems = [];
   renderGroceryGroups();
   renderNavBadge();
-  schedulePersistAppState();
+  persistGroceryItemsLocally(); // save [] to localStorage immediately
+  persistAppState();            // save to server immediately
   showToast("Boodschappenlijst is leeggemaakt.");
 });
 bindEvent(copyGroceryListButton, "click", () => {
@@ -4479,6 +4621,27 @@ bindEvent(detailIngredientList, "click", (event) => {
   toggleIngredientChecked(Number(ingredientButton.dataset.ingredientIndex));
 });
 
+// Basket servings controls
+bindEvent(document.getElementById("basketServingsMinus"), "click", () => {
+  if (state.basketServings <= 1) return;
+  state.basketServings -= 1;
+  renderBasketPreview();
+});
+bindEvent(document.getElementById("basketServingsPlus"), "click", () => {
+  state.basketServings += 1;
+  renderBasketPreview();
+});
+
+// Diet filter chips
+bindEvent(document.getElementById("basketFilterRow"), "click", (e) => {
+  const chip = e.target.closest("[data-filter]");
+  if (!chip) return;
+  const f = chip.dataset.filter;
+  if (f === "vega") state.basketFilter.vega = !state.basketFilter.vega;
+  if (f === "bio") state.basketFilter.bio = !state.basketFilter.bio;
+  renderBasketPreview();
+});
+
 // Basket overlay close
 bindEvent(document.getElementById("basketOverlayClose"), "click", closeBasketModal);
 bindEvent(document.getElementById("basketOverlay"), "click", (e) => {
@@ -4611,6 +4774,67 @@ bindEvent(recipePickerList, "click", (e) => {
   renderCookbookDetail(state.openCookbookId);
   showToast(`Recept toegevoegd aan ${cookbook.name}.`);
 });
+
+// Cookbooks screen add button
+bindEvent(document.getElementById("cookbooksAddBtn"), "click", () => openCreateCookbookPrompt());
+
+// "Gekoppelde kanalen" on profile → show channel settings
+bindEvent(document.getElementById("goToChannelsBtn"), "click", () => {
+  const cl = document.getElementById("channelSettingsList");
+  if (cl) { cl.style.display = ""; cl.scrollIntoView({ behavior: "smooth", block: "start" }); }
+});
+
+// Shared handler for cookbook grid interactions (works for both settings and cookbooks screen)
+function handleCookbookGridClick(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  const createCard = target.closest("[data-create-cookbook]");
+  if (createCard instanceof HTMLElement) { openCreateCookbookPrompt(); return; }
+
+  const optionsBtn = target.closest("[data-cookbook-options-id]");
+  if (optionsBtn instanceof HTMLElement) {
+    cookbookOptionsTargetId = optionsBtn.dataset.cookbookOptionsId;
+    const label = document.getElementById("cookbookOptionsLabel");
+    const cb = getCookbookById(cookbookOptionsTargetId);
+    if (label && cb) label.textContent = cb.name;
+    const deleteBtn = document.getElementById("cookbookDeleteButton");
+    if (deleteBtn) deleteBtn.disabled = state.cookbooks.length <= 1;
+    cookbookOptionsSheet?.classList.remove("hidden");
+    cookbookOptionsSheet?.setAttribute("aria-hidden", "false");
+    return;
+  }
+
+  const pickerBtn = target.closest("[data-open-recipe-picker]");
+  if (pickerBtn instanceof HTMLElement && state.openCookbookId) { openRecipePicker(state.openCookbookId); return; }
+
+  const backBtn = target.closest("[data-close-cookbook-detail]");
+  if (backBtn instanceof HTMLElement) { state.openCookbookId = null; renderCookbookList(); return; }
+
+  const removeBtn = target.closest("[data-remove-from-cookbook]");
+  if (removeBtn instanceof HTMLElement) {
+    const recipeId = removeBtn.dataset.removeFromCookbook;
+    const cb = state.cookbooks.find((c) => c.id === state.openCookbookId);
+    if (cb) { cb.recipeIds = cb.recipeIds.filter((id) => id !== recipeId); renderCookbookDetail(state.openCookbookId); schedulePersistAppState(); showToast("Recept verwijderd uit kookboek."); }
+    return;
+  }
+
+  const openRecipeBtn = target.closest("[data-open-recipe-id]");
+  if (openRecipeBtn instanceof HTMLElement) {
+    state.selectedRecipeId = openRecipeBtn.dataset.openRecipeId;
+    switchView("detail");
+    renderDetailRecipe(true);
+    return;
+  }
+
+  const cookbookCard = target.closest("[data-cookbook-id]");
+  if (!(cookbookCard instanceof HTMLElement)) return;
+  state.openCookbookId = cookbookCard.dataset.cookbookId;
+  renderCookbookList();
+}
+
+const cookbooksScreenGrid = document.getElementById("cookbooksScreenGrid");
+bindEvent(cookbooksScreenGrid, "click", handleCookbookGridClick);
 
 bindEvent(cookbookList, "click", (event) => {
   const target = event.target;
