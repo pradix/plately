@@ -1882,7 +1882,7 @@ function renderChannelRow() {
     const faviconUrl = getSourceIconUrl(ch.url);
     return `
     <button class="channel-item" type="button" data-channel-url="${escapeHtml(ch.url)}" aria-label="${escapeHtml(ch.name)} openen">
-      <span class="channel-avatar" style="background:${escapeHtml(ch.color)}22; border: 1.5px solid ${escapeHtml(ch.color)}44">
+      <span class="channel-avatar">
         ${faviconUrl
           ? `<img class="channel-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><span class="channel-avatar__initials" style="display:none">${escapeHtml(ch.initials)}</span>`
           : `<span class="channel-avatar__initials">${escapeHtml(ch.initials)}</span>`}
@@ -1946,8 +1946,8 @@ function renderChannelSettings() {
     const faviconUrl = getSourceIconUrl(ch.url);
     return `
       <label class="channel-toggle-row" data-channel-id="${escapeHtml(ch.id)}">
-        <span class="channel-toggle-avatar" style="background:${escapeHtml(ch.color)}22; border:1.5px solid ${escapeHtml(ch.color)}44">
-          ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;color:${escapeHtml(ch.color)};font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="color:${escapeHtml(ch.color)};font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
+        <span class="channel-toggle-avatar">
+          ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
         </span>
         <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
         <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>
@@ -1959,8 +1959,8 @@ function renderChannelSettings() {
     const faviconUrl = getSourceIconUrl(ch.url);
     return `
       <div class="channel-toggle-row channel-toggle-row--custom" data-channel-id="${escapeHtml(ch.id)}">
-        <span class="channel-toggle-avatar" style="background:${escapeHtml(ch.color)}22; border:1.5px solid ${escapeHtml(ch.color)}44">
-          ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;color:${escapeHtml(ch.color)};font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="color:${escapeHtml(ch.color)};font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
+        <span class="channel-toggle-avatar">
+          ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
         </span>
         <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
         <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>

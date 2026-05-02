@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-30" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-31" />
   </head>
   <body>
     <main class="page">
@@ -62,10 +62,15 @@
           <!-- Import banner -->
           <section class="import-banner">
             <div class="import-banner__head">
-              <span class="import-banner__icon" aria-hidden="true"></span>
+              <span class="import-banner__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2a9 9 0 1 0 0 18A9 9 0 0 0 12 2Z"/>
+                  <path d="M8 12h8M12 8v8"/>
+                </svg>
+              </span>
               <div>
                 <h1>Sla een recept op</h1>
-                <p class="section-copy">Importeer direct een recept vanuit Instagram, TikTok of een website.</p>
+                <p class="section-copy">Importeer direct een recept vanuit een website, Instagram of TikTok.</p>
               </div>
             </div>
             <form class="import-banner__form" id="homeImportForm">
@@ -100,10 +105,10 @@
           </section>
           <div class="home-cb-strip" id="homeCbStrip"></div>
 
-          <!-- Kookboek sectie -->
+          <!-- Recepten sectie -->
           <section class="kookboek-heading">
-            <h1>Kookboek</h1>
-            <button class="kookboek-add" type="button" aria-label="Kookboek toevoegen">
+            <h2>Mijn recepten</h2>
+            <button class="kookboek-add" type="button" aria-label="Recept importeren">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M11 5a1 1 0 1 1 2 0v6h6a1 1 0 1 1 0 2h-6v6a1 1 0 1 1-2 0v-6H5a1 1 0 1 1 0-2h6V5Z"/>
               </svg>
@@ -432,60 +437,45 @@
             <div class="channel-search-list" id="importChannelSearchResults"></div>
           </section>
 
-          <!-- Scheidslijn -->
-          <div class="import-or-row" id="importOrRow">
-            <span class="import-or-label">Of importeer via link</span>
-          </div>
-
-          <div class="import-platforms">
-            <button class="platform-card platform-card--active" type="button" data-platform-choice="tiktok">
-              <span class="platform-card__emoji">🎵</span>
-              <span class="platform-card__name">TikTok</span>
-              <span class="platform-card__badge">Actief</span>
-            </button>
-            <button class="platform-card" type="button" data-platform-choice="instagram">
-              <span class="platform-card__emoji">📸</span>
-              <span class="platform-card__name">Instagram</span>
-              <span class="platform-card__badge platform-card__badge--soft">Beta</span>
-            </button>
-            <button class="platform-card" type="button" data-platform-choice="website">
-              <span class="platform-card__emoji">🌐</span>
-              <span class="platform-card__name">Website</span>
-              <span class="platform-card__badge">Actief</span>
-            </button>
-          </div>
-
+          <!-- Universele import via link -->
           <form id="importScreenForm" class="import-url-form">
             <div class="import-url-row">
               <input
                 id="importScreenUrl"
                 type="url"
                 class="import-url-input"
-                placeholder="Plak hier je link..."
+                placeholder="Plak een link van TikTok, Instagram of een website..."
                 autocomplete="off"
               />
               <button class="import-go-btn" id="importScreenSubmit" type="submit" aria-label="Importeren">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
                   <path d="M5 12h14M13 6l6 6-6 6"/>
                 </svg>
               </button>
             </div>
-            <p class="import-hint" id="importScreenFeedback">Kopieer de link uit de app en plak hem hierboven.</p>
+            <p class="import-hint" id="importScreenFeedback">Kopieer de link en plak hem hierboven — we doen de rest.</p>
           </form>
 
           <section class="import-tips">
             <p class="import-tips__label">HOE WERKT HET</p>
             <div class="import-tip">
               <span class="import-tip__num">1</span>
-              <p>Open TikTok, Instagram of een receptwebsite en kopieer de link.</p>
+              <p>Open een receptwebsite, TikTok of Instagram en kopieer de link.</p>
             </div>
             <div class="import-tip">
               <span class="import-tip__num">2</span>
-              <p>Kom terug en plak de link in het veld hierboven.</p>
+              <p>Kom terug naar Plately en plak de link in het veld hierboven.</p>
             </div>
             <div class="import-tip">
               <span class="import-tip__num">3</span>
-              <p>We halen titel, ingredienten, stappen en een korte omschrijving automatisch op.</p>
+              <p>We halen titel, ingrediënten en bereidingsstappen automatisch op.</p>
+            </div>
+            <div class="import-tips__or">of</div>
+            <div class="import-tip">
+              <span class="import-tip__num">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+              </span>
+              <p>Gebruik de zoekbalk bovenaan om direct te zoeken op je favoriete kanalen.</p>
             </div>
           </section>
         </section>
@@ -806,6 +796,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-24"></script>
+    <script src="app.js?v=plately-banani-25"></script>
   </body>
 </html>
