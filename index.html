@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-44" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-45" />
   </head>
   <body>
     <main class="page">
@@ -456,11 +456,12 @@
 
           <!-- ══ Sub-panel: Mijn account ══ -->
           <div class="profile-subpanel" id="profileSubAccount" aria-hidden="true">
-            <header class="topbar topbar--std">
-              <button class="icon-button" id="profileSubAccountBack" type="button" aria-label="Terug">
+            <header class="topbar--sub">
+              <button class="topbar-back-btn" id="profileSubAccountBack" type="button" aria-label="Terug">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
               <h1 class="topbar-title">Mijn account</h1>
+              <span class="topbar-spacer"></span>
             </header>
             <div class="profile-subpanel__body">
               <!-- Hidden file input for photo upload -->
@@ -496,11 +497,12 @@
 
           <!-- ══ Sub-panel: Gekoppelde kanalen ══ -->
           <div class="profile-subpanel" id="profileSubChannels" aria-hidden="true">
-            <header class="topbar topbar--std">
-              <button class="icon-button" id="profileSubChannelsBack" type="button" aria-label="Terug">
+            <header class="topbar--sub">
+              <button class="topbar-back-btn" id="profileSubChannelsBack" type="button" aria-label="Terug">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
               <h1 class="topbar-title">Gekoppelde kanalen</h1>
+              <span class="topbar-spacer"></span>
             </header>
             <div class="channel-settings-list" id="channelSettingsList"></div>
             <button class="profile-subpanel__save-btn" id="profileSubChannelsSave" type="button">Opslaan</button>
@@ -508,11 +510,12 @@
 
           <!-- ══ Sub-panel: Nieuw in Plately (changelog) ══ -->
           <div class="profile-subpanel" id="profileSubChangelog" aria-hidden="true">
-            <header class="topbar topbar--std">
-              <button class="icon-button" id="profileSubChangelogBack" type="button" aria-label="Terug">
+            <header class="topbar--sub">
+              <button class="topbar-back-btn" id="profileSubChangelogBack" type="button" aria-label="Terug">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
               <h1 class="topbar-title">Nieuw in Plately</h1>
+              <span class="topbar-spacer"></span>
             </header>
             <div class="profile-subpanel__body" id="changelogBody">
               <!-- Filled dynamically by JS -->
@@ -521,11 +524,12 @@
 
           <!-- ══ Sub-panel: Taal ══ -->
           <div class="profile-subpanel" id="profileSubLanguage" aria-hidden="true">
-            <header class="topbar topbar--std">
-              <button class="icon-button" id="profileSubLanguageBack" type="button" aria-label="Terug">
+            <header class="topbar--sub">
+              <button class="topbar-back-btn" id="profileSubLanguageBack" type="button" aria-label="Terug">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
               <h1 class="topbar-title">Taal</h1>
+              <span class="topbar-spacer"></span>
             </header>
             <div class="profile-subpanel__body">
               <p class="profile2-section-label" style="margin-top:8px">KIES JE TAAL</p>
@@ -562,14 +566,12 @@
             </div>
           </header>
           <!-- Detail-mode header (back + cookbook title) — shown by JS -->
-          <header class="topbar topbar--home" id="cookbooksTopbarDetail" style="display:none">
-            <button class="cookbooks-back-btn" type="button" id="cookbooksDetailBackBtn" aria-label="Terug naar kookboeken">
+          <header class="topbar--sub" id="cookbooksTopbarDetail" style="display:none">
+            <button class="topbar-back-btn" type="button" id="cookbooksDetailBackBtn" aria-label="Terug naar kookboeken">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-              <span>Kookboeken</span>
             </button>
-            <div class="topbar-actions">
-              <button class="home-avatar" type="button" data-view="settings" aria-label="Profiel"></button>
-            </div>
+            <h1 class="topbar-title" id="cookbooksDetailTitle">Kookboek</h1>
+            <button class="home-avatar topbar-spacer" style="width:40px;height:40px;border-radius:50%" type="button" data-view="settings" aria-label="Profiel"></button>
           </header>
           <section class="cookbook-grid" id="cookbooksScreenGrid"></section>
           <div class="profile-space"></div>
@@ -1035,6 +1037,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-41"></script>
+    <script src="app.js?v=plately-banani-42"></script>
   </body>
 </html>

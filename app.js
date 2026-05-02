@@ -1251,12 +1251,15 @@ function formatIngredientAmount(ingredient, factor = 1) {
 function parseIngredientInput(value) {
   const cleanValue = String(value || "").trim();
   const match = cleanValue.match(
-    /^(\d+(?:[.,]\d+)?)\s*(g|kg|ml|l|el|tl|tbsp|tsp|cup|cups|oz|dl|stuks?|stuk|krop|bosje|zakje|pot|blik|liter|snuf|teen|plak(?:jes)?)?\s*(.+)$/i
+    /^(\d+(?:[.,]\d+)?)\s*(gr|gram|grams|g|kg|mg|ml|cl|dl|l|liter|el|eetlepels?|tl|theelepels?|tbsp|tsp|cup|cups|oz|lb|stuks?|stuk(?:ken)?|krop|kroppen|bosje|bosjes|zakje|zakjes|pot(?:je|jes)?|blik(?:je|jes)?|snuf(?:je|jes)?|teen|teentjes|plak(?:je|jes)?|handje|handjes|scheut(?:je)?|bakje|bakjes|pak(?:ken)?|rol(?:len)?|verpakking(?:en)?|takje|takjes|blokje|blokjes)?\s*(.+)$/i
   );
   if (match) {
+    // Normalize "gr" and "gram" → "g"
+    let unit = (match[2] || "x").toLowerCase();
+    if (unit === "gr" || unit === "gram" || unit === "grams") unit = "g";
     return {
       quantity: match[1],
-      unit: (match[2] || "x").toLowerCase(),
+      unit,
       name: match[3].trim(),
     };
   }
@@ -1267,9 +1270,11 @@ function normalizeUnit(unit) {
   const value = String(unit || "").trim().toLowerCase();
   if (!value || value === "x") return "stuk";
   if (value === "stuks") return "stuk";
-  if (value === "grams") return "g";
+  if (value === "gr" || value === "gram" || value === "grams") return "g";
   if (value === "liter") return "l";
   if (value === "milliliter") return "ml";
+  if (value === "eetlepel" || value === "eetlepels") return "el";
+  if (value === "theelepel" || value === "theelepels") return "tl";
   return value;
 }
 
@@ -2998,12 +3003,18 @@ function renderAvatars() {
   });
 }
 
-function setCookbooksScreenMode(mode) {
+function setCookbooksScreenMode(mode, cookbookName) {
   // mode: "list" | "detail"
   const listHeader = document.getElementById("cookbooksTopbarList");
   const detailHeader = document.getElementById("cookbooksTopbarDetail");
   if (listHeader) listHeader.style.display = mode === "detail" ? "none" : "";
   if (detailHeader) detailHeader.style.display = mode === "detail" ? "" : "none";
+  if (mode === "detail" && cookbookName) {
+    const titleEl = document.getElementById("cookbooksDetailTitle");
+    if (titleEl) titleEl.textContent = cookbookName;
+  }
+  // Sync home-avatar in cookbook list header
+  renderAvatars();
 }
 
 function renderCookbookDetail(cookbookId) {
@@ -3013,7 +3024,7 @@ function renderCookbookDetail(cookbookId) {
     renderCookbookList();
     return;
   }
-  setCookbooksScreenMode("detail");
+  setCookbooksScreenMode("detail", cookbook.name);
   const recipes = cookbook.recipeIds.map((id) => getRecipeById(id)).filter(Boolean);
   const _cbScreenGrid = document.getElementById("cookbooksScreenGrid");
   const _detailHtml = `

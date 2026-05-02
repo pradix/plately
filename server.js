@@ -444,6 +444,9 @@ function buildAppStateFromUser(user) {
     recipeProgress: sanitizeRecipeProgressForStorage(appState.recipeProgress),
     featuredRecipeId: sanitizeText(appState.featuredRecipeId || "recipe-1"),
     selectedRecipeId: sanitizeText(appState.selectedRecipeId || "recipe-1"),
+    followedChannelIds: Array.isArray(appState.followedChannelIds) ? appState.followedChannelIds.map(sanitizeText).filter(Boolean) : [],
+    customChannels: Array.isArray(appState.customChannels) ? appState.customChannels : [],
+    language: typeof appState.language === "string" && appState.language ? appState.language : "nl",
     createdAt: user.created_at,
     updatedAt: user.updated_at,
   };
@@ -752,6 +755,18 @@ function sanitizeUserStatePayload(body, currentUser) {
     ? sanitizeRecipeProgressForStorage(body.recipeProgress)
     : currentUser.recipeProgress;
 
+  const followedChannelIds = Array.isArray(body?.followedChannelIds)
+    ? body.followedChannelIds.map(sanitizeText).filter(Boolean)
+    : currentUser.followedChannelIds || [];
+
+  const customChannels = Array.isArray(body?.customChannels)
+    ? body.customChannels
+    : currentUser.customChannels || [];
+
+  const language = typeof body?.language === "string" && body.language
+    ? body.language
+    : currentUser.language || "nl";
+
   return {
     ...currentUser,
     profile: body?.profile ? sanitizeProfilePayload(body.profile) : currentUser.profile,
@@ -763,6 +778,9 @@ function sanitizeUserStatePayload(body, currentUser) {
     recipeProgress,
     featuredRecipeId: sanitizeText(body?.featuredRecipeId || currentUser.featuredRecipeId || "recipe-1"),
     selectedRecipeId: sanitizeText(body?.selectedRecipeId || currentUser.selectedRecipeId || "recipe-1"),
+    followedChannelIds,
+    customChannels,
+    language,
     updatedAt: new Date().toISOString(),
   };
 }

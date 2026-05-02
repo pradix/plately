@@ -1188,15 +1188,15 @@ img { display: block; max-width: 100%; }
 }
 
 .ingredient-amount {
-  min-width: 52px;
-  max-width: 72px;
-  padding: 10px 8px;
+  min-width: 56px;
+  max-width: 88px;
+  padding: 10px 10px;
   border-radius: 999px;
   background: #f1f6f1;
   text-align: center;
   color: #b5cbbb;
   font-weight: 900;
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3007,14 +3007,74 @@ img { display: block; max-width: 100%; }
   transform: translateX(0);
 }
 
+/* ── Universal sub-page topbar (profile panels, cookbook detail, etc.) ── */
+.topbar--sub {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+  padding: 14px 12px;
+  margin-bottom: 0;
+  gap: 0;
+  min-height: 56px;
+}
+
+.topbar--sub .topbar-back-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 0;
+  color: #1a1a1a;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.topbar--sub .topbar-back-btn svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.topbar--sub .topbar-back-btn:active {
+  background: rgba(0,0,0,0.10);
+}
+
+.topbar--sub .topbar-title {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-body, inherit);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: 0;
+  margin: 0;
+}
+
+/* Right spacer keeps title perfectly centered */
+.topbar--sub .topbar-spacer {
+  width: 40px;
+  flex-shrink: 0;
+}
+
+/* Legacy: profile sub-panels that still use topbar--std */
 .profile-subpanel .topbar--std {
   position: sticky;
   top: 0;
   background: var(--bg);
   z-index: 10;
-  border-bottom: 1px solid rgba(0,0,0,0.06);
-  padding: 18px 16px 14px;
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+  padding: 14px 12px;
   margin-bottom: 0;
+  min-height: 56px;
 }
 
 .profile-subpanel .topbar-title {
@@ -3029,14 +3089,24 @@ img { display: block; max-width: 100%; }
 }
 
 .profile-subpanel .icon-button {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: rgba(0,0,0,0.05);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  color: #1a1a1a;
+}
+
+.profile-subpanel .icon-button svg {
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 
 /* Changelog styles */
