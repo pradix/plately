@@ -3336,6 +3336,13 @@ img { display: block; max-width: 100%; }
   color: #6d8767;
 }
 
+.detail-icon-action--delete:hover,
+.detail-icon-action--delete:focus-visible {
+  background: rgba(200, 70, 60, 0.08);
+  border-color: rgba(200, 70, 60, 0.15);
+  color: #c44;
+}
+
 /* Bookmark saved state */
 #detailSaveHeaderButton.is-active svg path {
   fill: var(--sage-deep);

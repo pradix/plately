@@ -895,6 +895,7 @@ function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
           class="cookbook-save-option ${isDefaultCookbook ? "is-default" : ""}"
           type="button"
           data-save-cookbook-id="${cookbook.id}"
+          data-save-recipe-id="${escapeHtml(recipeId)}"
         >
           ${getCookbookCoverMarkup(cookbook)}
           <span class="cookbook-save-option__copy">
@@ -2251,6 +2252,11 @@ function renderDetailRecipe(resetServings = false) {
     saveRecipeButton.setAttribute("aria-label", saveLabel);
     saveRecipeButton.setAttribute("title", saveLabel);
     saveRecipeButton.classList.toggle("is-active", isRecipeSaved(recipe.id));
+  }
+  const deleteRecipeButton = document.getElementById("deleteRecipeButton");
+  if (deleteRecipeButton) {
+    const isDeletable = !SEED_RECIPE_IDS.has(recipe.id) && !recipe.isSeed;
+    deleteRecipeButton.classList.toggle("hidden", !isDeletable);
   }
   renderCookMode(recipe, recipeProgress);
   updateWakeLockUI();
@@ -4163,6 +4169,25 @@ bindEvent(shareRecipeButton, "click", shareSelectedRecipe);
 bindEvent(saveRecipeButton, "click", () => openCookbookSaveModal(getSelectedRecipe().id));
 bindEvent(detailSaveHeaderButton, "click", () => openCookbookSaveModal(getSelectedRecipe().id));
 bindEvent(reviewImportButton, "click", () => openImportReview(getSelectedRecipe().id));
+bindEvent(document.getElementById("deleteRecipeButton"), "click", () => {
+  const recipe = getSelectedRecipe();
+  if (!recipe || SEED_RECIPE_IDS.has(recipe.id) || recipe.isSeed) return;
+  if (!window.confirm(`"${recipe.title}" verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
+  // Remove from recipes list
+  state.recipes = state.recipes.filter((r) => r.id !== recipe.id);
+  // Remove from all cookbooks
+  state.cookbooks.forEach((cb) => {
+    cb.recipeIds = cb.recipeIds.filter((id) => id !== recipe.id);
+  });
+  // Reset selectedRecipeId to first remaining recipe
+  if (state.selectedRecipeId === recipe.id) {
+    state.selectedRecipeId = state.recipes[0]?.id || "";
+  }
+  schedulePersistAppState();
+  renderAll();
+  switchView("home");
+  showToast(`"${recipe.title}" is verwijderd.`);
+});
 bindEvent(profileEditButton, "click", () => {
   const nextName = window.prompt("Naam van je profiel", state.profile.name);
   if (nextName === null) {
@@ -4657,13 +4682,13 @@ bindEvent(cookbookSaveList, "click", (event) => {
     return;
   }
 
-  const recipeId = state.pendingCookbookSaveRecipeId || getSelectedRecipe().id;
+  // Read recipeId from the button itself — most reliable, no state timing issues
+  const recipeId = cookbookButton.dataset.saveRecipeId || state.pendingCookbookSaveRecipeId || getSelectedRecipe().id;
   const cookbookId = cookbookButton.dataset.saveCookbookId;
   if (!recipeId || !cookbookId) {
     return;
   }
 
-  // Set selectedRecipeId first so every subsequent render uses the right recipe
   state.selectedRecipeId = recipeId;
   saveRecipeToCookbook(recipeId, cookbookId);
   closeCookbookSaveModal();
