@@ -1095,8 +1095,6 @@ function renderBasketPreview() {
       : `<span class="basket-product__img basket-product__img--placeholder">${escapeHtml(choice.emoji || "🛒")}</span>`;
 
     const altCount = (item.choices || []).length;
-    const partnerBadge = choice.badge && choice.badge !== "Beste match" && choice.badge !== "Gevonden"
-      ? `<span class="basket-product__partner">PARTNER</span>` : "";
 
     return `
       <div class="basket-product" data-basket-item="${itemIndex}">
@@ -1108,7 +1106,7 @@ function renderBasketPreview() {
         </div>
         <div class="basket-product__info">
           <p class="basket-product__name">${escapeHtml(choice.title)}</p>
-          <p class="basket-product__meta">${escapeHtml(choice.price || "")}${choice.subtitle ? ` · ${escapeHtml(choice.subtitle)}` : ""}${partnerBadge}</p>
+          <p class="basket-product__meta">${escapeHtml(choice.price || "")}${choice.subtitle ? ` · ${escapeHtml(choice.subtitle)}` : ""}</p>
           <p class="basket-product__for">voor ${escapeHtml(item.ingredientAmount || "")} ${escapeHtml(item.ingredientTitle || "")}</p>
         </div>
         <div class="basket-product__right">
