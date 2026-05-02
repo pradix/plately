@@ -260,9 +260,9 @@ img { display: block; max-width: 100%; }
 }
 
 .import-banner__icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 18px;
+  width: 68px;
+  height: 68px;
+  border-radius: 22px;
   display: grid;
   place-items: center;
   background: #b7d0b4;
@@ -273,9 +273,10 @@ img { display: block; max-width: 100%; }
 }
 
 .import-banner__icon svg {
-  width: 24px;
-  height: 24px;
+  width: 34px;
+  height: 34px;
   stroke: #fff;
+  stroke-width: 2.2;
 }
 
 .import-banner h1 {
