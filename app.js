@@ -6271,6 +6271,11 @@ function showOnboarding() {
   authModal.classList.add("hidden");
   authModal.setAttribute("aria-hidden", "true");
   onboardingScreen.classList.remove("hidden");
+
+  // Hide tutorial overlays/bubbles while onboarding
+  const overlay = document.getElementById("onboardingOverlay");
+  if (overlay) overlay.setAttribute("hidden", "");
+
   showOnboardingStep(1);
   renderOnboardingChannels();
 }
