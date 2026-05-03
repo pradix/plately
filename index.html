@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-46" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-47" />
   </head>
   <body>
     <main class="page">
@@ -78,6 +78,8 @@
             </div>
             <form class="import-banner__form" id="homeImportForm">
               <input id="homeImportUrl" type="text" inputmode="url" class="import-banner__input--full" placeholder="Plak een link..." autocomplete="off" />
+              <button class="import-caption-toggle" type="button" id="homeImportCaptionToggle">+ Voeg beschrijving toe</button>
+              <textarea class="import-caption-field hidden" id="homeImportCaption" rows="3" placeholder="Plak hier de beschrijving of caption van het recept (optioneel) — dit verbetert de import sterk bij TikTok en Instagram"></textarea>
               <button class="import-banner__button--full" id="homeImportSubmit" type="submit">Importeer</button>
               <p class="import-banner__feedback" id="homeImportFeedback" aria-live="polite"></p>
             </form>
@@ -236,6 +238,67 @@
             </section>
           </article>
         </section>
+
+        <!-- ══ Recipe edit panel ══ -->
+        <div class="profile-subpanel" id="recipeEditPanel" aria-hidden="true">
+          <header class="topbar--sub">
+            <button class="topbar-back-btn" type="button" id="recipeEditClose" aria-label="Annuleren">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <h1 class="topbar-title">Recept bewerken</h1>
+            <button class="recipe-edit__save-btn" type="button" id="recipeEditSave">Opslaan</button>
+          </header>
+
+          <div class="recipe-edit__body">
+            <div class="recipe-edit__section">
+              <label class="recipe-edit__label">Titel</label>
+              <input class="recipe-edit__input" type="text" id="recipeEditTitle" placeholder="Naam van het recept" />
+            </div>
+
+            <div class="recipe-edit__section">
+              <label class="recipe-edit__label">Omschrijving</label>
+              <textarea class="recipe-edit__textarea" id="recipeEditDescription" rows="3" placeholder="Korte omschrijving..."></textarea>
+            </div>
+
+            <div class="recipe-edit__row2">
+              <div class="recipe-edit__section">
+                <label class="recipe-edit__label">Tijd</label>
+                <input class="recipe-edit__input" type="text" id="recipeEditTime" placeholder="30 min" />
+              </div>
+              <div class="recipe-edit__section">
+                <label class="recipe-edit__label">Porties</label>
+                <input class="recipe-edit__input" type="text" id="recipeEditServings" placeholder="2" />
+              </div>
+            </div>
+
+            <div class="recipe-edit__section">
+              <label class="recipe-edit__label">Maaltijdtype</label>
+              <div class="recipe-edit__meal-chips" id="recipeEditMealChips">
+                <button class="recipe-edit__meal-chip" type="button" data-meal="Ontbijt">Ontbijt</button>
+                <button class="recipe-edit__meal-chip" type="button" data-meal="Lunch">Lunch</button>
+                <button class="recipe-edit__meal-chip" type="button" data-meal="Avond">Avond</button>
+                <button class="recipe-edit__meal-chip" type="button" data-meal="Snack">Snack</button>
+                <button class="recipe-edit__meal-chip" type="button" data-meal="Dessert">Dessert</button>
+              </div>
+            </div>
+
+            <div class="recipe-edit__section">
+              <div class="recipe-edit__section-head">
+                <label class="recipe-edit__label">Ingrediënten</label>
+                <button class="recipe-edit__add-btn" type="button" id="recipeEditAddIngredient">+ Voeg toe</button>
+              </div>
+              <ul class="recipe-edit__ingredient-list" id="recipeEditIngredientList"></ul>
+            </div>
+
+            <div class="recipe-edit__section">
+              <div class="recipe-edit__section-head">
+                <label class="recipe-edit__label">Bereiding</label>
+                <button class="recipe-edit__add-btn" type="button" id="recipeEditAddStep">+ Voeg toe</button>
+              </div>
+              <ol class="recipe-edit__step-list" id="recipeEditStepList"></ol>
+            </div>
+          </div>
+        </div>
 
         <section class="screen grocery-screen" id="groceryScreen">
           <!-- Compact header: title + add button + avatar -->
@@ -621,6 +684,8 @@
                 </svg>
               </button>
             </div>
+            <button class="import-caption-toggle" type="button" id="importScreenCaptionToggle">+ Voeg beschrijving toe</button>
+            <textarea class="import-caption-field hidden" id="importScreenCaption" rows="3" placeholder="Plak hier de beschrijving of caption van het recept (optioneel) — dit verbetert de import sterk bij TikTok en Instagram"></textarea>
             <p class="import-hint" id="importScreenFeedback">Kopieer de link en plak hem hierboven — we doen de rest.</p>
           </form>
 
@@ -900,7 +965,7 @@
               id="recipeNote"
               name="recipeNote"
               rows="3"
-              placeholder="Bijv. eiwitrijk lunchrecept voor morgen"
+              placeholder="Plak hier de caption of beschrijving van het recept. Dit maakt de import sterk beter bij TikTok en Instagram."
             ></textarea>
           </label>
 
@@ -1060,6 +1125,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-43"></script>
+    <script src="app.js?v=plately-banani-44"></script>
   </body>
 </html>

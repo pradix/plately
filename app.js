@@ -4510,7 +4510,7 @@ brandHomeButtons.forEach((button) => {
 bindEvent(shareRecipeButton, "click", shareSelectedRecipe);
 bindEvent(saveRecipeButton, "click", () => openCookbookSaveModal(getSelectedRecipe().id));
 bindEvent(detailSaveHeaderButton, "click", () => openCookbookSaveModal(getSelectedRecipe().id));
-bindEvent(reviewImportButton, "click", () => openImportReview(getSelectedRecipe().id));
+bindEvent(reviewImportButton, "click", () => openRecipeEditPanel(state.selectedRecipeId));
 bindEvent(document.getElementById("deleteRecipeButton"), "click", () => {
   const recipe = getSelectedRecipe();
   if (!recipe || SEED_RECIPE_IDS.has(recipe.id) || recipe.isSeed) return;
@@ -5603,7 +5603,7 @@ bindEvent(homeImportForm, "submit", async (event) => {
 
   await submitImport(
     url,
-    "",
+    (document.getElementById("homeImportCaption")?.value || "").trim(),
     (message) => {
       homeImportFeedback.textContent = message;
     },
@@ -5617,6 +5617,13 @@ bindEvent(homeImportForm, "submit", async (event) => {
     },
     (importedRecipe) => {
       homeImportForm.reset();
+      const captionField = document.getElementById("homeImportCaption");
+      if (captionField) {
+        captionField.value = "";
+        captionField.classList.add("hidden");
+      }
+      const captionToggle = document.getElementById("homeImportCaptionToggle");
+      if (captionToggle) captionToggle.textContent = "+ Voeg beschrijving toe";
       homeImportFeedback.textContent = "Voeg direct een recept toe vanuit social media of een receptenwebsite.";
       openImportReview(importedRecipe.id);
       showToast(`${importedRecipe.title} klaar om na te lopen.`);
@@ -5630,7 +5637,7 @@ bindEvent(importScreenForm, "submit", async (event) => {
 
   await submitImport(
     url,
-    "",
+    (document.getElementById("importScreenCaption")?.value || "").trim(),
     (message) => {
       importScreenFeedback.textContent = message;
     },
@@ -5643,11 +5650,234 @@ bindEvent(importScreenForm, "submit", async (event) => {
     },
     (importedRecipe) => {
       importScreenForm.reset();
+      const captionField = document.getElementById("importScreenCaption");
+      if (captionField) {
+        captionField.value = "";
+        captionField.classList.add("hidden");
+      }
+      const captionToggle = document.getElementById("importScreenCaptionToggle");
+      if (captionToggle) captionToggle.textContent = "+ Voeg beschrijving toe";
       importScreenFeedback.textContent = "Kopieer de link uit de app of website en plak hem hierboven.";
       openImportReview(importedRecipe.id);
       showToast(`${importedRecipe.title} klaar om na te lopen.`);
     }
   );
+});
+
+// ── Caption toggle handlers ───────────────────────────────────────────────────
+bindEvent(document.getElementById("homeImportCaptionToggle"), "click", () => {
+  const field = document.getElementById("homeImportCaption");
+  if (!field) return;
+  field.classList.toggle("hidden");
+  const isOpen = !field.classList.contains("hidden");
+  document.getElementById("homeImportCaptionToggle").textContent = isOpen ? "− Beschrijving verbergen" : "+ Voeg beschrijving toe";
+  if (isOpen) field.focus();
+});
+bindEvent(document.getElementById("importScreenCaptionToggle"), "click", () => {
+  const field = document.getElementById("importScreenCaption");
+  if (!field) return;
+  field.classList.toggle("hidden");
+  const isOpen = !field.classList.contains("hidden");
+  document.getElementById("importScreenCaptionToggle").textContent = isOpen ? "− Beschrijving verbergen" : "+ Voeg beschrijving toe";
+  if (isOpen) field.focus();
+});
+
+// ── Recipe edit panel ─────────────────────────────────────────────────────────
+let recipeEditId = null;
+
+function openRecipeEditPanel(recipeId) {
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+  recipeEditId = recipeId;
+
+  // Fill fields
+  const titleEl = document.getElementById("recipeEditTitle");
+  const descEl = document.getElementById("recipeEditDescription");
+  const timeEl = document.getElementById("recipeEditTime");
+  const servEl = document.getElementById("recipeEditServings");
+  if (titleEl) titleEl.value = recipe.title || "";
+  if (descEl) descEl.value = recipe.description || "";
+  if (timeEl) timeEl.value = recipe.time || "";
+  if (servEl) servEl.value = recipe.servings || "";
+
+  // Meal chips
+  document.querySelectorAll(".recipe-edit__meal-chip").forEach(btn => {
+    btn.classList.toggle("is-active", btn.dataset.meal === (recipe.mealTag || "Avond"));
+  });
+
+  // Render ingredients
+  renderEditIngredients(recipe.ingredients || []);
+
+  // Render steps
+  renderEditSteps(recipe.instructions || []);
+
+  // Open panel
+  const panel = document.getElementById("recipeEditPanel");
+  if (panel) {
+    panel.classList.add("profile-subpanel--active");
+    panel.setAttribute("aria-hidden", "false");
+    panel.scrollTop = 0;
+  }
+}
+
+function closeRecipeEditPanel() {
+  const panel = document.getElementById("recipeEditPanel");
+  if (panel) {
+    panel.classList.remove("profile-subpanel--active");
+    panel.setAttribute("aria-hidden", "true");
+  }
+  recipeEditId = null;
+}
+
+function renderEditIngredients(ingredients) {
+  const list = document.getElementById("recipeEditIngredientList");
+  if (!list) return;
+  list.innerHTML = ingredients.map((ing, i) => `
+    <li class="recipe-edit__ingredient-item" data-ing-index="${i}">
+      <div class="recipe-edit__ingredient-inputs">
+        <input class="recipe-edit__qty-input" type="text" value="${escapeHtml(ing.quantity || "")}" placeholder="qty" data-ing-qty="${i}" />
+        <input class="recipe-edit__unit-input" type="text" value="${escapeHtml(ing.unit === "x" ? "" : (ing.unit || ""))}" placeholder="eenheid" data-ing-unit="${i}" />
+        <input class="recipe-edit__name-input" type="text" value="${escapeHtml(ing.name || "")}" placeholder="Ingredient" data-ing-name="${i}" />
+      </div>
+      <button class="recipe-edit__delete-btn" type="button" data-ing-delete="${i}" aria-label="Verwijder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </li>
+  `).join("");
+}
+
+function renderEditSteps(steps) {
+  const list = document.getElementById("recipeEditStepList");
+  if (!list) return;
+  list.innerHTML = steps.map((step, i) => `
+    <li class="recipe-edit__step-item" data-step-index="${i}">
+      <span class="recipe-edit__step-num">${i + 1}</span>
+      <textarea class="recipe-edit__step-input" data-step-text="${i}" rows="2">${escapeHtml(step)}</textarea>
+      <button class="recipe-edit__delete-btn" type="button" data-step-delete="${i}" aria-label="Verwijder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </li>
+  `).join("");
+}
+
+function collectEditedRecipe() {
+  const titleEl = document.getElementById("recipeEditTitle");
+  const descEl = document.getElementById("recipeEditDescription");
+  const timeEl = document.getElementById("recipeEditTime");
+  const servEl = document.getElementById("recipeEditServings");
+  const activeMeal = document.querySelector(".recipe-edit__meal-chip.is-active");
+
+  const ingList = document.getElementById("recipeEditIngredientList");
+  const ingredients = [];
+  if (ingList) {
+    ingList.querySelectorAll(".recipe-edit__ingredient-item").forEach(item => {
+      const qty = item.querySelector("[data-ing-qty]")?.value.trim() || "";
+      const unit = item.querySelector("[data-ing-unit]")?.value.trim() || "x";
+      const name = item.querySelector("[data-ing-name]")?.value.trim() || "";
+      if (name) ingredients.push({ quantity: qty || "1", unit: unit || "x", name });
+    });
+  }
+
+  const stepList = document.getElementById("recipeEditStepList");
+  const instructions = [];
+  if (stepList) {
+    stepList.querySelectorAll("[data-step-text]").forEach(ta => {
+      const text = ta.value.trim();
+      if (text) instructions.push(text);
+    });
+  }
+
+  return {
+    title: titleEl?.value.trim() || "",
+    description: descEl?.value.trim() || "",
+    time: timeEl?.value.trim() || "",
+    servings: servEl?.value.trim() || "",
+    mealTag: activeMeal?.dataset.meal || "Avond",
+    ingredients,
+    instructions,
+  };
+}
+
+function saveRecipeEdits() {
+  if (!recipeEditId) return;
+  const idx = state.recipes.findIndex(r => r.id === recipeEditId);
+  if (idx === -1) return;
+  const edits = collectEditedRecipe();
+  if (!edits.title) { showToast("Vul een naam in."); return; }
+  state.recipes[idx] = { ...state.recipes[idx], ...edits };
+  schedulePersistAppState();
+  const savedId = recipeEditId;
+  closeRecipeEditPanel();
+  state.selectedRecipeId = savedId;
+  switchView("detail");
+  renderDetailRecipe(true);
+  showToast("Recept opgeslagen.");
+}
+
+bindEvent(document.getElementById("recipeEditClose"), "click", closeRecipeEditPanel);
+bindEvent(document.getElementById("recipeEditSave"), "click", saveRecipeEdits);
+
+// Ingredient add
+bindEvent(document.getElementById("recipeEditAddIngredient"), "click", () => {
+  const list = document.getElementById("recipeEditIngredientList");
+  if (!list) return;
+  const i = list.children.length;
+  const li = document.createElement("li");
+  li.className = "recipe-edit__ingredient-item";
+  li.dataset.ingIndex = i;
+  li.innerHTML = `
+    <div class="recipe-edit__ingredient-inputs">
+      <input class="recipe-edit__qty-input" type="text" value="" placeholder="qty" data-ing-qty="${i}" />
+      <input class="recipe-edit__unit-input" type="text" value="" placeholder="eenheid" data-ing-unit="${i}" />
+      <input class="recipe-edit__name-input" type="text" value="" placeholder="Ingredient" data-ing-name="${i}" />
+    </div>
+    <button class="recipe-edit__delete-btn" type="button" data-ing-delete="${i}" aria-label="Verwijder">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  `;
+  list.appendChild(li);
+  li.querySelector(".recipe-edit__name-input")?.focus();
+});
+
+// Step add
+bindEvent(document.getElementById("recipeEditAddStep"), "click", () => {
+  const list = document.getElementById("recipeEditStepList");
+  if (!list) return;
+  const i = list.children.length;
+  const li = document.createElement("li");
+  li.className = "recipe-edit__step-item";
+  li.dataset.stepIndex = i;
+  li.innerHTML = `
+    <span class="recipe-edit__step-num">${i + 1}</span>
+    <textarea class="recipe-edit__step-input" data-step-text="${i}" rows="2"></textarea>
+    <button class="recipe-edit__delete-btn" type="button" data-step-delete="${i}" aria-label="Verwijder">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  `;
+  list.appendChild(li);
+  li.querySelector("textarea")?.focus();
+});
+
+// Delete ingredient/step via delegation
+bindEvent(document.getElementById("recipeEditIngredientList"), "click", (e) => {
+  const btn = e.target.closest("[data-ing-delete]");
+  if (!btn) return;
+  btn.closest("li")?.remove();
+});
+bindEvent(document.getElementById("recipeEditStepList"), "click", (e) => {
+  const btn = e.target.closest("[data-step-delete]");
+  if (!btn) return;
+  btn.closest("li")?.remove();
+  // Re-number steps
+  document.querySelectorAll(".recipe-edit__step-num").forEach((el, i) => { el.textContent = i + 1; });
+});
+
+// Meal chip selection
+bindEvent(document.getElementById("recipeEditMealChips"), "click", (e) => {
+  const chip = e.target.closest(".recipe-edit__meal-chip");
+  if (!chip) return;
+  document.querySelectorAll(".recipe-edit__meal-chip").forEach(c => c.classList.remove("is-active"));
+  chip.classList.add("is-active");
 });
 
 // ── Import screen search ──────────────────────────────────────────────────────
