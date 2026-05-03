@@ -2631,8 +2631,10 @@ function parseJsonLdInstructions(value) {
 }
 
 function parseListAfterHeading(html, headingPattern) {
+  // Allow optional trailing colon, whitespace, or any combination after the heading text
+  // Also allow nested tags within the heading (some sites wrap headings further)
   const pattern = new RegExp(
-    `<(?:h1|h2|h3|h4|strong|p)[^>]*>\\s*(?:${headingPattern})\\s*<\\/(?:h1|h2|h3|h4|strong|p)>[\\s\\S]{0,400}?<(ul|ol)[^>]*>([\\s\\S]*?)<\\/\\1>`,
+    `<(?:h1|h2|h3|h4|strong|p|b)[^>]*>\\s*(?:<[^>]+>\\s*)?(?:${headingPattern})\\s*[:：]?\\s*(?:[^<]*?)?<\\/(?:h1|h2|h3|h4|strong|p|b)>[\\s\\S]{0,400}?<(ul|ol)[^>]*>([\\s\\S]*?)<\\/\\1>`,
     "i"
   );
   const match = html.match(pattern);
@@ -2646,18 +2648,32 @@ function parseListAfterHeading(html, headingPattern) {
 }
 
 function parseParagraphsAfterHeading(html, headingPattern) {
-  const pattern = new RegExp(
-    `<(?:h1|h2|h3|h4|strong|p)[^>]*>\\s*(?:${headingPattern})\\s*<\\/(?:h1|h2|h3|h4|strong|p)>[\\s\\S]{0,600}?((?:<p[^>]*>[\\s\\S]*?<\\/p>){1,8})`,
+  // First find the heading position
+  const headingPattern2 = new RegExp(
+    `<(?:h1|h2|h3|h4|strong|p|b)[^>]*>\\s*(?:<[^>]+>\\s*)?(?:${headingPattern})\\s*[:：]?\\s*(?:[^<]*?)?<\\/(?:h1|h2|h3|h4|strong|p|b)>`,
     "i"
   );
-  const match = html.match(pattern);
-  if (!match) {
+  const headingMatch = html.match(headingPattern2);
+  if (!headingMatch) {
     return [];
   }
 
-  return [...match[1].matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
+  // Get the content after the heading (up to 8000 chars)
+  const startIdx = headingMatch.index + headingMatch[0].length;
+  const after = html.slice(startIdx, startIdx + 8000);
+
+  // Stop at next major section heading (e.g., another bold heading or h2)
+  const stopMatch = after.match(/<h[1-3][^>]*>|<(?:strong|b)[^>]*>\s*(?:tip|tips|nutrition|voedingswaarden|gerelateerde|reacties|comments|reviews|over\s)/i);
+  const section = stopMatch ? after.slice(0, stopMatch.index) : after;
+
+  // Extract all <p> tags from the section
+  const paragraphs = [...section.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
     .map((item) => sanitizeText(stripTags(item[1])))
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((text) => text.length >= 20) // Filter out very short paragraphs (likely captions)
+    .slice(0, 12);
+
+  return paragraphs;
 }
 
 function extractMarkdownSection(text, headingPattern, stopPattern) {
@@ -2782,10 +2798,10 @@ function parseWebsiteRecipe(html, url) {
   const metaTitle = parseMetaTag(html, "og:title") || parseTitleTag(html);
   const metaDescription = parseMetaTag(html, "og:description") || parseMetaTag(html, "description", "name");
   const metaImage = parseMetaTag(html, "og:image");
-  const fallbackIngredients = parseListAfterHeading(html, "ingrediënten|ingredienten|ingredients?");
+  const fallbackIngredients = parseListAfterHeading(html, "ingrediënten|ingredienten|ingredients?|benodigdheden|wat heb je nodig");
   const fallbackInstructions = [
-    ...parseListAfterHeading(html, "bereiding|bereidingswijze|instructions?|method|methode"),
-    ...parseParagraphsAfterHeading(html, "bereiding|bereidingswijze|instructions?|method|methode"),
+    ...parseListAfterHeading(html, "bereiding|bereidingswijze|instructions?|method|methode|aan de slag"),
+    ...parseParagraphsAfterHeading(html, "bereiding|bereidingswijze|instructions?|method|methode|aan de slag"),
   ];
 
   if (jsonLd || embeddedRecipe) {
