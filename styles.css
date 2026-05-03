@@ -2195,8 +2195,11 @@ img { display: block; max-width: 100%; }
   background: #fff;
   border: 1.5px solid rgba(200, 80, 80, 0.2);
   color: #c85050;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
   flex-shrink: 0;
 }
 
@@ -4995,6 +4998,8 @@ body {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
 }
 
 .icon-button {
@@ -5007,6 +5012,9 @@ body {
   box-shadow: 0 2px 8px rgba(36, 60, 43, 0.05);
   flex-shrink: 0;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .home-avatar {
