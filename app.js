@@ -2250,6 +2250,8 @@ function startStepTimer(btn, totalSeconds) {
 
 function renderDetailRecipe(resetServings = false) {
   const recipe = getSelectedRecipe();
+  if (!recipe) return;
+
   const recipeProgress = getRecipeProgress(recipe.id);
   const baseServings = parseBaseServings(recipe.servings);
   if (resetServings) {
