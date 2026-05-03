@@ -24,7 +24,13 @@
 
 * { box-sizing: border-box; }
 
-html, body { min-height: 100%; overflow-x: hidden; }
+html, body {
+  min-height: 100%;
+  overflow-x: hidden;
+  /* Disable browser pull-to-refresh and overscroll bounce */
+  overscroll-behavior-y: contain;
+  overscroll-behavior-x: none;
+}
 
 body {
   margin: 0;
