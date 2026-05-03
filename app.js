@@ -1954,6 +1954,13 @@ function renderHomeCookbooks() {
   const heading = document.getElementById("homeCookbooksSectionHead");
   if (!strip) return;
 
+  // Hide cookbooks section for unauthenticated users
+  if (!state.auth.authenticated) {
+    if (heading) heading.classList.add("hidden");
+    strip.innerHTML = "";
+    return;
+  }
+
   const top = state.cookbooks.slice(0, 4);
 
   if (!top.length) {
@@ -2130,8 +2137,8 @@ function renderRecipeGrid() {
   if (!recipes.length) {
     const isNewUser = getImportedRecipes().length === 0 && !isSearching && !state.activeCookbookFilter;
 
-    if (isNewUser) {
-      // New user - show import prompt
+    if (isNewUser && state.auth.authenticated) {
+      // New authenticated user - show import prompt
       recipeGrid.innerHTML = `
         <div class="home-empty-state">
           <div class="home-empty-state__icon">
@@ -2145,6 +2152,9 @@ function renderRecipeGrid() {
       bindEvent(document.getElementById("homeImportFirstRecipeBtn"), "click", () => {
         document.getElementById("openImportButton").click();
       });
+    } else if (isNewUser) {
+      // Unauthenticated user - hide empty state, show nothing
+      recipeGrid.innerHTML = "";
     } else {
       // Search or filter with no results
       recipeGrid.innerHTML = `
