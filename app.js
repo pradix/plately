@@ -4683,7 +4683,7 @@ bindEvent(document.getElementById("reportBugButton"), "click", () => {
       const body = encodeURIComponent(
         `Hallo Plately team,\n\nIk had een probleem met het importeren van dit recept.\n\nRecept: ${recipe.title}\nBron: ${recipe.sourceUrl || "(onbekend)"}\nPlatform: ${recipe.platform || "(onbekend)"}\n\nWat ging er mis?\n(Beschrijf hier wat er niet klopt aan het geïmporteerde recept)\n\n--\nVerstuurd vanuit de Plately app`
       );
-      window.location.href = `mailto:support@plately.app?subject=${subject}&body=${body}`;
+      window.location.href = `mailto:pradix@me.com?subject=${subject}&body=${body}`;
       showToast("Bedankt! Je e-mailprogramma wordt geopend.");
     },
   });
