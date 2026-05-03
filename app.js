@@ -885,6 +885,9 @@ function closeAuthModal() {
   authModal.setAttribute("aria-hidden", "true");
 }
 
+// Alias for backwards compatibility
+const showAuthModal = openAuthModal;
+
 // Password show/hide toggle
 bindEvent(document.getElementById("authPasswordToggle"), "click", () => {
   const input = document.getElementById("authPassword");
@@ -4102,6 +4105,10 @@ async function bootstrapSession() {
   } finally {
     state.session.ready = true;
     renderAll();
+    // Show auth modal for unauthenticated users on initial load
+    if (!state.auth.authenticated) {
+      openAuthModal("login");
+    }
   }
 }
 
