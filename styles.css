@@ -1593,7 +1593,7 @@ img { display: block; max-width: 100%; }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 2px 0 8px;
+  padding: 2px 16px 8px;
 }
 
 .grocery-headline__title {
@@ -1636,7 +1636,7 @@ img { display: block; max-width: 100%; }
 .grocery-groups {
   display: grid;
   gap: 28px;
-  padding-inline: 0;
+  padding-inline: 16px;
   padding-bottom: 164px;
 }
 
@@ -2082,6 +2082,7 @@ img { display: block; max-width: 100%; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+  padding-inline: 16px;
   margin: 0 0 32px;
 }
 
@@ -4875,7 +4876,9 @@ img { display: block; max-width: 100%; }
   .recipe-grid,
   .grocery-groups,
   .review-hero,
-  .grocery-toolbar {
+  .grocery-toolbar,
+  .kookboek-heading,
+  .cookbook-filter-bar {
     padding-inline: 12px;
   }
 
@@ -5159,7 +5162,7 @@ body {
   justify-content: space-between;
   gap: 12px;
   margin: 0 0 18px;
-  padding: 0;
+  padding-inline: 16px;
 }
 
 .section-heading h2,
@@ -5192,7 +5195,7 @@ body {
   gap: 18px;
   overflow-x: auto;
   margin: 0 0 36px;
-  padding: 0 2px;
+  padding: 4px 16px 20px;
 }
 
 .channel-item {
@@ -5565,6 +5568,7 @@ body {
   justify-content: space-between;
   gap: 16px;
   margin: 10px 0 22px;
+  padding-inline: 16px;
 }
 
 .kookboek-add {
@@ -5585,8 +5589,10 @@ body {
   display: flex;
   gap: 18px;
   overflow-x: auto;
-  padding: 0 0 10px;
+  padding: 4px 16px 10px;
   margin: 0 0 26px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .filter-chip {
@@ -5613,7 +5619,8 @@ body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  padding: 0 0 30px;
+  padding-inline: 16px;
+  padding-bottom: 30px;
 }
 
 .recipe-card {
@@ -5971,6 +5978,7 @@ body {
 .grocery-groups {
   display: grid;
   gap: 16px;
+  padding-inline: 16px;
   padding-bottom: 100px;
 }
 
