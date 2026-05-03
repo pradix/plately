@@ -4727,7 +4727,7 @@ bindEvent(document.getElementById("profileSubChannelsSave"), "click", () => {
 bindEvent(document.getElementById("profileSubLanguageBack"), "click", () => closeProfileSubPanel("profileSubLanguage"));
 bindEvent(document.getElementById("profileSubChangelogBack"), "click", () => closeProfileSubPanel("profileSubChangelog"));
 
-// Language option selection
+// Language option selection (select but don't save yet)
 bindEvent(document.getElementById("profileSubLanguage"), "click", (e) => {
   const btn = e.target.closest(".language-option");
   if (!btn) return;
@@ -4735,9 +4735,14 @@ bindEvent(document.getElementById("profileSubLanguage"), "click", (e) => {
   if (lang) {
     state.language = lang;
     updateLanguagePanel();
-    schedulePersistAppState();
-    showToast(lang === "nl" ? "Taal: Nederlands" : "Language: English");
   }
+});
+
+// Language save button
+bindEvent(document.getElementById("profileSubLanguageSave"), "click", () => {
+  schedulePersistAppState();
+  closeProfileSubPanel("profileSubLanguage");
+  showToast(state.language === "nl" ? "Taal opgeslagen." : "Language saved.");
 });
 
 bindEvent(profileEditAvatarButton, "click", () => {
