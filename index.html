@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-52" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-53" />
   </head>
   <body>
     <main class="page">
@@ -24,7 +24,9 @@
         <section class="screen screen--active" id="homeScreen">
           <!-- Topbar: logo | + import | avatar -->
           <header class="topbar topbar--home">
-            <img class="brand-logo" src="assets/plately.png" alt="Plately" />
+            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar home">
+              <img class="brand-logo" src="assets/plately.png" alt="Plately" />
+            </button>
             <div class="topbar-actions">
               <button class="icon-button icon-button--filled-green" id="openImportButton" type="button" aria-label="Recept importeren">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -124,7 +126,7 @@
         <section class="screen detail-screen" id="detailScreen">
           <header class="topbar topbar--home">
             <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar recepten">
-              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
+              <img class="brand-logo" src="assets/plately.png" alt="Plately" />
             </button>
             <div class="topbar-actions">
               <button class="icon-button" id="detailSaveHeaderButton" type="button" aria-label="Opslaan in kookboek">
@@ -302,7 +304,7 @@
           <!-- Compact header: title + add button + avatar -->
           <header class="topbar topbar--home">
             <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar recepten">
-              <img class="brand-logo brand-logo--grocery" src="assets/plately.png" alt="Plately" />
+              <img class="brand-logo" src="assets/plately.png" alt="Plately" />
             </button>
             <div class="topbar-actions">
               <button class="grocery-clear-btn hidden" id="groceryClearButton" type="button" aria-label="Lijst leegmaken">
@@ -358,7 +360,7 @@
         <section class="screen mealplan-screen" id="mealPlanScreen">
           <header class="topbar topbar--home">
             <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar recepten">
-              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
+              <img class="brand-logo" src="assets/plately.png" alt="Plately" />
             </button>
             <div class="topbar-actions">
               <button class="home-avatar" type="button" data-view="settings" aria-label="Profiel"></button>
@@ -379,8 +381,11 @@
           <!-- Topbar met logo -->
           <header class="topbar topbar--home">
             <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar home">
-              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
+              <img class="brand-logo" src="assets/plately.png" alt="Plately" />
             </button>
+            <div class="topbar-actions">
+              <button class="home-avatar" type="button" data-view="settings" aria-label="Profiel"></button>
+            </div>
           </header>
 
           <!-- Niet ingelogd banner (verborgen als authenticated) -->
@@ -610,7 +615,7 @@
           <!-- List-mode header (logo + add btn + avatar) -->
           <header class="topbar topbar--home" id="cookbooksTopbarList">
             <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar home">
-              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
+              <img class="brand-logo" src="assets/plately.png" alt="Plately" />
             </button>
             <div class="topbar-actions">
               <button class="icon-button icon-button--filled-green" type="button" id="cookbooksAddBtn" aria-label="Nieuw kookboek aanmaken">
@@ -1191,6 +1196,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-49"></script>
+    <script src="app.js?v=plately-banani-50"></script>
   </body>
 </html>
