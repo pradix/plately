@@ -3844,7 +3844,25 @@ function buildPersistedAppState() {
 }
 
 function applyPersistedAppState(user) {
+  // If user is null/undefined, clear all user-specific state (logout case)
   if (!user || typeof user !== "object") {
+    state.recipes = [];
+    state.cookbooks = [];
+    state.groceryItems = [];
+    state.recipeProgress = {};
+    state.mealPlan = {
+      maandag: null,
+      dinsdag: null,
+      woensdag: null,
+      donderdag: null,
+      vrijdag: null,
+      zaterdag: null,
+      zondag: null,
+    };
+    state.selectedCookbookId = "";
+    state.selectedRecipeId = "";
+    state.featuredRecipeId = "";
+    state.session.userId = "";
     return;
   }
 
