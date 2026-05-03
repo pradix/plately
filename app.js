@@ -2156,7 +2156,11 @@ function renderRecipeGrid() {
         </div>
       `;
       bindEvent(document.getElementById("homeImportFirstRecipeBtn"), "click", () => {
-        document.getElementById("openImportButton").click();
+        if (!state.auth.authenticated) {
+          openAuthModal("login");
+          return;
+        }
+        switchView("import");
       });
     } else if (isNewUser) {
       // Unauthenticated user - hide empty state, show nothing
@@ -6170,7 +6174,7 @@ bindEvent(document.getElementById("homeCbStrip"), "click", (event) => {
   if (!(btn instanceof HTMLElement)) return;
   const cookbookId = btn.dataset.openCookbookHome;
   state.openCookbookId = cookbookId;
-  switchView("settings");
+  switchView("cookbooks");
   renderCookbookList();
 });
 
