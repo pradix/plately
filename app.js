@@ -2466,18 +2466,18 @@ function renderGroceryGroups() {
   function renderGroceryItem(item) {
     return `
       <button class="grocery-entry ${item.checked ? "is-checked" : ""}" type="button" data-grocery-id="${item.id}">
-        <span class="grocery-entry__img" aria-hidden="true">
-          ${item.imageUrl
-            ? `<img class="grocery-entry__ah-img" src="${escapeHtml(item.imageUrl)}" alt="" loading="lazy" />`
-            : getIngredientVisualMarkup(item.title)}
-        </span>
+        <span class="grocery-check"></span>
         <span class="grocery-entry__content">
           <p class="grocery-entry__title">${item.title}</p>
           ${multiRecipe && item.recipeTitle && item.recipeTitle.includes(",")
             ? `<p class="grocery-entry__overlap">Gedeeld ingrediënt</p>` : ""}
         </span>
         <span class="grocery-entry__amount">${item.amount}</span>
-        <span class="grocery-check"></span>
+        <span class="grocery-entry__img" aria-hidden="true">
+          ${item.imageUrl
+            ? `<img class="grocery-entry__ah-img" src="${escapeHtml(item.imageUrl)}" alt="" loading="lazy" />`
+            : getIngredientVisualMarkup(item.title)}
+        </span>
       </button>
     `;
   }
@@ -4087,6 +4087,18 @@ function schedulePersistAppState(delay = 350) {
   }, delay);
 }
 
+// Track if user has ever been authenticated (persisted across refreshes)
+const HAS_AUTHED_KEY = "plately-has-authed";
+function markUserAsAuthed() {
+  try { localStorage.setItem(HAS_AUTHED_KEY, "1"); } catch {}
+}
+function clearUserAuthedMark() {
+  try { localStorage.removeItem(HAS_AUTHED_KEY); } catch {}
+}
+function hasUserEverAuthed() {
+  try { return localStorage.getItem(HAS_AUTHED_KEY) === "1"; } catch { return false; }
+}
+
 async function bootstrapSession() {
   let sessionCheckSucceeded = false;
   try {
@@ -4104,6 +4116,10 @@ async function bootstrapSession() {
       state.auth.authenticated = Boolean(payload.auth.authenticated);
       state.auth.email = payload.auth.email || "";
     }
+    // Remember authenticated state across refreshes
+    if (state.auth.authenticated) {
+      markUserAsAuthed();
+    }
     // localStorage is always written synchronously on changes, so it reflects the
     // most recent user action — even if the async server-persist hadn't completed.
     // Always overlay server state with the local grocery snapshot.
@@ -4120,10 +4136,12 @@ async function bootstrapSession() {
   } finally {
     state.session.ready = true;
     renderAll();
-    // Only show auth modal when the session check confirmed the user is NOT logged in.
-    // If the request failed (network/server error), don't disrupt the user — they may
-    // already have a valid session from a previous visit.
-    if (sessionCheckSucceeded && !state.auth.authenticated) {
+    // Only show auth modal for true first-time visitors:
+    //   - the session check confirmed they are NOT logged in, AND
+    //   - they have never authenticated on this device before.
+    // Returning visitors whose session expired won't be disrupted — they can
+    // still click "Inloggen" via the profile menu.
+    if (sessionCheckSucceeded && !state.auth.authenticated && !hasUserEverAuthed()) {
       openAuthModal("login");
     }
   }
@@ -4149,6 +4167,7 @@ async function submitAuth(mode, email, password) {
     state.auth.email = payload.auth.email || "";
   }
   applyPersistedAppState(payload.user);
+  if (state.auth.authenticated) markUserAsAuthed();
   renderAll();
 
   if (mode === "register") {
@@ -4171,6 +4190,7 @@ async function logoutAccount() {
     state.auth.email = payload.auth.email || "";
   }
   applyPersistedAppState(payload.user);
+  clearUserAuthedMark();
   renderAll();
   showToast("Je bent uitgelogd.");
 }
