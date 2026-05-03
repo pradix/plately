@@ -1958,7 +1958,9 @@ function renderHomeCookbooks() {
     if (heading) heading.classList.add("hidden");
     strip.innerHTML = `
       <div class="home-empty-state">
-        <div class="home-empty-state__icon">📚</div>
+        <div class="home-empty-state__icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </div>
         <h3 class="home-empty-state__title">Nieuw kookboek</h3>
         <p class="home-empty-state__text">Maak je eerste kookboek aan</p>
         <button class="home-empty-state__btn" type="button" id="homeCreateCookbookBtn">Nieuw kookboek</button>
@@ -2129,8 +2131,10 @@ function renderRecipeGrid() {
     if (isNewUser) {
       // New user - show import prompt
       recipeGrid.innerHTML = `
-        <div class="home-empty-state" style="grid-column:1/-1;padding:40px 24px;text-align:center">
-          <div class="home-empty-state__icon">🍽️</div>
+        <div class="home-empty-state">
+          <div class="home-empty-state__icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          </div>
           <h3 class="home-empty-state__title">Je recepten</h3>
           <p class="home-empty-state__text">Importeer je eerste recept</p>
           <button class="home-empty-state__btn" type="button" id="homeImportFirstRecipeBtn">Importeer recept</button>
