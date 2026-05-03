@@ -107,7 +107,6 @@ img { display: block; max-width: 100%; }
   cursor: pointer;
   flex-shrink: 0;
   min-width: 0;
-  min-width: 0;
 }
 
 /* Unified responsive logo */
@@ -4969,11 +4968,6 @@ body {
   padding: 24px 24px 0;
 }
 
-.topbar,
-.topbar--home,
-.topbar--home {
-  align-items: flex-start;
-}
 
 
 .topbar-actions {
