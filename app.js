@@ -6494,6 +6494,8 @@ bindEvent(document.getElementById("onboardingPhotoInput"), "change", (e) => {
 bindEvent(document.getElementById("confirmSheetBackdrop"), "click", closeConfirmSheet);
 bindEvent(document.getElementById("confirmSheetCancelBtn"), "click", closeConfirmSheet);
 bindEvent(document.getElementById("confirmSheetConfirmBtn"), "click", () => {
+  // Capture callback BEFORE closing (closeConfirmSheet sets it to null)
+  const cb = confirmCallback;
   closeConfirmSheet();
-  if (typeof confirmCallback === "function") confirmCallback();
+  if (typeof cb === "function") cb();
 });
