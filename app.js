@@ -3862,7 +3862,8 @@ function applyPersistedAppState(user) {
   const importedRecipes = Array.isArray(user.importedRecipes)
     ? user.importedRecipes.map((recipe) => normalizeImportedRecipe({ ...recipe, platform: recipe.platform || "website" }))
     : [];
-  state.recipes = [...importedRecipes, ...initialRecipes];
+  // Only store imported recipes in state; seed recipes shown dynamically during rendering
+  state.recipes = [...importedRecipes];
 
   if (Array.isArray(user.cookbooks)) {
     state.cookbooks = user.cookbooks.map((cookbook) => ({
