@@ -4610,8 +4610,12 @@ bindEvent(document.getElementById("deleteRecipeButton"), "click", () => {
 function openProfileSubPanel(id) {
   const panel = document.getElementById(id);
   if (!panel) return;
+  // Scroll main window to top to prevent jump effect when panel opens
+  window.scrollTo({ top: 0, behavior: "auto" });
   panel.classList.add("profile-subpanel--active");
   panel.setAttribute("aria-hidden", "false");
+  // Scroll panel to top to avoid showing content from previous state
+  panel.scrollTop = 0;
 }
 
 function closeProfileSubPanel(id) {
@@ -4619,6 +4623,8 @@ function closeProfileSubPanel(id) {
   if (!panel) return;
   panel.classList.remove("profile-subpanel--active");
   panel.setAttribute("aria-hidden", "true");
+  // Keep main window at top when closing panel
+  window.scrollTo({ top: 0, behavior: "auto" });
 }
 
 // Helper: resize an image File/Blob to a compact JPEG data URL
