@@ -2115,10 +2115,10 @@ function renderRecipeGrid() {
 
   if (!recipes.length) {
     recipeGrid.innerHTML = `
-      <article class="recipe-card recipe-card--empty">
-        <div class="recipe-card__body">
-          <h3>Geen recepten gevonden</h3>
-          <div class="recipe-card__meta"><span>Probeer een andere zoekterm</span></div>
+      <article class="recent-card recent-card--empty" style="grid-column:1/-1;border:none;box-shadow:none;background:transparent">
+        <div class="recent-card__body" style="padding:24px 0">
+          <p class="recent-card__title">Geen recepten gevonden</p>
+          <p class="recent-card__meta">Probeer een andere zoekterm</p>
         </div>
       </article>
     `;
@@ -2130,17 +2130,15 @@ function renderRecipeGrid() {
       (recipe) => {
         const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
         const faviconHtml = faviconUrl
-          ? `<span class="recipe-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" /></span>`
+          ? `<span class="recent-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" /></span>`
           : "";
         return `
-        <button class="recipe-card" type="button" data-recipe-id="${recipe.id}">
-          <img src="${recipe.image}" alt="${recipe.alt}" />
+        <button class="recent-card" type="button" data-recipe-id="${escapeHtml(recipe.id)}">
+          <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title || "")}" loading="lazy" />
           ${faviconHtml}
-          <div class="recipe-card__body">
-            <h3>${recipe.title}</h3>
-            <div class="recipe-card__meta">
-              <span><span class="recipe-card__clock" aria-hidden="true">◔</span>${recipe.time}</span>
-            </div>
+          <div class="recent-card__body">
+            <p class="recent-card__title">${escapeHtml(recipe.title)}</p>
+            <p class="recent-card__meta">${escapeHtml(recipe.time || "")}</p>
           </div>
         </button>
       `;

@@ -5396,7 +5396,7 @@ body {
 .recipe-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px 18px;
+  gap: 12px;
   padding: 0 0 30px;
 }
 
