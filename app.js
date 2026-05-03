@@ -5568,6 +5568,18 @@ bindEvent(switchAuthModeButton, "click", () => {
   openAuthModal(state.auth.mode === "register" ? "login" : "register");
 });
 
+// Social login buttons (TikTok and Instagram)
+const authTiktokBtn = document.getElementById("authTiktokBtn");
+const authInstagramBtn = document.getElementById("authInstagramBtn");
+
+bindEvent(authTiktokBtn, "click", () => {
+  showToast("TikTok inloggen wordt binnenkort ondersteund.");
+});
+
+bindEvent(authInstagramBtn, "click", () => {
+  showToast("Instagram inloggen wordt binnenkort ondersteund.");
+});
+
 bindEvent(authForm, "submit", async (event) => {
   event.preventDefault();
   const email = authEmail.value.trim();

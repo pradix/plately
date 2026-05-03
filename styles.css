@@ -3560,22 +3560,53 @@ img { display: block; max-width: 100%; }
   background: #e5e2dc;
 }
 
-.auth-screen__guest-btn {
-  display: block;
-  width: 100%;
-  padding: 14px;
-  background: transparent;
-  color: #6b7280;
-  border: 1.5px solid #e5e2dc;
-  border-radius: 14px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  text-align: center;
+.auth-screen__social-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
 
-.auth-screen__guest-btn:active { background: #f5f3ef; }
+.auth-screen__social-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  border: none;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  color: #fff;
+}
+
+.auth-screen__social-btn:active {
+  transform: scale(0.98);
+}
+
+.auth-screen__social-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.auth-screen__social-btn--tiktok {
+  background: #000;
+}
+
+.auth-screen__social-btn--tiktok:hover {
+  opacity: 0.9;
+}
+
+.auth-screen__social-btn--instagram {
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+}
+
+.auth-screen__social-btn--instagram:hover {
+  opacity: 0.9;
+}
 
 /* ══ Onboarding screen ════════════════════════════════════════════════════════ */
 .onboarding-screen {
