@@ -4332,7 +4332,13 @@ function bindEvent(element, eventName, handler) {
 
 // + button and filter button → navigate to import screen (universal import)
 document.querySelectorAll("#openImportButton, #openImportButton2").forEach((btn) => {
-  if (btn) btn.addEventListener("click", () => switchView("import"));
+  if (btn) btn.addEventListener("click", () => {
+    if (!state.auth.authenticated) {
+      showAuthModal();
+      return;
+    }
+    switchView("import");
+  });
 });
 
 platformButtons.forEach((button) => {
@@ -5730,6 +5736,12 @@ bindEvent(importForm, "submit", async (event) => {
 
 bindEvent(homeImportForm, "submit", async (event) => {
   event.preventDefault();
+
+  if (!state.auth.authenticated) {
+    showAuthModal();
+    return;
+  }
+
   const url = extractUrl(homeImportUrl.value.trim());
 
   await submitImport(
@@ -5764,6 +5776,12 @@ bindEvent(homeImportForm, "submit", async (event) => {
 
 bindEvent(importScreenForm, "submit", async (event) => {
   event.preventDefault();
+
+  if (!state.auth.authenticated) {
+    showAuthModal();
+    return;
+  }
+
   const url = extractUrl(importScreenUrl.value.trim());
 
   await submitImport(
