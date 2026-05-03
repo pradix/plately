@@ -1856,7 +1856,9 @@ function getQuickRecipes() {
   if (!state.searchQuery.trim() && !state.activeCookbookFilter) {
     return HOME_QUICK_RECIPE_IDS.map((recipeId) => getRecipeById(recipeId)).filter(Boolean);
   }
-  const featuredId = getFeaturedRecipe().id;
+  const featured = getFeaturedRecipe();
+  if (!featured) return [];
+  const featuredId = featured.id;
   return getVisibleRecipes()
     .filter((recipe) => recipe.id !== featuredId)
     .sort((left, right) => parseMinutesLabel(left.time) - parseMinutesLabel(right.time))
@@ -3447,6 +3449,8 @@ bindEvent(document.getElementById("shareCardNativeShare"), "click", async () => 
 });
 
 function addRecipeToGrocery(recipe) {
+  if (!recipe) return;
+
   let added = 0;
   let merged = 0;
 
@@ -4587,8 +4591,14 @@ brandHomeButtons.forEach((button) => {
   button.addEventListener("click", goHome);
 });
 bindEvent(shareRecipeButton, "click", shareSelectedRecipe);
-bindEvent(saveRecipeButton, "click", () => openCookbookSaveModal(getSelectedRecipe().id));
-bindEvent(detailSaveHeaderButton, "click", () => openCookbookSaveModal(getSelectedRecipe().id));
+bindEvent(saveRecipeButton, "click", () => {
+  const recipe = getSelectedRecipe();
+  if (recipe) openCookbookSaveModal(recipe.id);
+});
+bindEvent(detailSaveHeaderButton, "click", () => {
+  const recipe = getSelectedRecipe();
+  if (recipe) openCookbookSaveModal(recipe.id);
+});
 bindEvent(reviewImportButton, "click", () => openRecipeEditPanel(state.selectedRecipeId));
 bindEvent(document.getElementById("deleteRecipeButton"), "click", () => {
   const recipe = getSelectedRecipe();
@@ -5374,7 +5384,8 @@ bindEvent(cookbookSaveList, "click", (event) => {
   }
 
   // Read recipeId from the button itself — most reliable, no state timing issues
-  const recipeId = cookbookButton.dataset.saveRecipeId || state.pendingCookbookSaveRecipeId || getSelectedRecipe().id;
+  const selectedRecipe = getSelectedRecipe();
+  const recipeId = cookbookButton.dataset.saveRecipeId || state.pendingCookbookSaveRecipeId || selectedRecipe?.id;
   const cookbookId = cookbookButton.dataset.saveCookbookId;
   if (!recipeId || !cookbookId) {
     return;
