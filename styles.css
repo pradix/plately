@@ -58,16 +58,6 @@ img { display: block; max-width: 100%; }
   padding-bottom: 28px;
 }
 
-#homeScreen::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 12% 8%, rgba(216, 230, 216, 0.28), transparent 18%),
-    radial-gradient(circle at 86% 14%, rgba(246, 182, 157, 0.16), transparent 14%);
-  pointer-events: none;
-}
-
 #homeScreen > * {
   position: relative;
   z-index: 1;
