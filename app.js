@@ -1135,7 +1135,10 @@ function renderBasketPreview() {
 
   // Update servings label
   const servLabel = document.getElementById("basketServingsLabel");
-  if (servLabel) servLabel.textContent = `${state.basketServings} pers.`;
+  if (servLabel) {
+    const noun = state.basketServings === 1 ? "persoon" : "personen";
+    servLabel.textContent = `${state.basketServings} ${noun}`;
+  }
 
   // Update filter chip active state
   document.getElementById("basketFilterBio")?.classList.toggle("is-active", state.basketFilter.bio);
@@ -4081,14 +4084,22 @@ function schedulePersistAppState(delay = 350) {
 }
 
 async function bootstrapSession() {
+  let sessionCheckSucceeded = false;
   try {
     const payload = await fetchJson(`${state.apiBase}/api/session`);
+    sessionCheckSucceeded = true;
     if (payload?.auth) {
       state.auth.enabled = Boolean(payload.auth.enabled);
       state.auth.authenticated = Boolean(payload.auth.authenticated);
       state.auth.email = payload.auth.email || "";
     }
     applyPersistedAppState(payload.user);
+    // applyPersistedAppState may have reset state.auth.authenticated based on
+    // payload.user.authenticated — re-apply the auth payload as the source of truth
+    if (payload?.auth) {
+      state.auth.authenticated = Boolean(payload.auth.authenticated);
+      state.auth.email = payload.auth.email || "";
+    }
     // localStorage is always written synchronously on changes, so it reflects the
     // most recent user action — even if the async server-persist hadn't completed.
     // Always overlay server state with the local grocery snapshot.
@@ -4105,8 +4116,10 @@ async function bootstrapSession() {
   } finally {
     state.session.ready = true;
     renderAll();
-    // Show auth modal for unauthenticated users on initial load
-    if (!state.auth.authenticated) {
+    // Only show auth modal when the session check confirmed the user is NOT logged in.
+    // If the request failed (network/server error), don't disrupt the user — they may
+    // already have a valid session from a previous visit.
+    if (sessionCheckSucceeded && !state.auth.authenticated) {
       openAuthModal("login");
     }
   }
@@ -5556,6 +5569,7 @@ bindEvent(document.getElementById("channelSettingsList"), "click", (event) => {
         state.followedChannelIds = state.followedChannelIds.filter((c) => c !== id);
         renderChannelSettings();
         renderChannelRow();
+        renderProfileSummary();
         schedulePersistAppState();
       },
     });
@@ -5599,6 +5613,7 @@ bindEvent(document.getElementById("channelSettingsList"), "click", (event) => {
   }
   renderChannelSettings();
   renderChannelRow();
+  renderProfileSummary();
   schedulePersistAppState();
 });
 
