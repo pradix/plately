@@ -3849,9 +3849,11 @@ function parseWPStandard(html, _baseUrl, channelName, channelId, count) {
 
 /** WP REST API fallback — returns results mapped to our format. */
 // URL patterns that strongly suggest a non-recipe (blog/article/tip/news) post
-const BLOG_POST_URL_RE = /\/(blog|artikel|artikelen|nieuws|tips?|advies|inspiratie|over-ons|contact|vacature|actie|winactie|review|test|colofon|interviews?|winnen|video|videos|podcast|categorie|category|tag|author|auteur|page|zoeken|search)\//i;
+const BLOG_POST_URL_RE = /\/(blog|artikel|artikelen|nieuws|tips?|advies|inspiratie|over-ons|contact|vacature|actie|winactie|review|test|colofon|interviews?|winnen|video|videos|podcast|categorie|category|tag|author|auteur|page|zoeken|search|webshop|shop|product|cadeau|aanbieding|kookboek)\//i;
 // URL patterns that strongly suggest a recipe post
 const RECIPE_URL_RE = /\/(recept|recepten|recipe|recipes|gerecht|gerechten|bakken|koken|lekker|snack|ontbijt|lunch|diner|avondeten|dessert|taart|cake|soep|salade|pasta|vlees|vis|vegetarisch|vegan|borrelhap|hapje|saus|dressing)\//i;
+// Title keywords that strongly suggest a non-recipe post (opinion / list / guide).
+const BLOG_TITLE_RE = /\b(tips?|review|gids|uitleg|interview|podcast|blog|nieuws|aankondiging|aanbieding|webshop|kookboek|artikel|wat\s+is|waarom|zo\s+doe\s+je|10\s+x\b|\d+\s+keer\b)\b/i;
 
 /**
  * Returns true when a WP post URL looks like a recipe (not a blog/tip/news article).
@@ -3866,15 +3868,33 @@ function urlLooksLikeRecipe(url) {
 }
 
 /**
- * Returns true when at least one word from the query appears in the title.
- * Helps filter out off-topic results returned by a general WP search.
+ * Returns true when the title looks like a recipe (not a tip/review/guide post).
  */
-function titleMatchesQuery(title, query) {
-  if (!title || !query) return true; // can't determine — keep
+function titleLooksLikeRecipe(title) {
+  if (!title) return true;
+  return !BLOG_TITLE_RE.test(title);
+}
+
+/**
+ * Returns a score 0..1 for how well the title matches the query.
+ *  - 1.0 → all 3+-letter query words appear in the title
+ *  - 0.5 → at least half of them appear
+ *  - 0.0 → none appear
+ * Use threshold 0.5 to keep results that share most key terms.
+ */
+function titleQueryScore(title, query) {
+  if (!title || !query) return 1; // can't determine — pass
   const t = title.toLowerCase();
   const words = query.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
-  if (!words.length) return true;
-  return words.some((w) => t.includes(w));
+  if (!words.length) return 1;
+  const hits = words.filter((w) => t.includes(w)).length;
+  return hits / words.length;
+}
+
+function titleMatchesQuery(title, query) {
+  // Stricter: at least HALF of the 3+-letter words must hit the title.
+  // For single-word queries this still requires a hit.
+  return titleQueryScore(title, query) >= 0.5;
 }
 
 async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
@@ -3909,8 +3929,12 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
           .filter((r) => r.title && r.url)
           // Filter out blog/non-recipe URLs for all endpoint types
           .filter((r) => urlLooksLikeRecipe(r.url))
-          // Filter out results whose title has no overlap with the query
+          // Filter out posts whose title looks like a tip/review/guide
+          .filter((r) => titleLooksLikeRecipe(r.title))
+          // Filter out results whose title doesn't share half the query words
           .filter((r) => titleMatchesQuery(r.title, query))
+          // Sort by relevance — best title-match first
+          .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
           .slice(0, count);
         if (mapped.length > 0) return mapped;
       }
@@ -3952,7 +3976,14 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
     const html = await fetchHtml(searchUrl);
     if (html && html.length > 500) {
       const scraped = parser(html, baseUrl, channelName, channelId, count);
-      if (scraped.length > 0) return scraped;
+      const filtered = scraped
+        .filter((r) => r.title && r.url)
+        .filter((r) => urlLooksLikeRecipe(r.url))
+        .filter((r) => titleLooksLikeRecipe(r.title))
+        .filter((r) => titleMatchesQuery(r.title, query || ""))
+        .sort((a, b) => titleQueryScore(b.title, query || "") - titleQueryScore(a.title, query || ""))
+        .slice(0, count);
+      if (filtered.length > 0) return filtered;
     }
   } catch { /* fall through */ }
   return wpRestSearch(baseUrl, channelName, channelId, query || "", count);
@@ -3968,7 +3999,16 @@ async function searchChannelRecipes(query, allowedChannels = null) {
       const html = await fetchHtml(searchUrl);
       if (html && html.length > 500) {
         const scraped = parser(html, baseUrl, channelName, channelId, count);
-        if (scraped.length > 0) return scraped;
+        // Apply the same relevance filters here so HTML-scraped results aren't
+        // less filtered than the WP REST fallback.
+        const filtered = scraped
+          .filter((r) => r.title && r.url)
+          .filter((r) => urlLooksLikeRecipe(r.url))
+          .filter((r) => titleLooksLikeRecipe(r.title))
+          .filter((r) => titleMatchesQuery(r.title, query))
+          .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
+          .slice(0, count);
+        if (filtered.length > 0) return filtered;
       }
     } catch { /* fall through */ }
     return wpRestSearch(baseUrl, channelName, channelId, query, count);
