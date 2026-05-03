@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-50" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-51" />
   </head>
   <body>
     <main class="page">
@@ -994,57 +994,32 @@
 
     <!-- ══ Auth screen ══ -->
     <div class="auth-screen hidden" id="authModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="authKicker">
+      <button class="auth-screen__close-btn" type="button" data-close-auth="true" aria-label="Sluiten">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
 
-      <!-- Hero image + topbar -->
-      <div class="auth-screen__hero">
-        <div class="auth-screen__hero-topbar">
-          <div class="auth-hero-brand">
-            <img src="assets/plately.png" alt="Plately" class="auth-hero-brand__logo" />
-            <span class="auth-hero-brand__name">plately</span>
-          </div>
-          <button class="auth-hero-close" type="button" data-close-auth="true" aria-label="Sluiten">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Bottom card -->
-      <div class="auth-screen__card">
-        <span class="auth-screen__badge" id="authBadge">100% GRATIS</span>
-        <h1 class="auth-screen__title" id="authKicker">Klaar om te koken?</h1>
-        <p class="auth-screen__subtitle" id="authSubtitle">Maak je account aan en bewaar al je favoriete recepten op één slimme plek.</p>
-
-        <!-- Social login buttons -->
-        <div class="auth-socials">
-          <button class="auth-social-btn auth-social-btn--google" type="button" id="authGoogleBtn">
-            <svg viewBox="0 0 24 24" aria-hidden="true" width="20" height="20"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-            Doorgaan met Google
-          </button>
-          <button class="auth-social-btn auth-social-btn--apple" type="button" id="authAppleBtn">
-            <svg viewBox="0 0 24 24" aria-hidden="true" width="20" height="20" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-            Doorgaan met Apple
-          </button>
+      <div class="auth-screen__inner">
+        <div class="auth-screen__brand">
+          <img class="auth-screen__logo" src="assets/plately.png" alt="Plately" />
+          <h1 class="auth-screen__title" id="authKicker">Welkom terug</h1>
+          <p class="auth-screen__subtitle" id="authSubtitle">Recepten, kookboeken en lijstjes altijd bij je.</p>
         </div>
 
-        <!-- Divider -->
-        <div class="auth-screen__divider"><span>OF VIA E-MAIL</span></div>
-
-        <!-- Form -->
         <form id="authForm" class="auth-screen__form">
           <div class="auth-field" id="authNameField" style="display:none">
             <label class="auth-field__label" for="authName">Voornaam</label>
-            <input class="auth-field__input" id="authName" name="name" type="text" placeholder="Bijv. Sanne" autocomplete="given-name" />
+            <input class="auth-field__input" id="authName" name="name" type="text" placeholder="Jouw naam" autocomplete="given-name" />
           </div>
 
           <div class="auth-field">
             <label class="auth-field__label" for="authEmail">E-mailadres</label>
-            <input class="auth-field__input" id="authEmail" name="email" type="email" placeholder="sanne@voorbeeld.nl" autocomplete="email" required />
+            <input class="auth-field__input" id="authEmail" name="email" type="email" placeholder="jij@voorbeeld.nl" autocomplete="email" required />
           </div>
 
           <div class="auth-field">
             <label class="auth-field__label" for="authPassword">Wachtwoord</label>
             <div class="auth-field__password-wrap">
-              <input class="auth-field__input" id="authPassword" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required />
+              <input class="auth-field__input" id="authPassword" name="password" type="password" placeholder="Minimaal 8 tekens" autocomplete="current-password" required />
               <button class="auth-field__eye" type="button" id="authPasswordToggle" aria-label="Wachtwoord tonen">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
@@ -1053,14 +1028,87 @@
 
           <p class="auth-screen__feedback" id="authFeedback" aria-live="polite"></p>
 
-          <button class="auth-screen__submit" id="submitAuthButton" type="submit">Maak account aan</button>
+          <button class="auth-screen__submit" id="submitAuthButton" type="submit">Inloggen</button>
         </form>
 
-        <!-- Switch mode -->
         <div class="auth-screen__switch">
           <button class="auth-screen__switch-btn" id="switchAuthModeButton" type="button">
-            Heb je al een account? <strong>Inloggen</strong>
+            Nog geen account? <strong>Account aanmaken</strong>
           </button>
+        </div>
+
+        <div class="auth-screen__divider"><span>of</span></div>
+
+        <button class="auth-screen__guest-btn" type="button" data-close-auth="true">
+          Doorgaan zonder account
+        </button>
+      </div>
+    </div>
+
+    <!-- ══ Onboarding screen (after registration) ══ -->
+    <div class="onboarding-screen hidden" id="onboardingScreen">
+      <button class="onboarding-screen__close" type="button" id="onboardingClose" aria-label="Sluiten">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+
+      <div class="onboarding-container">
+        <!-- Step 1: Channels -->
+        <div class="onboarding-step hidden" id="onboardingStep1">
+          <div class="onboarding-header">
+            <span class="onboarding-progress">Stap 1 van 3</span>
+            <h2 class="onboarding-title">Volg kanalen</h2>
+            <p class="onboarding-subtitle">Welke receptbronnen interesseren jou?</p>
+          </div>
+          <div id="onboardingChannelsList" class="onboarding-channels"></div>
+          <div class="onboarding-actions">
+            <button class="onboarding-btn onboarding-btn--secondary" id="onboardingStep1Skip" type="button">Overslaan</button>
+            <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep1Next" type="button">Volgende</button>
+          </div>
+        </div>
+
+        <!-- Step 2: First cookbook -->
+        <div class="onboarding-step hidden" id="onboardingStep2">
+          <div class="onboarding-header">
+            <span class="onboarding-progress">Stap 2 van 3</span>
+            <h2 class="onboarding-title">Je eerste kookboek</h2>
+            <p class="onboarding-subtitle">Maak een kookboek aan om recepten in te bewaren.</p>
+          </div>
+          <div class="onboarding-form">
+            <div class="auth-field">
+              <label class="auth-field__label" for="onboardingCookbookName">Naam kookboek</label>
+              <input class="auth-field__input" id="onboardingCookbookName" type="text" placeholder="Bijv. Makkelijk & snel" />
+            </div>
+          </div>
+          <div class="onboarding-actions">
+            <button class="onboarding-btn onboarding-btn--secondary" id="onboardingStep2Skip" type="button">Overslaan</button>
+            <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep2Next" type="button">Volgende</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Profile -->
+        <div class="onboarding-step hidden" id="onboardingStep3">
+          <div class="onboarding-header">
+            <span class="onboarding-progress">Stap 3 van 3</span>
+            <h2 class="onboarding-title">Maak je profiel compleet</h2>
+            <p class="onboarding-subtitle">Voeg foto en gebruikersnaam toe.</p>
+          </div>
+          <div class="onboarding-form">
+            <div class="onboarding-photo-upload">
+              <button class="onboarding-photo-btn" id="onboardingPhotoBtn" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Foto toevoegen
+              </button>
+              <input class="hidden" id="onboardingPhotoInput" type="file" accept="image/*" />
+            </div>
+            <div class="auth-field">
+              <label class="auth-field__label" for="onboardingHandle">Gebruikersnaam (handle)</label>
+              <input class="auth-field__input" id="onboardingHandle" type="text" placeholder="bijv. mijn_naam" />
+            </div>
+          </div>
+          <div class="onboarding-actions">
+            <button class="onboarding-btn onboarding-btn--secondary" id="onboardingStep3Skip" type="button">Overslaan</button>
+            <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep3Finish" type="button">Klaar!</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1150,6 +1198,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-47"></script>
+    <script src="app.js?v=plately-banani-48"></script>
   </body>
 </html>

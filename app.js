@@ -857,30 +857,25 @@ function openAuthModal(mode = "login") {
   authModal.classList.remove("hidden");
   authModal.setAttribute("aria-hidden", "false");
 
-  // Title
-  if (authKicker) authKicker.textContent = isRegister ? "Klaar om te koken?" : "Welkom terug";
+  // Title and subtitle
+  if (authKicker) authKicker.textContent = isRegister ? "Account aanmaken" : "Welkom terug";
 
-  // Subtitle
   const subtitleEl = document.getElementById("authSubtitle");
   if (subtitleEl) subtitleEl.textContent = isRegister
-    ? "Maak je account aan en bewaar al je favoriete recepten op één slimme plek."
-    : "Log in om je recepten, kookboeken en boodschappenlijst te bekijken.";
-
-  // Badge
-  const badgeEl = document.getElementById("authBadge");
-  if (badgeEl) badgeEl.textContent = isRegister ? "100% GRATIS" : "Plately";
+    ? "Bewaar recepten, kookboeken en boodschappenlijsten in je account."
+    : "Log in om je recepten en lijstjes te bekijken.";
 
   // Show/hide name field
   const nameField = document.getElementById("authNameField");
   if (nameField) nameField.style.display = isRegister ? "" : "none";
 
   // Submit button text
-  if (submitAuthButton) submitAuthButton.textContent = isRegister ? "Maak account aan" : "Inloggen";
+  if (submitAuthButton) submitAuthButton.textContent = isRegister ? "Account aanmaken" : "Inloggen";
 
   // Switch button
   if (switchAuthModeButton) {
     switchAuthModeButton.innerHTML = isRegister
-      ? 'Heb je al een account? <strong>Inloggen</strong>'
+      ? 'Al een account? <strong>Inloggen</strong>'
       : 'Nog geen account? <strong>Account aanmaken</strong>';
   }
 
@@ -4069,8 +4064,14 @@ async function submitAuth(mode, email, password) {
   }
   applyPersistedAppState(payload.user);
   renderAll();
-  closeAuthModal();
-  showToast(mode === "register" ? "Account aangemaakt." : "Je bent ingelogd.");
+
+  if (mode === "register") {
+    showOnboarding();
+    showToast("Account aangemaakt! Volg de stappen om je profiel compleet te maken.");
+  } else {
+    closeAuthModal();
+    showToast("Je bent ingelogd.");
+  }
 }
 
 async function logoutAccount() {
@@ -6160,12 +6161,136 @@ refreshBackendStatus();
 registerServiceWorker();
 bootstrapSession();
 
-// ── Auth social buttons (placeholder) ─────────────────────────────────────────
-bindEvent(document.getElementById("authGoogleBtn"), "click", () => {
-  showToast("Google login komt binnenkort beschikbaar.");
+// ── Onboarding flow (after successful registration) ────────────────────────────
+const onboardingScreen = document.getElementById("onboardingScreen");
+let onboardingData = {
+  channels: [],
+  cookbook: "",
+  handle: "",
+  photoData: null,
+};
+
+function showOnboarding() {
+  authModal.classList.add("hidden");
+  authModal.setAttribute("aria-hidden", "true");
+  onboardingScreen.classList.remove("hidden");
+  showOnboardingStep(1);
+  renderOnboardingChannels();
+}
+
+function showOnboardingStep(step) {
+  document.getElementById("onboardingStep1")?.classList.add("hidden");
+  document.getElementById("onboardingStep2")?.classList.add("hidden");
+  document.getElementById("onboardingStep3")?.classList.add("hidden");
+  document.getElementById(`onboardingStep${step}`)?.classList.remove("hidden");
+}
+
+function renderOnboardingChannels() {
+  const list = document.getElementById("onboardingChannelsList");
+  list.innerHTML = SEED_CHANNELS.map((ch) => `
+    <label class="onboarding-channel-item" data-channel-id="${escapeHtml(ch.id)}">
+      <input type="checkbox" data-channel-check="${escapeHtml(ch.id)}" />
+      <span>${escapeHtml(ch.name)}</span>
+    </label>
+  `).join("");
+
+  // Event listeners for checkboxes
+  list.querySelectorAll("input[type=checkbox]").forEach((checkbox) => {
+    checkbox.addEventListener("change", (e) => {
+      const channelId = e.target.dataset.channelCheck;
+      const label = e.target.closest(".onboarding-channel-item");
+      if (e.target.checked) {
+        onboardingData.channels.push(channelId);
+        label.classList.add("selected");
+      } else {
+        onboardingData.channels = onboardingData.channels.filter((id) => id !== channelId);
+        label.classList.remove("selected");
+      }
+    });
+  });
+}
+
+function finishOnboarding() {
+  // Apply channels
+  if (onboardingData.channels.length > 0) {
+    state.followedChannelIds = onboardingData.channels;
+  }
+
+  // Create first cookbook if name provided
+  if (onboardingData.cookbook.trim()) {
+    const newCb = {
+      id: "cb-" + Date.now(),
+      name: onboardingData.cookbook,
+      recipeIds: [],
+    };
+    state.cookbooks.push(newCb);
+    if (state.cookbooks.length === 1) state.selectedCookbookId = newCb.id;
+  }
+
+  // Update profile if handle provided
+  if (onboardingData.handle.trim()) {
+    state.profile.handle = onboardingData.handle;
+  }
+  if (onboardingData.photoData) {
+    state.profile.photo = onboardingData.photoData;
+  }
+
+  persistAppState();
+  onboardingScreen.classList.add("hidden");
+  switchView("home");
+  renderAll();
+  showToast("Welkom! Je profiel is klaar.");
+}
+
+// ── Onboarding event listeners ─────────────────────────────────────────────────
+bindEvent(document.getElementById("onboardingClose"), "click", () => {
+  onboardingScreen.classList.add("hidden");
+  switchView("home");
 });
-bindEvent(document.getElementById("authAppleBtn"), "click", () => {
-  showToast("Apple login komt binnenkort beschikbaar.");
+
+bindEvent(document.getElementById("onboardingStep1Skip"), "click", () => {
+  showOnboardingStep(2);
+});
+
+bindEvent(document.getElementById("onboardingStep1Next"), "click", () => {
+  showOnboardingStep(2);
+});
+
+bindEvent(document.getElementById("onboardingStep2Skip"), "click", () => {
+  showOnboardingStep(3);
+});
+
+bindEvent(document.getElementById("onboardingStep2Next"), "click", () => {
+  const name = document.getElementById("onboardingCookbookName")?.value.trim();
+  if (!name) {
+    showToast("Voer een naam voor je kookboek in.");
+    return;
+  }
+  onboardingData.cookbook = name;
+  showOnboardingStep(3);
+});
+
+bindEvent(document.getElementById("onboardingStep3Skip"), "click", () => {
+  finishOnboarding();
+});
+
+bindEvent(document.getElementById("onboardingStep3Finish"), "click", () => {
+  onboardingData.handle = document.getElementById("onboardingHandle")?.value.trim() || "";
+  finishOnboarding();
+});
+
+// Photo upload
+bindEvent(document.getElementById("onboardingPhotoBtn"), "click", () => {
+  document.getElementById("onboardingPhotoInput")?.click();
+});
+
+bindEvent(document.getElementById("onboardingPhotoInput"), "change", (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  resizeImageToDataUrl(file, 320).then((dataUrl) => {
+    onboardingData.photoData = dataUrl;
+    showToast("Foto toegevoegd!");
+  });
 });
 
 // ── Confirm sheet ──────────────────────────────────────────────────────────────
