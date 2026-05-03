@@ -227,7 +227,7 @@ img { display: block; max-width: 100%; }
   align-items: center;
   gap: 12px;
   margin-bottom: 18px;
-  padding-inline: 16px;
+  padding: 16px 16px 0;
 }
 
 .search-input {
