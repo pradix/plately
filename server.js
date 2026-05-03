@@ -2259,8 +2259,66 @@ function safelyParseJson(rawValue) {
   try {
     return JSON.parse(rawValue);
   } catch {
-    return null;
+    // Some sites embed literal newlines/tabs inside JSON string values, which
+    // strict JSON forbids. Try to sanitize control chars inside quoted strings
+    // and retry once.
+    try {
+      const sanitized = sanitizeLooseJsonString(rawValue);
+      return JSON.parse(sanitized);
+    } catch {
+      return null;
+    }
   }
+}
+
+/**
+ * Walk through a JSON-ish string and replace literal control characters
+ * (newlines, tabs, carriage returns, form feed, backspace) that appear INSIDE
+ * quoted strings with their escaped equivalents. Outside of strings we keep
+ * whitespace as-is. This salvages JSON-LD blocks that have raw \n inside
+ * descriptions or instructions (common with WordPress theme misconfigs).
+ */
+function sanitizeLooseJsonString(input) {
+  let out = "";
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < input.length; i += 1) {
+    const ch = input[i];
+    if (escape) {
+      out += ch;
+      escape = false;
+      continue;
+    }
+    if (ch === "\\") {
+      out += ch;
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      out += ch;
+      inString = !inString;
+      continue;
+    }
+    if (inString) {
+      // Map invalid control chars to their JSON escape sequences
+      switch (ch) {
+        case "\n": out += "\\n"; continue;
+        case "\r": out += "\\r"; continue;
+        case "\t": out += "\\t"; continue;
+        case "\f": out += "\\f"; continue;
+        case "\b": out += "\\b"; continue;
+        default: {
+          const code = ch.charCodeAt(0);
+          if (code < 0x20) {
+            out += `\\u${code.toString(16).padStart(4, "0")}`;
+            continue;
+          }
+        }
+      }
+    }
+    out += ch;
+  }
+  return out;
 }
 
 function extractJsonScriptById(html, id) {
@@ -2811,13 +2869,34 @@ function parseWebsiteRecipe(html, url) {
     const recipeIngredients = Array.isArray(recipeSource.recipeIngredient)
       ? normalizeIngredientList(recipeSource.recipeIngredient.map(parseIngredientLine))
       : [];
-    const recipeInstructions = parseJsonLdInstructions(recipeSource.recipeInstructions);
+    // Detect bogus recipeInstructions: some sites stuff the description string into
+    // this field instead of an array of steps. Treat strings that match the
+    // description (or are very long without paragraph breaks) as suspect.
+    let rawInstructions = recipeSource.recipeInstructions;
+    if (typeof rawInstructions === "string") {
+      const trimmedInstr = rawInstructions.replace(/\s+/g, " ").trim();
+      const trimmedDesc = (recipeSource.description || "").replace(/\s+/g, " ").trim();
+      const looksLikeDescription =
+        trimmedInstr === trimmedDesc ||
+        (trimmedInstr.length > 200 && !/\b(stap|step|\d+\.)/i.test(trimmedInstr));
+      if (looksLikeDescription) {
+        rawInstructions = null; // force HTML fallback
+      }
+    }
+    const recipeInstructions = parseJsonLdInstructions(rawInstructions);
     const mergedIngredients = recipeIngredients.length
       ? recipeIngredients
       : normalizeIngredientList(fallbackIngredients.map(parseIngredientLine)).slice(0, 16);
-    const mergedInstructions = recipeInstructions.length
-      ? finalizeInstructionSteps(recipeInstructions)
-      : finalizeInstructionSteps(mergeInstructionLines(fallbackInstructions)).slice(0, 12);
+    // Prefer JSON-LD if it has at least 2 steps; otherwise prefer the HTML
+    // fallback when it offers significantly more steps.
+    const fallbackInstructionsFinal = finalizeInstructionSteps(mergeInstructionLines(fallbackInstructions)).slice(0, 12);
+    const jsonLdInstructionsFinal = finalizeInstructionSteps(recipeInstructions);
+    const mergedInstructions =
+      jsonLdInstructionsFinal.length >= 2 && jsonLdInstructionsFinal.length >= fallbackInstructionsFinal.length
+        ? jsonLdInstructionsFinal
+        : fallbackInstructionsFinal.length >= jsonLdInstructionsFinal.length
+          ? fallbackInstructionsFinal
+          : jsonLdInstructionsFinal;
     const recipeYield = Array.isArray(recipeSource.recipeYield)
       ? sanitizeText(recipeSource.recipeYield.find(Boolean) || recipeSource.recipeYield[0])
       : sanitizeText(recipeSource.recipeYield);
@@ -2856,7 +2935,10 @@ function parseWebsiteRecipe(html, url) {
           recipeSource.totalTime || recipeSource.cookTime || recipeSource.prepTime || jsonLd?.totalTime || jsonLd?.cookTime || jsonLd?.prepTime
         ) || estimateTime(recipeDescription),
       servings: recipeYield || "2",
-      needsReview: mergedIngredients.length === 0 || mergedInstructions.length === 0,
+      // Flag for review whenever we have fewer than 2 ingredients or 2 instructions
+      // — this triggers the Claude AI fallback in importWebsite when ANTHROPIC_API_KEY
+      // is set, which can extract proper steps from messy article bodies.
+      needsReview: mergedIngredients.length < 2 || mergedInstructions.length < 2,
       sourceLabel: "Imported from Website",
     };
   }
