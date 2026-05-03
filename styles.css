@@ -113,7 +113,7 @@ img { display: block; max-width: 100%; }
 .brand-logo {
   height: 40px;
   width: auto;
-  max-width: min(60vw, 180px);
+  max-width: 140px;
   object-fit: contain;
   object-position: left center;
   mix-blend-mode: multiply;
