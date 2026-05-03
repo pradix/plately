@@ -3431,39 +3431,66 @@ img { display: block; max-width: 100%; }
   display: none !important;
 }
 
-.auth-screen__topbar {
+/* Floating close button top-right */
+.auth-screen__close-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.07);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  z-index: 1;
   flex-shrink: 0;
 }
+.auth-screen__close-btn svg { width: 18px; height: 18px; display: block; }
+.auth-screen__close-btn:active { background: rgba(0,0,0,0.14); }
 
-.auth-screen__body {
+.auth-screen__inner {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 0 24px 48px;
-  max-width: 480px;
+  padding: 0 28px 52px;
+  max-width: 440px;
   width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .auth-screen__brand {
   text-align: center;
-  padding: 16px 0 32px;
+  padding: 52px 0 28px;
 }
 
 .auth-screen__logo {
-  height: 52px;
+  height: 68px;
   width: auto;
   object-fit: contain;
+  display: block;
+  margin: 0 auto 16px;
 }
 
 .auth-screen__tagline {
-  margin: 12px 0 0;
+  margin: 0 0 6px;
   font-family: var(--font-display);
-  font-size: 1.9rem;
-  font-weight: 700;
+  font-size: 2rem;
+  font-weight: 800;
   color: #1a1a1a;
   letter-spacing: -0.03em;
-  line-height: 1.1;
+  line-height: 1.15;
+}
+
+.auth-screen__subtitle {
+  margin: 0;
+  font-size: 0.93rem;
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .auth-screen__form {
@@ -3622,6 +3649,78 @@ img { display: block; max-width: 100%; }
 
 .auth-screen__guest-btn:active {
   background: #f5f3ef;
+}
+
+/* ── Custom confirm action sheet ─────────────────────────────────────────────── */
+.confirm-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 350;
+}
+.confirm-sheet-backdrop.hidden { display: none !important; }
+
+.confirm-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 351;
+  background: var(--bg);
+  border-radius: 20px 20px 0 0;
+  padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  max-width: 520px;
+  margin: 0 auto;
+}
+.confirm-sheet.hidden { display: none !important; }
+
+.confirm-sheet__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 4px;
+  text-align: center;
+}
+
+.confirm-sheet__subtitle {
+  font-size: 0.88rem;
+  color: var(--muted);
+  margin: 0 0 20px;
+  text-align: center;
+}
+.confirm-sheet__subtitle:empty { display: none; }
+
+.confirm-sheet__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.confirm-sheet__btn {
+  display: block;
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.confirm-sheet__btn:active { opacity: 0.8; }
+
+.confirm-sheet__btn--confirm {
+  background: #78936f;
+  color: #fff;
+}
+.confirm-sheet__btn--destructive {
+  background: #ef4444;
+  color: #fff;
+}
+.confirm-sheet__btn--cancel {
+  background: rgba(0,0,0,0.06);
+  color: #4b5563;
 }
 
 .modal {
@@ -6655,6 +6754,18 @@ body {
   font-size: 0.73rem;
   color: var(--muted);
   margin: 0;
+}
+
+/* Add cookbook card */
+.home-cb-card--add {
+  border: 2px dashed rgba(116,111,98,0.22);
+  background: transparent;
+  box-shadow: none;
+}
+.home-cb-card--add:active { transform: scale(0.97); }
+.home-cb-card__cover--add {
+  background: rgba(116,111,98,0.05);
+  color: var(--muted);
 }
 
 /* ── Recipe card source favicon ────────────────────────────────────────────── */

@@ -794,6 +794,30 @@ function showToast(message) {
   }, 2800);
 }
 
+let confirmCallback = null;
+function showConfirm({ title, subtitle, confirmLabel = "Bevestigen", destructive = false, onConfirm }) {
+  const sheet = document.getElementById("confirmSheet");
+  const titleEl = document.getElementById("confirmSheetTitle");
+  const subtitleEl = document.getElementById("confirmSheetSubtitle");
+  const confirmBtn = document.getElementById("confirmSheetConfirmBtn");
+  if (!sheet) return;
+  if (titleEl) titleEl.textContent = title || "";
+  if (subtitleEl) subtitleEl.textContent = subtitle || "";
+  if (confirmBtn) {
+    confirmBtn.textContent = confirmLabel;
+    confirmBtn.className = "confirm-sheet__btn confirm-sheet__btn--confirm" + (destructive ? " confirm-sheet__btn--destructive" : "");
+  }
+  confirmCallback = onConfirm || null;
+  sheet.classList.remove("hidden");
+  document.getElementById("confirmSheetBackdrop")?.classList.remove("hidden");
+}
+function closeConfirmSheet() {
+  const sheet = document.getElementById("confirmSheet");
+  sheet?.classList.add("hidden");
+  document.getElementById("confirmSheetBackdrop")?.classList.add("hidden");
+  confirmCallback = null;
+}
+
 function updateAuthUI() {
   if (!accountTitle || !accountCopy || !openRegisterButton || !openLoginButton || !logoutButton) {
     return;
@@ -1939,6 +1963,18 @@ function renderHomeCookbooks() {
 
   if (heading) heading.classList.remove("hidden");
 
+  const addCard = `
+    <button class="home-cb-card home-cb-card--add" type="button" id="homeCookbookAddCard" aria-label="Nieuw kookboek aanmaken">
+      <div class="home-cb-card__cover home-cb-card__cover--add">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" style="width:32px;height:32px;opacity:.55"><path d="M12 5v14M5 12h14"/></svg>
+      </div>
+      <div class="home-cb-card__body">
+        <p class="home-cb-card__name">Nieuw</p>
+        <p class="home-cb-card__count">Kookboek</p>
+      </div>
+    </button>
+  `;
+
   strip.innerHTML = top.map((cookbook) => {
     const recipes = cookbook.recipeIds.map((id) => getRecipeById(id)).filter(Boolean);
     const coverImg = recipes[0]?.image || "";
@@ -1959,7 +1995,7 @@ function renderHomeCookbooks() {
         </div>
       </button>
     `;
-  }).join("");
+  }).join("") + addCard;
 }
 
 function renderNavBadge() {
@@ -4323,13 +4359,20 @@ bindEvent(document.getElementById("viewAllCookbooksBtn"), "click", () => {
 });
 bindEvent(document.getElementById("groceryClearButton"), "click", () => {
   if (!state.groceryItems.length) return;
-  if (!confirm("Wil je de hele boodschappenlijst leegmaken?")) return;
-  state.groceryItems = [];
-  renderGroceryGroups();
-  renderNavBadge();
-  persistGroceryItemsLocally(); // save [] to localStorage immediately
-  persistAppState();            // save to server immediately
-  showToast("Boodschappenlijst is leeggemaakt.");
+  showConfirm({
+    title: "Boodschappenlijst leegmaken?",
+    subtitle: "Alle items worden verwijderd.",
+    confirmLabel: "Leegmaken",
+    destructive: true,
+    onConfirm: () => {
+      state.groceryItems = [];
+      renderGroceryGroups();
+      renderNavBadge();
+      persistGroceryItemsLocally();
+      persistAppState();
+      showToast("Boodschappenlijst is leeggemaakt.");
+    },
+  });
 });
 bindEvent(copyGroceryListButton, "click", () => {
   copyGroceryList().catch(() => {
@@ -5950,6 +5993,11 @@ bindEvent(document.getElementById("importChannelSearchResults"), "click", async 
 
 // ── Cookbook strip on home screen ──────────────────────────────────────────────
 bindEvent(document.getElementById("homeCbStrip"), "click", (event) => {
+  // "add cookbook" card
+  if (event.target.closest("#homeCookbookAddCard")) {
+    openCookbookNameModal("create");
+    return;
+  }
   const btn = event.target.closest("[data-open-cookbook-home]");
   if (!(btn instanceof HTMLElement)) return;
   const cookbookId = btn.dataset.openCookbookHome;
@@ -6103,3 +6151,11 @@ document.querySelectorAll(".brand-logo").forEach((logo) => {
 refreshBackendStatus();
 registerServiceWorker();
 bootstrapSession();
+
+// ── Confirm sheet ──────────────────────────────────────────────────────────────
+bindEvent(document.getElementById("confirmSheetBackdrop"), "click", closeConfirmSheet);
+bindEvent(document.getElementById("confirmSheetCancelBtn"), "click", closeConfirmSheet);
+bindEvent(document.getElementById("confirmSheetConfirmBtn"), "click", () => {
+  closeConfirmSheet();
+  if (typeof confirmCallback === "function") confirmCallback();
+});

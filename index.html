@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-47" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-48" />
   </head>
   <body>
     <main class="page">
@@ -457,7 +457,7 @@
             <div class="profile2-row-divider"></div>
             <button class="profile2-row" type="button" id="goToLanguageBtn">
               <span class="profile2-row__icon" style="background:#e0f2f1">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#0f766e" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 8l4 4-4 4"/><path d="M12 16h7"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#0f766e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3c-2.5 3.5-2.5 14.5 0 18M12 3c2.5 3.5 2.5 14.5 0 18M3 12h18M3.6 7.5h16.8M3.6 16.5h16.8"/></svg>
               </span>
               <span class="profile2-row__label">Taal</span>
               <span class="profile2-row__meta" id="profileLanguageMeta">Nederlands</span>
@@ -836,11 +836,11 @@
       <div class="basket-sheet" id="basketSheet">
         <!-- Header -->
         <div class="basket-sheet__header">
+          <span class="basket-sheet__header-spacer"></span>
+          <span class="basket-sheet__title" id="basketOverlayTitle">Boodschappen</span>
           <button class="basket-sheet__close" id="basketOverlayClose" type="button" aria-label="Sluiten">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
-          <span class="basket-sheet__title" id="basketOverlayTitle">Boodschappen</span>
-          <span class="basket-sheet__header-spacer"></span>
         </div>
 
         <!-- Recipe title + servings -->
@@ -981,22 +981,30 @@
 
     <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
 
-    <!-- ══ Auth screen (full-screen panel) ══ -->
-    <div class="auth-screen hidden" id="authModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-      <!-- Back / close -->
-      <header class="topbar--sub auth-screen__topbar">
-        <button class="topbar-back-btn" type="button" data-close-auth="true" aria-label="Sluiten">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-        </button>
-        <span class="topbar-spacer"></span>
-        <span class="topbar-spacer"></span>
-      </header>
+    <!-- Custom confirm action sheet -->
+    <div class="confirm-sheet-backdrop hidden" id="confirmSheetBackdrop"></div>
+    <div class="confirm-sheet hidden" id="confirmSheet" role="alertdialog" aria-modal="true">
+      <p class="confirm-sheet__title" id="confirmSheetTitle"></p>
+      <p class="confirm-sheet__subtitle" id="confirmSheetSubtitle"></p>
+      <div class="confirm-sheet__actions">
+        <button class="confirm-sheet__btn confirm-sheet__btn--confirm" id="confirmSheetConfirmBtn" type="button">Bevestigen</button>
+        <button class="confirm-sheet__btn confirm-sheet__btn--cancel" id="confirmSheetCancelBtn" type="button">Annuleren</button>
+      </div>
+    </div>
 
-      <div class="auth-screen__body">
-        <!-- Logo + tagline -->
+    <!-- ══ Auth screen (full-screen panel) ══ -->
+    <div class="auth-screen hidden" id="authModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="authKicker">
+      <!-- Floating close button -->
+      <button class="auth-screen__close-btn" type="button" data-close-auth="true" aria-label="Sluiten">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+
+      <div class="auth-screen__inner">
+        <!-- Brand section -->
         <div class="auth-screen__brand">
           <img class="auth-screen__logo" src="assets/plately.png" alt="Plately" />
-          <p class="auth-screen__tagline" id="authKicker">Inloggen</p>
+          <h1 class="auth-screen__tagline" id="authKicker">Welkom terug</h1>
+          <p class="auth-screen__subtitle">Recepten, kookboeken en lijstjes altijd bij je.</p>
         </div>
 
         <form id="authForm" class="auth-screen__form">
@@ -1125,6 +1133,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-44"></script>
+    <script src="app.js?v=plately-banani-45"></script>
   </body>
 </html>
