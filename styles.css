@@ -3570,16 +3570,14 @@ img { display: block; max-width: 100%; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 14px;
+  padding: 16px;
   border: none;
   border-radius: 14px;
-  font-size: 0.95rem;
-  font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   transition: transform 0.15s ease, opacity 0.15s ease;
   color: #fff;
+  min-height: 56px;
 }
 
 .auth-screen__social-btn:active {
@@ -3587,8 +3585,8 @@ img { display: block; max-width: 100%; }
 }
 
 .auth-screen__social-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 28px;
   display: block;
 }
 
