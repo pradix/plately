@@ -5040,7 +5040,7 @@ body {
   align-items: center;
   gap: 0;
   margin: 0 0 24px;
-  padding: 12px 12px 12px 22px;
+  padding: 0 12px 12px 22px;
   border-radius: 36px;
   background: #fff;
   border: 1px solid rgba(120, 147, 111, 0.08);
