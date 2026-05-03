@@ -857,20 +857,30 @@ function openAuthModal(mode = "login") {
   authModal.classList.remove("hidden");
   authModal.setAttribute("aria-hidden", "false");
 
-  // Tagline (used as the title now)
-  if (authKicker) authKicker.textContent = isRegister ? "Account aanmaken" : "Welkom terug";
+  // Title
+  if (authKicker) authKicker.textContent = isRegister ? "Klaar om te koken?" : "Welkom terug";
+
+  // Subtitle
+  const subtitleEl = document.getElementById("authSubtitle");
+  if (subtitleEl) subtitleEl.textContent = isRegister
+    ? "Maak je account aan en bewaar al je favoriete recepten op één slimme plek."
+    : "Log in om je recepten, kookboeken en boodschappenlijst te bekijken.";
+
+  // Badge
+  const badgeEl = document.getElementById("authBadge");
+  if (badgeEl) badgeEl.textContent = isRegister ? "100% GRATIS" : "Plately";
 
   // Show/hide name field
   const nameField = document.getElementById("authNameField");
   if (nameField) nameField.style.display = isRegister ? "" : "none";
 
   // Submit button text
-  if (submitAuthButton) submitAuthButton.textContent = isRegister ? "Account aanmaken" : "Inloggen";
+  if (submitAuthButton) submitAuthButton.textContent = isRegister ? "Maak account aan" : "Inloggen";
 
   // Switch button
   if (switchAuthModeButton) {
     switchAuthModeButton.innerHTML = isRegister
-      ? 'Al een account? <strong>Inloggen</strong>'
+      ? 'Heb je al een account? <strong>Inloggen</strong>'
       : 'Nog geen account? <strong>Account aanmaken</strong>';
   }
 
@@ -6149,6 +6159,14 @@ document.querySelectorAll(".brand-logo").forEach((logo) => {
 refreshBackendStatus();
 registerServiceWorker();
 bootstrapSession();
+
+// ── Auth social buttons (placeholder) ─────────────────────────────────────────
+bindEvent(document.getElementById("authGoogleBtn"), "click", () => {
+  showToast("Google login komt binnenkort beschikbaar.");
+});
+bindEvent(document.getElementById("authAppleBtn"), "click", () => {
+  showToast("Apple login komt binnenkort beschikbaar.");
+});
 
 // ── Confirm sheet ──────────────────────────────────────────────────────────────
 bindEvent(document.getElementById("confirmSheetBackdrop"), "click", closeConfirmSheet);
