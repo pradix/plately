@@ -6273,6 +6273,8 @@ function _obFinish() {
 }
 
 function startOnboarding() {
+  // Only show tooltips for authenticated users on their first time
+  if (!state.auth.authenticated) return;
   try { if (localStorage.getItem(ONBOARDING_KEY)) return; } catch {}
   _obStep = 0;
   setTimeout(() => _obShow(0), 600);
@@ -6400,6 +6402,8 @@ function finishOnboarding() {
   switchView("home");
   renderAll();
   showToast("Welkom! Je profiel is klaar.");
+  // Show tutorial tooltips for first-time users
+  setTimeout(() => startOnboarding(), 800);
 }
 
 // ── Onboarding event listeners ─────────────────────────────────────────────────
