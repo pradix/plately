@@ -105,13 +105,6 @@ img { display: block; max-width: 100%; }
 }
 
 /* Hero variant sits on top of the hero image */
-.topbar--hero {
-  position: absolute;
-  inset: 0 0 auto 0;
-  z-index: 2;
-  margin-bottom: 0;
-  padding-top: 20px;
-}
 
 .brand-lockup {
   border: 0;
@@ -208,15 +201,6 @@ img { display: block; max-width: 100%; }
 .topbar-actions,
 .detail-hero__actions,
 .grocery-header__actions,
-.detail-topbar-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.detail-topbar-actions {
-  align-items: center;
-}
-
 /* ── Icon buttons ── */
 .icon-button {
   width: 44px;
@@ -3095,7 +3079,7 @@ img { display: block; max-width: 100%; }
 }
 
 /* Legacy: profile sub-panels that still use topbar--std */
-.profile-subpanel .topbar--std {
+.profile-subpanel .topbar--sub {
   position: sticky;
   top: 0;
   background: var(--bg);
@@ -4905,14 +4889,7 @@ body {
 
 .topbar,
 .topbar--home,
-.topbar--std {
-  padding: 0;
-  margin: 0 0 28px;
-  background: transparent;
-}
-
-.topbar--home,
-.topbar--std {
+.topbar--home {
   align-items: flex-start;
 }
 

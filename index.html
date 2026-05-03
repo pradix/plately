@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-51" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-52" />
   </head>
   <body>
     <main class="page">
@@ -122,24 +122,22 @@
         </section>
 
         <section class="screen detail-screen" id="detailScreen">
-          <header class="topbar topbar--hero">
-            <button class="icon-button icon-button--solid" id="detailBackButton" type="button" aria-label="Terug">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M10.78 5.22a1 1 0 0 1 0 1.41L6.41 11H20a1 1 0 1 1 0 2H6.41l4.37 4.37a1 1 0 0 1-1.41 1.41l-6.08-6.08a1 1 0 0 1 0-1.41l6.08-6.08a1 1 0 0 1 1.41 0Z"/>
-              </svg>
+          <header class="topbar topbar--home">
+            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar recepten">
+              <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
             </button>
-            <div class="topbar-spacer" aria-hidden="true"></div>
-            <div class="detail-topbar-actions">
-              <button class="icon-button icon-button--solid" id="detailSaveHeaderButton" type="button" aria-label="Opslaan in kookboek">
+            <div class="topbar-actions">
+              <button class="icon-button" id="detailSaveHeaderButton" type="button" aria-label="Opslaan in kookboek">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M5 3.75A1.75 1.75 0 0 1 6.75 2h10.5A1.75 1.75 0 0 1 19 3.75v17.5a.75.75 0 0 1-1.2.6L12 17.69l-5.8 4.16A.75.75 0 0 1 5 21.25V3.75Zm1.75-.25a.25.25 0 0 0-.25.25v16.3l5.05-3.62a.75.75 0 0 1 .9 0l5.05 3.62V3.75a.25.25 0 0 0-.25-.25H6.75Z"/>
                 </svg>
               </button>
-              <button class="icon-button icon-button--solid" id="shareRecipeButton" type="button" aria-label="Recept delen">
+              <button class="icon-button" id="shareRecipeButton" type="button" aria-label="Recept delen">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z"/>
                 </svg>
               </button>
+              <button class="home-avatar" type="button" data-view="settings" aria-label="Profiel"></button>
             </div>
           </header>
           <div class="detail-hero">
@@ -358,17 +356,12 @@
         </section>
 
         <section class="screen mealplan-screen" id="mealPlanScreen">
-          <header class="topbar topbar--std">
+          <header class="topbar topbar--home">
             <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar recepten">
               <img class="brand-logo brand-logo--sm" src="assets/plately.png" alt="Plately" />
             </button>
             <div class="topbar-actions">
-              <button class="icon-button" type="button" aria-label="Meldingen">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 3.75a4.75 4.75 0 0 0-4.75 4.75v1.07c0 .72-.24 1.43-.67 2l-1.1 1.47a2.75 2.75 0 0 0 2.2 4.4h8.64a2.75 2.75 0 0 0 2.2-4.4l-1.1-1.47a3.36 3.36 0 0 1-.67-2V8.5A4.75 4.75 0 0 0 12 3.75Zm0 17a2.74 2.74 0 0 1-2.47-1.55h4.94A2.74 2.74 0 0 1 12 20.75Z"/>
-                </svg>
-              </button>
-              <button class="home-avatar" type="button" data-view="settings" aria-label="Instellingen"></button>
+              <button class="home-avatar" type="button" data-view="settings" aria-label="Profiel"></button>
             </div>
           </header>
 
@@ -1198,6 +1191,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-48"></script>
+    <script src="app.js?v=plately-banani-49"></script>
   </body>
 </html>

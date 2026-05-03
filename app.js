@@ -532,7 +532,6 @@ const openFeaturedRecipeButton = document.getElementById("openFeaturedRecipeButt
 const platformButtons = [...document.querySelectorAll(".platform-button[data-platform-choice]")];
 const platformCards = [...document.querySelectorAll(".platform-card[data-platform-choice]")];
 const navItems = [...document.querySelectorAll(".nav-item[data-view]")];
-const detailBackButton = document.getElementById("detailBackButton");
 const detailHeroImage = document.getElementById("detailHeroImage");
 const detailTitle = document.getElementById("detailTitle");
 const detailMealTag = document.getElementById("detailMealTag");
@@ -4306,7 +4305,6 @@ bindEvent(featuredCard, "keydown", (event) => {
   }
 });
 
-bindEvent(detailBackButton, "click", () => switchView("home"));
 bindEvent(groceryAddButton, "click", () => addRecipeToGrocery(getSelectedRecipe()));
 bindEvent(addSelectedToGroceriesButton, "click", () => {
   addRecipeToGrocery(getSelectedRecipe());
