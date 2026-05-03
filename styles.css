@@ -88,6 +88,8 @@ img { display: block; max-width: 100%; }
   flex-wrap: nowrap;
   min-height: 56px;
   box-sizing: border-box;
+  width: 100%;
+  overflow: hidden;
 }
 
 /* Home topbar variant */
@@ -117,13 +119,14 @@ img { display: block; max-width: 100%; }
   cursor: pointer;
   flex-shrink: 0;
   min-width: 0;
+  min-width: 0;
 }
 
 /* Unified responsive logo */
 .brand-logo {
   height: 40px;
   width: auto;
-  max-width: 60vw;
+  max-width: min(60vw, 180px);
   object-fit: contain;
   object-position: left center;
   mix-blend-mode: multiply;
