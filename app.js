@@ -1961,7 +1961,17 @@ function renderHomeCookbooks() {
 
   if (!top.length) {
     if (heading) heading.classList.add("hidden");
-    strip.innerHTML = "";
+    strip.innerHTML = `
+      <div class="home-empty-state">
+        <div class="home-empty-state__icon">📚</div>
+        <h3 class="home-empty-state__title">Nieuw kookboek</h3>
+        <p class="home-empty-state__text">Maak je eerste kookboek aan</p>
+        <button class="home-empty-state__btn" type="button" id="homeCreateCookbookBtn">Nieuw kookboek</button>
+      </div>
+    `;
+    bindEvent(document.getElementById("homeCreateCookbookBtn"), "click", () => {
+      switchView("cookbooks");
+    });
     return;
   }
 
@@ -2078,7 +2088,7 @@ function renderRecipeGrid() {
   const isSearching = !!state.searchQuery.trim();
   const gridSection = document.getElementById("recipeGridSection");
 
-  // Show grid section when actively searching or filtering
+  // Show grid section when actively searching/filtering OR when displaying recipes
   if (isSearching || state.activeCookbookFilter) {
     if (gridSection) gridSection.style.display = "";
   }
@@ -2086,9 +2096,10 @@ function renderRecipeGrid() {
   let recipes;
   if (!isSearching && !state.activeCookbookFilter) {
     // Show user-imported recipes first, then fill with seed recipes
+    // For new users (no imported recipes), show nothing (empty state will be shown)
     const imported = getImportedRecipes();
     const seeds = COOKBOOK_SHOWCASE_IDS.map((id) => getRecipeById(id)).filter(Boolean);
-    recipes = imported.length ? [...imported, ...seeds] : seeds;
+    recipes = imported.length ? [...imported, ...seeds] : [];
   } else {
     recipes = getVisibleRecipes();
   }
@@ -2118,14 +2129,32 @@ function renderRecipeGrid() {
   }
 
   if (!recipes.length) {
-    recipeGrid.innerHTML = `
-      <article class="recent-card recent-card--empty" style="grid-column:1/-1;border:none;box-shadow:none;background:transparent">
-        <div class="recent-card__body" style="padding:24px 0">
-          <p class="recent-card__title">Geen recepten gevonden</p>
-          <p class="recent-card__meta">Probeer een andere zoekterm</p>
+    const isNewUser = getImportedRecipes().length === 0 && !isSearching && !state.activeCookbookFilter;
+
+    if (isNewUser) {
+      // New user - show import prompt
+      recipeGrid.innerHTML = `
+        <div class="home-empty-state" style="grid-column:1/-1;padding:40px 24px;text-align:center">
+          <div class="home-empty-state__icon">🍽️</div>
+          <h3 class="home-empty-state__title">Je recepten</h3>
+          <p class="home-empty-state__text">Importeer je eerste recept</p>
+          <button class="home-empty-state__btn" type="button" id="homeImportFirstRecipeBtn">Importeer recept</button>
         </div>
-      </article>
-    `;
+      `;
+      bindEvent(document.getElementById("homeImportFirstRecipeBtn"), "click", () => {
+        document.getElementById("openImportButton").click();
+      });
+    } else {
+      // Search or filter with no results
+      recipeGrid.innerHTML = `
+        <article class="recent-card recent-card--empty" style="grid-column:1/-1;border:none;box-shadow:none;background:transparent">
+          <div class="recent-card__body" style="padding:24px 0">
+            <p class="recent-card__title">Geen recepten gevonden</p>
+            <p class="recent-card__meta">Probeer een andere zoekterm</p>
+          </div>
+        </article>
+      `;
+    }
     return;
   }
 
@@ -6185,12 +6214,18 @@ function showOnboardingStep(step) {
 
 function renderOnboardingChannels() {
   const list = document.getElementById("onboardingChannelsList");
-  list.innerHTML = SEED_CHANNELS.map((ch) => `
-    <label class="onboarding-channel-item" data-channel-id="${escapeHtml(ch.id)}">
-      <input type="checkbox" data-channel-check="${escapeHtml(ch.id)}" />
-      <span>${escapeHtml(ch.name)}</span>
-    </label>
-  `).join("");
+  list.innerHTML = SEED_CHANNELS.map((ch) => {
+    const faviconUrl = getSourceIconUrl(ch.url);
+    return `
+      <label class="onboarding-channel-item" data-channel-id="${escapeHtml(ch.id)}">
+        <input type="checkbox" data-channel-check="${escapeHtml(ch.id)}" />
+        <span class="onboarding-channel-avatar">
+          ${faviconUrl ? `<img class="onboarding-channel-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
+        </span>
+        <span>${escapeHtml(ch.name)}</span>
+      </label>
+    `;
+  }).join("");
 
   // Event listeners for checkboxes
   list.querySelectorAll("input[type=checkbox]").forEach((checkbox) => {
@@ -6212,6 +6247,11 @@ function finishOnboarding() {
   // Apply channels
   if (onboardingData.channels.length > 0) {
     state.followedChannelIds = onboardingData.channels;
+  }
+
+  // Persist suggested channels if any
+  if (onboardingData.suggestedChannels && onboardingData.suggestedChannels.length > 0) {
+    state.customChannels.push(...onboardingData.suggestedChannels);
   }
 
   // Create first cookbook if name provided
@@ -6244,6 +6284,43 @@ function finishOnboarding() {
 bindEvent(document.getElementById("onboardingClose"), "click", () => {
   onboardingScreen.classList.add("hidden");
   switchView("home");
+});
+
+bindEvent(document.getElementById("onboardingSuggestBtn"), "click", () => {
+  const name = prompt("Kanaal naam (bijv. \"Leuke Recepten\"):");
+  if (!name || !name.trim()) return;
+
+  const url = prompt("Website URL (bijv. \"https://www.leukerecepten.nl\"):");
+  if (!url || !url.trim()) return;
+
+  // Create temporary channel object
+  const newChannelId = `ch-custom-${Date.now()}`;
+  const initials = name
+    .split(" ")
+    .map((word) => word[0])
+    .filter((c) => /[a-zA-Z]/.test(c))
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "NC";
+
+  // Add to onboarding data temporarily
+  if (!onboardingData.suggestedChannels) {
+    onboardingData.suggestedChannels = [];
+  }
+
+  onboardingData.suggestedChannels.push({
+    id: newChannelId,
+    name: name.trim(),
+    url: url.trim(),
+    initials: initials,
+  });
+
+  // Add to followed channels
+  onboardingData.channels.push(newChannelId);
+
+  // Re-render with the new channel
+  renderOnboardingChannels();
+  showToast(`"${escapeHtml(name)}" voorgesteld! Het wordt gevolgd.`);
 });
 
 bindEvent(document.getElementById("onboardingStep1Skip"), "click", () => {

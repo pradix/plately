@@ -3718,6 +3718,56 @@ img { display: block; max-width: 100%; }
   width: 18px;
   height: 18px;
   cursor: pointer;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.onboarding-channel-avatar {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f0f0f0;
+  flex-shrink: 0;
+  font-weight: 800;
+  font-size: .65rem;
+  color: #999;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+}
+
+.onboarding-channel-avatar__favicon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.onboarding-suggest-section {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 8px;
+  border-top: 1px solid rgba(0,0,0,0.06);
+  margin-top: 8px;
+}
+
+.onboarding-suggest-btn {
+  padding: 10px 16px;
+  background: transparent;
+  border: 1px solid #d0ccbf;
+  border-radius: 10px;
+  color: #6b7280;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: inherit;
+}
+
+.onboarding-suggest-btn:active {
+  border-color: #78936f;
+  background: rgba(120,147,111,0.06);
 }
 
 .onboarding-form {
@@ -3779,6 +3829,54 @@ img { display: block; max-width: 100%; }
   background: transparent;
   color: #6b7280;
   border: 1.5px solid #e5e2dc;
+}
+
+/* ── Home empty states ────────────────────────────────────────────────────────── */
+.home-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 24px;
+}
+
+.home-empty-state__icon {
+  font-size: 2.5rem;
+  display: block;
+}
+
+.home-empty-state__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+  text-align: center;
+}
+
+.home-empty-state__text {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin: 0;
+  text-align: center;
+}
+
+.home-empty-state__btn {
+  margin-top: 8px;
+  padding: 12px 20px;
+  background: #78936f;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.15s;
+}
+
+.home-empty-state__btn:active {
+  opacity: 0.8;
 }
 
 .hidden { display: none !important; }
