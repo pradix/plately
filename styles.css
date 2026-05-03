@@ -3566,6 +3566,14 @@ img { display: block; max-width: 100%; }
   gap: 12px;
 }
 
+.auth-screen__social-buttons--single {
+  grid-template-columns: 1fr;
+}
+
+.auth-screen__social-btn {
+  text-decoration: none;
+}
+
 .auth-screen__social-btn {
   display: flex;
   align-items: center;
@@ -4624,6 +4632,17 @@ img { display: block; max-width: 100%; }
   background: rgba(200, 70, 60, 0.08);
   border-color: rgba(200, 70, 60, 0.15);
   color: #c44;
+}
+
+.detail-icon-action--bug {
+  color: #b9883a;
+}
+
+.detail-icon-action--bug:hover,
+.detail-icon-action--bug:focus-visible {
+  background: rgba(220, 170, 60, 0.1);
+  border-color: rgba(220, 170, 60, 0.2);
+  color: #a47521;
 }
 
 /* Bookmark saved state */

@@ -4646,21 +4646,47 @@ bindEvent(reviewImportButton, "click", () => openRecipeEditPanel(state.selectedR
 bindEvent(document.getElementById("deleteRecipeButton"), "click", () => {
   const recipe = getSelectedRecipe();
   if (!recipe || SEED_RECIPE_IDS.has(recipe.id) || recipe.isSeed) return;
-  if (!window.confirm(`"${recipe.title}" verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
-  // Remove from recipes list
-  state.recipes = state.recipes.filter((r) => r.id !== recipe.id);
-  // Remove from all cookbooks
-  state.cookbooks.forEach((cb) => {
-    cb.recipeIds = cb.recipeIds.filter((id) => id !== recipe.id);
+  showConfirm({
+    title: "Recept verwijderen?",
+    subtitle: `"${recipe.title}" wordt definitief verwijderd. Dit kan niet ongedaan worden gemaakt.`,
+    confirmLabel: "Verwijderen",
+    destructive: true,
+    onConfirm: () => {
+      // Remove from recipes list
+      state.recipes = state.recipes.filter((r) => r.id !== recipe.id);
+      // Remove from all cookbooks
+      state.cookbooks.forEach((cb) => {
+        cb.recipeIds = cb.recipeIds.filter((id) => id !== recipe.id);
+      });
+      // Reset selectedRecipeId to first remaining recipe
+      if (state.selectedRecipeId === recipe.id) {
+        state.selectedRecipeId = state.recipes[0]?.id || "";
+      }
+      schedulePersistAppState();
+      renderAll();
+      switchView("home");
+      showToast(`"${recipe.title}" is verwijderd.`);
+    },
   });
-  // Reset selectedRecipeId to first remaining recipe
-  if (state.selectedRecipeId === recipe.id) {
-    state.selectedRecipeId = state.recipes[0]?.id || "";
-  }
-  schedulePersistAppState();
-  renderAll();
-  switchView("home");
-  showToast(`"${recipe.title}" is verwijderd.`);
+});
+
+// Bug report button - report import errors
+bindEvent(document.getElementById("reportBugButton"), "click", () => {
+  const recipe = getSelectedRecipe();
+  if (!recipe) return;
+  showConfirm({
+    title: "Importfout melden?",
+    subtitle: `Iets niet goed gegaan bij het importeren van "${recipe.title}"? We sturen de details naar het Plately team zodat we het kunnen verbeteren.`,
+    confirmLabel: "Melden",
+    onConfirm: () => {
+      const subject = encodeURIComponent(`Importfout: ${recipe.title}`);
+      const body = encodeURIComponent(
+        `Hallo Plately team,\n\nIk had een probleem met het importeren van dit recept.\n\nRecept: ${recipe.title}\nBron: ${recipe.sourceUrl || "(onbekend)"}\nPlatform: ${recipe.platform || "(onbekend)"}\n\nWat ging er mis?\n(Beschrijf hier wat er niet klopt aan het geïmporteerde recept)\n\n--\nVerstuurd vanuit de Plately app`
+      );
+      window.location.href = `mailto:support@plately.app?subject=${subject}&body=${body}`;
+      showToast("Bedankt! Je e-mailprogramma wordt geopend.");
+    },
+  });
 });
 // ── Profile sub-panels ──────────────────────────────────────────────────────
 
@@ -5501,8 +5527,13 @@ bindEvent(document.getElementById("cookbookDeleteButton"), "click", () => {
   if (!cookbookOptionsTargetId) return;
   const cb = getCookbookById(cookbookOptionsTargetId);
   if (!cb) return;
-  if (!confirm(`"${cb.name}" verwijderen? Recepten blijven bewaard.`)) return;
-  deleteCookbook(cookbookOptionsTargetId);
+  showConfirm({
+    title: "Kookboek verwijderen?",
+    subtitle: `"${cb.name}" wordt verwijderd. De recepten blijven bewaard in je collectie.`,
+    confirmLabel: "Verwijderen",
+    destructive: true,
+    onConfirm: () => deleteCookbook(cookbookOptionsTargetId),
+  });
 });
 
 // Channel toggle click handler
@@ -5515,12 +5546,19 @@ bindEvent(document.getElementById("channelSettingsList"), "click", (event) => {
     if (!id) return;
     const ch = state.customChannels.find((c) => c.id === id);
     if (!ch) return;
-    if (!confirm(`"${ch.name}" verwijderen?`)) return;
-    state.customChannels = state.customChannels.filter((c) => c.id !== id);
-    state.followedChannelIds = state.followedChannelIds.filter((c) => c !== id);
-    renderChannelSettings();
-    renderChannelRow();
-    schedulePersistAppState();
+    showConfirm({
+      title: "Kanaal verwijderen?",
+      subtitle: `"${ch.name}" wordt verwijderd uit je kanalen.`,
+      confirmLabel: "Verwijderen",
+      destructive: true,
+      onConfirm: () => {
+        state.customChannels = state.customChannels.filter((c) => c.id !== id);
+        state.followedChannelIds = state.followedChannelIds.filter((c) => c !== id);
+        renderChannelSettings();
+        renderChannelRow();
+        schedulePersistAppState();
+      },
+    });
     return;
   }
 
@@ -5568,17 +5606,7 @@ bindEvent(switchAuthModeButton, "click", () => {
   openAuthModal(state.auth.mode === "register" ? "login" : "register");
 });
 
-// Social login buttons (TikTok and Instagram)
-const authTiktokBtn = document.getElementById("authTiktokBtn");
-const authInstagramBtn = document.getElementById("authInstagramBtn");
-
-bindEvent(authTiktokBtn, "click", () => {
-  showToast("TikTok inloggen wordt binnenkort ondersteund.");
-});
-
-bindEvent(authInstagramBtn, "click", () => {
-  showToast("Instagram inloggen wordt binnenkort ondersteund.");
-});
+// Instagram link button (opens in new tab — handled by anchor href)
 
 bindEvent(authForm, "submit", async (event) => {
   event.preventDefault();
