@@ -5329,6 +5329,17 @@ bindEvent(document.getElementById("goToLanguageBtn"), "click", () => {
   openProfileSubPanel("profileSubLanguage");
 });
 
+// "Over deze App" → about sub-panel
+const APP_VERSION = "1.0.0";
+const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
+const aboutVersionDisplay = document.getElementById("profileAboutVersion");
+if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
+if (aboutVersionDisplay) aboutVersionDisplay.textContent = APP_VERSION;
+bindEvent(document.getElementById("goToAboutBtn"), "click", () => {
+  openProfileSubPanel("profileSubAbout");
+});
+bindEvent(document.getElementById("profileSubAboutBack"), "click", () => closeProfileSubPanel("profileSubAbout"));
+
 // "Nieuw in Plately" → changelog sub-panel
 // Profile stat buttons → navigate to relevant screen/panel
 bindEvent(document.getElementById("profileStatRecipes"), "click", () => switchView("home"));

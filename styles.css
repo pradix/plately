@@ -8074,3 +8074,83 @@ body {
 .recipe-edit__delete-btn svg { width: 16px; height: 16px; display: block; }
 
 .onboarding-next-btn:active { opacity: 0.85; }
+
+/* ── Over deze App sub-panel ─────────────────────────────────────────────── */
+.about-app {
+  text-align: center;
+  padding: 24px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.about-app__logo {
+  width: 96px;
+  height: 96px;
+  border-radius: 28px;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 12px 28px rgba(76, 85, 69, 0.12);
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+
+.about-app__logo img {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+}
+
+.about-app__name {
+  margin: 0 0 4px;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.about-app__tagline {
+  margin: 0 0 20px;
+  font-size: 0.95rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.about-app__version-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(141, 164, 133, 0.12);
+  border: 1px solid rgba(141, 164, 133, 0.2);
+  margin-bottom: 24px;
+  font-size: 0.88rem;
+}
+
+.about-app__version-label {
+  color: var(--muted-strong);
+  font-weight: 500;
+}
+
+.about-app__version {
+  color: #4a6b4c;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.about-app__description {
+  margin: 0 0 24px;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--muted-strong);
+  max-width: 320px;
+}
+
+.about-app__copyright {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
