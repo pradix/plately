@@ -627,7 +627,7 @@
               <img class="brand-logo" src="assets/plately.png" alt="Plately" />
             </button>
             <div class="topbar-actions">
-              <button class="icon-button icon-button--filled-green" type="button" id="cookbooksAddBtn" aria-label="Nieuw kookboek aanmaken">
+              <button class="icon-button icon-button--filled-green" type="button" id="cookbooksAddBtn" aria-label="Recept importeren">
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
                   <path d="M12 5v14M5 12h14"/>
                 </svg>
@@ -674,15 +674,58 @@
             <div class="channel-search-list" id="importChannelSearchResults"></div>
           </section>
 
+          <!-- Visual hero -->
+          <div class="import-hero">
+            <div class="import-hero__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v13"/>
+                <path d="M7 11l5 5 5-5"/>
+                <path d="M5 19h14"/>
+              </svg>
+            </div>
+            <h1 class="import-hero__title">Importeer recept</h1>
+            <p class="import-hero__subtitle">Plak een link van TikTok, Instagram of een website — wij halen titel, ingrediënten en stappen automatisch op.</p>
+          </div>
+
+          <!-- Supported platforms -->
+          <div class="import-platforms-row">
+            <div class="import-platform-pill" title="TikTok">
+              <svg viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="currentColor" d="M33.5 14.5a9.4 9.4 0 0 1-5.7-1.9v13.6a8.7 8.7 0 1 1-8.7-8.7c.4 0 .8 0 1.2.1v4.4a4.4 4.4 0 1 0 3.1 4.2V6h4.4a5.5 5.5 0 0 0 5.5 5.5c.1 0 .1 0 .2 0V14.5z"/>
+              </svg>
+              <span>TikTok</span>
+            </div>
+            <div class="import-platform-pill" title="Instagram">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+              </svg>
+              <span>Instagram</span>
+            </div>
+            <div class="import-platform-pill" title="Websites">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>
+              </svg>
+              <span>Website</span>
+            </div>
+          </div>
+
           <!-- Universele import via link -->
           <form id="importScreenForm" class="import-url-form">
+            <label for="importScreenUrl" class="import-url-label">PLAK JE LINK</label>
             <div class="import-url-row">
+              <span class="import-url-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                </svg>
+              </span>
               <input
                 id="importScreenUrl"
                 type="text"
                 inputmode="url"
                 class="import-url-input"
-                placeholder="Plak een link van TikTok, Instagram of een website..."
+                placeholder="https://..."
                 autocomplete="off"
               />
               <button class="import-go-btn" id="importScreenSubmit" type="submit" aria-label="Importeren">
@@ -691,31 +734,39 @@
                 </svg>
               </button>
             </div>
-            <button class="import-caption-toggle" type="button" id="importScreenCaptionToggle">+ Voeg beschrijving toe</button>
-            <textarea class="import-caption-field hidden" id="importScreenCaption" rows="3" placeholder="Plak hier de beschrijving of caption van het recept (optioneel) — dit verbetert de import sterk bij TikTok en Instagram"></textarea>
-            <p class="import-hint" id="importScreenFeedback">Kopieer de link en plak hem hierboven — we doen de rest.</p>
+            <button class="import-caption-toggle" type="button" id="importScreenCaptionToggle">+ Voeg beschrijving toe (optioneel)</button>
+            <textarea class="import-caption-field hidden" id="importScreenCaption" rows="3" placeholder="Plak hier de caption van TikTok of Instagram — dit verbetert de import sterk."></textarea>
+            <p class="import-hint" id="importScreenFeedback"></p>
           </form>
 
-          <section class="import-tips">
-            <p class="import-tips__label">HOE WERKT HET</p>
-            <div class="import-tip">
-              <span class="import-tip__num">1</span>
-              <p>Open een receptwebsite, TikTok of Instagram en kopieer de link.</p>
-            </div>
-            <div class="import-tip">
-              <span class="import-tip__num">2</span>
-              <p>Kom terug naar Plately en plak de link in het veld hierboven.</p>
-            </div>
-            <div class="import-tips__or">of</div>
-            <div class="import-tip">
-              <span class="import-tip__num">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
-              </span>
+          <section class="import-steps">
+            <p class="import-steps__label">HOE WERKT HET</p>
+            <ol class="import-steps__list">
+              <li class="import-step">
+                <span class="import-step__num">1</span>
+                <div class="import-step__body">
+                  <strong>Kopieer een link</strong>
+                  <span>Open een recept op TikTok, Instagram of een website en kopieer de link.</span>
+                </div>
+              </li>
+              <li class="import-step">
+                <span class="import-step__num">2</span>
+                <div class="import-step__body">
+                  <strong>Plak hierboven</strong>
+                  <span>Plak de link in het veld en tik op de pijl.</span>
+                </div>
+              </li>
+              <li class="import-step">
+                <span class="import-step__num">3</span>
+                <div class="import-step__body">
+                  <strong>Klaar!</strong>
+                  <span>We halen titel, ingrediënten en stappen automatisch op.</span>
+                </div>
+              </li>
+            </ol>
+            <div class="import-steps__alt">
+              <span class="import-steps__alt-label">of</span>
               <p>Gebruik de zoekbalk bovenaan om direct te zoeken op je favoriete kanalen.</p>
-            </div>
-            <div class="import-tip">
-              <span class="import-tip__num">3</span>
-              <p>We halen titel, ingrediënten en bereidingsstappen automatisch op.</p>
             </div>
           </section>
         </section>

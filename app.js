@@ -4895,8 +4895,13 @@ navItems.forEach((item) => {
   });
 });
 
-// Home avatar → instellingen
-document.querySelector(".home-avatar")?.addEventListener("click", () => switchView("settings"));
+// Home avatar → instellingen (op ELKE pagina, niet alleen home)
+document.querySelectorAll(".home-avatar").forEach((avatar) => {
+  avatar.addEventListener("click", () => {
+    const view = avatar.dataset.view || "settings";
+    switchView(view);
+  });
+});
 
 // Kanaal-knoppen → open URL
 document.getElementById("channelRow")?.addEventListener("click", (event) => {
@@ -5279,7 +5284,13 @@ bindEvent(recipePickerList, "click", (e) => {
 });
 
 // Cookbooks screen add button
-bindEvent(document.getElementById("cookbooksAddBtn"), "click", () => openCreateCookbookPrompt());
+bindEvent(document.getElementById("cookbooksAddBtn"), "click", () => {
+  if (!state.auth.authenticated) {
+    openAuthModal("login");
+    return;
+  }
+  switchView("import");
+});
 // Detail topbar back button → back to cookbook list
 bindEvent(document.getElementById("cookbooksDetailBackBtn"), "click", () => {
   state.openCookbookId = null;
