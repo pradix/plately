@@ -7402,7 +7402,8 @@ body {
   position: fixed;
   z-index: 9991;
   border-radius: 16px;
-  box-shadow: 0 0 0 9999px rgba(15, 15, 15, 0.58);
+  /* Lighter dimming so the page stays readable */
+  box-shadow: 0 0 0 9999px rgba(15, 15, 15, 0.35);
   transition: top 0.35s cubic-bezier(.4,0,.2,1),
               left 0.35s cubic-bezier(.4,0,.2,1),
               width 0.35s cubic-bezier(.4,0,.2,1),

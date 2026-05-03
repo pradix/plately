@@ -6283,47 +6283,75 @@ function _obShow(index) {
 
   const step = ONBOARDING_STEPS[index];
   const target = document.querySelector(step.selector);
+  // Skip if target is missing OR not actually visible (display:none, hidden parent)
   if (!target) { _obShow(index + 1); return; }
+  const initialRect = target.getBoundingClientRect();
+  if (initialRect.width === 0 || initialRect.height === 0) {
+    _obShow(index + 1);
+    return;
+  }
 
-  overlay.hidden = false;
-  overlay.removeAttribute("aria-hidden");
+  // Scroll target into view before measuring (block: 'center' centers vertically)
+  // Use behavior 'instant' if available so the spotlight lines up immediately.
+  try {
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+  } catch {}
 
-  const PAD = 8;
-  const rect = target.getBoundingClientRect();
+  // Wait a tick for the scroll to settle, then measure and position
+  setTimeout(() => positionTooltip(target, step, index), 380);
 
-  // Spotlight
-  spotlight.style.left = `${rect.left - PAD}px`;
-  spotlight.style.top = `${rect.top - PAD}px`;
-  spotlight.style.width = `${rect.width + PAD * 2}px`;
-  spotlight.style.height = `${rect.height + PAD * 2}px`;
-  spotlight.style.borderRadius = window.getComputedStyle(target).borderRadius || "16px";
+  function positionTooltip(target, step, index) {
+    overlay.hidden = false;
+    overlay.removeAttribute("aria-hidden");
 
-  // Content
-  textEl.textContent = step.text;
-  progressEl.innerHTML = ONBOARDING_STEPS.map((_, i) =>
-    `<span class="onboarding-dot ${i === index ? "onboarding-dot--active" : ""}"></span>`
-  ).join("");
-  nextBtn.textContent = index === ONBOARDING_STEPS.length - 1 ? "Klaar ✓" : "Volgende →";
+    const PAD = 8;
+    const rect = target.getBoundingClientRect();
 
-  // Bubble position
-  const BW = 270;
-  const MARGIN = 14;
-  let bLeft = rect.left + rect.width / 2 - BW / 2;
-  bLeft = Math.max(12, Math.min(bLeft, window.innerWidth - BW - 12));
+    // Spotlight
+    spotlight.style.left = `${rect.left - PAD}px`;
+    spotlight.style.top = `${rect.top - PAD}px`;
+    spotlight.style.width = `${rect.width + PAD * 2}px`;
+    spotlight.style.height = `${rect.height + PAD * 2}px`;
+    spotlight.style.borderRadius = window.getComputedStyle(target).borderRadius || "16px";
 
-  const arrowX = rect.left + rect.width / 2 - bLeft;
-  bubble.style.setProperty("--arrow-x", `${Math.max(20, Math.min(arrowX, BW - 20))}px`);
-  bubble.style.left = `${bLeft}px`;
-  bubble.style.width = `${BW}px`;
+    // Content
+    textEl.textContent = step.text;
+    progressEl.innerHTML = ONBOARDING_STEPS.map((_, i) =>
+      `<span class="onboarding-dot ${i === index ? "onboarding-dot--active" : ""}"></span>`
+    ).join("");
+    nextBtn.textContent = index === ONBOARDING_STEPS.length - 1 ? "Klaar ✓" : "Volgende →";
 
-  if (step.dir === "above") {
-    bubble.style.top = "auto";
-    bubble.style.bottom = `${window.innerHeight - rect.top + MARGIN}px`;
-    bubble.dataset.arrow = "down";
-  } else {
-    bubble.style.bottom = "auto";
-    bubble.style.top = `${rect.bottom + MARGIN}px`;
-    bubble.dataset.arrow = "up";
+    // Bubble position
+    const BW = Math.min(270, window.innerWidth - 24);
+    const MARGIN = 14;
+    let bLeft = rect.left + rect.width / 2 - BW / 2;
+    bLeft = Math.max(12, Math.min(bLeft, window.innerWidth - BW - 12));
+
+    const arrowX = rect.left + rect.width / 2 - bLeft;
+    bubble.style.setProperty("--arrow-x", `${Math.max(20, Math.min(arrowX, BW - 20))}px`);
+    bubble.style.left = `${bLeft}px`;
+    bubble.style.width = `${BW}px`;
+
+    // Auto-flip direction when there's not enough space in the chosen direction
+    let dir = step.dir || "below";
+    const bubbleHeightEstimate = 160;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    if (dir === "below" && spaceBelow < bubbleHeightEstimate && spaceAbove > spaceBelow) {
+      dir = "above";
+    } else if (dir === "above" && spaceAbove < bubbleHeightEstimate && spaceBelow > spaceAbove) {
+      dir = "below";
+    }
+
+    if (dir === "above") {
+      bubble.style.top = "auto";
+      bubble.style.bottom = `${Math.max(12, window.innerHeight - rect.top + MARGIN)}px`;
+      bubble.dataset.arrow = "down";
+    } else {
+      bubble.style.bottom = "auto";
+      bubble.style.top = `${Math.min(window.innerHeight - bubbleHeightEstimate - 12, rect.bottom + MARGIN)}px`;
+      bubble.dataset.arrow = "up";
+    }
   }
 }
 
