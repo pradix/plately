@@ -269,6 +269,7 @@ async function getDevAuthenticatedUser(request) {
   const cookies = parseCookies(request.headers.cookie);
   const authToken = cookies.plately_auth || "";
   if (!authToken) {
+    console.log("🔍 getDevAuthenticatedUser: no auth cookie found");
     return null;
   }
 
@@ -276,10 +277,17 @@ async function getDevAuthenticatedUser(request) {
     // Read directly from file to avoid cache issues
     const rawFile = await fsp.readFile(DATA_FILE, "utf8");
     const parsed = JSON.parse(rawFile);
-    const authSession = parsed.authSessions?.[authToken];
+    const authSessions = parsed.authSessions || {};
+    const authSession = authSessions[authToken];
+
+    console.log(`🔍 getDevAuthenticatedUser: looking for token ${authToken.substring(0, 8)}... found ${Object.keys(authSessions).length} sessions in file`);
+
     if (!authSession) {
+      console.log(`⚠️  Auth session not found for token ${authToken.substring(0, 8)}...`);
       return null;
     }
+
+    console.log(`✅ Auth session found for user ${authSession.userId}`);
 
     // Return minimal user object compatible with buildAppStateFromUser
     return {
@@ -287,7 +295,8 @@ async function getDevAuthenticatedUser(request) {
       email: authSession.email,
       authenticated: true,
     };
-  } catch {
+  } catch (error) {
+    console.error("❌ Error in getDevAuthenticatedUser:", error.message);
     return null;
   }
 }
@@ -502,10 +511,11 @@ async function loadDatabase() {
 }
 
 async function persistDatabase() {
-  const db = await loadDatabase();
-  databaseWriteQueue = databaseWriteQueue.then(() =>
-    fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2), "utf8")
-  );
+  databaseWriteQueue = databaseWriteQueue.then(async () => {
+    const db = await loadDatabase();
+    console.log(`💾 Writing database: users=${Object.keys(db.users || {}).length}, sessions=${Object.keys(db.sessions || {}).length}, authSessions=${Object.keys(db.authSessions || {}).length}`);
+    await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2), "utf8");
+  });
   return databaseWriteQueue;
 }
 
@@ -4405,6 +4415,9 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/api/session" && request.method === "GET") {
+      const cookies = parseCookies(request.headers.cookie);
+      console.log(`🔐 /api/session request - Auth cookie: ${cookies.plately_auth ? cookies.plately_auth.substring(0, 8) + "..." : "NONE"}`);
+
       let authUser = await getAuthenticatedUser(request);
 
       // Fallback to dev auth if Postgres not available
