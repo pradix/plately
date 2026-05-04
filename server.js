@@ -421,7 +421,9 @@ async function loadDatabase() {
       sessions: parsed?.sessions && typeof parsed.sessions === "object" ? parsed.sessions : {},
       authSessions: parsed?.authSessions && typeof parsed.authSessions === "object" ? parsed.authSessions : {},
     };
-  } catch {
+    console.log(`✅ Database loaded: ${Object.keys(databaseCache.users).length} users, ${Object.keys(databaseCache.sessions).length} sessions`);
+  } catch (error) {
+    console.error("❌ Database parse error:", error.message);
     databaseCache = createEmptyDatabase();
   }
 
@@ -4693,7 +4695,18 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/api/admin/stats" && request.method === "GET") {
+      console.log("📊 /api/admin/stats called");
+
+      // Force reload database cache to ensure fresh data
+      databaseCache = null;
       const db = await loadDatabase();
+
+      console.log("🔍 Database contents:", {
+        usersCount: Object.keys(db.users || {}).length,
+        sessionsCount: Object.keys(db.sessions || {}).length,
+        authSessionsCount: Object.keys(db.authSessions || {}).length,
+      });
+
       const users = Object.values(db.users || {});
       const sessions = Object.values(db.sessions || {});
 
@@ -4712,6 +4725,7 @@ const server = http.createServer(async (request, response) => {
         })),
       };
 
+      console.log("✅ Returning stats:", stats.totalUsers, "users");
       sendJson(response, 200, { ok: true, stats });
       return;
     }
