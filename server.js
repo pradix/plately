@@ -419,6 +419,7 @@ async function loadDatabase() {
     databaseCache = {
       users: parsed?.users && typeof parsed.users === "object" ? parsed.users : {},
       sessions: parsed?.sessions && typeof parsed.sessions === "object" ? parsed.sessions : {},
+      authSessions: parsed?.authSessions && typeof parsed.authSessions === "object" ? parsed.authSessions : {},
     };
   } catch {
     databaseCache = createEmptyDatabase();

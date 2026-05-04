@@ -244,6 +244,7 @@
         }
 
         const { stats } = data;
+        console.log("Stats loaded:", stats);
 
         // Update cards
         document.getElementById("totalUsers").textContent = stats.totalUsers;
@@ -253,23 +254,33 @@
 
         // Fill table
         const tbody = document.getElementById("usersList");
-        tbody.innerHTML = stats.users.map(user => `
-          <tr>
-            <td>
-              <div class="user-email ${user.email === 'Guest' ? 'guest' : ''}">${escapeHtml(user.email)}</div>
-              <div class="user-id">${user.id}</div>
-            </td>
-            <td><span class="stat-badge">${user.recipes}</span></td>
-            <td><span class="stat-badge">${user.cookbooks}</span></td>
-            <td><span class="stat-badge">${user.groceryItems}</span></td>
-            <td><span class="stat-badge ${user.hasProfile ? 'active' : ''}">${user.hasProfile ? '✓ Yes' : 'No'}</span></td>
-            <td class="timestamp">${new Date(user.createdAt).toLocaleDateString('nl-NL', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
-          </tr>
-        `).join("");
+        if (stats.users.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #999;">Geen gebruikers gevonden</td></tr>';
+        } else {
+          tbody.innerHTML = stats.users.map(user => {
+            const email = user.email || "Guest";
+            const date = new Date(user.createdAt);
+            const dateStr = date.toLocaleDateString('nl-NL', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            return `
+              <tr>
+                <td>
+                  <div class="user-email ${email === 'Guest' ? 'guest' : ''}">${escapeHtml(email)}</div>
+                  <div class="user-id">${user.id.substring(0, 20)}...</div>
+                </td>
+                <td><span class="stat-badge">${user.recipes}</span></td>
+                <td><span class="stat-badge">${user.cookbooks}</span></td>
+                <td><span class="stat-badge">${user.groceryItems}</span></td>
+                <td><span class="stat-badge ${user.hasProfile ? 'active' : ''}">${user.hasProfile ? '✓ Yes' : 'No'}</span></td>
+                <td class="timestamp">${dateStr}</td>
+              </tr>
+            `;
+          }).join("");
+        }
 
         document.getElementById("loading").style.display = "none";
         document.getElementById("content").style.display = "block";
       } catch (error) {
+        console.error("Error:", error);
         document.getElementById("loading").style.display = "none";
         document.getElementById("error").style.display = "block";
         document.getElementById("error").textContent = "❌ " + error.message;
