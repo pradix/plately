@@ -4781,36 +4781,40 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/admin/stats" && request.method === "GET") {
       console.log("📊 /api/admin/stats called");
 
-      // Force reload database cache to ensure fresh data
-      databaseCache = null;
-      const db = await loadDatabase();
+      try {
+        // Read database directly from file, don't use cache
+        const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+        const parsed = JSON.parse(rawFile);
 
-      console.log("🔍 Database contents:", {
-        usersCount: Object.keys(db.users || {}).length,
-        sessionsCount: Object.keys(db.sessions || {}).length,
-        authSessionsCount: Object.keys(db.authSessions || {}).length,
-      });
+        const users = Object.values(parsed.users || {});
+        const sessions = Object.values(parsed.sessions || {});
 
-      const users = Object.values(db.users || {});
-      const sessions = Object.values(db.sessions || {});
+        console.log("✅ Loaded from file:", users.length, "users,", sessions.length, "sessions");
 
-      const stats = {
-        totalUsers: users.length,
-        totalSessions: sessions.length,
-        users: users.map((u) => ({
-          id: u.id,
-          email: u.email || "Guest",
-          recipes: (u.importedRecipes || []).length,
-          cookbooks: (u.cookbooks || []).length,
-          groceryItems: (u.groceryItems || []).length,
-          createdAt: u.createdAt,
-          updatedAt: u.updatedAt,
-          hasProfile: Boolean(u.profile?.name),
-        })),
-      };
+        const stats = {
+          totalUsers: users.length,
+          totalSessions: sessions.length,
+          users: users.map((u) => ({
+            id: u.id,
+            email: u.email || "Guest",
+            recipes: (u.importedRecipes || []).length,
+            cookbooks: (u.cookbooks || []).length,
+            groceryItems: (u.groceryItems || []).length,
+            createdAt: u.createdAt,
+            updatedAt: u.updatedAt,
+            hasProfile: Boolean(u.profile?.name),
+          })),
+        };
 
-      console.log("✅ Returning stats:", stats.totalUsers, "users");
-      sendJson(response, 200, { ok: true, stats });
+        console.log("✅ Returning stats:", stats.totalUsers, "users");
+        sendJson(response, 200, { ok: true, stats });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/stats:", error.message);
+        sendJson(response, 500, {
+          ok: false,
+          error: error.message,
+        });
+      }
       return;
     }
 
