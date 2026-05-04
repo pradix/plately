@@ -239,13 +239,18 @@ function isPostgresEnabled() {
 // Dev-only fallback: create auth session without database
 async function createDevAuthSession(response, userId, email) {
   const token = crypto.randomBytes(24).toString("hex");
+
+  // Clear cache to ensure fresh read from file
+  databaseCache = null;
   const db = await loadDatabase();
 
   if (!db.authSessions) {
     db.authSessions = {};
   }
   db.authSessions[token] = { userId, email };
+  console.log("💾 Saving auth session:", token.substring(0, 8) + "...", "for user", userId);
   await persistDatabase();
+  console.log("✅ Auth session persisted");
 
   appendSetCookie(
     response,
