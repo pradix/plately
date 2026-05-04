@@ -107,9 +107,9 @@ img { display: block; max-width: 100%; }
 
 /* Unified responsive logo */
 .brand-logo {
-  height: 40px;
+  height: 60px;
   width: auto;
-  max-width: 140px;
+  max-width: 200px;
   object-fit: contain;
   object-position: left center;
   mix-blend-mode: multiply;
@@ -3167,6 +3167,13 @@ img { display: block; max-width: 100%; }
 .profile-login-banner__avatar svg {
   width: 44px;
   height: 44px;
+}
+
+/* Make logo larger on login/welcome screen */
+.profile-login-banner .brand-logo {
+  height: 100px;
+  max-width: 280px;
+  margin-bottom: 12px;
 }
 
 .profile-login-banner__title {
