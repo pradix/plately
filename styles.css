@@ -6483,6 +6483,18 @@ body {
   background: transparent;
 }
 
+.nav-item--profile {
+  min-height: auto;
+  padding: 8px 1px;
+}
+
+.profile2-avatar--nav {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .nav-label {
   font-size: 0.74rem;
   font-weight: 500;

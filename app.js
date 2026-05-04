@@ -3096,8 +3096,8 @@ function renderAvatars() {
     }
   });
 
-  // Update profile2 avatars (main + sub-panel)
-  ["profileSubAvatarDisplay"].forEach((id) => {
+  // Update profile2 avatars (bottom nav + sub-panel)
+  ["profileAvatarDisplay", "profileSubAvatarDisplay"].forEach((id) => {
     const p2avatar = document.getElementById(id);
     if (!p2avatar) return;
     const img = p2avatar.querySelector(".profile2-avatar__img");
