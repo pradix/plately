@@ -4760,6 +4760,12 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/admin" && request.method === "GET") {
+      // Serve admin.html for /admin route
+      await serveStaticFile("/admin.html", response);
+      return;
+    }
+
     if (requestUrl.pathname === "/api/debug/db" && request.method === "GET") {
       console.log("🔍 /api/debug/db called");
       try {
