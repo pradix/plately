@@ -4478,9 +4478,6 @@ bindEvent(document.getElementById("viewAllImportsButton"), "click", () => {
   renderRecipeGrid();
   document.getElementById("recipeGrid")?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
-bindEvent(document.getElementById("viewAllChannelsButton"), "click", () => {
-  switchView("settings");
-});
 // "Mijn kookboeken > Bekijk alles" → go to Kookboeken tab
 bindEvent(document.getElementById("viewAllCookbooksBtn"), "click", () => {
   switchView("cookbooks");
