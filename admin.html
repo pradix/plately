@@ -89,6 +89,7 @@
     .users-table {
       width: 100%;
       border-collapse: collapse;
+      font-size: 14px;
     }
 
     .users-table th {
@@ -111,43 +112,15 @@
       background: #fafafa;
     }
 
-    .user-id {
+    .debug-info {
+      background: #f0f9ff;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      border: 1px solid #b3d9ff;
       font-family: monospace;
       font-size: 12px;
-      color: #999;
-      max-width: 150px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .user-email {
-      font-weight: 500;
-    }
-
-    .user-email.guest {
-      color: #999;
-      font-style: italic;
-    }
-
-    .stat-badge {
-      display: inline-block;
-      background: #f0f0f0;
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      color: #666;
-      margin: 0 2px;
-    }
-
-    .stat-badge.active {
-      background: rgba(120, 147, 111, 0.1);
-      color: #78936f;
-    }
-
-    .timestamp {
-      font-size: 12px;
-      color: #999;
+      color: #0066cc;
     }
 
     .loading {
@@ -162,21 +135,7 @@
       padding: 16px;
       border-radius: 8px;
       margin-bottom: 16px;
-    }
-
-    @media (max-width: 768px) {
-      .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-
-      .users-table {
-        font-size: 12px;
-      }
-
-      .users-table th,
-      .users-table td {
-        padding: 8px;
-      }
+      border: 1px solid #fcc;
     }
   </style>
 </head>
@@ -188,28 +147,29 @@
     </header>
 
     <div id="error" class="error" style="display: none;"></div>
+    <div id="debug" class="debug-info" style="display: none;"></div>
 
     <div id="loading" class="loading">
-      Statistieken laden...
+      ⏳ Statistieken laden van /api/admin/stats...
     </div>
 
     <div id="content" style="display: none;">
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-value" id="totalUsers">0</div>
+          <div class="stat-value" id="totalUsers">-</div>
           <div class="stat-label">Gebruikers</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value" id="totalRecipes">0</div>
-          <div class="stat-label">Recepten Geïmporteerd</div>
+          <div class="stat-value" id="totalRecipes">-</div>
+          <div class="stat-label">Recepten</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value" id="totalCookbooks">0</div>
+          <div class="stat-value" id="totalCookbooks">-</div>
           <div class="stat-label">Kookboeken</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value" id="totalGroceries">0</div>
-          <div class="stat-label">Boodschappen Items</div>
+          <div class="stat-value" id="totalGroceries">-</div>
+          <div class="stat-label">Boodschappen</div>
         </div>
       </div>
 
@@ -218,7 +178,7 @@
         <table class="users-table">
           <thead>
             <tr>
-              <th>Email</th>
+              <th>Email / ID</th>
               <th>Recepten</th>
               <th>Kookboeken</th>
               <th>Boodschappen</th>
@@ -236,62 +196,93 @@
   <script>
     async function loadStats() {
       try {
+        console.log("🔍 Starting to fetch /api/admin/stats...");
+        document.getElementById("debug").style.display = "block";
+        document.getElementById("debug").textContent = "Fetching /api/admin/stats...";
+
         const response = await fetch("/api/admin/stats");
+        console.log("📡 Response status:", response.status);
+
         const data = await response.json();
+        console.log("📊 Data received:", data);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${data.error || 'Unknown error'}`);
+        }
 
         if (!data.ok) {
-          throw new Error(data.error || "Fout bij laden stats");
+          throw new Error(data.error || "API returned not ok");
         }
 
         const { stats } = data;
-        console.log("Stats loaded:", stats);
+        console.log("✅ Stats loaded successfully:", stats);
+
+        document.getElementById("debug").textContent = `✅ Data loaded: ${stats.totalUsers} users, ${stats.users.length} user objects`;
 
         // Update cards
+        const totalRecipes = stats.users.reduce((sum, u) => sum + u.recipes, 0);
+        const totalCookbooks = stats.users.reduce((sum, u) => sum + u.cookbooks, 0);
+        const totalGroceries = stats.users.reduce((sum, u) => sum + u.groceryItems, 0);
+
         document.getElementById("totalUsers").textContent = stats.totalUsers;
-        document.getElementById("totalRecipes").textContent = stats.users.reduce((sum, u) => sum + u.recipes, 0);
-        document.getElementById("totalCookbooks").textContent = stats.users.reduce((sum, u) => sum + u.cookbooks, 0);
-        document.getElementById("totalGroceries").textContent = stats.users.reduce((sum, u) => sum + u.groceryItems, 0);
+        document.getElementById("totalRecipes").textContent = totalRecipes;
+        document.getElementById("totalCookbooks").textContent = totalCookbooks;
+        document.getElementById("totalGroceries").textContent = totalGroceries;
 
         // Fill table
         const tbody = document.getElementById("usersList");
-        if (stats.users.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #999;">Geen gebruikers gevonden</td></tr>';
-        } else {
-          tbody.innerHTML = stats.users.map(user => {
-            const email = user.email || "Guest";
-            const date = new Date(user.createdAt);
-            const dateStr = date.toLocaleDateString('nl-NL', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-            return `
-              <tr>
-                <td>
-                  <div class="user-email ${email === 'Guest' ? 'guest' : ''}">${escapeHtml(email)}</div>
-                  <div class="user-id">${user.id.substring(0, 20)}...</div>
-                </td>
-                <td><span class="stat-badge">${user.recipes}</span></td>
-                <td><span class="stat-badge">${user.cookbooks}</span></td>
-                <td><span class="stat-badge">${user.groceryItems}</span></td>
-                <td><span class="stat-badge ${user.hasProfile ? 'active' : ''}">${user.hasProfile ? '✓ Yes' : 'No'}</span></td>
-                <td class="timestamp">${dateStr}</td>
-              </tr>
-            `;
-          }).join("");
-        }
+        tbody.innerHTML = stats.users.map((user, idx) => {
+          const email = user.email || "Guest";
+          const date = new Date(user.createdAt);
+          const dateStr = !isNaN(date.getTime())
+            ? date.toLocaleDateString('nl-NL', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })
+            : 'N/A';
+
+          return `
+            <tr>
+              <td>
+                <strong>${escapeHtml(email)}</strong><br>
+                <small style="color: #999;">${user.id.substring(0, 16)}...</small>
+              </td>
+              <td>${user.recipes}</td>
+              <td>${user.cookbooks}</td>
+              <td>${user.groceryItems}</td>
+              <td>${user.hasProfile ? '✅' : '❌'}</td>
+              <td><small>${dateStr}</small></td>
+            </tr>
+          `;
+        }).join("");
+
+        console.log("✅ Table rendered with", stats.users.length, "users");
 
         document.getElementById("loading").style.display = "none";
         document.getElementById("content").style.display = "block";
       } catch (error) {
-        console.error("Error:", error);
+        console.error("❌ Error:", error);
         document.getElementById("loading").style.display = "none";
         document.getElementById("error").style.display = "block";
-        document.getElementById("error").textContent = "❌ " + error.message;
+        document.getElementById("error").innerHTML = `
+          <strong>❌ Fout bij laden:</strong><br>
+          ${escapeHtml(error.message)}<br><br>
+          <small>Check de browser console (F12) voor meer details.</small>
+        `;
+        document.getElementById("debug").style.display = "block";
+        document.getElementById("debug").textContent = "❌ " + error.message;
       }
     }
 
     function escapeHtml(text) {
       const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-      return text.replace(/[&<>"']/g, m => map[m]);
+      return String(text).replace(/[&<>"']/g, m => map[m]);
     }
 
+    console.log("🚀 Admin page loaded, starting to fetch stats...");
     loadStats();
   </script>
 </body>
