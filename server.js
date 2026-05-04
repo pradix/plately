@@ -4691,6 +4691,30 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/admin/stats" && request.method === "GET") {
+      const db = await loadDatabase();
+      const users = Object.values(db.users || {});
+      const sessions = Object.values(db.sessions || {});
+
+      const stats = {
+        totalUsers: users.length,
+        totalSessions: sessions.length,
+        users: users.map((u) => ({
+          id: u.id,
+          email: u.email || "Guest",
+          recipes: (u.importedRecipes || []).length,
+          cookbooks: (u.cookbooks || []).length,
+          groceryItems: (u.groceryItems || []).length,
+          createdAt: u.createdAt,
+          updatedAt: u.updatedAt,
+          hasProfile: Boolean(u.profile?.name),
+        })),
+      };
+
+      sendJson(response, 200, { ok: true, stats });
+      return;
+    }
+
     await serveStaticFile(requestUrl.pathname, response);
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.statusCode : 500;

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plately Admin — Statistieken</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    header {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+      color: #78936f;
+    }
+
+    .subtitle {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: 800;
+      color: #78936f;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .users-section {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .users-section h2 {
+      font-size: 20px;
+      margin-bottom: 16px;
+      color: #1a1a1a;
+    }
+
+    .users-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .users-table th {
+      text-align: left;
+      padding: 12px;
+      border-bottom: 2px solid #e5e2dc;
+      font-weight: 600;
+      font-size: 13px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .users-table td {
+      padding: 12px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .users-table tbody tr:hover {
+      background: #fafafa;
+    }
+
+    .user-id {
+      font-family: monospace;
+      font-size: 12px;
+      color: #999;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .user-email {
+      font-weight: 500;
+    }
+
+    .user-email.guest {
+      color: #999;
+      font-style: italic;
+    }
+
+    .stat-badge {
+      display: inline-block;
+      background: #f0f0f0;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      margin: 0 2px;
+    }
+
+    .stat-badge.active {
+      background: rgba(120, 147, 111, 0.1);
+      color: #78936f;
+    }
+
+    .timestamp {
+      font-size: 12px;
+      color: #999;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+    }
+
+    .error {
+      background: #fee;
+      color: #c33;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .users-table {
+        font-size: 12px;
+      }
+
+      .users-table th,
+      .users-table td {
+        padding: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📊 Plately Admin</h1>
+      <p class="subtitle">Gebruikers & Activiteit Statistieken</p>
+    </header>
+
+    <div id="error" class="error" style="display: none;"></div>
+
+    <div id="loading" class="loading">
+      Statistieken laden...
+    </div>
+
+    <div id="content" style="display: none;">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="totalUsers">0</div>
+          <div class="stat-label">Gebruikers</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="totalRecipes">0</div>
+          <div class="stat-label">Recepten Geïmporteerd</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="totalCookbooks">0</div>
+          <div class="stat-label">Kookboeken</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="totalGroceries">0</div>
+          <div class="stat-label">Boodschappen Items</div>
+        </div>
+      </div>
+
+      <div class="users-section">
+        <h2>Gebruikers Detail</h2>
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Recepten</th>
+              <th>Kookboeken</th>
+              <th>Boodschappen</th>
+              <th>Profiel</th>
+              <th>Aangemaakt</th>
+            </tr>
+          </thead>
+          <tbody id="usersList">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function loadStats() {
+      try {
+        const response = await fetch("/api/admin/stats");
+        const data = await response.json();
+
+        if (!data.ok) {
+          throw new Error(data.error || "Fout bij laden stats");
+        }
+
+        const { stats } = data;
+
+        // Update cards
+        document.getElementById("totalUsers").textContent = stats.totalUsers;
+        document.getElementById("totalRecipes").textContent = stats.users.reduce((sum, u) => sum + u.recipes, 0);
+        document.getElementById("totalCookbooks").textContent = stats.users.reduce((sum, u) => sum + u.cookbooks, 0);
+        document.getElementById("totalGroceries").textContent = stats.users.reduce((sum, u) => sum + u.groceryItems, 0);
+
+        // Fill table
+        const tbody = document.getElementById("usersList");
+        tbody.innerHTML = stats.users.map(user => `
+          <tr>
+            <td>
+              <div class="user-email ${user.email === 'Guest' ? 'guest' : ''}">${escapeHtml(user.email)}</div>
+              <div class="user-id">${user.id}</div>
+            </td>
+            <td><span class="stat-badge">${user.recipes}</span></td>
+            <td><span class="stat-badge">${user.cookbooks}</span></td>
+            <td><span class="stat-badge">${user.groceryItems}</span></td>
+            <td><span class="stat-badge ${user.hasProfile ? 'active' : ''}">${user.hasProfile ? '✓ Yes' : 'No'}</span></td>
+            <td class="timestamp">${new Date(user.createdAt).toLocaleDateString('nl-NL', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+          </tr>
+        `).join("");
+
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("content").style.display = "block";
+      } catch (error) {
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("error").style.display = "block";
+        document.getElementById("error").textContent = "❌ " + error.message;
+      }
+    }
+
+    function escapeHtml(text) {
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+      return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    loadStats();
+  </script>
+</body>
+</html>
