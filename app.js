@@ -589,7 +589,6 @@ const profileCookbookCount = document.getElementById("profileCookbookCount");
 const profileEditButton = document.getElementById("profileEditButton");
 const shareProfileButton = document.getElementById("shareProfileButton");
 const premiumButton = document.getElementById("premiumButton");
-const profileEditAvatarButton = document.getElementById("profileEditAvatarButton");
 const accountTitle = document.getElementById("accountTitle");
 const accountCopy = document.getElementById("accountCopy");
 const openRegisterButton = document.getElementById("openRegisterButton");
@@ -3098,7 +3097,7 @@ function renderAvatars() {
   });
 
   // Update profile2 avatars (main + sub-panel)
-  ["profileAvatarDisplay", "profileSubAvatarDisplay"].forEach((id) => {
+  ["profileSubAvatarDisplay"].forEach((id) => {
     const p2avatar = document.getElementById(id);
     if (!p2avatar) return;
     const img = p2avatar.querySelector(".profile2-avatar__img");
@@ -4870,15 +4869,6 @@ bindEvent(document.getElementById("profileSubLanguageSave"), "click", () => {
   schedulePersistAppState();
   closeProfileSubPanel("profileSubLanguage");
   showToast(state.language === "nl" ? "Taal opgeslagen." : "Language saved.");
-});
-
-bindEvent(profileEditAvatarButton, "click", () => {
-  const nameInput = document.getElementById("profileSubNameInput");
-  const emailInput = document.getElementById("profileSubEmailInput");
-  if (nameInput) nameInput.value = state.profile.name || "";
-  if (emailInput) emailInput.value = state.profile.email || state.profile.handle?.replace(/^@/, "") || "";
-  syncRemovePhotoBtn();
-  openProfileSubPanel("profileSubAccount");
 });
 bindEvent(premiumButton, "click", () => showToast("Premium preview staat klaar voor later."));
 bindEvent(openRegisterButton, "click", () => openAuthModal("register"));
