@@ -228,11 +228,83 @@ function createEmptyDatabase() {
   return {
     users: {},
     sessions: {},
+    authSessions: {}, // Dev-only: simple auth token -> {email, userId} mapping
   };
 }
 
 function isPostgresEnabled() {
   return Boolean(DATABASE_URL);
+}
+
+// Dev-only fallback: create auth session without database
+async function createDevAuthSession(response, userId, email) {
+  const token = crypto.randomBytes(24).toString("hex");
+  const db = await loadDatabase();
+
+  if (!db.authSessions) {
+    db.authSessions = {};
+  }
+  db.authSessions[token] = { userId, email };
+  await persistDatabase();
+
+  appendSetCookie(
+    response,
+    serializeCookie("plately_auth", token, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+    })
+  );
+}
+
+// Dev-only fallback: get authenticated user from dev auth session
+async function getDevAuthenticatedUser(request) {
+  const cookies = parseCookies(request.headers.cookie);
+  const authToken = cookies.plately_auth || "";
+  if (!authToken) {
+    return null;
+  }
+
+  const db = await loadDatabase();
+  const authSession = db.authSessions?.[authToken];
+  if (!authSession) {
+    return null;
+  }
+
+  // Return minimal user object compatible with buildAppStateFromUser
+  return {
+    id: authSession.userId,
+    email: authSession.email,
+    authenticated: true,
+  };
+}
+
+// Dev-only fallback: clear dev auth session
+async function clearDevAuthSession(request, response) {
+  const cookies = parseCookies(request.headers.cookie);
+  const authToken = cookies.plately_auth || "";
+
+  if (authToken) {
+    const db = await loadDatabase();
+    if (db.authSessions?.[authToken]) {
+      delete db.authSessions[authToken];
+      await persistDatabase();
+    }
+  }
+
+  // Clear the auth cookie
+  appendSetCookie(
+    response,
+    serializeCookie("plately_auth", "", {
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 1,
+    })
+  );
 }
 
 async function getPostgresPool() {
@@ -4259,11 +4331,22 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/api/session" && request.method === "GET") {
-      const authUser = await getAuthenticatedUser(request);
+      let authUser = await getAuthenticatedUser(request);
+
+      // Fallback to dev auth if Postgres not available
+      if (!authUser && !isPostgresEnabled()) {
+        authUser = await getDevAuthenticatedUser(request);
+      }
+
       if (authUser) {
+        const appState = isPostgresEnabled() ? buildAppStateFromUser(authUser) : (await ensureUserSession(request, response));
         sendJson(response, 200, {
           ok: true,
-          user: buildAppStateFromUser(authUser),
+          user: {
+            ...appState,
+            authenticated: true,
+            email: authUser.email,
+          },
           auth: {
             enabled: isPostgresEnabled(),
             authenticated: true,
@@ -4329,10 +4412,6 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/api/auth/register" && request.method === "POST") {
-      if (!isPostgresEnabled()) {
-        throw new HttpError(400, "Postgres login is nog niet geconfigureerd.");
-      }
-
       const body = await readRequestBody(request);
       const email = sanitizeEmail(body.email);
       const password = String(body.password || "");
@@ -4343,63 +4422,123 @@ const server = http.createServer(async (request, response) => {
         throw new HttpError(400, "Gebruik een wachtwoord van minimaal 8 tekens.");
       }
 
-      await ensurePostgresSchema();
-      const pool = await getPostgresPool();
-      const existing = await pool.query(`SELECT id FROM plately_users WHERE email = $1 LIMIT 1`, [email]);
-      if (existing.rows[0]) {
-        throw new HttpError(409, "Er bestaat al een account met dit e-mailadres.");
-      }
+      if (isPostgresEnabled()) {
+        // Postgres-backed registration
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        const existing = await pool.query(`SELECT id FROM plately_users WHERE email = $1 LIMIT 1`, [email]);
+        if (existing.rows[0]) {
+          throw new HttpError(409, "Er bestaat al een account met dit e-mailadres.");
+        }
 
-      const createdUser = await createPostgresUser(email, password, body.currentState || {});
-      await createAuthSession(response, createdUser.id);
-      sendJson(response, 200, {
-        ok: true,
-        user: buildAppStateFromUser(createdUser),
-        auth: {
-          enabled: true,
-          authenticated: true,
-          email: createdUser.email,
-        },
-      });
-      return;
+        const createdUser = await createPostgresUser(email, password, body.currentState || {});
+        await createAuthSession(response, createdUser.id);
+        sendJson(response, 200, {
+          ok: true,
+          user: buildAppStateFromUser(createdUser),
+          auth: {
+            enabled: true,
+            authenticated: true,
+            email: createdUser.email,
+          },
+        });
+        return;
+      } else {
+        // Dev fallback: simple in-memory auth without database
+        const db = await loadDatabase();
+        const existingEmail = Object.values(db.users || {}).some(u => u.email === email);
+        if (existingEmail) {
+          throw new HttpError(409, "Er bestaat al een account met dit e-mailadres.");
+        }
+
+        const userId = generateId("user");
+        const user = buildDefaultUserData(userId);
+        user.email = email;
+        db.users[userId] = user;
+        await persistDatabase();
+
+        await createDevAuthSession(response, userId, email);
+        sendJson(response, 200, {
+          ok: true,
+          user: { ...user, authenticated: true, email },
+          auth: {
+            enabled: false,
+            authenticated: true,
+            email: email,
+          },
+        });
+        return;
+      }
     }
 
     if (requestUrl.pathname === "/api/auth/login" && request.method === "POST") {
-      if (!isPostgresEnabled()) {
-        throw new HttpError(400, "Postgres login is nog niet geconfigureerd.");
-      }
-
       const body = await readRequestBody(request);
       const email = sanitizeEmail(body.email);
       const password = String(body.password || "");
-      await ensurePostgresSchema();
-      const pool = await getPostgresPool();
-      const result = await pool.query(`SELECT * FROM plately_users WHERE email = $1 LIMIT 1`, [email]);
-      const user = result.rows[0];
-      if (!user) {
-        throw new HttpError(401, "Onjuiste inloggegevens.");
-      }
 
-      const { hash } = createPasswordHash(password, user.password_salt);
-      if (hash !== user.password_hash) {
-        throw new HttpError(401, "Onjuiste inloggegevens.");
-      }
+      if (isPostgresEnabled()) {
+        // Postgres-backed login
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        const result = await pool.query(`SELECT * FROM plately_users WHERE email = $1 LIMIT 1`, [email]);
+        const user = result.rows[0];
+        if (!user) {
+          throw new HttpError(401, "Onjuiste inloggegevens.");
+        }
 
-      await createAuthSession(response, user.id);
-      sendJson(response, 200, {
-        ok: true,
-        user: buildAppStateFromUser(user),
-        auth: {
-          enabled: true,
-          authenticated: true,
-          email: user.email,
-        },
-      });
-      return;
+        const { hash } = createPasswordHash(password, user.password_salt);
+        if (hash !== user.password_hash) {
+          throw new HttpError(401, "Onjuiste inloggegevens.");
+        }
+
+        await createAuthSession(response, user.id);
+        sendJson(response, 200, {
+          ok: true,
+          user: buildAppStateFromUser(user),
+          auth: {
+            enabled: true,
+            authenticated: true,
+            email: user.email,
+          },
+        });
+        return;
+      } else {
+        // Dev fallback: simple in-memory auth without database
+        const db = await loadDatabase();
+        const userId = Object.entries(db.users || {}).find(
+          ([_, u]) => u.email === email && u.password_hash && u.password_salt
+        )?.[0];
+
+        if (!userId) {
+          throw new HttpError(401, "Onjuiste inloggegevens.");
+        }
+
+        const user = db.users[userId];
+        const { hash } = createPasswordHash(password, user.password_salt);
+        if (hash !== user.password_hash) {
+          throw new HttpError(401, "Onjuiste inloggegevens.");
+        }
+
+        await createDevAuthSession(response, userId, email);
+        sendJson(response, 200, {
+          ok: true,
+          user: { ...user, authenticated: true, email },
+          auth: {
+            enabled: false,
+            authenticated: true,
+            email: user.email,
+          },
+        });
+        return;
+      }
     }
 
     if (requestUrl.pathname === "/api/auth/logout" && request.method === "POST") {
-      await clearAuthSession(request, response);
+      if (isPostgresEnabled()) {
+        await clearAuthSession(request, response);
+      } else {
+        await clearDevAuthSession(request, response);
+      }
       const guestUser = await ensureUserSession(request, response);
       sendJson(response, 200, {
         ok: true,
