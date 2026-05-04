@@ -250,7 +250,15 @@ async function createDevAuthSession(response, userId, email) {
   db.authSessions[token] = { userId, email };
   console.log("💾 Saving auth session:", token.substring(0, 8) + "...", "for user", userId);
   await persistDatabase();
-  console.log("✅ Auth session persisted");
+  console.log("✅ Auth session persisted", token.substring(0, 8) + "...");
+
+  // Verify it was written
+  const verify = await fsp.readFile(DATA_FILE, "utf8").then(JSON.parse).catch(() => null);
+  if (verify?.authSessions?.[token]) {
+    console.log("✅ Verified: auth session written to disk");
+  } else {
+    console.warn("⚠️  Warning: auth session not found in file after write");
+  }
 
   appendSetCookie(
     response,
@@ -513,12 +521,14 @@ async function loadDatabase() {
 }
 
 async function persistDatabase() {
+  // Capture the current database state at the time of the persist call
+  // This prevents race conditions where another request clears the cache
+  const dbSnapshot = databaseCache;
+
   databaseWriteQueue = databaseWriteQueue.then(async () => {
-    // Always read fresh from memory cache to preserve recent modifications
-    // Don't reload from disk, as that would lose in-memory changes
-    const db = databaseCache;
+    const db = dbSnapshot;
     if (!db) {
-      console.warn("⚠️  databaseCache is null when persisting");
+      console.warn("⚠️  databaseCache was null when persistDatabase was called");
       return;
     }
     console.log(`💾 Writing database: users=${Object.keys(db.users || {}).length}, sessions=${Object.keys(db.sessions || {}).length}, authSessions=${Object.keys(db.authSessions || {}).length}`);
