@@ -267,18 +267,24 @@ async function getDevAuthenticatedUser(request) {
     return null;
   }
 
-  const db = await loadDatabase();
-  const authSession = db.authSessions?.[authToken];
-  if (!authSession) {
+  try {
+    // Read directly from file to avoid cache issues
+    const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+    const parsed = JSON.parse(rawFile);
+    const authSession = parsed.authSessions?.[authToken];
+    if (!authSession) {
+      return null;
+    }
+
+    // Return minimal user object compatible with buildAppStateFromUser
+    return {
+      id: authSession.userId,
+      email: authSession.email,
+      authenticated: true,
+    };
+  } catch {
     return null;
   }
-
-  // Return minimal user object compatible with buildAppStateFromUser
-  return {
-    id: authSession.userId,
-    email: authSession.email,
-    authenticated: true,
-  };
 }
 
 // Dev-only fallback: clear dev auth session
