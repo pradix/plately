@@ -6354,6 +6354,7 @@ function _obFinish() {
   const overlay = document.getElementById("onboardingOverlay");
   if (overlay) { overlay.hidden = true; overlay.setAttribute("aria-hidden", "true"); }
   try { localStorage.setItem(ONBOARDING_KEY, "1"); } catch {}
+  window.scrollTo(0, 0);
 }
 
 function startOnboarding() {
