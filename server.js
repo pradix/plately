@@ -4694,6 +4694,30 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/debug/db" && request.method === "GET") {
+      console.log("🔍 /api/debug/db called");
+      try {
+        const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+        const parsed = JSON.parse(rawFile);
+        sendJson(response, 200, {
+          ok: true,
+          dataFile: DATA_FILE,
+          fileSize: rawFile.length,
+          users: Object.keys(parsed.users || {}).length,
+          sessions: Object.keys(parsed.sessions || {}).length,
+          authSessions: Object.keys(parsed.authSessions || {}).length,
+          firstUserKeys: Object.keys(parsed.users || {}).slice(0, 3),
+        });
+      } catch (error) {
+        sendJson(response, 500, {
+          ok: false,
+          error: error.message,
+          dataFile: DATA_FILE,
+        });
+      }
+      return;
+    }
+
     if (requestUrl.pathname === "/api/admin/stats" && request.method === "GET") {
       console.log("📊 /api/admin/stats called");
 
