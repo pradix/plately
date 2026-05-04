@@ -3163,7 +3163,15 @@ function renderCookbookDetail(cookbookId) {
             </div>
           `).join("")}
         </div>
-      ` : `<p class="cb-detail__empty">Dit kookboek is nog leeg.<br>Sla een recept op om het hier te zien.</p>`}
+      ` : `
+        <div class="cb-detail__empty-state">
+          <div class="cb-detail__empty-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16a4 4 0 0 1 4-4h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3 class="cb-detail__empty-title">Dit kookboek is nog leeg</h3>
+          <p class="cb-detail__empty-text">Voeg recepten toe om ze hier te zien en te organiseren</p>
+        </div>
+      `}
       <button class="cb-detail__add-btn" type="button" data-open-recipe-picker="true">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
         Recept toevoegen
@@ -6423,6 +6431,17 @@ function showOnboardingStep(step) {
   document.getElementById("onboardingStep2")?.classList.add("hidden");
   document.getElementById("onboardingStep3")?.classList.add("hidden");
   document.getElementById(`onboardingStep${step}`)?.classList.remove("hidden");
+  updateOnboardingProgress(step);
+}
+
+function updateOnboardingProgress(step) {
+  document.querySelectorAll(".onboarding-progress-dot").forEach((dot, i) => {
+    if (i + 1 === step) {
+      dot.classList.add("active");
+    } else {
+      dot.classList.remove("active");
+    }
+  });
 }
 
 function renderOnboardingChannels() {
@@ -6558,6 +6577,18 @@ bindEvent(document.getElementById("onboardingStep2Next"), "click", () => {
   }
   onboardingData.cookbook = name;
   showOnboardingStep(3);
+});
+
+// Suggestion pills for cookbook names
+document.querySelectorAll(".onboarding-suggestion-pill").forEach((pill) => {
+  pill.addEventListener("click", () => {
+    const suggestedName = pill.dataset.cookbookSuggest;
+    const input = document.getElementById("onboardingCookbookName");
+    if (input) {
+      input.value = suggestedName;
+      input.focus();
+    }
+  });
 });
 
 bindEvent(document.getElementById("onboardingStep3Skip"), "click", () => {
