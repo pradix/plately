@@ -19,7 +19,7 @@
     }
 
     .container {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
       padding: 24px;
     }
@@ -30,12 +30,43 @@
       border-radius: 12px;
       margin-bottom: 24px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
     h1 {
       font-size: 28px;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
       color: #78936f;
+    }
+
+    .header-info {
+      flex: 1;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #78936f;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #6a7f62;
     }
 
     .subtitle {
@@ -73,17 +104,38 @@
       font-weight: 600;
     }
 
-    .users-section {
+    .section {
       background: white;
       padding: 24px;
       border-radius: 12px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-bottom: 24px;
     }
 
-    .users-section h2 {
+    .section h2 {
       font-size: 20px;
       margin-bottom: 16px;
       color: #1a1a1a;
+    }
+
+    .search-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .search-bar input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .search-bar input:focus {
+      outline: none;
+      border-color: #78936f;
+      box-shadow: 0 0 0 3px rgba(120, 147, 111, 0.1);
     }
 
     .users-table {
@@ -101,6 +153,27 @@
       color: #666;
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .users-table th:hover {
+      background: #f9f9f9;
+    }
+
+    .users-table th.sortable::after {
+      content: " ⇅";
+      opacity: 0.3;
+    }
+
+    .users-table th.sorted-asc::after {
+      content: " ↑";
+      opacity: 1;
+    }
+
+    .users-table th.sorted-desc::after {
+      content: " ↓";
+      opacity: 1;
     }
 
     .users-table td {
@@ -110,17 +183,92 @@
 
     .users-table tbody tr:hover {
       background: #fafafa;
+      cursor: pointer;
     }
 
-    .debug-info {
-      background: #f0f9ff;
-      padding: 16px;
-      border-radius: 8px;
-      margin-bottom: 16px;
-      border: 1px solid #b3d9ff;
+    .user-row {
+      transition: background 0.15s;
+    }
+
+    .user-email {
+      font-weight: 500;
+      color: #78936f;
+    }
+
+    .user-id {
       font-family: monospace;
       font-size: 12px;
-      color: #0066cc;
+      color: #999;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #f0f0f0;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+    }
+
+    .badge.new {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .badge.active {
+      background: #cfe2ff;
+      color: #084298;
+    }
+
+    .timestamp {
+      font-size: 12px;
+      color: #999;
+    }
+
+    .detail-panel {
+      position: fixed;
+      right: 0;
+      top: 0;
+      width: 400px;
+      height: 100vh;
+      background: white;
+      box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+      overflow-y: auto;
+      padding: 24px;
+      transform: translateX(100%);
+      transition: transform 0.3s;
+      z-index: 1000;
+    }
+
+    .detail-panel.open {
+      transform: translateX(0);
+    }
+
+    .detail-panel-close {
+      float: right;
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #999;
+    }
+
+    .detail-panel h3 {
+      clear: both;
+      margin-top: 20px;
+      margin-bottom: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+    }
+
+    .detail-panel p {
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 12px;
+      word-break: break-all;
     }
 
     .loading {
@@ -137,20 +285,43 @@
       margin-bottom: 16px;
       border: 1px solid #fcc;
     }
+
+    @media (max-width: 768px) {
+      .header-actions {
+        flex-direction: column;
+      }
+
+      .detail-panel {
+        width: 100%;
+      }
+
+      .users-table {
+        font-size: 12px;
+      }
+
+      .users-table th,
+      .users-table td {
+        padding: 8px;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>📊 Plately Admin</h1>
-      <p class="subtitle">Gebruikers & Activiteit Statistieken</p>
+      <div class="header-info">
+        <h1>📊 Plately Admin</h1>
+        <p class="subtitle">Gebruikers & Activiteit Statistieken</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" id="exportBtn" onclick="exportToCSV()">📥 Export CSV</button>
+      </div>
     </header>
 
     <div id="error" class="error" style="display: none;"></div>
-    <div id="debug" class="debug-info" style="display: none;"></div>
 
     <div id="loading" class="loading">
-      ⏳ Statistieken laden van /api/admin/stats...
+      ⏳ Statistieken laden...
     </div>
 
     <div id="content" style="display: none;">
@@ -173,17 +344,20 @@
         </div>
       </div>
 
-      <div class="users-section">
-        <h2>Gebruikers Detail</h2>
+      <div class="section">
+        <h2>🔍 Gebruikers</h2>
+        <div class="search-bar">
+          <input type="text" id="searchInput" placeholder="Zoek gebruiker by email..." onkeyup="filterUsers()">
+        </div>
         <table class="users-table">
           <thead>
             <tr>
-              <th>Email / ID</th>
-              <th>Recepten</th>
-              <th>Kookboeken</th>
-              <th>Boodschappen</th>
-              <th>Profiel</th>
-              <th>Aangemaakt</th>
+              <th class="sortable" onclick="sortTable('email')">Email</th>
+              <th class="sortable" onclick="sortTable('recipes')">Recepten</th>
+              <th class="sortable" onclick="sortTable('cookbooks')">Kookboeken</th>
+              <th class="sortable" onclick="sortTable('groceryItems')">Boodschappen</th>
+              <th class="sortable" onclick="sortTable('createdAt')">Aangemaakt</th>
+              <th class="sortable" onclick="sortTable('updatedAt')">Laatst Actief</th>
             </tr>
           </thead>
           <tbody id="usersList">
@@ -193,31 +367,28 @@
     </div>
   </div>
 
+  <div id="detailPanel" class="detail-panel">
+    <button class="detail-panel-close" onclick="closeDetail()">✕</button>
+    <h2 id="detailName">User Details</h2>
+    <div id="detailContent"></div>
+  </div>
+
   <script>
+    let allUsers = [];
+    let sortBy = 'updatedAt';
+    let sortOrder = 'desc';
+
     async function loadStats() {
       try {
-        console.log("🔍 Starting to fetch /api/admin/stats...");
-        document.getElementById("debug").style.display = "block";
-        document.getElementById("debug").textContent = "Fetching /api/admin/stats...";
-
         const response = await fetch("/api/admin/stats");
-        console.log("📡 Response status:", response.status);
-
         const data = await response.json();
-        console.log("📊 Data received:", data);
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${data.error || 'Unknown error'}`);
-        }
-
-        if (!data.ok) {
-          throw new Error(data.error || "API returned not ok");
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "Failed to load stats");
         }
 
         const { stats } = data;
-        console.log("✅ Stats loaded successfully:", stats);
-
-        document.getElementById("debug").textContent = `✅ Data loaded: ${stats.totalUsers} users, ${stats.users.length} user objects`;
+        allUsers = stats.users;
 
         // Update cards
         const totalRecipes = stats.users.reduce((sum, u) => sum + u.recipes, 0);
@@ -229,52 +400,170 @@
         document.getElementById("totalCookbooks").textContent = totalCookbooks;
         document.getElementById("totalGroceries").textContent = totalGroceries;
 
-        // Fill table
-        const tbody = document.getElementById("usersList");
-        tbody.innerHTML = stats.users.map((user, idx) => {
-          const email = user.email || "Guest";
-          const date = new Date(user.createdAt);
-          const dateStr = !isNaN(date.getTime())
-            ? date.toLocaleDateString('nl-NL', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              })
-            : 'N/A';
-
-          return `
-            <tr>
-              <td>
-                <strong>${escapeHtml(email)}</strong><br>
-                <small style="color: #999;">${user.id.substring(0, 16)}...</small>
-              </td>
-              <td>${user.recipes}</td>
-              <td>${user.cookbooks}</td>
-              <td>${user.groceryItems}</td>
-              <td>${user.hasProfile ? '✅' : '❌'}</td>
-              <td><small>${dateStr}</small></td>
-            </tr>
-          `;
-        }).join("");
-
-        console.log("✅ Table rendered with", stats.users.length, "users");
+        renderUsers();
 
         document.getElementById("loading").style.display = "none";
         document.getElementById("content").style.display = "block";
       } catch (error) {
-        console.error("❌ Error:", error);
         document.getElementById("loading").style.display = "none";
         document.getElementById("error").style.display = "block";
-        document.getElementById("error").innerHTML = `
-          <strong>❌ Fout bij laden:</strong><br>
-          ${escapeHtml(error.message)}<br><br>
-          <small>Check de browser console (F12) voor meer details.</small>
-        `;
-        document.getElementById("debug").style.display = "block";
-        document.getElementById("debug").textContent = "❌ " + error.message;
+        document.getElementById("error").textContent = "❌ " + error.message;
       }
+    }
+
+    function renderUsers() {
+      const tbody = document.getElementById("usersList");
+
+      if (allUsers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #999;">Geen gebruikers</td></tr>';
+        return;
+      }
+
+      // Filter by search
+      const searchText = document.getElementById("searchInput").value.toLowerCase();
+      const filtered = allUsers.filter(u => u.email.toLowerCase().includes(searchText));
+
+      // Sort
+      filtered.sort((a, b) => {
+        let aVal = a[sortBy];
+        let bVal = b[sortBy];
+
+        if (sortBy === 'createdAt' || sortBy === 'updatedAt') {
+          aVal = new Date(aVal).getTime();
+          bVal = new Date(bVal).getTime();
+        }
+
+        if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+
+      tbody.innerHTML = filtered.map(user => {
+        const email = user.email || "Guest";
+        const createdDate = new Date(user.createdAt);
+        const updatedDate = new Date(user.updatedAt);
+        const createdStr = formatDate(createdDate);
+        const updatedStr = formatDate(updatedDate);
+        const isNew = Date.now() - createdDate.getTime() < 86400000; // < 1 day
+        const isActive = Date.now() - updatedDate.getTime() < 604800000; // < 7 days
+
+        return `
+          <tr class="user-row" onclick="showDetail('${escapeHtml(user.id)}')">
+            <td>
+              <div class="user-email">${escapeHtml(email)}</div>
+              <div class="user-id">${user.id.substring(0, 16)}...</div>
+            </td>
+            <td>${user.recipes}</td>
+            <td>${user.cookbooks}</td>
+            <td>${user.groceryItems}</td>
+            <td class="timestamp">${createdStr}${isNew ? ' <span class="badge new">NEW</span>' : ''}</td>
+            <td class="timestamp">${updatedStr}${isActive ? ' <span class="badge active">ACTIVE</span>' : ''}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function formatDate(date) {
+      return date.toLocaleDateString('nl-NL', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function filterUsers() {
+      renderUsers();
+    }
+
+    function sortTable(column) {
+      if (sortBy === column) {
+        sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortBy = column;
+        sortOrder = 'desc';
+      }
+
+      // Update header indicators
+      document.querySelectorAll('.users-table th').forEach(th => {
+        th.classList.remove('sorted-asc', 'sorted-desc');
+      });
+
+      const activeHeader = Array.from(document.querySelectorAll('.users-table th')).find(th => {
+        const col = th.textContent.toLowerCase();
+        return (column === 'email' && col.includes('email')) ||
+               (column === 'recipes' && col.includes('recepten')) ||
+               (column === 'cookbooks' && col.includes('kookboeken')) ||
+               (column === 'groceryItems' && col.includes('boodschappen')) ||
+               (column === 'createdAt' && col.includes('aangemaakt')) ||
+               (column === 'updatedAt' && col.includes('actief'));
+      });
+
+      if (activeHeader) {
+        activeHeader.classList.add(sortOrder === 'asc' ? 'sorted-asc' : 'sorted-desc');
+      }
+
+      renderUsers();
+    }
+
+    function showDetail(userId) {
+      const user = allUsers.find(u => u.id === userId);
+      if (!user) return;
+
+      const html = `
+        <h3>Email</h3>
+        <p>${escapeHtml(user.email)}</p>
+
+        <h3>User ID</h3>
+        <p><code>${user.id}</code></p>
+
+        <h3>Recepten</h3>
+        <p>${user.recipes} recepten geïmporteerd</p>
+
+        <h3>Kookboeken</h3>
+        <p>${user.cookbooks} kookboeken</p>
+
+        <h3>Boodschappen</h3>
+        <p>${user.groceryItems} items</p>
+
+        <h3>Profiel</h3>
+        <p>${user.hasProfile ? '✅ Compleet' : '❌ Onvolledig'}</p>
+
+        <h3>Aangemaakt</h3>
+        <p>${formatDate(new Date(user.createdAt))}</p>
+
+        <h3>Laatst Actief</h3>
+        <p>${formatDate(new Date(user.updatedAt))}</p>
+      `;
+
+      document.getElementById("detailName").textContent = escapeHtml(user.email) || "Guest User";
+      document.getElementById("detailContent").innerHTML = html;
+      document.getElementById("detailPanel").classList.add("open");
+    }
+
+    function closeDetail() {
+      document.getElementById("detailPanel").classList.remove("open");
+    }
+
+    function exportToCSV() {
+      const headers = ["Email", "Recepten", "Kookboeken", "Boodschappen", "Profiel", "Aangemaakt", "Laatst Actief", "User ID"];
+      const rows = allUsers.map(u => [
+        u.email || "Guest",
+        u.recipes,
+        u.cookbooks,
+        u.groceryItems,
+        u.hasProfile ? "Ja" : "Nee",
+        formatDate(new Date(u.createdAt)),
+        formatDate(new Date(u.updatedAt)),
+        u.id
+      ]);
+
+      let csv = headers.join(",") + "\n";
+      rows.forEach(row => {
+        csv += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",") + "\n";
+      });
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `plately-users-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
     }
 
     function escapeHtml(text) {
@@ -282,7 +571,6 @@
       return String(text).replace(/[&<>"']/g, m => map[m]);
     }
 
-    console.log("🚀 Admin page loaded, starting to fetch stats...");
     loadStats();
   </script>
 </body>
