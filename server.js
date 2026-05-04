@@ -442,8 +442,12 @@ async function ensureDataFile() {
       await initializeTestData();
     }
   } catch {
-    console.log("📝 Data file not found, initializing with test data...");
-    await initializeTestData();
+    console.log("📝 Data file not found, initializing with empty database...");
+    // Create empty database instead of test data
+    // Test data should only be used for development, not production
+    const emptyDb = createEmptyDatabase();
+    await fsp.writeFile(DATA_FILE, JSON.stringify(emptyDb, null, 2), "utf8");
+    console.log("✅ Empty database created");
   }
 }
 
