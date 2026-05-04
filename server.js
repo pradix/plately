@@ -240,14 +240,21 @@ function isPostgresEnabled() {
 async function createDevAuthSession(response, userId, email) {
   const token = crypto.randomBytes(24).toString("hex");
 
-  // Clear cache to ensure fresh read from file
-  databaseCache = null;
-  const db = await loadDatabase();
+  // Wait for any pending writes to complete before modifying cache
+  await databaseWriteQueue;
+
+  // Now read fresh from disk to avoid losing concurrent writes
+  const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+  const db = JSON.parse(rawFile);
 
   if (!db.authSessions) {
     db.authSessions = {};
   }
   db.authSessions[token] = { userId, email };
+
+  // Update cache with the new state
+  databaseCache = db;
+
   console.log("💾 Saving auth session:", token.substring(0, 8) + "...", "for user", userId);
   await persistDatabase();
   console.log("✅ Auth session persisted", token.substring(0, 8) + "...");
@@ -521,14 +528,11 @@ async function loadDatabase() {
 }
 
 async function persistDatabase() {
-  // Capture the current database state at the time of the persist call
-  // This prevents race conditions where another request clears the cache
-  const dbSnapshot = databaseCache;
-
   databaseWriteQueue = databaseWriteQueue.then(async () => {
-    const db = dbSnapshot;
+    // Always read from the actual databaseCache to ensure we have current state
+    const db = databaseCache;
     if (!db) {
-      console.warn("⚠️  databaseCache was null when persistDatabase was called");
+      console.warn("⚠️  databaseCache is null when writing");
       return;
     }
     console.log(`💾 Writing database: users=${Object.keys(db.users || {}).length}, sessions=${Object.keys(db.sessions || {}).length}, authSessions=${Object.keys(db.authSessions || {}).length}`);
