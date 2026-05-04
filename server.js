@@ -400,10 +400,70 @@ function buildDefaultUserData(userId = generateId("user")) {
 async function ensureDataFile() {
   await fsp.mkdir(DATA_DIR, { recursive: true });
   try {
-    await fsp.access(DATA_FILE);
+    const stat = await fsp.stat(DATA_FILE);
+    // If file exists but is empty or corrupted, use test data
+    if (stat.size === 0) {
+      console.log("📝 Data file is empty, initializing with test data...");
+      await initializeTestData();
+    }
   } catch {
-    await fsp.writeFile(DATA_FILE, JSON.stringify(createEmptyDatabase(), null, 2), "utf8");
+    console.log("📝 Data file not found, initializing with test data...");
+    await initializeTestData();
   }
+}
+
+async function initializeTestData() {
+  const testDb = {
+    users: {
+      "user-test-1": {
+        id: "user-test-1",
+        profile: { name: "Test User 1", handle: "@test1" },
+        importedRecipes: ["recipe-1", "recipe-2"],
+        cookbooks: [
+          { id: "cb-1", name: "Favorites", recipeIds: ["recipe-1"] },
+          { id: "cb-2", name: "Quick Meals", recipeIds: ["recipe-2"] }
+        ],
+        selectedCookbookId: "cb-1",
+        mealPlan: { maandag: "recipe-1", dinsdag: null, woensdag: null, donderdag: null, vrijdag: null, zaterdag: null, zondag: null },
+        groceryItems: [
+          { id: "item-1", title: "Tomatoes", amount: 3 },
+          { id: "item-2", title: "Basil", amount: 1 }
+        ],
+        recipeProgress: {},
+        featuredRecipeId: "recipe-1",
+        selectedRecipeId: "recipe-1",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      "user-test-2": {
+        id: "user-test-2",
+        profile: { name: "Test User 2", handle: "@test2" },
+        importedRecipes: ["recipe-3"],
+        cookbooks: [
+          { id: "cb-3", name: "Healthy", recipeIds: ["recipe-3"] }
+        ],
+        selectedCookbookId: "cb-3",
+        mealPlan: { maandag: null, dinsdag: "recipe-3", woensdag: null, donderdag: null, vrijdag: null, zaterdag: null, zondag: null },
+        groceryItems: [
+          { id: "item-3", title: "Chicken", amount: 1 },
+          { id: "item-4", title: "Rice", amount: 2 }
+        ],
+        recipeProgress: {},
+        featuredRecipeId: "recipe-3",
+        selectedRecipeId: "recipe-3",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    },
+    sessions: {
+      "session-test-1": "user-test-1",
+      "session-test-2": "user-test-2",
+    },
+    authSessions: {},
+  };
+
+  await fsp.writeFile(DATA_FILE, JSON.stringify(testDb, null, 2), "utf8");
+  console.log("✅ Test data initialized");
 }
 
 async function loadDatabase() {
