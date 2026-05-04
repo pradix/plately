@@ -1,0 +1,59 @@
+{
+  "users": {
+    "user-a7d70d1d-d828-46ab-988e-b8c50c8fa9e5": {
+      "id": "user-a7d70d1d-d828-46ab-988e-b8c50c8fa9e5",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt"
+      },
+      "importedRecipes": [],
+      "cookbooks": [],
+      "selectedCookbookId": "",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "",
+      "selectedRecipeId": "",
+      "createdAt": "2026-05-04T19:08:30.403Z",
+      "updatedAt": "2026-05-04T19:08:30.403Z"
+    },
+    "user-21756d09-8b98-4894-afbe-81c936f4d627": {
+      "id": "user-21756d09-8b98-4894-afbe-81c936f4d627",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt"
+      },
+      "importedRecipes": [],
+      "cookbooks": [],
+      "selectedCookbookId": "",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "",
+      "selectedRecipeId": "",
+      "createdAt": "2026-05-04T19:08:33.652Z",
+      "updatedAt": "2026-05-04T19:08:33.652Z"
+    }
+  },
+  "sessions": {
+    "7d3964bf9c866906fb6330609815d9a7e7bd34e53fb232af": "user-a7d70d1d-d828-46ab-988e-b8c50c8fa9e5",
+    "81da4efa52e0499c6216c807766ef7a2c9284cdbee782bd2": "user-21756d09-8b98-4894-afbe-81c936f4d627"
+  },
+  "authSessions": {}
+}

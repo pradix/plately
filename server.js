@@ -437,6 +437,7 @@ async function initializeTestData() {
     users: {
       "user-test-1": {
         id: "user-test-1",
+        email: "test1@example.com",
         profile: { name: "Test User 1", handle: "@test1" },
         importedRecipes: ["recipe-1", "recipe-2"],
         cookbooks: [
@@ -457,6 +458,7 @@ async function initializeTestData() {
       },
       "user-test-2": {
         id: "user-test-2",
+        email: "test2@example.com",
         profile: { name: "Test User 2", handle: "@test2" },
         importedRecipes: ["recipe-3"],
         cookbooks: [

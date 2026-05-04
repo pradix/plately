@@ -1,16 +1,23 @@
 {
   "users": {
-    "user-a7d70d1d-d828-46ab-988e-b8c50c8fa9e5": {
-      "id": "user-a7d70d1d-d828-46ab-988e-b8c50c8fa9e5",
+    "user-test-1": {
+      "id": "user-test-1",
+      "email": "test1@example.com",
       "profile": {
-        "name": "Sarah de Vries",
-        "handle": "@sarahkookt"
+        "name": "Test User 1",
+        "handle": "@test1"
       },
-      "importedRecipes": [],
-      "cookbooks": [],
-      "selectedCookbookId": "",
+      "importedRecipes": ["recipe-1", "recipe-2"],
+      "cookbooks": [
+        {
+          "id": "cb-1",
+          "name": "Favorites",
+          "recipeIds": ["recipe-1"]
+        }
+      ],
+      "selectedCookbookId": "cb-1",
       "mealPlan": {
-        "maandag": null,
+        "maandag": "recipe-1",
         "dinsdag": null,
         "woensdag": null,
         "donderdag": null,
@@ -20,23 +27,30 @@
       },
       "groceryItems": [],
       "recipeProgress": {},
-      "featuredRecipeId": "",
-      "selectedRecipeId": "",
-      "createdAt": "2026-05-04T19:08:30.403Z",
-      "updatedAt": "2026-05-04T19:08:30.403Z"
+      "featuredRecipeId": "recipe-1",
+      "selectedRecipeId": "recipe-1",
+      "createdAt": "2026-05-01T10:00:00.000Z",
+      "updatedAt": "2026-05-04T10:00:00.000Z"
     },
-    "user-21756d09-8b98-4894-afbe-81c936f4d627": {
-      "id": "user-21756d09-8b98-4894-afbe-81c936f4d627",
+    "user-test-2": {
+      "id": "user-test-2",
+      "email": "test2@example.com",
       "profile": {
-        "name": "Sarah de Vries",
-        "handle": "@sarahkookt"
+        "name": "Test User 2",
+        "handle": "@test2"
       },
-      "importedRecipes": [],
-      "cookbooks": [],
-      "selectedCookbookId": "",
+      "importedRecipes": ["recipe-3"],
+      "cookbooks": [
+        {
+          "id": "cb-2",
+          "name": "Healthy",
+          "recipeIds": ["recipe-3"]
+        }
+      ],
+      "selectedCookbookId": "cb-2",
       "mealPlan": {
         "maandag": null,
-        "dinsdag": null,
+        "dinsdag": "recipe-3",
         "woensdag": null,
         "donderdag": null,
         "vrijdag": null,
@@ -45,15 +59,12 @@
       },
       "groceryItems": [],
       "recipeProgress": {},
-      "featuredRecipeId": "",
-      "selectedRecipeId": "",
-      "createdAt": "2026-05-04T19:08:33.652Z",
-      "updatedAt": "2026-05-04T19:08:33.652Z"
+      "featuredRecipeId": "recipe-3",
+      "selectedRecipeId": "recipe-3",
+      "createdAt": "2026-05-02T10:00:00.000Z",
+      "updatedAt": "2026-05-04T10:00:00.000Z"
     }
   },
-  "sessions": {
-    "7d3964bf9c866906fb6330609815d9a7e7bd34e53fb232af": "user-a7d70d1d-d828-46ab-988e-b8c50c8fa9e5",
-    "81da4efa52e0499c6216c807766ef7a2c9284cdbee782bd2": "user-21756d09-8b98-4894-afbe-81c936f4d627"
-  },
+  "sessions": {},
   "authSessions": {}
 }
