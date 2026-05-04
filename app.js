@@ -6597,6 +6597,15 @@ bindEvent(document.getElementById("onboardingPhotoInput"), "change", (e) => {
   if (!file) return;
   resizeImageToDataUrl(file, 320).then((dataUrl) => {
     onboardingData.photoData = dataUrl;
+    // Display the photo in the circle
+    const circle = document.getElementById("onboardingPhotoCircle");
+    const icon = circle?.querySelector(".onboarding-photo-icon");
+    if (circle && icon) {
+      circle.style.backgroundImage = `url(${dataUrl})`;
+      circle.style.backgroundSize = "cover";
+      circle.style.backgroundPosition = "center";
+      icon.style.display = "none";
+    }
     showToast("Foto toegevoegd!");
   });
 });

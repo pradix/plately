@@ -514,7 +514,13 @@ async function loadDatabase() {
 
 async function persistDatabase() {
   databaseWriteQueue = databaseWriteQueue.then(async () => {
-    const db = await loadDatabase();
+    // Always read fresh from memory cache to preserve recent modifications
+    // Don't reload from disk, as that would lose in-memory changes
+    const db = databaseCache;
+    if (!db) {
+      console.warn("⚠️  databaseCache is null when persisting");
+      return;
+    }
     console.log(`💾 Writing database: users=${Object.keys(db.users || {}).length}, sessions=${Object.keys(db.sessions || {}).length}, authSessions=${Object.keys(db.authSessions || {}).length}`);
     await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2), "utf8");
   });
