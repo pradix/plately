@@ -3855,6 +3855,12 @@ img { display: block; max-width: 100%; }
   grid-template-columns: 1fr;
 }
 
+.auth-screen__social-buttons {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+}
+
 .auth-screen__social-btn {
   text-decoration: none;
 }
@@ -3888,6 +3894,14 @@ img { display: block; max-width: 100%; }
 }
 
 .auth-screen__social-btn--tiktok:hover {
+  opacity: 0.9;
+}
+
+.auth-screen__social-btn--whatsapp {
+  background: #25d366;
+}
+
+.auth-screen__social-btn--whatsapp:hover {
   opacity: 0.9;
 }
 
