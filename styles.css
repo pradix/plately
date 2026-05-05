@@ -867,17 +867,20 @@ img { display: block; max-width: 100%; }
 .detail-screen { background: var(--bg); }
 
 /* Position topbar over hero image */
+.detail-screen {
+  position: relative;
+}
+
 .detail-screen .topbar--home {
-  position: absolute;
+  position: fixed;
   top: 0;
-  left: 0;
-  right: 0;
-  width: 100vw;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100vw, 430px);
   background: transparent;
   border: none;
   box-shadow: none;
-  z-index: 10;
-  margin-left: calc(-50vw + 50%);
+  z-index: 15;
   padding: 12px 16px;
 }
 
@@ -886,6 +889,7 @@ img { display: block; max-width: 100%; }
   padding: 8px 12px;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  width: fit-content;
 }
 
 .detail-hero {
@@ -3344,11 +3348,38 @@ img { display: block; max-width: 100%; }
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.28s ease;
+  background: var(--bg);
 }
 #recipeEditPanel.profile-subpanel--active {
   opacity: 1;
   pointer-events: auto;
   transform: none;
+}
+
+#recipeEditPanel .topbar--sub {
+  background: var(--bg);
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+  padding: 14px 16px;
+  min-height: 56px;
+}
+
+#recipeEditPanel .topbar-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+#recipeEditPanel .recipe-edit__save-btn {
+  background: var(--sage-deep);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.recipe-edit__body {
+  padding: 20px 16px;
 }
 
 /* ── Universal sub-page topbar (profile panels, cookbook detail, etc.) ── */
@@ -8310,17 +8341,25 @@ body {
 }
 
 .basket-product__delete {
-  background: none;
-  border: none;
+  background: rgba(192, 184, 176, 0.12);
+  border: 1px solid rgba(192, 184, 176, 0.2);
+  border-radius: 8px;
   cursor: pointer;
   color: #c0b8b0;
-  padding: 2px;
+  padding: 8px 10px;
   display: grid;
   place-items: center;
+  min-width: 40px;
+  min-height: 40px;
+  transition: all 0.2s ease;
 }
 
-.basket-product__delete svg { width: 18px; height: 18px; }
-.basket-product__delete:hover { color: #c44; }
+.basket-product__delete svg { width: 20px; height: 20px; }
+.basket-product__delete:hover {
+  background: rgba(196, 68, 68, 0.1);
+  border-color: rgba(196, 68, 68, 0.3);
+  color: #c44;
+}
 
 .basket-product__qty {
   display: flex;
