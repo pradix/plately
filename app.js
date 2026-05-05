@@ -4116,17 +4116,26 @@ async function bootstrapSession() {
   try {
     const payload = await fetchJson(`${state.apiBase}/api/session`);
     sessionCheckSucceeded = true;
+    console.log("📥 Session payload received:", {
+      auth: payload?.auth,
+      user_id: payload?.user?.id
+    });
+
     if (payload?.auth) {
       state.auth.enabled = Boolean(payload.auth.enabled);
       state.auth.authenticated = Boolean(payload.auth.authenticated);
       state.auth.email = payload.auth.email || "";
+      console.log("✅ Auth payload applied - authenticated:", state.auth.authenticated);
     }
     applyPersistedAppState(payload.user);
+    console.log("📦 After applyPersistedAppState - authenticated:", state.auth.authenticated);
+
     // applyPersistedAppState may have reset state.auth.authenticated based on
     // payload.user.authenticated — re-apply the auth payload as the source of truth
     if (payload?.auth) {
       state.auth.authenticated = Boolean(payload.auth.authenticated);
       state.auth.email = payload.auth.email || "";
+      console.log("🔐 Auth re-applied after applyPersistedAppState - authenticated:", state.auth.authenticated);
     }
     // Remember authenticated state across refreshes
     if (state.auth.authenticated) {
@@ -4150,11 +4159,12 @@ async function bootstrapSession() {
     state.session.ready = true;
     renderAll();
     // Show auth modal to all unauthenticated users
-    if (sessionCheckSucceeded && !state.auth.authenticated) {
+    // IMPORTANT: Check state.auth.authenticated (from server) NOT cached localStorage
+    if (sessionCheckSucceeded && state.auth.authenticated === false) {
       console.log("📱 User not authenticated, showing login modal");
       openAuthModal("login");
     } else {
-      console.log("✅ User is authenticated or session check failed");
+      console.log("✅ User is authenticated or session check failed. state.auth.authenticated:", state.auth.authenticated);
     }
   }
 }
