@@ -8,6 +8,10 @@ const ROOT_DIR = __dirname;
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT_DIR, "data");
 const DATA_FILE = path.join(DATA_DIR, "plately-db.json");
 
+console.log(`📁 DATA_DIR: ${DATA_DIR}`);
+console.log(`📄 DATA_FILE: ${DATA_FILE}`);
+console.log(`🌍 NODE_ENV: ${process.env.NODE_ENV}`);
+
 loadEnvFile();
 
 const PORT = Number(process.env.PORT || 3000);
@@ -509,10 +513,12 @@ async function initializeTestData() {
 
 async function loadDatabase() {
   if (databaseCache) {
+    console.log(`📦 Using cached database: ${Object.keys(databaseCache.users || {}).length} users`);
     return databaseCache;
   }
 
   await ensureDataFile();
+  console.log(`📖 Loading database from ${DATA_FILE}`);
   const rawContents = await fsp.readFile(DATA_FILE, "utf8");
 
   try {
@@ -522,7 +528,10 @@ async function loadDatabase() {
       sessions: parsed?.sessions && typeof parsed.sessions === "object" ? parsed.sessions : {},
       authSessions: parsed?.authSessions && typeof parsed.authSessions === "object" ? parsed.authSessions : {},
     };
-    console.log(`✅ Database loaded: ${Object.keys(databaseCache.users).length} users, ${Object.keys(databaseCache.sessions).length} sessions`);
+    const userCount = Object.keys(databaseCache.users).length;
+    const sessionCount = Object.keys(databaseCache.sessions).length;
+    const authCount = Object.keys(databaseCache.authSessions).length;
+    console.log(`✅ Database loaded from disk: ${userCount} users, ${sessionCount} sessions, ${authCount} auth sessions`);
   } catch (error) {
     console.error("❌ Database parse error:", error.message);
     databaseCache = createEmptyDatabase();
@@ -539,8 +548,13 @@ async function persistDatabase() {
       console.warn("⚠️  databaseCache is null when writing");
       return;
     }
-    console.log(`💾 Writing database: users=${Object.keys(db.users || {}).length}, sessions=${Object.keys(db.sessions || {}).length}, authSessions=${Object.keys(db.authSessions || {}).length}`);
+    const userCount = Object.keys(db.users || {}).length;
+    const sessionCount = Object.keys(db.sessions || {}).length;
+    const authCount = Object.keys(db.authSessions || {}).length;
+    console.log(`💾 Writing database to ${DATA_FILE}`);
+    console.log(`   users=${userCount}, sessions=${sessionCount}, authSessions=${authCount}`);
     await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2), "utf8");
+    console.log(`✅ Database written successfully to ${DATA_FILE}`);
   });
   return databaseWriteQueue;
 }
