@@ -4498,15 +4498,41 @@ async function searchAHRecipes(query, count = 4) {
       console.log(`Found ${links.length} recipe links in Jina markdown`);
 
       if (links.length > 0) {
-        return links.slice(0, count).map((match) => ({
-          title: sanitizeText(match[1] || ""),
-          url: match[2],
-          thumbnail: "",
-          channel: "Allerhande",
-          channelId: "ch-ah",
-          description: "",
-          time: "",
-        })).filter((r) => r.title && r.url && r.title.length > 2);
+        // Fetch images for first few results
+        const results = await Promise.all(
+          links.slice(0, count).map(async (match) => {
+            const title = sanitizeText(match[1] || "");
+            const url = match[2];
+            let thumbnail = "";
+
+            // Try to fetch the recipe page and extract image
+            try {
+              const recipeHtml = await fetch(url, {
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                },
+                signal: AbortSignal.timeout(5000),
+              }).then(r => r.ok ? r.text() : "").catch(() => "");
+
+              if (recipeHtml) {
+                const image = extractAhRecipeImage(recipeHtml);
+                if (image) thumbnail = image;
+              }
+            } catch { /* skip image fetch */ }
+
+            return {
+              title,
+              url,
+              thumbnail,
+              channel: "Allerhande",
+              channelId: "ch-ah",
+              description: "",
+              time: "",
+            };
+          })
+        );
+
+        return results.filter((r) => r.title && r.url && r.title.length > 2);
       }
     }
   } catch (err) {
@@ -4551,29 +4577,46 @@ async function searchAHRecipes(query, count = 4) {
     }
 
     if (recipeUrls.size > 0) {
-      // Try to get titles by fetching the first few recipes
-      const results = [];
-      for (const url of Array.from(recipeUrls).slice(0, count)) {
-        try {
-          const recipeHtml = await fetchHtml(url);
-          const titleMatch = recipeHtml.match(/<h1[^>]*>([^<]+)<\/h1>/i) ||
-                           recipeHtml.match(/<title[^>]*>([^<]+)<\/title>/i);
-          const title = titleMatch ? sanitizeText(titleMatch[1]) : sanitizeText(url.split("/").pop() || "");
-          if (title.length > 2) {
-            results.push({
+      // Try to get titles and images by fetching the first few recipes
+      const results = await Promise.all(
+        Array.from(recipeUrls).slice(0, count).map(async (url) => {
+          try {
+            const recipeHtml = await fetch(url, {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "text/html,application/xhtml+xml",
+              },
+              signal: AbortSignal.timeout(5000),
+            }).then(r => r.ok ? r.text() : "").catch(() => "");
+
+            if (!recipeHtml) return null;
+
+            const titleMatch = recipeHtml.match(/<h1[^>]*>([^<]+)<\/h1>/i) ||
+                             recipeHtml.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
+            const title = titleMatch ? sanitizeText(titleMatch[1]) : sanitizeText(url.split("/").pop() || "");
+
+            if (title.length <= 2) return null;
+
+            const thumbnail = extractAhRecipeImage(recipeHtml);
+
+            return {
               title,
               url,
-              thumbnail: "",
+              thumbnail,
               channel: "Allerhande",
               channelId: "ch-ah",
               description: "",
               time: "",
-            });
+            };
+          } catch {
+            return null;
           }
-        } catch { /* skip */ }
-      }
-      console.log(`✅ HTML scraper found ${results.length} recipes`);
-      return results;
+        })
+      );
+
+      const validResults = results.filter(Boolean);
+      console.log(`✅ HTML scraper found ${validResults.length} recipes`);
+      return validResults;
     }
   } catch (err) {
     console.log(`⚠️  HTML scraper failed: ${err.message}`);
