@@ -3123,7 +3123,7 @@ function parseMarkdownIngredientSection(text) {
   const ingredientSection = extractMarkdownSection(
     text,
     "ingredi[eë]nten|ingredienten|ingredients?|dit heb je nodig",
-    "aan de slag|bereiding|voedingswaarden|boodschappen|services"
+    "aan de slag|bereiding|voedingswaarden|boodschappen|services|ontdek|gerelateerde|ook te zien"
   );
 
   if (!ingredientSection) {
