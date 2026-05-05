@@ -3338,6 +3338,19 @@ img { display: block; max-width: 100%; }
   transform: translateX(0);
 }
 
+/* Recipe edit panel - integrated Plately layout */
+#recipeEditPanel {
+  transform: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease;
+}
+#recipeEditPanel.profile-subpanel--active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
 /* ── Universal sub-page topbar (profile panels, cookbook detail, etc.) ── */
 .topbar--sub {
   position: sticky;
