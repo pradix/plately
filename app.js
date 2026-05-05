@@ -5965,40 +5965,64 @@ bindEvent(document.getElementById("channelAddFormClose"), "click", () => {
   if (formContainer) formContainer.hidden = true;
 });
 
-bindEvent(document.getElementById("customChannelForm"), "submit", (event) => {
+bindEvent(document.getElementById("customChannelForm"), "submit", async (event) => {
   event.preventDefault();
-  const nameInput = document.getElementById("customChannelName");
   const urlInput = document.getElementById("customChannelUrl");
+  const submitBtn = document.getElementById("customChannelSubmit");
 
-  if (!nameInput || !urlInput) return;
+  if (!urlInput || !submitBtn) return;
 
-  const trimmedName = nameInput.value.trim();
   const trimmedUrl = urlInput.value.trim();
+  if (!trimmedUrl) return;
 
-  if (!trimmedName || !trimmedUrl) return;
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="animation: hourglass-flip 3s ease-in-out infinite;">
+      <path d="M6 2c-1.1 0-2 .9-2 2v1h2V4h12v1h2V4c0-1.1-.9-2-2-2H6zm0 5h12v7c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1V7zm12 9H6v1c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2v-1z"/>
+    </svg>
+    Verwerken...
+  `;
 
-  const initials = trimmedName.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase() || trimmedName.slice(0, 2).toUpperCase();
-  const color = CUSTOM_CHANNEL_COLORS[state.customChannels.length % CUSTOM_CHANNEL_COLORS.length];
-  const newChannel = {
-    id: `ch-custom-${Date.now()}`,
-    name: trimmedName,
-    url: trimmedUrl,
-    initials,
-    color,
-  };
+  try {
+    // Extract domain name from URL
+    const url = new URL(trimmedUrl);
+    const domain = url.hostname.replace("www.", "");
+    const nameParts = domain.split(".")[0];
+    const channelName = nameParts.charAt(0).toUpperCase() + nameParts.slice(1);
 
-  state.customChannels.push(newChannel);
-  state.followedChannelIds.push(newChannel.id);
+    const initials = channelName.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase() || "WEB";
+    const color = CUSTOM_CHANNEL_COLORS[state.customChannels.length % CUSTOM_CHANNEL_COLORS.length];
 
-  // Hide form and reset
-  const formContainer = document.getElementById("channelAddForm");
-  if (formContainer) formContainer.hidden = true;
+    const newChannel = {
+      id: `ch-custom-${Date.now()}`,
+      name: channelName,
+      url: trimmedUrl,
+      initials,
+      color,
+    };
 
-  renderChannelSettings();
-  renderChannelRow();
-  schedulePersistAppState();
+    state.customChannels.push(newChannel);
+    state.followedChannelIds.push(newChannel.id);
 
-  showToast("Kanaal toegevoegd!");
+    // Hide form and reset
+    const formContainer = document.getElementById("channelAddForm");
+    if (formContainer) formContainer.hidden = true;
+    urlInput.value = "";
+
+    renderChannelSettings();
+    renderChannelRow();
+    schedulePersistAppState();
+
+    showToast(`${channelName} toegevoegd!`);
+  } catch (error) {
+    showToast("Geldig URL-adres vereist.");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Kanaal toevoegen
+    `;
+  }
 });
 
 bindEvent(switchAuthModeButton, "click", () => {
