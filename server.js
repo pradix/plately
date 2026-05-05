@@ -280,7 +280,7 @@ async function createDevAuthSession(response, userId, email) {
     serializeCookie("plately_auth", token, {
       path: "/",
       httpOnly: false,
-      sameSite: "None",
+      sameSite: "Lax",
       secure: true,
       maxAge: 60 * 60 * 24 * 30, // 30 days
     })
@@ -343,7 +343,7 @@ async function clearDevAuthSession(request, response) {
     serializeCookie("plately_auth", "", {
       path: "/",
       httpOnly: true,
-      sameSite: "None",
+      sameSite: "Lax",
       secure: true,
       maxAge: 1,
     })
@@ -634,13 +634,13 @@ function serializeCookie(name, value, options = {}) {
 function appendSetCookie(response, cookieValue) {
   const existing = response.getHeader("Set-Cookie");
   if (!existing) {
-    console.log(`🍪 Setting cookie: ${cookieValue.substring(0, 50)}...`);
+    console.log(`🍪 Setting cookie [FULL]: ${cookieValue}`);
     response.setHeader("Set-Cookie", cookieValue);
     return;
   }
 
   const nextCookies = Array.isArray(existing) ? [...existing, cookieValue] : [existing, cookieValue];
-  console.log(`🍪 Appending cookie: ${cookieValue.substring(0, 50)}...`);
+  console.log(`🍪 Appending cookie [FULL]: ${cookieValue}`);
   response.setHeader("Set-Cookie", nextCookies);
 }
 
@@ -713,7 +713,7 @@ async function createAuthSession(response, userId) {
       serializeCookie("plately_auth", token, {
         path: "/",
         httpOnly: false,
-        sameSite: "None",
+        sameSite: "Lax",
         secure: true,
         maxAge: 60 * 60 * 24 * 30,
       })
@@ -731,7 +731,7 @@ async function clearAuthSession(request, response) {
       serializeCookie("plately_auth", "", {
         path: "/",
         httpOnly: true,
-        sameSite: "None",
+        sameSite: "Lax",
         secure: true,
         maxAge: 1,
       })
@@ -752,7 +752,7 @@ async function clearAuthSession(request, response) {
     serializeCookie("plately_auth", "", {
       path: "/",
       httpOnly: true,
-      sameSite: "None",
+      sameSite: "Lax",
       secure: true,
       maxAge: 1,
     })
@@ -875,7 +875,7 @@ async function ensureUserSession(request, response) {
       serializeCookie("plately_session", sessionToken, {
         path: "/",
         httpOnly: true,
-        sameSite: "None",
+        sameSite: "Lax",
         secure: true,
         maxAge: 60 * 60 * 24 * 365,
       })
@@ -4526,7 +4526,9 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === "/api/session" && request.method === "GET") {
       const cookies = parseCookies(request.headers.cookie);
-      console.log(`🔐 /api/session request - Auth cookie: ${cookies.plately_auth ? cookies.plately_auth.substring(0, 8) + "..." : "NONE"}`);
+      console.log(`🔐 /api/session - Raw Cookie header: ${request.headers.cookie || "EMPTY"}`);
+      console.log(`🔐 /api/session - Parsed cookies: ${Object.keys(cookies).join(", ") || "NONE"}`);
+      console.log(`🔐 /api/session - Auth cookie: ${cookies.plately_auth ? cookies.plately_auth.substring(0, 8) + "..." : "NONE"}`);
 
       let authUser = await getAuthenticatedUser(request);
 
