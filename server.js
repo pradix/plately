@@ -455,7 +455,13 @@ function buildDefaultUserData(userId = generateId("user")) {
 }
 
 async function ensureDataFile() {
-  await fsp.mkdir(DATA_DIR, { recursive: true });
+  try {
+    await fsp.mkdir(DATA_DIR, { recursive: true });
+  } catch (err) {
+    console.log(`⚠️ Could not create DATA_DIR ${DATA_DIR}: ${err.message}`);
+    // On Render, /data might not be writable, we'll use in-memory DB instead
+  }
+
   try {
     const stat = await fsp.stat(DATA_FILE);
     // If file exists but is empty or corrupted, use test data
