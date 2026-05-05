@@ -4801,7 +4801,7 @@ function bindEvent(element, eventName, handler) {
 }
 
 // + button and filter button → navigate to import screen (universal import)
-document.querySelectorAll("#openImportButton, #openImportButton2, #groceryImportButton, #mealplanImportButton, #reviewImportButton, #profileImportButton").forEach((btn) => {
+document.querySelectorAll("#openImportButton, #openImportButton2, #groceryImportButton, #mealplanImportButton, #profileImportButton").forEach((btn) => {
   if (btn) btn.addEventListener("click", () => {
     if (!state.auth.authenticated) {
       showAuthModal();
@@ -4810,6 +4810,15 @@ document.querySelectorAll("#openImportButton, #openImportButton2, #groceryImport
     switchView("import");
   });
 });
+
+// Edit recipe button → open edit panel
+if (reviewImportButton) {
+  reviewImportButton.addEventListener("click", () => {
+    if (state.view === "detail" && state.selectedRecipeId) {
+      openRecipeEditPanel(state.selectedRecipeId);
+    }
+  });
+}
 
 platformButtons.forEach((button) => {
   button.addEventListener("click", () => {
