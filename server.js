@@ -3121,8 +3121,8 @@ function parseTextRecipeDocument(text, url) {
 function parseMarkdownIngredientSection(text) {
   const ingredientSection = extractMarkdownSection(
     text,
-    "ingredi[eë]nten|ingredienten|ingredients?",
-    "dit heb je nodig|aan de slag|bereiding|voedingswaarden|boodschappen|allerhande|services|albert heijn"
+    "ingredi[eë]nten|ingredienten|ingredients?|dit heb je nodig",
+    "aan de slag|bereiding|voedingswaarden|boodschappen|services"
   );
 
   if (!ingredientSection) {
@@ -3142,7 +3142,7 @@ function parseMarkdownInstructionSection(text) {
   const instructionSection = extractMarkdownSection(
     text,
     "aan de slag|bereiding|bereidingswijze|instructions?|method",
-    "voedingswaarden|ingredi[eë]nten|ingredienten|boodschappen|allerhande|services|albert heijn"
+    "voedingswaarden|ingredi[eë]nten|ingredienten|boodschappen|services"
   );
 
   if (!instructionSection) {
