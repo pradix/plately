@@ -2117,9 +2117,21 @@ async function callClaudeApi(systemPrompt, userPrompt, maxTokens = 2048) {
 }
 
 // Extract clean readable text from HTML for Claude input
+function removeAdContainers(html) {
+  // Remove common ad containers and interrupting elements
+  return html
+    .replace(/<(?:div|section|aside)[^>]*(?:id|class)="[^"]*(?:ad|advertisement|advert|banner|popup|modal|sidebar|related|recommend|newsletter|subscribe|form|chat|widget)[^"]*"[^>]*>[\s\S]*?<\/(?:div|section|aside)>/gi, " ")
+    .replace(/<!-- ?ad[\s\S]*?-->/gi, " ")
+    .replace(/<ins[^>]*>[\s\S]*?<\/ins>/gi, " ")
+    .replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, " ");
+}
+
 function extractReadableTextFromHtml(html, maxLength = 6000) {
+  // First remove ads and interrupting content
+  let noAds = removeAdContainers(html);
+
   // Remove script, style, nav, footer, aside, header blocks
-  let cleaned = html
+  let cleaned = noAds
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
@@ -2980,13 +2992,16 @@ function parseJsonLdInstructions(value) {
 }
 
 function parseListAfterHeading(html, headingPattern) {
+  // First remove common ad containers that might interrupt lists
+  let cleanHtml = removeAdContainers(html);
+
   // Allow optional trailing colon, whitespace, or any combination after the heading text
   // Also allow nested tags within the heading (some sites wrap headings further)
   const pattern = new RegExp(
     `<(?:h1|h2|h3|h4|strong|p|b)[^>]*>\\s*(?:<[^>]+>\\s*)?(?:${headingPattern})\\s*[:：]?\\s*(?:[^<]*?)?<\\/(?:h1|h2|h3|h4|strong|p|b)>[\\s\\S]{0,400}?<(ul|ol)[^>]*>([\\s\\S]*?)<\\/\\1>`,
     "i"
   );
-  const match = html.match(pattern);
+  const match = cleanHtml.match(pattern);
   if (!match) {
     return [];
   }
@@ -2997,19 +3012,22 @@ function parseListAfterHeading(html, headingPattern) {
 }
 
 function parseParagraphsAfterHeading(html, headingPattern) {
+  // First remove ads and interrupting content
+  let cleanHtml = removeAdContainers(html);
+
   // First find the heading position
   const headingPattern2 = new RegExp(
     `<(?:h1|h2|h3|h4|strong|p|b)[^>]*>\\s*(?:<[^>]+>\\s*)?(?:${headingPattern})\\s*[:：]?\\s*(?:[^<]*?)?<\\/(?:h1|h2|h3|h4|strong|p|b)>`,
     "i"
   );
-  const headingMatch = html.match(headingPattern2);
+  const headingMatch = cleanHtml.match(headingPattern2);
   if (!headingMatch) {
     return [];
   }
 
-  // Get the content after the heading (up to 8000 chars)
+  // Get the content after the heading (up to 12000 chars to capture more content)
   const startIdx = headingMatch.index + headingMatch[0].length;
-  const after = html.slice(startIdx, startIdx + 8000);
+  const after = cleanHtml.slice(startIdx, startIdx + 12000);
 
   // Stop at next major section heading (e.g., another bold heading or h2)
   const stopMatch = after.match(/<h[1-3][^>]*>|<(?:strong|b)[^>]*>\s*(?:tip|tips|nutrition|voedingswaarden|gerelateerde|reacties|comments|reviews|over\s)/i);
@@ -3020,7 +3038,7 @@ function parseParagraphsAfterHeading(html, headingPattern) {
     .map((item) => sanitizeText(stripTags(item[1])))
     .filter(Boolean)
     .filter((text) => text.length >= 20) // Filter out very short paragraphs (likely captions)
-    .slice(0, 12);
+    .slice(0, 16);
 
   return paragraphs;
 }
@@ -3142,15 +3160,18 @@ function parseMarkdownServings(text) {
 }
 
 function parseWebsiteRecipe(html, url) {
-  const jsonLd = findRecipeJsonLd(html);
-  const embeddedRecipe = extractEmbeddedRecipeFields(html);
-  const metaTitle = parseMetaTag(html, "og:title") || parseTitleTag(html);
-  const metaDescription = parseMetaTag(html, "og:description") || parseMetaTag(html, "description", "name");
-  const metaImage = parseMetaTag(html, "og:image");
-  const fallbackIngredients = parseListAfterHeading(html, "ingrediënten|ingredienten|ingredients?|benodigdheden|wat heb je nodig");
+  // Remove ads before parsing to avoid interruptions in ingredient/instruction lists
+  const cleanHtml = removeAdContainers(html);
+
+  const jsonLd = findRecipeJsonLd(cleanHtml);
+  const embeddedRecipe = extractEmbeddedRecipeFields(cleanHtml);
+  const metaTitle = parseMetaTag(cleanHtml, "og:title") || parseTitleTag(cleanHtml);
+  const metaDescription = parseMetaTag(cleanHtml, "og:description") || parseMetaTag(cleanHtml, "description", "name");
+  const metaImage = parseMetaTag(cleanHtml, "og:image");
+  const fallbackIngredients = parseListAfterHeading(cleanHtml, "ingrediënten|ingredienten|ingredients?|benodigdheden|wat heb je nodig");
   const fallbackInstructions = [
-    ...parseListAfterHeading(html, "bereiding|bereidingswijze|instructions?|method|methode|aan de slag"),
-    ...parseParagraphsAfterHeading(html, "bereiding|bereidingswijze|instructions?|method|methode|aan de slag"),
+    ...parseListAfterHeading(cleanHtml, "bereiding|bereidingswijze|instructions?|method|methode|aan de slag"),
+    ...parseParagraphsAfterHeading(cleanHtml, "bereiding|bereidingswijze|instructions?|method|methode|aan de slag"),
   ];
 
   if (jsonLd || embeddedRecipe) {
@@ -3591,7 +3612,7 @@ async function importWebsite(sourceUrl) {
     // Claude fallback for text documents missing ingredients or instructions
     if (textRecipe.needsReview && ANTHROPIC_API_KEY) {
       const claudeResult = await extractWithClaudeFromWebPage(
-        document.body.slice(0, 5000),
+        document.body.slice(0, 8000),
         textRecipe.title,
         sourceUrl,
         ""
@@ -3622,7 +3643,8 @@ async function importWebsite(sourceUrl) {
 
   // Claude fallback for HTML pages missing ingredients or instructions
   if (htmlRecipe.needsReview && ANTHROPIC_API_KEY) {
-    const pageText = extractReadableTextFromHtml(document.body, 5000);
+    // Extract more content for better AI analysis (up to 8000 chars instead of 5000)
+    const pageText = extractReadableTextFromHtml(document.body, 8000);
     const claudeResult = await extractWithClaudeFromWebPage(
       pageText,
       htmlRecipe.title,
@@ -4160,9 +4182,20 @@ function urlLooksLikeRecipe(url) {
 
 /**
  * Returns true when the title looks like a recipe (not a tip/review/guide post).
+ * Improved to also look for positive recipe indicators.
  */
 function titleLooksLikeRecipe(title) {
   if (!title) return true;
+
+  // Strong positive indicators for recipes
+  const recipeKeywords = /\b(?:recept|recipe|maken|bereid|bak|ingredient|snelle|makkelijke|gezonde|eenvoudige|lekker|vers|huisgemaakte|homemade|how\s+to\s+make|how\s+to\s+bake|voor|met|soep|pizza|pasta|diner|ontbijt|tart|cake|koekje|cookies?)\b/i;
+
+  // If it has strong recipe keywords, it's likely a recipe
+  if (recipeKeywords.test(title)) {
+    return true;
+  }
+
+  // Otherwise check if it fails the blog pattern test
   return !BLOG_TITLE_RE.test(title);
 }
 
@@ -4172,14 +4205,41 @@ function titleLooksLikeRecipe(title) {
  *  - 0.5 → at least half of them appear
  *  - 0.0 → none appear
  * Use threshold 0.5 to keep results that share most key terms.
+ * Bonus points for exact phrase matches and word order.
  */
 function titleQueryScore(title, query) {
   if (!title || !query) return 1; // can't determine — pass
   const t = title.toLowerCase();
   const words = query.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
   if (!words.length) return 1;
-  const hits = words.filter((w) => t.includes(w)).length;
-  return hits / words.length;
+
+  // Check for word boundary matches (more accurate than substring)
+  const wordBoundaryHits = words.filter((w) => {
+    const wordRegex = new RegExp(`\\b${w}\\b`);
+    return wordRegex.test(t);
+  }).length;
+
+  const baseScore = wordBoundaryHits / words.length;
+
+  // Bonus: exact phrase match (higher confidence)
+  if (t.includes(query.toLowerCase())) {
+    return Math.min(1, baseScore + 0.3);
+  }
+
+  // Bonus: consecutive words appear in order
+  const wordsInOrder = words.filter((w, i) => {
+    if (i === 0) return t.includes(w);
+    const prevWord = words[i - 1];
+    const prevIdx = t.indexOf(prevWord);
+    const currIdx = t.indexOf(w);
+    return prevIdx >= 0 && currIdx > prevIdx;
+  }).length;
+
+  if (wordsInOrder > 1) {
+    return Math.min(1, baseScore + 0.2);
+  }
+
+  return baseScore;
 }
 
 function titleMatchesQuery(title, query) {
