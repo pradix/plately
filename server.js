@@ -547,22 +547,29 @@ async function loadDatabase() {
   }
 
   await ensureDataFile();
-  console.log(`📖 Loading database from ${DATA_FILE}`);
-  const rawContents = await fsp.readFile(DATA_FILE, "utf8");
 
   try {
-    const parsed = JSON.parse(rawContents);
-    databaseCache = {
-      users: parsed?.users && typeof parsed.users === "object" ? parsed.users : {},
-      sessions: parsed?.sessions && typeof parsed.sessions === "object" ? parsed.sessions : {},
-      authSessions: parsed?.authSessions && typeof parsed.authSessions === "object" ? parsed.authSessions : {},
-    };
-    const userCount = Object.keys(databaseCache.users).length;
-    const sessionCount = Object.keys(databaseCache.sessions).length;
-    const authCount = Object.keys(databaseCache.authSessions).length;
-    console.log(`✅ Database loaded from disk: ${userCount} users, ${sessionCount} sessions, ${authCount} auth sessions`);
-  } catch (error) {
-    console.error("❌ Database parse error:", error.message);
+    console.log(`📖 Loading database from ${DATA_FILE}`);
+    const rawContents = await fsp.readFile(DATA_FILE, "utf8");
+
+    try {
+      const parsed = JSON.parse(rawContents);
+      databaseCache = {
+        users: parsed?.users && typeof parsed.users === "object" ? parsed.users : {},
+        sessions: parsed?.sessions && typeof parsed.sessions === "object" ? parsed.sessions : {},
+        authSessions: parsed?.authSessions && typeof parsed.authSessions === "object" ? parsed.authSessions : {},
+      };
+      const userCount = Object.keys(databaseCache.users).length;
+      const sessionCount = Object.keys(databaseCache.sessions).length;
+      const authCount = Object.keys(databaseCache.authSessions).length;
+      console.log(`✅ Database loaded from disk: ${userCount} users, ${sessionCount} sessions, ${authCount} auth sessions`);
+    } catch (parseError) {
+      console.error("❌ Database parse error:", parseError.message);
+      databaseCache = createEmptyDatabase();
+    }
+  } catch (readError) {
+    console.log(`⚠️ Could not read database file: ${readError.message}`);
+    console.log("💾 Using empty in-memory database");
     databaseCache = createEmptyDatabase();
   }
 
