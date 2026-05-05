@@ -13,16 +13,20 @@ Plately now supports importing recipes directly from the iOS share sheet. This a
    https://plately.app/?importUrl=<encoded-url>
    ```
 
-2. **Auto-Population**: The app detects the `importUrl` parameter and automatically:
-   - Switches to the import view
-   - Populates the recipe URL input field
+2. **Automatic Import**: The app detects the `importUrl` parameter and automatically:
+   - Extracts and validates the URL
+   - Starts the import process immediately
+   - Shows loading state ("Importeren...")
    - Clears the URL parameter from the address bar (for privacy)
+   - Displays the recipe review screen when ready
 
-3. **User Flow**:
+3. **User Flow** (Super Fast! ⚡):
    - User sees a recipe in Safari/TikTok/Instagram
    - User taps Share → Plately
-   - Plately opens with the URL pre-filled in the import form
-   - User can review and import the recipe
+   - Plately opens and **automatically starts importing**
+   - Loading indicator shows progress
+   - Recipe review screen appears when ready
+   - User can immediately review and save
 
 ## Setting Up the Siri Shortcut
 

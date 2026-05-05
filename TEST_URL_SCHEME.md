@@ -25,10 +25,11 @@ https://plately.app/?importUrl=https://www.ah.nl/allerhande/recepten/pizza&note=
 2. **Paste in browser address bar**
 3. **Expected behavior**:
    - App should open
-   - Import view should be shown
-   - Recipe URL input should be pre-filled
+   - Import automatically starts
+   - Loading indicator shows: "Importeren..."
    - URL parameter should be removed from address bar
-   - Toast message should appear: "URL klaar om in te voeren"
+   - Recipe review screen appears with imported recipe
+   - Toast confirms: "[Recipe title] klaar om na te lopen"
 
 ## Verify in Browser Console
 
@@ -68,17 +69,21 @@ App opens with: https://plately.app/?importUrl=<url>
     ↓
 handleUrlSchemeImport() detects parameter
     ↓
+URL parameter cleared from address bar immediately
+    ↓
 switchView('import') called
     ↓
-recipeUrlInput.value populated
+submitImport() called AUTOMATICALLY 🚀
     ↓
-URL parameter cleared from address bar
+Loading indicator: "Importeren..."
     ↓
-User sees pre-filled import form
+Recipe is fetched and processed
     ↓
-User taps "Recept importeren"
+Recipe review screen appears
     ↓
-Recipe imported!
+Toast confirms: "[Recipe title] klaar om na te lopen"
+    ↓
+User can immediately review & save!
 ```
 
 ## Debugging
@@ -126,12 +131,13 @@ switchView('import'); // Should switch to import view
 ## Success Indicators
 
 ✅ Import view opens automatically
-✅ URL field is populated
-✅ Placeholder shows correct platform
-✅ Toast notification appears
-✅ URL parameter removed from address bar
-✅ User can modify URL before importing
-✅ Import proceeds normally after clicking submit
+✅ Loading indicator shows: "Importeren..."
+✅ URL parameter removed from address bar immediately
+✅ Import starts automatically (no manual click needed)
+✅ Recipe is processed and displayed
+✅ Toast confirmation appears: "[Recipe title] klaar om na te lopen"
+✅ Review screen shows with imported recipe
+✅ User can save or edit before cooking
 
 ---
 
