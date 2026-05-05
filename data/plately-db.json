@@ -542,6 +542,34 @@
       "selectedRecipeId": "",
       "createdAt": "2026-05-05T14:18:50.686Z",
       "updatedAt": "2026-05-05T14:18:50.686Z"
+    },
+    "user-4ed3dff5-55ae-40b5-82f7-1473753d8c78": {
+      "id": "user-4ed3dff5-55ae-40b5-82f7-1473753d8c78",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt",
+        "favoriteSupermarket": "ah",
+        "gender": "",
+        "birthDate": ""
+      },
+      "importedRecipes": [],
+      "cookbooks": [],
+      "selectedCookbookId": "",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "",
+      "selectedRecipeId": "",
+      "createdAt": "2026-05-05T14:54:35.777Z",
+      "updatedAt": "2026-05-05T14:54:35.777Z"
     }
   },
   "sessions": {
@@ -558,7 +586,8 @@
     "8fb979461cbee8a045802e27395f1e7b66fcd51c83437719": "user-479b85f4-2d66-47b3-b958-a255f01b2fdd",
     "0d6c38b5229230aeb282d011c445ed6b25c61a1a0c24a297": "user-58cf1991-5485-4d4a-acd1-b4abd3908f27",
     "a42c8d266b2821186970820ea8d30180b6d6b67c990a6e95": "user-8377cb11-f49d-4918-bc8a-00541e83fdaa",
-    "c85c074f5e1dbead75dc2db9e3f453646dd72482525c28f9": "user-fefa6f73-1057-45d2-9bae-233ed2dc40d2"
+    "c85c074f5e1dbead75dc2db9e3f453646dd72482525c28f9": "user-fefa6f73-1057-45d2-9bae-233ed2dc40d2",
+    "cb63ee00f653f3c17466f78bc3e6344927174be20029c491": "user-4ed3dff5-55ae-40b5-82f7-1473753d8c78"
   },
   "authSessions": {
     "06ef960ba8cefba3329bb5e5fcb585fe276b720f286a32e6": {
