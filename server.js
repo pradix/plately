@@ -4423,6 +4423,7 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
 async function searchChannelRecipes(query, allowedChannels = null) {
   const q = encodeURIComponent(query);
   // null = all channels; array = only those channel IDs
+  // BUT: Always include Allerhande (ch-ah) since it's a primary recipe source
   const allow = allowedChannels && allowedChannels.length ? new Set(allowedChannels) : null;
 
   async function scrapeOrRest(baseUrl, channelName, channelId, searchUrl, parser, count) {
@@ -4446,6 +4447,8 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   }
 
   function maybeSearch(channelId, fn) {
+    // Allerhande (ch-ah) is always searched since it's a primary recipe source
+    if (channelId === "ch-ah") return fn();
     if (allow && !allow.has(channelId)) return Promise.resolve([]);
     return fn();
   }
