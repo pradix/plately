@@ -4141,12 +4141,8 @@ async function bootstrapSession() {
   } finally {
     state.session.ready = true;
     renderAll();
-    // Only show auth modal for true first-time visitors:
-    //   - the session check confirmed they are NOT logged in, AND
-    //   - they have never authenticated on this device before.
-    // Returning visitors whose session expired won't be disrupted — they can
-    // still click "Inloggen" via the profile menu.
-    if (sessionCheckSucceeded && !state.auth.authenticated && !hasUserEverAuthed()) {
+    // Show auth modal to all unauthenticated users
+    if (sessionCheckSucceeded && !state.auth.authenticated) {
       openAuthModal("login");
     }
   }
