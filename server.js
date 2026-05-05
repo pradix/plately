@@ -1057,10 +1057,12 @@ function loadEnvFile() {
 }
 
 function sendJson(response, statusCode, payload) {
-  response.writeHead(statusCode, {
-    ...HTTP_HEADERS,
-    "Content-Type": MIME_TYPES[".json"],
-  });
+  // Set headers individually to preserve any Set-Cookie headers added by appendSetCookie
+  response.statusCode = statusCode;
+  for (const [key, value] of Object.entries(HTTP_HEADERS)) {
+    response.setHeader(key, value);
+  }
+  response.setHeader("Content-Type", MIME_TYPES[".json"]);
   response.end(JSON.stringify(payload));
 }
 
