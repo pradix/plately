@@ -2512,30 +2512,16 @@ function renderDetailRecipe(resetServings = false) {
 
   detailIngredientList.innerHTML = recipe.ingredients
     .map(
-      (ingredient, index) => {
-        const isChecked = isIngredientChecked(recipe.id, ingredient, index);
-        return `
-          <li class="ingredient-entry ${isChecked ? "is-checked" : ""}">
-            <button
-              class="ingredient-item"
-              type="button"
-              data-ingredient-index="${index}"
-              aria-pressed="${String(isChecked)}"
-            >
-              <span class="ingredient-checkbox" aria-hidden="true">
-                <svg class="ingredient-checkbox__check" viewBox="0 0 24 24">
-                  <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" fill="currentColor"/>
-                </svg>
-              </span>
-              <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
-              <span class="ingredient-name">${ingredient.name}</span>
-              <span class="ingredient-image-wrapper">
-                <img class="ingredient-image" src="" alt="" loading="lazy" />
-              </span>
-            </button>
-          </li>
-        `;
-      }
+      (ingredient, index) => `
+        <li class="ingredient-item">
+          <span class="ingredient-image-wrapper">
+            <img class="ingredient-image" src="" alt="" loading="lazy" />
+            <span class="ingredient-image-fallback" aria-hidden="true">${getIngredientVisualMarkup(ingredient.name)}</span>
+          </span>
+          <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
+          <span class="ingredient-name">${ingredient.name}</span>
+        </li>
+      `
     )
     .join("");
 
@@ -2849,12 +2835,22 @@ function updateIngredientImages() {
   const recipe = getSelectedRecipe();
   if (!recipe) return;
 
-  const images = document.querySelectorAll(".ingredient-image");
-  images.forEach((img, index) => {
+  const wrappers = document.querySelectorAll(".ingredient-image-wrapper");
+  wrappers.forEach((wrapper, index) => {
     const ingredient = recipe.ingredients[index];
     if (ingredient?.imageUrl) {
-      img.src = ingredient.imageUrl;
-      img.alt = ingredient.name;
+      const img = wrapper.querySelector(".ingredient-image");
+      const fallback = wrapper.querySelector(".ingredient-image-fallback");
+      if (img) {
+        img.src = ingredient.imageUrl;
+        img.alt = ingredient.name;
+        img.onload = () => {
+          if (fallback) fallback.style.display = "none";
+        };
+        img.onerror = () => {
+          if (fallback) fallback.style.display = "grid";
+        };
+      }
     }
   });
 }
@@ -5764,20 +5760,6 @@ bindEvent(detailStepList, "click", (event) => {
   if (!(btn instanceof HTMLElement)) return;
   const secs = parseInt(btn.dataset.stepSeconds || "0", 10);
   if (secs > 0) startStepTimer(btn, secs);
-});
-
-bindEvent(detailIngredientList, "click", (event) => {
-  const target = event.target;
-  if (!(target instanceof Element)) {
-    return;
-  }
-
-  const ingredientButton = target.closest("[data-ingredient-index]");
-  if (!(ingredientButton instanceof HTMLElement)) {
-    return;
-  }
-
-  toggleIngredientChecked(Number(ingredientButton.dataset.ingredientIndex));
 });
 
 // Basket servings controls
