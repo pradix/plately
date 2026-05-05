@@ -4202,6 +4202,7 @@ async function submitAuth(mode, email, password) {
 }
 
 async function logoutAccount() {
+  console.log("🔓 Logging out...");
   const payload = await fetchJson(`${state.apiBase}/api/auth/logout`, {
     method: "POST",
   });
@@ -4210,11 +4211,18 @@ async function logoutAccount() {
     state.auth.enabled = Boolean(payload.auth.enabled);
     state.auth.authenticated = Boolean(payload.auth.authenticated);
     state.auth.email = payload.auth.email || "";
+    console.log("✅ Logout auth state updated - authenticated:", state.auth.authenticated);
   }
   applyPersistedAppState(payload.user);
   clearUserAuthedMark();
   renderAll();
   showToast("Je bent uitgelogd.");
+
+  // Show login screen after logout
+  if (!state.auth.authenticated) {
+    console.log("📱 Showing login screen after logout");
+    openAuthModal("login");
+  }
 }
 
 async function handleImport(url, note) {
