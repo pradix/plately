@@ -5,7 +5,11 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 
 const ROOT_DIR = __dirname;
-const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT_DIR, "data");
+// On Render (production), ALWAYS use /data which is persistent
+// Locally (dev), use ./data in project directory
+const DATA_DIR = process.env.NODE_ENV === "production"
+  ? "/data"
+  : (process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT_DIR, "data"));
 const DATA_FILE = path.join(DATA_DIR, "plately-db.json");
 
 console.log(`📁 DATA_DIR: ${DATA_DIR}`);
