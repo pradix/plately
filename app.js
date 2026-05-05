@@ -4479,6 +4479,13 @@ function hasUserEverAuthed() {
 
 async function bootstrapSession() {
   let sessionCheckSucceeded = false;
+  // Save any locally persisted grocery items before applying server state
+  let localGroceryItems = null;
+  try {
+    const saved = localStorage.getItem("plately-grocery-items");
+    if (saved !== null) localGroceryItems = JSON.parse(saved);
+  } catch {}
+
   try {
     const payload = await fetchJson(`${state.apiBase}/api/session`);
     sessionCheckSucceeded = true;
@@ -4496,6 +4503,12 @@ async function bootstrapSession() {
     applyPersistedAppState(payload.user);
     console.log("📦 After applyPersistedAppState - authenticated:", state.auth.authenticated);
 
+    // If server didn't provide grocery items but we have them locally, restore from localStorage
+    if ((!payload?.user?.groceryItems || !Array.isArray(payload.user.groceryItems)) && localGroceryItems) {
+      state.groceryItems = localGroceryItems;
+      console.log("♻️ Restored grocery items from localStorage (server didn't provide any)");
+    }
+
     // applyPersistedAppState may have reset state.auth.authenticated based on
     // payload.user.authenticated — re-apply the auth payload as the source of truth
     if (payload?.auth) {
@@ -4507,13 +4520,6 @@ async function bootstrapSession() {
     if (state.auth.authenticated) {
       markUserAsAuthed();
     }
-    // localStorage is always written synchronously on changes, so it reflects the
-    // most recent user action — even if the async server-persist hadn't completed.
-    // Always overlay server state with the local grocery snapshot.
-    try {
-      const saved = localStorage.getItem("plately-grocery-items");
-      if (saved !== null) state.groceryItems = JSON.parse(saved);
-    } catch {}
   } catch {
     // Server unreachable — restore groceryItems from localStorage
     try {
@@ -5166,15 +5172,13 @@ function openProfileSubPanel(id) {
   // Scroll panel to top to avoid showing content from previous state
   panel.scrollTop = 0;
 
-  // Show processing notice only if user has added custom channels
+  // Show processing notice only if user has pending (not approved) custom channels
   if (id === "profileSubChannels") {
     const notice = document.querySelector(".channel-processing-notice");
     if (notice) {
-      if (state.customChannels.length > 0) {
-        notice.style.display = "flex";
-      } else {
-        notice.style.display = "none";
-      }
+      // Only show if there are pending channels
+      const hasPendingChannels = state.customChannels.some((ch) => ch.status === "pending");
+      notice.style.display = hasPendingChannels ? "flex" : "none";
     }
   }
 }
