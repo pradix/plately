@@ -2516,23 +2516,22 @@ function renderDetailRecipe(resetServings = false) {
         const isChecked = isIngredientChecked(recipe.id, ingredient, index);
         return `
           <li class="ingredient-entry ${isChecked ? "is-checked" : ""}">
-            <button class="ingredient-checkbox" type="button" data-ingredient-index="${index}" aria-pressed="${String(isChecked)}">
-              <svg class="ingredient-checkbox__check" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" fill="currentColor"/>
-              </svg>
-            </button>
-            <div class="ingredient-image-wrapper">
-              <img class="ingredient-image" src="" alt="${ingredient.name}" loading="lazy" />
-            </div>
             <button
               class="ingredient-item"
               type="button"
               data-ingredient-index="${index}"
               aria-pressed="${String(isChecked)}"
             >
+              <span class="ingredient-checkbox" aria-hidden="true">
+                <svg class="ingredient-checkbox__check" viewBox="0 0 24 24">
+                  <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" fill="currentColor"/>
+                </svg>
+              </span>
               <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
               <span class="ingredient-name">${ingredient.name}</span>
-              <span class="ingredient-thumb" aria-hidden="true">${getIngredientVisualMarkup(ingredient.name)}</span>
+              <span class="ingredient-image-wrapper">
+                <img class="ingredient-image" src="" alt="" loading="lazy" />
+              </span>
             </button>
           </li>
         `;
