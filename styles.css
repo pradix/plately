@@ -3936,42 +3936,43 @@ img { display: block; max-width: 100%; }
 .onboarding-channels {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .onboarding-channel-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 10px 12px;
   background: var(--surface);
-  border-radius: 14px;
+  border-radius: 12px;
   border: 1.5px solid transparent;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
+  font-size: 0.95rem;
 }
 .onboarding-channel-item:active { background: var(--sage); opacity: 0.7; }
 .onboarding-channel-item.selected { border-color: #78936f; background: rgba(120,147,111,0.08); }
 
 .onboarding-channel-item input {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   cursor: pointer;
   margin: 0;
   flex-shrink: 0;
 }
 
 .onboarding-channel-avatar {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   background: #f0f0f0;
   flex-shrink: 0;
-  font-weight: 800;
-  font-size: .65rem;
+  font-weight: 700;
+  font-size: .58rem;
   color: #999;
   letter-spacing: -0.02em;
   overflow: hidden;
@@ -7557,6 +7558,77 @@ body {
   font-size: 1.2rem;
   line-height: 1;
   font-weight: 400;
+}
+
+/* ── Custom channel form ────────────────────────────────────────────────────── */
+.channel-add-form {
+  padding: 16px 12px;
+  border-top: 1px solid rgba(120, 147, 111, 0.1);
+  background: rgba(141, 164, 133, 0.04);
+  border-radius: 12px;
+  margin-top: 12px;
+}
+
+.channel-add-form__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.channel-add-form__header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #243c2b;
+}
+
+.channel-add-form__close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #8da485;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.channel-add-form__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Processing notice ──────────────────────────────────────────────────────── */
+.channel-processing-notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  background: rgba(141, 164, 133, 0.08);
+  border-left: 3px solid #8da485;
+  border-radius: 6px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+
+.channel-processing-hourglass {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: #8da485;
+  margin-top: 2px;
+}
+
+.channel-processing-text {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: #666;
 }
 
 /* ── Channel favicon in avatar ───────────────────────────────────────────── */

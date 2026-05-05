@@ -2096,6 +2096,14 @@ function renderChannelSettings() {
     </button>`;
 
   container.innerHTML = seedRows + customRows + addButton;
+
+  // Reset form and hide it
+  const form = document.getElementById("customChannelForm");
+  const formContainer = document.getElementById("channelAddForm");
+  if (form) {
+    form.reset();
+    if (formContainer) formContainer.hidden = true;
+  }
 }
 
 function renderCookbookFilterBar() {
@@ -5845,26 +5853,8 @@ bindEvent(document.getElementById("channelSettingsList"), "click", (event) => {
 
   // Handle "Kanaal toevoegen" button
   if (event.target.closest("#addCustomChannelButton")) {
-    const name = prompt("Website naam (bijv. \"Leuke Recepten\"):");
-    if (!name || !name.trim()) return;
-    const url = prompt("Website URL (bijv. \"https://www.leukerecepten.nl\"):");
-    if (!url || !url.trim()) return;
-    const trimmedName = name.trim();
-    const trimmedUrl = url.trim();
-    const initials = trimmedName.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase() || trimmedName.slice(0, 2).toUpperCase();
-    const color = CUSTOM_CHANNEL_COLORS[state.customChannels.length % CUSTOM_CHANNEL_COLORS.length];
-    const newChannel = {
-      id: `ch-custom-${Date.now()}`,
-      name: trimmedName,
-      url: trimmedUrl,
-      initials,
-      color,
-    };
-    state.customChannels.push(newChannel);
-    state.followedChannelIds.push(newChannel.id);
-    renderChannelSettings();
-    renderChannelRow();
-    schedulePersistAppState();
+    const formContainer = document.getElementById("channelAddForm");
+    if (formContainer) formContainer.hidden = !formContainer.hidden;
     return;
   }
 
@@ -5882,6 +5872,48 @@ bindEvent(document.getElementById("channelSettingsList"), "click", (event) => {
   renderChannelRow();
   renderProfileSummary();
   schedulePersistAppState();
+});
+
+// Handle custom channel form
+bindEvent(document.getElementById("channelAddFormClose"), "click", () => {
+  const formContainer = document.getElementById("channelAddForm");
+  if (formContainer) formContainer.hidden = true;
+});
+
+bindEvent(document.getElementById("customChannelForm"), "submit", (event) => {
+  event.preventDefault();
+  const nameInput = document.getElementById("customChannelName");
+  const urlInput = document.getElementById("customChannelUrl");
+
+  if (!nameInput || !urlInput) return;
+
+  const trimmedName = nameInput.value.trim();
+  const trimmedUrl = urlInput.value.trim();
+
+  if (!trimmedName || !trimmedUrl) return;
+
+  const initials = trimmedName.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase() || trimmedName.slice(0, 2).toUpperCase();
+  const color = CUSTOM_CHANNEL_COLORS[state.customChannels.length % CUSTOM_CHANNEL_COLORS.length];
+  const newChannel = {
+    id: `ch-custom-${Date.now()}`,
+    name: trimmedName,
+    url: trimmedUrl,
+    initials,
+    color,
+  };
+
+  state.customChannels.push(newChannel);
+  state.followedChannelIds.push(newChannel.id);
+
+  // Hide form and reset
+  const formContainer = document.getElementById("channelAddForm");
+  if (formContainer) formContainer.hidden = true;
+
+  renderChannelSettings();
+  renderChannelRow();
+  schedulePersistAppState();
+
+  showToast("Kanaal toegevoegd!");
 });
 
 bindEvent(switchAuthModeButton, "click", () => {
