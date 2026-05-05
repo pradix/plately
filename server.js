@@ -4530,6 +4530,11 @@ const server = http.createServer(async (request, response) => {
       console.log(`🔐 /api/session - Parsed cookies: ${Object.keys(cookies).join(", ") || "NONE"}`);
       console.log(`🔐 /api/session - Auth cookie: ${cookies.plately_auth ? cookies.plately_auth.substring(0, 8) + "..." : "NONE"}`);
 
+      // Prevent any cached /api/session responses (browser or proxy)
+      response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+      response.setHeader("Pragma", "no-cache");
+      response.setHeader("Expires", "0");
+
       let authUser = await getAuthenticatedUser(request);
 
       // Fallback to dev auth if Postgres not available
@@ -4537,8 +4542,11 @@ const server = http.createServer(async (request, response) => {
         authUser = await getDevAuthenticatedUser(request);
       }
 
+      console.log(`🔐 /api/session - authUser resolved: ${authUser ? authUser.email : "NULL"}`);
+
       if (authUser) {
         const appState = isPostgresEnabled() ? buildAppStateFromUser(authUser) : (await ensureUserSession(request, response));
+        console.log(`🔐 /api/session - RESPONSE: authenticated=true, email=${authUser.email}`);
         sendJson(response, 200, {
           ok: true,
           user: {
@@ -4556,6 +4564,7 @@ const server = http.createServer(async (request, response) => {
       }
 
       const user = await ensureUserSession(request, response);
+      console.log(`🔐 /api/session - RESPONSE: authenticated=false (guest user_id=${user?.user_id || "?"})`);
       sendJson(response, 200, {
         ok: true,
         user: {
