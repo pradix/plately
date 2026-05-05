@@ -3056,29 +3056,29 @@ img { display: block; max-width: 100%; }
 
 .profile2-hero {
   background: #fff;
-  padding: 32px 20px 24px;
+  padding: 20px 20px 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 24px;
+  gap: 4px;
+  margin-bottom: 16px;
 }
 
 .profile2-avatar-wrap {
   position: relative;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .profile2-avatar {
-  width: 90px;
-  height: 90px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
   background: #e8b4a0;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.2rem;
+  font-size: 2rem;
   font-weight: 700;
   color: #fff;
 }
@@ -3113,7 +3113,7 @@ img { display: block; max-width: 100%; }
 
 .profile2-name {
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   font-weight: 700;
   color: #1a1a1a;
   text-align: center;
@@ -3124,14 +3124,14 @@ img { display: block; max-width: 100%; }
   font-size: 0.9rem;
   color: #6b7280;
   text-align: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .profile2-stats {
   display: flex;
   align-items: center;
   gap: 0;
-  padding-top: 16px;
+  padding-top: 12px;
   border-top: 1px solid #f0f0f0;
   width: 100%;
   justify-content: center;
