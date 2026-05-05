@@ -7237,6 +7237,38 @@ refreshBackendStatus();
 registerServiceWorker();
 bootstrapSession();
 
+// ── URL Scheme Handler (for iOS share integration) ────────────────────────────
+// Handle plately://import?url=... URL scheme from iOS share sheet
+function handleUrlSchemeImport() {
+  // Check for importUrl query parameter (set by iOS share handler or Siri Shortcut)
+  const params = new URLSearchParams(window.location.search);
+  const importUrl = params.get('importUrl');
+
+  if (importUrl) {
+    // Decode the URL if it's encoded
+    const decodedUrl = decodeURIComponent(importUrl);
+
+    // Switch to import view
+    switchView('import');
+
+    // Populate the recipe URL input
+    setTimeout(() => {
+      if (recipeUrlInput) {
+        recipeUrlInput.value = decodedUrl;
+        recipeUrlInput.focus();
+        recipeNoteInput.value = '';
+        showToast('URL klaar om in te voeren');
+      }
+    }, 100);
+
+    // Clear the URL parameter so it doesn't persist on page reload
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+}
+
+// Call the URL scheme handler after session is loaded
+handleUrlSchemeImport();
+
 // ── Onboarding flow (after successful registration) ────────────────────────────
 const onboardingScreen = document.getElementById("onboardingScreen");
 let onboardingData = {
