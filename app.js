@@ -7263,21 +7263,47 @@ function handleUrlSchemeImport() {
     // Decode the URL if it's encoded
     const decodedUrl = decodeURIComponent(importUrl);
 
+    // Clear the URL parameter immediately (so it doesn't persist on page reload)
+    window.history.replaceState({}, document.title, window.location.pathname);
+
     // Switch to import view
     switchView('import');
 
-    // Populate the recipe URL input
+    // Auto-start import after a short delay to ensure form is ready
     setTimeout(() => {
       if (recipeUrlInput) {
-        recipeUrlInput.value = decodedUrl;
-        recipeUrlInput.focus();
-        recipeNoteInput.value = '';
-        showToast('URL klaar om in te voeren');
-      }
-    }, 100);
+        const url = extractUrl(decodedUrl);
+        const submitButton = document.getElementById("submitImport");
 
-    // Clear the URL parameter so it doesn't persist on page reload
-    window.history.replaceState({}, document.title, window.location.pathname);
+        // Populate the recipe URL input
+        recipeUrlInput.value = url;
+        recipeNoteInput.value = '';
+
+        // Auto-submit the import
+        submitImport(
+          url,
+          '',
+          (message) => {
+            if (importFeedback) importFeedback.textContent = message;
+          },
+          (isLoading) => {
+            if (submitButton) {
+              submitButton.disabled = isLoading;
+              submitButton.textContent = isLoading ? "Importeren..." : "Recept importeren";
+            }
+          },
+          (importedRecipe) => {
+            // On success: show review screen
+            importForm.reset();
+            state.selectedPlatform = "tiktok";
+            syncPlatformUI();
+            closeModal();
+            openImportReview(importedRecipe.id);
+            showToast(`${importedRecipe.title} klaar om na te lopen.`);
+          }
+        );
+      }
+    }, 150);
   }
 }
 
