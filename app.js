@@ -2051,7 +2051,11 @@ function renderCategoryGrid() {
 function renderChannelRow() {
   const row = document.getElementById("channelRow");
   if (!row) return;
-  const followed = getAllChannels().filter((ch) => state.followedChannelIds.includes(ch.id));
+  // Only show followed channels that are approved (not pending)
+  const followed = getAllChannels().filter((ch) =>
+    state.followedChannelIds.includes(ch.id) &&
+    (ch.status || "approved") === "approved"
+  );
   row.innerHTML = followed.map((ch) => {
     const faviconUrl = getSourceIconUrl(ch.url);
     return `
