@@ -4578,25 +4578,44 @@ async function searchAHRecipes(query, count = 4) {
       }
 
       const links = allLinks.filter(match => {
+        const title = match[1] || "";
         const url = match[2];
         const slug = url.split('/recepten/')[1] || "";
 
+        // Filter out obvious categories
         if (slug.endsWith('recepten') || slug.endsWith('gerechten')) {
           return false;
         }
 
+        // Need multi-word recipe names
         const wordCount = (slug.match(/-/g) || []).length + 1;
         if (wordCount < 2) {
           return false;
         }
 
+        // Skip numeric slugs
         if (/^\d+/.test(slug)) {
           return false;
         }
 
+        // **NEW: Filter for search relevance**
+        // Only keep recipes that mention the search query in title or URL
+        const searchWords = query.toLowerCase().split(/\s+/);
+        const titleLower = title.toLowerCase();
+        const slugLower = slug.toLowerCase();
+
+        // At least one search word should be in title or URL
+        const hasMatchingWord = searchWords.some(word =>
+          (word.length > 2 && (titleLower.includes(word) || slugLower.includes(word)))
+        );
+
+        if (!hasMatchingWord) {
+          return false; // Skip recipes that don't match search query
+        }
+
         return true;
       });
-      console.log(`Found ${links.length} real recipe links (filtered from ${allLinks.length} total)`);
+      console.log(`Found ${links.length} relevant recipe links (filtered from ${allLinks.length} total for query "${query}")`);
 
       if (links.length > 0) {
         const results = links.slice(0, count).map((match) => {
