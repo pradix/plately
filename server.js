@@ -5265,14 +5265,12 @@ const server = http.createServer(async (request, response) => {
         if (isPostgresEnabled()) {
           await ensurePostgresSchema();
           const pool = await getPostgresPool();
-          const result = await pool.query(
-            "SELECT u.id, u.data FROM plately_users u WHERE u.data->>'customChannels' IS NOT NULL"
-          );
+          const result = await pool.query("SELECT id, email, app_state FROM plately_users");
 
           const pendingChannels = [];
           for (const row of result.rows) {
-            const data = JSON.parse(row.data);
-            const customChannels = Array.isArray(data.customChannels) ? data.customChannels : [];
+            const appState = typeof row.app_state === 'object' ? row.app_state : JSON.parse(row.app_state || '{}');
+            const customChannels = Array.isArray(appState.customChannels) ? appState.customChannels : [];
             for (const ch of customChannels) {
               if (ch.status === "pending") {
                 pendingChannels.push({
@@ -5281,7 +5279,7 @@ const server = http.createServer(async (request, response) => {
                   url: ch.url,
                   createdAt: ch.createdAt || new Date().toISOString(),
                   createdById: ch.createdBy,
-                  createdByEmail: data.email || "unknown"
+                  createdByEmail: row.email || "unknown"
                 });
               }
             }
@@ -5334,21 +5332,19 @@ const server = http.createServer(async (request, response) => {
         if (isPostgresEnabled()) {
           await ensurePostgresSchema();
           const pool = await getPostgresPool();
-          const result = await pool.query(
-            "SELECT id, data FROM plately_users u WHERE u.data->>'customChannels' IS NOT NULL"
-          );
+          const result = await pool.query("SELECT id, app_state FROM plately_users");
 
           let found = false;
           for (const row of result.rows) {
-            const data = JSON.parse(row.data);
-            const customChannels = Array.isArray(data.customChannels) ? data.customChannels : [];
+            const appState = typeof row.app_state === 'object' ? row.app_state : JSON.parse(row.app_state || '{}');
+            const customChannels = Array.isArray(appState.customChannels) ? appState.customChannels : [];
             const channelIndex = customChannels.findIndex(ch => ch.id === channelId);
             if (channelIndex !== -1) {
               customChannels[channelIndex].status = status;
-              data.customChannels = customChannels;
+              appState.customChannels = customChannels;
               await pool.query(
-                "UPDATE plately_users SET data = $1 WHERE id = $2",
-                [JSON.stringify(data), row.id]
+                "UPDATE plately_users SET app_state = $1 WHERE id = $2",
+                [JSON.stringify(appState), row.id]
               );
               found = true;
               break;
