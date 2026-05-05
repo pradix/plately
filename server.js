@@ -5261,11 +5261,6 @@ const server = http.createServer(async (request, response) => {
       console.log("⏳ /api/admin/pending-channels called");
 
       try {
-        const ADMIN_EMAIL = "pradix@me.com";
-        const authUser = await getAuthenticatedUser(request);
-        if (!authUser || authUser.email !== ADMIN_EMAIL) {
-          return sendJson(response, 403, { ok: false, error: "Unauthorized" });
-        }
 
         if (isPostgresEnabled()) {
           await ensurePostgresSchema();
@@ -5327,11 +5322,6 @@ const server = http.createServer(async (request, response) => {
       console.log("✅ /api/admin/approve-channel called");
 
       try {
-        const ADMIN_EMAIL = "pradix@me.com";
-        const authUser = await getAuthenticatedUser(request);
-        if (!authUser || authUser.email !== ADMIN_EMAIL) {
-          return sendJson(response, 403, { ok: false, error: "Unauthorized" });
-        }
 
         let body = "";
         for await (const chunk of request) body += chunk.toString();
