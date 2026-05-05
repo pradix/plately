@@ -2206,7 +2206,23 @@ function renderRecipeGrid() {
     return;
   }
 
-  recipeGrid.innerHTML = recipes
+  // Add "add new recipe" card at the beginning when authenticated
+  let gridHtml = "";
+  if (state.auth.authenticated && !isSearching && !state.activeCookbookFilter) {
+    gridHtml = `
+      <button class="recent-card recent-card--add-recipe" type="button" id="addRecipeCard">
+        <div class="recent-card__img" style="background: linear-gradient(135deg, #fde8d8 0%, #fef3c7 100%); display: flex; align-items: center; justify-content: center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2.2" stroke-linecap="round" style="width: 32px; height: 32px;" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </div>
+        <div class="recent-card__body">
+          <p class="recent-card__title">Nieuw recept</p>
+          <p class="recent-card__meta">Importeer een recept</p>
+        </div>
+      </button>
+    `;
+  }
+
+  gridHtml += recipes
     .map(
       (recipe) => {
         const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
@@ -2226,6 +2242,16 @@ function renderRecipeGrid() {
       }
     )
     .join("");
+
+  recipeGrid.innerHTML = gridHtml;
+
+  // Bind the add recipe card click
+  const addRecipeCardBtn = document.getElementById("addRecipeCard");
+  if (addRecipeCardBtn) {
+    bindEvent(addRecipeCardBtn, "click", () => {
+      switchView("import");
+    });
+  }
 }
 
 // ── Step timer ────────────────────────────────────────────────────────────────
