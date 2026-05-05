@@ -4382,7 +4382,7 @@ function bindEvent(element, eventName, handler) {
 }
 
 // + button and filter button → navigate to import screen (universal import)
-document.querySelectorAll("#openImportButton, #openImportButton2").forEach((btn) => {
+document.querySelectorAll("#openImportButton, #openImportButton2, #groceryImportButton, #mealplanImportButton, #reviewImportButton").forEach((btn) => {
   if (btn) btn.addEventListener("click", () => {
     if (!state.auth.authenticated) {
       showAuthModal();
