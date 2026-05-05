@@ -922,6 +922,69 @@ bindEvent(document.getElementById("authPasswordToggle"), "click", () => {
   input.type = input.type === "password" ? "text" : "password";
 });
 
+bindEvent(document.getElementById("forgotPasswordBtn"), "click", (e) => {
+  e.preventDefault();
+  const authForm = document.querySelector(".auth-screen__form:not(#resetEmailForm)");
+  const resetForm = document.getElementById("passwordResetForm");
+  if (authForm) authForm.style.display = "none";
+  if (resetForm) resetForm.classList.remove("hidden");
+});
+
+bindEvent(document.getElementById("resetFormBack"), "click", (e) => {
+  e.preventDefault();
+  const authForm = document.querySelector(".auth-screen__form:not(#resetEmailForm)");
+  const resetForm = document.getElementById("passwordResetForm");
+  if (authForm) authForm.style.display = "";
+  if (resetForm) resetForm.classList.add("hidden");
+  const resetFeedback = document.getElementById("resetFeedback");
+  if (resetFeedback) resetFeedback.textContent = "";
+});
+
+bindEvent(document.getElementById("resetEmailForm"), "submit", async (e) => {
+  e.preventDefault();
+  const resetEmail = document.getElementById("resetEmail");
+  const resetSubmitBtn = document.getElementById("resetSubmitBtn");
+  const resetFeedback = document.getElementById("resetFeedback");
+
+  if (!resetEmail || !resetSubmitBtn) return;
+
+  const email = resetEmail.value.trim();
+  if (!email) return;
+
+  resetSubmitBtn.disabled = true;
+  resetSubmitBtn.textContent = "Link wordt verstuurd...";
+  if (resetFeedback) resetFeedback.textContent = "";
+
+  try {
+    const response = await fetch("/api/auth/request-password-reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await response.json();
+
+    if (data.ok) {
+      if (resetFeedback) resetFeedback.style.color = "#22c55e";
+      if (resetFeedback) resetFeedback.textContent = "Check je e-mail voor een reset link.";
+      resetEmail.value = "";
+      setTimeout(() => {
+        const authForm = document.querySelector(".auth-screen__form:not(#resetEmailForm)");
+        const resetForm = document.getElementById("passwordResetForm");
+        if (authForm) authForm.style.display = "";
+        if (resetForm) resetForm.classList.add("hidden");
+      }, 3000);
+    } else {
+      if (resetFeedback) resetFeedback.textContent = data.error || "Er is iets fout gegaan.";
+    }
+  } catch (error) {
+    if (resetFeedback) resetFeedback.textContent = "Verbindingsfout. Probeer opnieuw.";
+  } finally {
+    resetSubmitBtn.disabled = false;
+    resetSubmitBtn.textContent = "Reset link versturen";
+  }
+});
+
 function getCookbookCoverMarkup(cookbook, modifier = "cookbook-save-option__cover") {
   const recipes = (cookbook?.recipeIds || [])
     .map((recipeId) => getRecipeById(recipeId))

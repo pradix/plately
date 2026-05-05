@@ -1219,6 +1219,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
             </div>
+            <button class="auth-field__forgot-link" type="button" id="forgotPasswordBtn">Wachtwoord vergeten?</button>
           </div>
 
           <p class="auth-screen__feedback" id="authFeedback" aria-live="polite"></p>
@@ -1230,6 +1231,24 @@
           <button class="auth-screen__switch-btn" id="switchAuthModeButton" type="button">
             Nog geen account? <strong>Account aanmaken</strong>
           </button>
+        </div>
+
+        <!-- Password reset form (hidden, shown when user clicks forgot) -->
+        <div class="auth-screen__reset-form hidden" id="passwordResetForm">
+          <button class="auth-screen__reset-back" type="button" id="resetFormBack">← Terug</button>
+          <h2 class="auth-screen__title">Wachtwoord resetten</h2>
+          <p class="auth-screen__subtitle">Voer je e-mailadres in om je wachtwoord opnieuw in te stellen.</p>
+
+          <form id="resetEmailForm" class="auth-screen__form">
+            <div class="auth-field">
+              <label class="auth-field__label" for="resetEmail">E-mailadres</label>
+              <input class="auth-field__input" id="resetEmail" name="email" type="email" placeholder="jij@voorbeeld.nl" autocomplete="email" required />
+            </div>
+            <p class="auth-screen__feedback" id="resetFeedback" aria-live="polite"></p>
+            <button class="auth-screen__submit" id="resetSubmitBtn" type="submit">Reset link versturen</button>
+          </form>
+
+          <p class="auth-screen__reset-note">Je ontvangt een e-mail met een link om je wachtwoord opnieuw in te stellen.</p>
         </div>
 
         <div class="auth-screen__divider"><span>Volg ons op social media</span></div>

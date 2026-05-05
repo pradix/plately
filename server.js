@@ -4851,6 +4851,57 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/auth/request-password-reset" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const email = String(body.email || "").trim().toLowerCase();
+
+      if (!email || !email.includes("@")) {
+        throw new HttpError(400, "Geldig e-mailadres vereist.");
+      }
+
+      // Check if user exists
+      let userExists = false;
+      if (isPostgresEnabled()) {
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        const result = await pool.query(`SELECT id FROM plately_users WHERE LOWER(email) = $1 LIMIT 1`, [email]);
+        userExists = result.rows.length > 0;
+      } else {
+        const db = await loadDatabase();
+        userExists = Object.values(db.users).some((u) => u.email.toLowerCase() === email);
+      }
+
+      if (!userExists) {
+        sendJson(response, 200, {
+          ok: true,
+          message: "Als dit e-mailadres bekend is, ontvang je een reset link.",
+        });
+        return;
+      }
+
+      // Generate reset token
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 min expiry
+
+      // Store token (in-memory for dev, would be database for prod)
+      if (!global.passwordResetTokens) {
+        global.passwordResetTokens = {};
+      }
+      global.passwordResetTokens[resetToken] = { email, expiresAt };
+
+      // In production, send email with reset link
+      // For now, just return success message
+      console.log(`🔐 Password reset token for ${email}: ${resetToken}`);
+
+      sendJson(response, 200, {
+        ok: true,
+        message: "Als dit e-mailadres bekend is, ontvang je een reset link.",
+        // In dev mode, return the token (remove in production!)
+        ...(process.env.NODE_ENV !== "production" && { _devToken: resetToken }),
+      });
+      return;
+    }
+
     if (requestUrl.pathname === "/api/grocery-suggest" && request.method === "GET") {
       const raw = sanitizeText(requestUrl.searchParams.get("q") || "");
       if (!raw || raw.length < 2) {

@@ -3737,6 +3737,24 @@ img { display: block; max-width: 100%; }
 }
 .auth-field__eye svg { width: 20px; height: 20px; display: block; }
 
+.auth-field__forgot-link {
+  background: none;
+  border: none;
+  color: #8da485;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 6px;
+  text-decoration: underline;
+  text-decoration-color: rgba(141, 164, 133, 0.3);
+  transition: color 0.15s, text-decoration-color 0.15s;
+}
+.auth-field__forgot-link:hover {
+  color: #78936f;
+  text-decoration-color: #78936f;
+}
+
 .auth-screen__feedback {
   min-height: 20px;
   font-size: 0.88rem;
@@ -3780,6 +3798,35 @@ img { display: block; max-width: 100%; }
 }
 
 .auth-screen__switch-btn strong { color: #78936f; }
+
+.auth-screen__reset-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-screen__reset-form.hidden {
+  display: none;
+}
+
+.auth-screen__reset-back {
+  background: none;
+  border: none;
+  color: #8da485;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0 0 12px 0;
+  text-align: left;
+  margin-bottom: 12px;
+}
+
+.auth-screen__reset-note {
+  font-size: 0.85rem;
+  color: #666;
+  text-align: center;
+  margin-top: 16px;
+  line-height: 1.4;
+}
 
 .auth-screen__divider {
   display: flex;
