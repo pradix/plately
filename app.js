@@ -4675,21 +4675,15 @@ async function bootstrapSession() {
     console.log("🔄 Bootstrap session finally block - authenticated:", state.auth.authenticated, "sessionCheckSucceeded:", sessionCheckSucceeded);
     state.session.ready = true;
 
-    // Restore view to detail if a recipe was selected before refresh
-    if (state.selectedRecipeId && getRecipeById(state.selectedRecipeId)) {
-      switchView("detail");
-    }
+    renderAll();
 
-    // Restore the view user was on before refresh
-    // Use state.view which was restored from applyPersistedAppState
+    // Restore the view user was on before refresh (already in state from applyPersistedAppState)
+    // Only switch to a non-home view if that's where they were
     if (state.view === "detail" && state.selectedRecipeId && getRecipeById(state.selectedRecipeId)) {
       switchView("detail");
       renderDetailRecipe(true);
     } else if (state.view !== "home") {
       switchView(state.view);
-      renderAll();
-    } else {
-      renderAll();
     }
 
     // Scroll to top for non-detail views
