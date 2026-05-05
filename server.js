@@ -281,7 +281,7 @@ async function createDevAuthSession(response, userId, email) {
       path: "/",
       httpOnly: false,
       sameSite: "None",
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       maxAge: 60 * 60 * 24 * 30, // 30 days
     })
   );
@@ -344,7 +344,7 @@ async function clearDevAuthSession(request, response) {
       path: "/",
       httpOnly: true,
       sameSite: "None",
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       maxAge: 1,
     })
   );
@@ -714,7 +714,7 @@ async function createAuthSession(response, userId) {
         path: "/",
         httpOnly: false,
         sameSite: "None",
-        secure: process.env.NODE_ENV === "production",
+        secure: true,
         maxAge: 60 * 60 * 24 * 30,
       })
     );
@@ -732,7 +732,7 @@ async function clearAuthSession(request, response) {
         path: "/",
         httpOnly: true,
         sameSite: "None",
-        secure: process.env.NODE_ENV === "production",
+        secure: true,
         maxAge: 1,
       })
     );
@@ -753,7 +753,7 @@ async function clearAuthSession(request, response) {
       path: "/",
       httpOnly: true,
       sameSite: "None",
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       maxAge: 1,
     })
   );
@@ -876,7 +876,7 @@ async function ensureUserSession(request, response) {
         path: "/",
         httpOnly: true,
         sameSite: "None",
-        secure: process.env.NODE_ENV === "production",
+        secure: true,
         maxAge: 60 * 60 * 24 * 365,
       })
     );
