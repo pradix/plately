@@ -4898,19 +4898,32 @@ const server = http.createServer(async (request, response) => {
       console.log("📊 /api/admin/stats called");
 
       try {
-        // Read database directly from file, don't use cache
-        const rawFile = await fsp.readFile(DATA_FILE, "utf8");
-        const parsed = JSON.parse(rawFile);
+        let users = [];
+        let sessions = [];
 
-        const users = Object.values(parsed.users || {});
-        const sessions = Object.values(parsed.sessions || {});
-
-        console.log("✅ Loaded from file:", users.length, "users,", sessions.length, "sessions");
-
-        const stats = {
-          totalUsers: users.length,
-          totalSessions: sessions.length,
-          users: users.map((u) => ({
+        if (isPostgresEnabled()) {
+          // Get users from PostgreSQL
+          console.log("📦 Loading users from PostgreSQL...");
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const result = await pool.query("SELECT * FROM plately_users ORDER BY created_at DESC");
+          users = result.rows.map((u) => ({
+            id: u.id,
+            email: u.email,
+            recipes: 0,
+            cookbooks: 0,
+            groceryItems: 0,
+            createdAt: u.created_at,
+            updatedAt: u.updated_at,
+            hasProfile: Boolean(u.profile?.name),
+          }));
+          console.log(`✅ Loaded ${users.length} users from PostgreSQL`);
+        } else {
+          // Read from JSON file
+          console.log("📖 Loading users from JSON file...");
+          const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+          const parsed = JSON.parse(rawFile);
+          users = Object.values(parsed.users || {}).map((u) => ({
             id: u.id,
             email: u.email || "Guest",
             recipes: (u.importedRecipes || []).length,
@@ -4919,7 +4932,15 @@ const server = http.createServer(async (request, response) => {
             createdAt: u.createdAt,
             updatedAt: u.updatedAt,
             hasProfile: Boolean(u.profile?.name),
-          })),
+          }));
+          sessions = Object.values(parsed.sessions || {});
+          console.log(`✅ Loaded ${users.length} users from file`);
+        }
+
+        const stats = {
+          totalUsers: users.length,
+          totalSessions: sessions.length,
+          users: users,
         };
 
         console.log("✅ Returning stats:", stats.totalUsers, "users");
