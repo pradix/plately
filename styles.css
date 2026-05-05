@@ -1237,7 +1237,7 @@ img { display: block; max-width: 100%; }
 .ingredient-item {
   list-style: none;
   display: grid;
-  grid-template-columns: 42px auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) 42px;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -2487,19 +2487,25 @@ img { display: block; max-width: 100%; }
 .recent-card {
   background: #fff;
   border-radius: 20px;
-  border: 1px solid rgba(120, 147, 111, 0.08);
-  box-shadow: 0 2px 10px rgba(36, 60, 43, 0.03);
+  border: 1px solid rgba(120, 147, 111, 0.1);
+  box-shadow: 0 4px 12px rgba(36, 60, 43, 0.06);
   overflow: hidden;
   cursor: pointer;
   text-align: left;
   padding: 0;
   width: 100%;
   position: relative;
+  transition: box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.recent-card:hover {
+  border-color: rgba(120, 147, 111, 0.15);
+  box-shadow: 0 6px 16px rgba(36, 60, 43, 0.1);
 }
 
 .recent-card__img {
   width: 100%;
-  aspect-ratio: 4/3;
+  aspect-ratio: 16/10;
   object-fit: cover;
   display: block;
   background: #e8ede8;

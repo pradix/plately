@@ -2518,12 +2518,12 @@ function renderDetailRecipe(resetServings = false) {
     .map(
       (ingredient, index) => `
         <li class="ingredient-item">
+          <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
+          <span class="ingredient-name">${ingredient.name}</span>
           <span class="ingredient-image-wrapper">
             <img class="ingredient-image" src="" alt="" loading="lazy" />
             <span class="ingredient-image-fallback" aria-hidden="true">${getIngredientVisualMarkup(ingredient.name)}</span>
           </span>
-          <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
-          <span class="ingredient-name">${ingredient.name}</span>
         </li>
       `
     )
