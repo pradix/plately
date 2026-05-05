@@ -562,6 +562,7 @@ const reviewImportButton = document.getElementById("reviewImportButton");
 const detailSaveHeaderButton = document.getElementById("detailSaveHeaderButton");
 const shareRecipeButton = document.getElementById("shareRecipeButton");
 const favoriteRecipeButton = document.getElementById("favoriteRecipeButton");
+const topbarFavoriteButton = document.getElementById("topbarFavoriteButton");
 const saveRecipeButton = document.getElementById("saveRecipeButton");
 const cookModeButton = document.getElementById("cookModeButton");
 const wakeLockButton = document.getElementById("wakeLockButton");
@@ -2511,20 +2512,31 @@ function renderDetailRecipe(resetServings = false) {
 
   detailIngredientList.innerHTML = recipe.ingredients
     .map(
-      (ingredient, index) => `
-        <li>
-          <button
-            class="ingredient-item ${isIngredientChecked(recipe.id, ingredient, index) ? "is-checked" : ""}"
-            type="button"
-            data-ingredient-index="${index}"
-            aria-pressed="${String(isIngredientChecked(recipe.id, ingredient, index))}"
-          >
-            <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
-            <span class="ingredient-name">${ingredient.name}</span>
-            <span class="ingredient-thumb" aria-hidden="true">${getIngredientVisualMarkup(ingredient.name)}</span>
-          </button>
-        </li>
-      `
+      (ingredient, index) => {
+        const isChecked = isIngredientChecked(recipe.id, ingredient, index);
+        return `
+          <li class="ingredient-entry ${isChecked ? "is-checked" : ""}">
+            <button class="ingredient-checkbox" type="button" data-ingredient-index="${index}" aria-pressed="${String(isChecked)}">
+              <svg class="ingredient-checkbox__check" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" fill="currentColor"/>
+              </svg>
+            </button>
+            <div class="ingredient-image-wrapper">
+              <img class="ingredient-image" src="" alt="${ingredient.name}" loading="lazy" />
+            </div>
+            <button
+              class="ingredient-item"
+              type="button"
+              data-ingredient-index="${index}"
+              aria-pressed="${String(isChecked)}"
+            >
+              <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
+              <span class="ingredient-name">${ingredient.name}</span>
+              <span class="ingredient-thumb" aria-hidden="true">${getIngredientVisualMarkup(ingredient.name)}</span>
+            </button>
+          </li>
+        `;
+      }
     )
     .join("");
 
@@ -2562,6 +2574,13 @@ function renderDetailRecipe(resetServings = false) {
     favoriteRecipeButton.setAttribute("title", favoriteLabel);
     favoriteRecipeButton.classList.toggle("is-active", isFavorited);
   }
+  if (topbarFavoriteButton) {
+    const isFavorited = isRecipeFavorited(recipe.id);
+    const favoriteLabel = isFavorited ? "Verwijder uit favorieten" : "Toevoegen aan favorieten";
+    topbarFavoriteButton.setAttribute("aria-label", favoriteLabel);
+    topbarFavoriteButton.setAttribute("title", favoriteLabel);
+    topbarFavoriteButton.classList.toggle("is-active", isFavorited);
+  }
   if (saveRecipeButton) {
     const saveLabel = isRecipeSaved(recipe.id) ? "Recept bewaard" : "Bewaar recept";
     saveRecipeButton.setAttribute("aria-label", saveLabel);
@@ -2576,6 +2595,9 @@ function renderDetailRecipe(resetServings = false) {
   renderCookMode(recipe, recipeProgress);
   updateWakeLockUI();
   renderMealPlanCurrentRecipe();
+
+  // Fetch ingredient photos from Albert Heijn
+  fetchIngredientPhotos();
 }
 
 function renderCookMode(recipe, recipeProgress = getRecipeProgress(recipe.id)) {
@@ -2736,41 +2758,7 @@ function renderGroceryGroups() {
     { title: "Ui", icon: "🧅" },
   ];
 
-  const smartSection = `
-    <section class="grocery-group grocery-group--smart">
-      <div class="grocery-group__header">
-        <h2>Dit heb je misschien al in huis</h2>
-      </div>
-      <div class="grocery-smart-items">
-        ${pantryItems.map(item => `
-          <button class="grocery-smart-item" type="button" aria-label="Toevoegen: ${item.title}">
-            <span class="grocery-smart-item__icon">${item.icon}</span>
-            <span class="grocery-smart-item__title">${item.title}</span>
-          </button>
-        `).join("")}
-      </div>
-    </section>
-  `;
-
-  groceryGroups.innerHTML = smartSection + html;
-
-  // Handle smart pantry item clicks
-  document.querySelectorAll(".grocery-smart-item").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      const title = e.currentTarget.querySelector(".grocery-smart-item__title").textContent;
-      // Add to grocery list
-      state.groceryItems.push({
-        id: "grocery-" + Date.now() + "-" + Math.random().toString(36).substr(2, 9),
-        title: title,
-        amount: "",
-        checked: false,
-        group: "Basis",
-        recipeTitle: "Overig"
-      });
-      renderGroceryGroups();
-      schedulePersistAppState();
-    });
-  });
+  groceryGroups.innerHTML = html;
 
   // Trigger background photo fetch for items without photos (debounced, safe to call always)
   debouncedFetchGroceryPhotos();
@@ -2819,6 +2807,57 @@ async function fetchGroceryPhotos() {
   } finally {
     document.getElementById("groceryScreen")?.classList.remove("grocery--loading");
   }
+}
+
+async function fetchIngredientPhotos() {
+  const recipe = getSelectedRecipe();
+  if (!recipe) return;
+
+  const ingredientsWithoutPhoto = recipe.ingredients
+    .filter((item) => !item.imageUrl)
+    .slice(0, 20);
+  if (!ingredientsWithoutPhoto.length) return;
+
+  try {
+    const resp = await fetch("/api/grocery-photos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: ingredientsWithoutPhoto.map((item) => ({ id: item.name, title: item.name })),
+      }),
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const photos = data.photos || {};
+    let changed = false;
+    for (const [ingredientName, url] of Object.entries(photos)) {
+      if (!url) continue;
+      const ingredient = recipe.ingredients.find((i) => i.name === ingredientName);
+      if (ingredient && !ingredient.imageUrl) {
+        ingredient.imageUrl = url;
+        changed = true;
+      }
+    }
+    if (changed && state.view === "detail") {
+      updateIngredientImages();
+    }
+  } catch {
+    // silently ignore
+  }
+}
+
+function updateIngredientImages() {
+  const recipe = getSelectedRecipe();
+  if (!recipe) return;
+
+  const images = document.querySelectorAll(".ingredient-image");
+  images.forEach((img, index) => {
+    const ingredient = recipe.ingredients[index];
+    if (ingredient?.imageUrl) {
+      img.src = ingredient.imageUrl;
+      img.alt = ingredient.name;
+    }
+  });
 }
 
 function getReviewRecipe() {
@@ -5142,6 +5181,11 @@ brandHomeButtons.forEach((button) => {
 });
 bindEvent(shareRecipeButton, "click", shareSelectedRecipe);
 bindEvent(favoriteRecipeButton, "click", () => {
+  const recipe = getSelectedRecipe();
+  if (recipe) toggleRecipeFavorite(recipe.id);
+});
+
+bindEvent(topbarFavoriteButton, "click", () => {
   const recipe = getSelectedRecipe();
   if (recipe) toggleRecipeFavorite(recipe.id);
 });

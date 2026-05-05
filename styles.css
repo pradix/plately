@@ -886,10 +886,24 @@ img { display: block; max-width: 100%; }
 
 .detail-screen .brand-lockup {
   background: rgba(255, 255, 255, 0.95);
-  padding: 8px 12px;
-  border-radius: 12px;
+  padding: 0;
+  border-radius: 50%;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  width: fit-content;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+}
+
+.detail-screen .brand-logo {
+  height: 28px;
+  width: 28px;
+  max-width: none;
+}
+
+.detail-screen .topbar-actions {
+  flex-direction: column;
+  gap: 8px;
 }
 
 .detail-hero {
@@ -1236,6 +1250,66 @@ img { display: block; max-width: 100%; }
   margin: 0;
   display: grid;
   gap: 10px;
+}
+
+.ingredient-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.ingredient-checkbox {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 2px solid rgba(120, 147, 111, 0.2);
+  background: transparent;
+  display: grid;
+  place-items: center;
+  color: transparent;
+  cursor: pointer;
+  transition: all 160ms ease;
+  flex-shrink: 0;
+}
+
+.ingredient-checkbox__check {
+  width: 22px;
+  height: 22px;
+  color: #6d8767;
+}
+
+.ingredient-entry.is-checked .ingredient-checkbox {
+  background: #6d8767;
+  border-color: #6d8767;
+}
+
+.ingredient-entry.is-checked .ingredient-checkbox__check {
+  color: #fff;
+}
+
+.ingredient-image-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: #f1f6f1;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: opacity 160ms ease, filter 160ms ease;
+}
+
+.ingredient-entry.is-checked .ingredient-image-wrapper {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+
+.ingredient-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .ingredient-item {
@@ -1897,6 +1971,12 @@ img { display: block; max-width: 100%; }
   font-size: 1.48rem;
   flex: none;
   overflow: hidden;
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.grocery-entry.is-checked .grocery-entry__img {
+  opacity: 0.4;
+  filter: grayscale(1);
 }
 
 .grocery-entry__content {
@@ -5258,6 +5338,10 @@ img { display: block; max-width: 100%; }
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+#reviewImportButton {
+  display: none !important;
 }
 
 .detail-icon-action {
