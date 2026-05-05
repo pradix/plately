@@ -1,4 +1,4 @@
-const CACHE_NAME = "plately-shell-v6";
+const CACHE_NAME = "plately-shell-v7";
 const APP_SHELL = [
   "/assets/plately.png",
   "/assets/favicon.png",
