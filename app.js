@@ -498,6 +498,61 @@ const SUPERMARKETS = [
   { id: "hoogvliet", name: "Hoogvliet",    color: "#e30613", url: "https://www.hoogvliet.com", supported: false, logo: "assets/supermarkt-hoogvliet.png" },
 ];
 
+// ── i18n (Internationalization) ──────────────────────────────────────────────
+let translations = {};
+let translationsReady = false;
+
+async function loadTranslations() {
+  try {
+    const response = await fetch('translations.json');
+    translations = await response.json();
+    translationsReady = true;
+    console.log('✓ Translations loaded:', Object.keys(translations));
+  } catch (error) {
+    console.error('Failed to load translations:', error);
+    // Fallback to Dutch if loading fails
+    translations = { nl: {}, en: {} };
+    translationsReady = true;
+  }
+}
+
+function t(key, fallback = '') {
+  const lang = state.language || 'nl';
+  const translated = translations[lang]?.[key];
+  const fallbackTranslated = translations['nl']?.[key];
+  return translated || fallbackTranslated || fallback || key;
+}
+
+function applyTranslations() {
+  // Update all elements with data-i18n attribute
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    const key = el.dataset.i18n;
+    const translated = t(key);
+    if (el.tagName === 'INPUT' && el.type === 'placeholder') {
+      el.placeholder = translated;
+    } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+      el.value = translated;
+    } else {
+      el.textContent = translated;
+    }
+  });
+
+  // Update all elements with data-i18n-title attribute
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+    const key = el.dataset.i18nTitle;
+    el.title = t(key);
+  });
+
+  // Update all elements with data-i18n-placeholder attribute
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    const key = el.dataset.i18nPlaceholder;
+    el.placeholder = t(key);
+  });
+}
+
+// Load translations immediately (non-blocking)
+loadTranslations();
+
 function getSupermarketIconUrl(sm) {
   return sm.logo || getSourceIconUrl(sm.url);
 }
@@ -4544,6 +4599,8 @@ function renderAll() {
   renderAvatars();
   updateAuthUI();
   closeBasketModal();
+  // Apply translations for current language
+  applyTranslations();
   // Render admin screen (async, non-blocking)
   if (isAdmin()) {
     renderAdminScreen();
@@ -5532,6 +5589,11 @@ bindEvent(document.getElementById("profileSubLanguage"), "click", (e) => {
 bindEvent(document.getElementById("profileSubLanguageSave"), "click", () => {
   schedulePersistAppState();
   closeProfileSubPanel("profileSubLanguage");
+
+  // Re-render UI with new language
+  renderAll();
+
+  // Show confirmation toast
   showToast(state.language === "nl" ? "Taal opgeslagen." : "Language saved.");
 });
 
