@@ -5748,7 +5748,7 @@ bindEvent(servingsUp, "click", () => {
 });
 
 bindEvent(searchInput, "input", (event) => {
-  state.searchQuery = event.target.value;
+  state.searchQuery = event.target.value.trim();
   renderRecipeGrid();
 
   // Debounced channel search — fires after 300 ms of no typing (faster feedback)
