@@ -2400,7 +2400,9 @@ function extractIngredientsFromText(text) {
     ...sourceLines.filter((line) => isLikelyIngredientLine(line)),
   ];
 
-  return normalizeIngredientList(candidates.map(parseIngredientLine)).slice(0, 12);
+  // Increased limit to capture more ingredients (was 12, now 20)
+  const normalized = normalizeIngredientList(candidates.map(parseIngredientLine));
+  return normalized.slice(0, Math.max(16, normalized.length));
 }
 
 function extractInstructionsFromText(text) {
@@ -2408,7 +2410,9 @@ function extractInstructionsFromText(text) {
   const candidates = structured.instructions.length
     ? structured.instructions
     : mergeInstructionLines(splitCaptionLines(text).filter((line) => isLikelyInstructionLine(line)));
-  return finalizeInstructionSteps(candidates).slice(0, 8);
+  // Increased limit to capture more steps (was 8, now 12)
+  const finalized = finalizeInstructionSteps(candidates);
+  return finalized.slice(0, Math.max(12, finalized.length));
 }
 
 function isLikelyOptionalInstructionStep(step) {
@@ -3196,19 +3200,29 @@ function parseWebsiteRecipe(html, url) {
       }
     }
     const recipeInstructions = parseJsonLdInstructions(rawInstructions);
-    const mergedIngredients = recipeIngredients.length
+    const fallbackIngredientsList = normalizeIngredientList(fallbackIngredients.map(parseIngredientLine));
+    const mergedIngredients = recipeIngredients.length >= 2
       ? recipeIngredients
-      : normalizeIngredientList(fallbackIngredients.map(parseIngredientLine)).slice(0, 16);
+      : fallbackIngredientsList.length >= 2
+        ? fallbackIngredientsList
+        : recipeIngredients;
+
     // Prefer JSON-LD if it has at least 2 steps; otherwise prefer the HTML
     // fallback when it offers significantly more steps.
-    const fallbackInstructionsFinal = finalizeInstructionSteps(mergeInstructionLines(fallbackInstructions)).slice(0, 12);
+    const fallbackInstructionsFinal = finalizeInstructionSteps(mergeInstructionLines(fallbackInstructions));
     const jsonLdInstructionsFinal = finalizeInstructionSteps(recipeInstructions);
-    const mergedInstructions =
-      jsonLdInstructionsFinal.length >= 2 && jsonLdInstructionsFinal.length >= fallbackInstructionsFinal.length
-        ? jsonLdInstructionsFinal
-        : fallbackInstructionsFinal.length >= jsonLdInstructionsFinal.length
-          ? fallbackInstructionsFinal
-          : jsonLdInstructionsFinal;
+
+    // Be more lenient about which source to use
+    let mergedInstructions = [];
+    if (jsonLdInstructionsFinal.length >= 3) {
+      mergedInstructions = jsonLdInstructionsFinal;
+    } else if (fallbackInstructionsFinal.length >= 3) {
+      mergedInstructions = fallbackInstructionsFinal;
+    } else if (jsonLdInstructionsFinal.length > fallbackInstructionsFinal.length) {
+      mergedInstructions = jsonLdInstructionsFinal;
+    } else {
+      mergedInstructions = fallbackInstructionsFinal;
+    }
     const recipeYield = Array.isArray(recipeSource.recipeYield)
       ? sanitizeText(recipeSource.recipeYield.find(Boolean) || recipeSource.recipeYield[0])
       : sanitizeText(recipeSource.recipeYield);
@@ -3257,6 +3271,8 @@ function parseWebsiteRecipe(html, url) {
 
   const fallbackTitle = normalizeRecipeTitle(metaTitle) || "Website recept";
   const fallbackDescription = extractDescription(metaDescription, fallbackTitle);
+  const fallbackIngredientsList = normalizeIngredientList(fallbackIngredients.map(parseIngredientLine));
+  const fallbackInstructionsList = finalizeInstructionSteps(fallbackInstructions);
 
   return {
     platform: "website",
@@ -3266,11 +3282,11 @@ function parseWebsiteRecipe(html, url) {
     caption: fallbackDescription,
     image: metaImage,
     author: new URL(url).hostname.replace(/^www\./, ""),
-    ingredients: normalizeIngredientList(fallbackIngredients.map(parseIngredientLine)).slice(0, 12),
-    instructions: finalizeInstructionSteps(fallbackInstructions).slice(0, 10),
+    ingredients: fallbackIngredientsList,
+    instructions: fallbackInstructionsList,
     time: estimateTime(fallbackDescription),
     servings: "2",
-    needsReview: fallbackIngredients.length === 0 || fallbackInstructions.length === 0,
+    needsReview: fallbackIngredientsList.length < 2 || fallbackInstructionsList.length < 2,
     sourceLabel: "Imported from Website",
   };
 }
