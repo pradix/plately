@@ -4507,18 +4507,34 @@ async function searchAHRecipes(query, count = 4) {
 
             // Try to fetch the recipe page and extract image
             try {
+              console.log(`  📄 Fetching recipe page: ${url}`);
               const recipeHtml = await fetch(url, {
                 headers: {
                   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 },
                 signal: AbortSignal.timeout(5000),
-              }).then(r => r.ok ? r.text() : "").catch(() => "");
+              }).then(r => {
+                console.log(`  Response: ${r.status}`);
+                return r.ok ? r.text() : "";
+              }).catch((err) => {
+                console.log(`  Fetch error: ${err.message}`);
+                return "";
+              });
 
-              if (recipeHtml) {
+              if (recipeHtml && recipeHtml.length > 100) {
                 const image = extractAhRecipeImage(recipeHtml);
-                if (image) thumbnail = image;
+                if (image) {
+                  thumbnail = image;
+                  console.log(`  ✅ Found image: ${thumbnail.substring(0, 60)}...`);
+                } else {
+                  console.log(`  ⚠️  No image found in HTML`);
+                }
+              } else {
+                console.log(`  ⚠️  HTML too short: ${recipeHtml.length} chars`);
               }
-            } catch { /* skip image fetch */ }
+            } catch (err) {
+              console.log(`  ❌ Image fetch error: ${err.message}`);
+            }
 
             return {
               title,
@@ -4581,23 +4597,40 @@ async function searchAHRecipes(query, count = 4) {
       const results = await Promise.all(
         Array.from(recipeUrls).slice(0, count).map(async (url) => {
           try {
+            console.log(`  📄 HTML scraper fetching: ${url}`);
             const recipeHtml = await fetch(url, {
               headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 "Accept": "text/html,application/xhtml+xml",
               },
               signal: AbortSignal.timeout(5000),
-            }).then(r => r.ok ? r.text() : "").catch(() => "");
+            }).then(r => {
+              if (!r.ok) {
+                console.log(`  HTTP ${r.status}`);
+                return "";
+              }
+              return r.text();
+            }).catch((err) => {
+              console.log(`  Error: ${err.message}`);
+              return "";
+            });
 
-            if (!recipeHtml) return null;
+            if (!recipeHtml || recipeHtml.length < 100) {
+              console.log(`  ⚠️  No HTML received`);
+              return null;
+            }
 
             const titleMatch = recipeHtml.match(/<h1[^>]*>([^<]+)<\/h1>/i) ||
                              recipeHtml.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
             const title = titleMatch ? sanitizeText(titleMatch[1]) : sanitizeText(url.split("/").pop() || "");
 
-            if (title.length <= 2) return null;
+            if (title.length <= 2) {
+              console.log(`  ⚠️  Title too short: "${title}"`);
+              return null;
+            }
 
             const thumbnail = extractAhRecipeImage(recipeHtml);
+            console.log(`  ✅ ${title} - Image: ${thumbnail ? "YES" : "NO"}`);
 
             return {
               title,
@@ -4608,7 +4641,8 @@ async function searchAHRecipes(query, count = 4) {
               description: "",
               time: "",
             };
-          } catch {
+          } catch (err) {
+            console.log(`  ❌ Error: ${err.message}`);
             return null;
           }
         })
