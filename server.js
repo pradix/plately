@@ -4523,16 +4523,30 @@ async function searchAHRecipes(query, count = 4) {
       }),
       fetch(searchUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "nl-NL,nl;q=0.9",
+          "Referer": "https://www.ah.nl/allerhande/",
+          "Cache-Control": "no-cache",
         },
         signal: AbortSignal.timeout(8000),
-      }).catch(() => null),
+      }).catch((err) => {
+        console.log(`HTML fetch error: ${err.message}`);
+        return null;
+      }),
     ]);
 
-    console.log(`Jina response: ${markdownResp.status}`);
+    console.log(`Jina response: ${markdownResp.status}, HTML response: ${htmlResp?.status || 'failed'}`);
     if (markdownResp.ok) {
       const markdown = await markdownResp.text();
-      const html = htmlResp?.ok ? await htmlResp.text() : "";
+      let html = "";
+      if (htmlResp?.ok) {
+        try {
+          html = await htmlResp.text();
+        } catch (err) {
+          console.log(`HTML text parse error: ${err.message}`);
+        }
+      }
       console.log(`✅ Jina returned ${markdown.length} chars, HTML: ${html.length} chars`);
 
       // Extract recipe links from markdown
@@ -4540,18 +4554,27 @@ async function searchAHRecipes(query, count = 4) {
 
       // Extract images from HTML (search results page images)
       const imageMap = new Map();
-      if (html) {
-        // Look for images in srcset or img src attributes
-        const imgMatches = [...html.matchAll(/<img[^>]+src=["']([^"']+static\.ah\.nl[^"']*)["'][^>]*alt=["']([^"']*)["']/gi)];
+      if (html && html.length > 100) {
+        // Look for images in srcset or img src attributes - be flexible with patterns
+        const imgMatches = [
+          ...html.matchAll(/<img[^>]+src=["']([^"']*static\.ah\.nl[^"']*jpg[^"']*)["'][^>]*alt=["']([^"']*)["']/gi),
+          ...html.matchAll(/<img[^>]+alt=["']([^"']*)["'][^>]*src=["']([^"']*static\.ah\.nl[^"']*jpg[^"']*)["']/gi),
+        ];
+
         for (const match of imgMatches) {
-          const imgUrl = match[1];
-          const altText = match[2];
-          // Map alt text to image URL
-          if (altText) {
-            imageMap.set(altText.toLowerCase(), upgradeAhImageQuality(imgUrl));
+          let imgUrl = match[1] || match[2];
+          let altText = match[2] || match[1];
+
+          // Validate it's actually an image URL
+          if (imgUrl && imgUrl.includes('static.ah.nl')) {
+            if (altText) {
+              imageMap.set(altText.toLowerCase(), upgradeAhImageQuality(imgUrl));
+            }
           }
         }
         console.log(`📸 Found ${imageMap.size} images in search results HTML`);
+      } else if (html.length === 0) {
+        console.log(`📸 No HTML content to extract images from`);
       }
 
       const links = allLinks.filter(match => {
