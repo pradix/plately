@@ -2526,29 +2526,65 @@ async function fetchReaderFallback(url) {
   };
 }
 
-async function fetchWebsiteDocument(url) {
+async function fetchWebsiteDocument(url, maxRetries = 2) {
   const parsedUrl = new URL(url);
   const originReferer = `${parsedUrl.protocol}//${parsedUrl.host}/`;
   let lastStatus = 0;
+  let lastError = null;
 
+  // Try each fetch profile
   for (const profile of HTML_FETCH_PROFILES) {
-    const response = await fetchWithProfile(url, profile, originReferer);
-    lastStatus = response.status;
+    let retryCount = 0;
+    let success = false;
 
-    if (response.ok) {
-      return {
-        kind: "html",
-        body: await response.text(),
-        finalUrl: response.url || url,
-      };
+    // Retry with exponential backoff for 5xx errors
+    while (retryCount <= maxRetries && !success) {
+      try {
+        const response = await fetchWithProfile(url, profile, originReferer);
+        lastStatus = response.status;
+
+        if (response.ok) {
+          return {
+            kind: "html",
+            body: await response.text(),
+            finalUrl: response.url || url,
+          };
+        }
+
+        // Retry on 5xx errors (server errors are temporary)
+        if (response.status >= 500 && response.status < 600 && retryCount < maxRetries) {
+          retryCount++;
+          const delayMs = Math.min(1000 * Math.pow(2, retryCount - 1), 8000); // Exponential: 1s, 2s, 4s, 8s
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue; // Retry with same profile
+        }
+
+        // Don't retry on client errors (4xx)
+        break;
+      } catch (error) {
+        lastError = error;
+        // Network errors: retry with backoff
+        if (retryCount < maxRetries) {
+          retryCount++;
+          const delayMs = Math.min(1000 * Math.pow(2, retryCount - 1), 8000);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+        break;
+      }
     }
   }
 
+  // Fallback to Jina reader for 401/403 errors on readable URLs
   if ((lastStatus === 401 || lastStatus === 403) && isSafeForReaderFallback(parsedUrl)) {
-    return fetchReaderFallback(url);
+    try {
+      return await fetchReaderFallback(url);
+    } catch (error) {
+      // Jina also failed, continue to error handling below
+    }
   }
 
-  throw new HttpError(502, `Kon bronpagina niet ophalen (${lastStatus || 403}).`);
+  throw new HttpError(502, `Kon bronpagina niet ophalen (${lastStatus || 403})${lastError ? `: ${lastError.message}` : ""}.`);
 }
 
 async function fetchHtml(url) {
@@ -3470,23 +3506,24 @@ async function importInstagram(sourceUrl, note) {
   }
 
   if (!oembed && !html && !textFallback) {
-    if (/Meta oEmbed Read|oEmbed Read/i.test(oembedErrorMessage)) {
+    // Provide user-friendly error messages with helpful suggestions
+    if (/Meta oEmbed Read|oEmbed Read|Insufficient Permission/i.test(oembedErrorMessage)) {
       throw new HttpError(
         503,
-        "Instagram import wacht nog op Meta-goedkeuring voor deze app. Gebruik voorlopig een publieke website-link of probeer een openbare post."
+        "Instagram import wacht nog op Meta-goedkeuring. Probeer: (1) Kopieer de recept-URL van je browser en importeer die direct, (2) Deel de receptpost naar een website-link, of (3) Probeer met een openbare post."
       );
     }
 
     if (!META_APP_ID || !META_APP_SECRET) {
       throw new HttpError(
         501,
-        "Instagram import kon geen openbare brondata lezen. Voeg META_APP_ID en META_APP_SECRET toe of gebruik een publieke post."
+        "Instagram public fallback mislukt. Probeer: (1) Kopieer de directe URL van de post en importeer die, (2) Gebruik een publieke recipe website-link in je bio, of (3) Voeg je recept handmatig in."
       );
     }
 
     throw new HttpError(
       502,
-      "Instagram import kon geen brondata ophalen voor deze post. Probeer een publieke reel/post of gebruik de website-link van het recept."
+      "Instagram post kon niet geladen worden (privé account of verwijderde post?). Probeer: (1) Link een openbare receptwebsite in plaats daarvan, (2) Deel de recepttekst rechtstreeks, of (3) Probeer een ander post."
     );
   }
 
