@@ -1,101 +1,23 @@
-const CACHE_NAME = "plately-shell-v7";
-const APP_SHELL = [
-  "/assets/plately.png",
-  "/assets/favicon.png",
-  "/assets/apple-touch-icon.png",
-  "/assets/icon-192.png",
-  "/assets/icon-512.png",
-  "/assets/hero-burger.svg",
-  "/assets/profile-avatar.svg",
-];
-
-const NETWORK_FIRST_PATHS = new Set([
-  "/",
-  "/index.html",
-  "/styles.css",
-  "/app.js",
-  "/manifest.webmanifest",
-]);
+// Self-destructing service worker.
+// Previous versions intercepted and cached same-origin GET requests including
+// /api/session, which caused stale auth state to be served after login.
+// This SW unregisters itself, deletes all caches, and reloads any open clients
+// so the page reverts to direct network fetches with no SW in between.
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())
-  );
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
-      )
-      .then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener("fetch", (event) => {
-  const { request } = event;
-  if (request.method !== "GET") {
-    return;
-  }
-
-  const url = new URL(request.url);
-  if (url.origin !== self.location.origin) {
-    return;
-  }
-
-  if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request, { cache: "no-store" })
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put("/index.html", copy));
-          return response;
-        })
-        .catch(() => caches.match("/index.html"))
-    );
-    return;
-  }
-
-  if (NETWORK_FIRST_PATHS.has(url.pathname)) {
-    event.respondWith(
-      fetch(request, { cache: "no-store" })
-        .then((response) => {
-          if (!response || response.status !== 200) {
-            return response;
-          }
-
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          return response;
-        })
-        .catch(() => caches.match(request))
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) {
-        return cached;
+    (async () => {
+      const cacheKeys = await caches.keys();
+      await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+      await self.registration.unregister();
+      const clients = await self.clients.matchAll({ type: "window" });
+      for (const client of clients) {
+        client.navigate(client.url).catch(() => {});
       }
-
-      return fetch(request).then((response) => {
-        if (!response || response.status !== 200) {
-          return response;
-        }
-
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        return response;
-      });
-    })
+    })()
   );
-});
-
-self.addEventListener("message", (event) => {
-  if (event.data?.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
 });
