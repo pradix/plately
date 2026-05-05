@@ -4916,17 +4916,21 @@ const server = http.createServer(async (request, response) => {
           users = result.rows.map((u) => {
             const appState = typeof u.app_state === 'object' ? u.app_state : JSON.parse(u.app_state || '{}');
             const profile = typeof u.profile === 'object' ? u.profile : JSON.parse(u.profile || '{}');
+            const importedRecipes = appState.importedRecipes || [];
+            const cookbooksList = appState.cookbooks || [];
             return {
               id: u.id,
               email: u.email,
-              recipes: (appState.importedRecipes || []).length,
-              cookbooks: (appState.cookbooks || []).length,
+              recipes: importedRecipes.length,
+              cookbooks: cookbooksList.length,
               groceryItems: (appState.groceryItems || []).length,
               createdAt: u.created_at,
               updatedAt: u.updated_at,
               hasProfile: Boolean(profile.name),
               profileName: profile.name || "",
               profilePhoto: profile.photo || "",
+              importedRecipes: importedRecipes.map(r => ({ title: r.title || "Naamloos recept" })),
+              cookbookList: cookbooksList.map(c => ({ name: c.name || "Naamloos kookboek" })),
             };
           });
           console.log(`✅ Loaded ${users.length} users from PostgreSQL`);
@@ -4935,16 +4939,24 @@ const server = http.createServer(async (request, response) => {
           console.log("📖 Loading users from JSON file...");
           const rawFile = await fsp.readFile(DATA_FILE, "utf8");
           const parsed = JSON.parse(rawFile);
-          users = Object.values(parsed.users || {}).map((u) => ({
-            id: u.id,
-            email: u.email || "Guest",
-            recipes: (u.importedRecipes || []).length,
-            cookbooks: (u.cookbooks || []).length,
-            groceryItems: (u.groceryItems || []).length,
-            createdAt: u.createdAt,
-            updatedAt: u.updatedAt,
-            hasProfile: Boolean(u.profile?.name),
-          }));
+          users = Object.values(parsed.users || {}).map((u) => {
+            const importedRecipes = u.importedRecipes || [];
+            const cookbooksList = u.cookbooks || [];
+            return {
+              id: u.id,
+              email: u.email || "Guest",
+              recipes: importedRecipes.length,
+              cookbooks: cookbooksList.length,
+              groceryItems: (u.groceryItems || []).length,
+              createdAt: u.createdAt,
+              updatedAt: u.updatedAt,
+              hasProfile: Boolean(u.profile?.name),
+              profileName: u.profile?.name || "",
+              profilePhoto: u.profile?.photo || "",
+              importedRecipes: importedRecipes.map(r => ({ title: r.title || "Naamloos recept" })),
+              cookbookList: cookbooksList.map(c => ({ name: c.name || "Naamloos kookboek" })),
+            };
+          });
           sessions = Object.values(parsed.sessions || {});
           console.log(`✅ Loaded ${users.length} users from file`);
         }

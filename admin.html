@@ -524,11 +524,19 @@
         <h3>User ID</h3>
         <p><code>${user.id}</code></p>
 
-        <h3>Recepten</h3>
-        <p>${user.recipes} recepten geïmporteerd</p>
+        <h3>Geïmporteerde Recepten (${user.recipes})</h3>
+        ${user.importedRecipes && user.importedRecipes.length > 0 ? `
+          <ul style="margin: 10px 0; padding-left: 20px;">
+            ${user.importedRecipes.map(r => `<li>${escapeHtml(r.title)}</li>`).join('')}
+          </ul>
+        ` : '<p>Geen recepten geïmporteerd</p>'}
 
-        <h3>Kookboeken</h3>
-        <p>${user.cookbooks} kookboeken</p>
+        <h3>Kookboeken (${user.cookbooks})</h3>
+        ${user.cookbookList && user.cookbookList.length > 0 ? `
+          <ul style="margin: 10px 0; padding-left: 20px;">
+            ${user.cookbookList.map(c => `<li>${escapeHtml(c.name)}</li>`).join('')}
+          </ul>
+        ` : '<p>Geen kookboeken gemaakt</p>'}
 
         <h3>Boodschappen</h3>
         <p>${user.groceryItems} items</p>
