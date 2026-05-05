@@ -311,6 +311,72 @@
       "selectedRecipeId": "",
       "createdAt": "2026-05-05T09:14:51.895Z",
       "updatedAt": "2026-05-05T09:14:51.895Z"
+    },
+    "user-92b793bc-14c8-4c6b-8c32-d8bcc5b4a567": {
+      "id": "user-92b793bc-14c8-4c6b-8c32-d8bcc5b4a567",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt",
+        "email": "",
+        "photo": "",
+        "favoriteSupermarket": "ah"
+      },
+      "importedRecipes": [],
+      "cookbooks": [],
+      "selectedCookbookId": "cookbook-1",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "recipe-1",
+      "selectedRecipeId": "recipe-1",
+      "createdAt": "2026-05-05T12:11:33.873Z",
+      "updatedAt": "2026-05-05T12:13:31.050Z",
+      "followedChannelIds": [
+        "ch-ah",
+        "ch-ek",
+        "ch-mj",
+        "ch-up",
+        "ch-clf",
+        "ch-les",
+        "ch-lb"
+      ],
+      "customChannels": [],
+      "language": "nl"
+    },
+    "user-c4f5dffa-4629-436e-a6c9-95d56e86e3ee": {
+      "id": "user-c4f5dffa-4629-436e-a6c9-95d56e86e3ee",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt",
+        "favoriteSupermarket": "ah"
+      },
+      "importedRecipes": [],
+      "cookbooks": [],
+      "selectedCookbookId": "",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "",
+      "selectedRecipeId": "",
+      "createdAt": "2026-05-05T12:12:42.384Z",
+      "updatedAt": "2026-05-05T12:12:42.384Z",
+      "email": "newuser2026@example.com"
     }
   },
   "sessions": {
@@ -321,12 +387,17 @@
     "414eb6d68fcde47dd75fc288170546667daa2f7611f5dfd7": "user-09caa71b-8289-4d9b-a525-4611a71397be",
     "21fa79e45d851f34780ace8a22e306c64c51c5acf0770b9f": "user-e98993f6-c1df-438e-b612-8af073ff0bfa",
     "11215866b8aa28e77c40a21dd60f7c7f7f9b510af577875e": "user-86d45ebc-6ae5-403b-b95e-9e572f59b66d",
-    "7aaf8d890412bb809c3edc490623295d3b25c30d7df2ff4e": "user-abed8354-c53c-4598-ac70-ea8884cbfab8"
+    "7aaf8d890412bb809c3edc490623295d3b25c30d7df2ff4e": "user-abed8354-c53c-4598-ac70-ea8884cbfab8",
+    "7b532ed828b4fe64a1cb4b4806ff82763b020140145bd7d6": "user-92b793bc-14c8-4c6b-8c32-d8bcc5b4a567"
   },
   "authSessions": {
     "06ef960ba8cefba3329bb5e5fcb585fe276b720f286a32e6": {
       "userId": "user-7100d198-0a10-4553-b526-d5cefe0ea002",
       "email": "testuser@example.com"
+    },
+    "269337e0a2859edc8b6cdebc1f5171695ef52b284c36d409": {
+      "userId": "user-c4f5dffa-4629-436e-a6c9-95d56e86e3ee",
+      "email": "newuser2026@example.com"
     }
   }
 }

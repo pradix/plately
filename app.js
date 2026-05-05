@@ -2195,12 +2195,13 @@ function renderRecipeGrid() {
     } else {
       // Search or filter with no results
       recipeGrid.innerHTML = `
-        <article class="recent-card recent-card--empty" style="grid-column:1/-1;border:none;box-shadow:none;background:transparent">
-          <div class="recent-card__body" style="padding:24px 0">
-            <p class="recent-card__title">Geen recepten gevonden</p>
-            <p class="recent-card__meta">Probeer een andere zoekterm</p>
+        <div class="home-empty-state" style="grid-column:1/-1">
+          <div class="home-empty-state__icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4.75a5.75 5.75 0 1 0 0 11.5a5.75 5.75 0 0 0 0-11.5Zm0 13.5a7.75 7.75 0 1 1 5.01-13.66a7.75 7.75 0 0 1-5.01 13.66Zm10.04 1.38l-4.42-4.42l1.41-1.41l4.42 4.42l-1.41 1.41Z"/></svg>
           </div>
-        </article>
+          <h3 class="home-empty-state__title">Geen resultaten</h3>
+          <p class="home-empty-state__text">Probeer een andere zoekterm</p>
+        </div>
       `;
     }
     return;
@@ -6847,7 +6848,6 @@ bindEvent(document.getElementById("onboardingStep3Skip"), "click", () => {
 });
 
 bindEvent(document.getElementById("onboardingStep3Next"), "click", () => {
-  onboardingData.handle = document.getElementById("onboardingHandle")?.value.trim() || "";
   showOnboardingStep(4);
 });
 
@@ -6856,6 +6856,7 @@ bindEvent(document.getElementById("onboardingStep4Skip"), "click", () => {
 });
 
 bindEvent(document.getElementById("onboardingStep4Finish"), "click", () => {
+  onboardingData.handle = document.getElementById("onboardingHandle")?.value.trim() || "";
   finishOnboarding();
 });
 
