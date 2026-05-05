@@ -3702,7 +3702,7 @@ async function importRecipe(url, note, imageHint = "") {
   if (/(^|\.)ah\.nl$/i.test(parsedUrl.hostname) && /^\/r\/\d+/.test(parsedUrl.pathname)) {
     try {
       const expandRes = await fetch(parsedUrl.toString(), {
-        method: "HEAD",
+        method: "GET",
         redirect: "follow",
         signal: AbortSignal.timeout(8000),
         headers: FETCH_HEADERS,
@@ -3710,7 +3710,10 @@ async function importRecipe(url, note, imageHint = "") {
       if (expandRes.url && expandRes.url !== parsedUrl.toString()) {
         parsedUrl = new URL(expandRes.url);
       }
-    } catch { /* keep original */ }
+    } catch (error) {
+      console.error("⚠️ Failed to expand AH short URL, continuing with original:", error.message);
+      /* keep original */
+    }
   }
 
   const platform = detectPlatform(parsedUrl);
