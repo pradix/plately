@@ -616,11 +616,13 @@ function serializeCookie(name, value, options = {}) {
 function appendSetCookie(response, cookieValue) {
   const existing = response.getHeader("Set-Cookie");
   if (!existing) {
+    console.log(`🍪 Setting cookie: ${cookieValue.substring(0, 50)}...`);
     response.setHeader("Set-Cookie", cookieValue);
     return;
   }
 
   const nextCookies = Array.isArray(existing) ? [...existing, cookieValue] : [existing, cookieValue];
+  console.log(`🍪 Appending cookie: ${cookieValue.substring(0, 50)}...`);
   response.setHeader("Set-Cookie", nextCookies);
 }
 
