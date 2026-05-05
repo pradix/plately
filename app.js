@@ -844,11 +844,18 @@ function updateAuthUI() {
 }
 
 function openAuthModal(mode = "login") {
+  console.log("🔐 Opening auth modal, mode:", mode, "authModal element:", authModal);
   state.auth.mode = mode;
   const isRegister = mode === "register";
 
+  if (!authModal) {
+    console.error("❌ authModal element not found!");
+    return;
+  }
+
   authModal.classList.remove("hidden");
   authModal.setAttribute("aria-hidden", "false");
+  console.log("✅ Auth modal opened, hidden class:", authModal.classList.contains("hidden"));
 
   // Title and subtitle
   if (authKicker) authKicker.textContent = isRegister ? "Account aanmaken" : "Welkom terug";
@@ -4139,11 +4146,15 @@ async function bootstrapSession() {
       if (saved !== null) state.groceryItems = JSON.parse(saved);
     } catch {}
   } finally {
+    console.log("🔄 Bootstrap session finally block - authenticated:", state.auth.authenticated, "sessionCheckSucceeded:", sessionCheckSucceeded);
     state.session.ready = true;
     renderAll();
     // Show auth modal to all unauthenticated users
     if (sessionCheckSucceeded && !state.auth.authenticated) {
+      console.log("📱 User not authenticated, showing login modal");
       openAuthModal("login");
+    } else {
+      console.log("✅ User is authenticated or session check failed");
     }
   }
 }
