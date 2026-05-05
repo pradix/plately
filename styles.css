@@ -882,10 +882,9 @@ img { display: block; max-width: 100%; }
   box-shadow: none;
   z-index: 15;
   padding: 12px 16px;
-}
-
-.detail-screen .topbar--home {
-  display: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .detail-hero {
@@ -1924,10 +1923,14 @@ img { display: block; max-width: 100%; }
 }
 
 .grocery-entry__amount {
-  color: #91a092;
-  font-size: 0.96rem;
-  font-weight: 500;
+  color: #b5cbbb;
+  background: #f1f6f1;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .grocery-entry.is-checked .grocery-entry__title {

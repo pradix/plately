@@ -570,6 +570,70 @@
       "selectedRecipeId": "",
       "createdAt": "2026-05-05T14:54:35.777Z",
       "updatedAt": "2026-05-05T14:54:35.777Z"
+    },
+    "user-755222d9-65cf-4d77-8a00-46864b8e50ba": {
+      "id": "user-755222d9-65cf-4d77-8a00-46864b8e50ba",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt",
+        "favoriteSupermarket": "ah",
+        "gender": "",
+        "birthDate": ""
+      },
+      "importedRecipes": [],
+      "cookbooks": [],
+      "selectedCookbookId": "",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "",
+      "selectedRecipeId": "",
+      "createdAt": "2026-05-05T16:51:21.502Z",
+      "updatedAt": "2026-05-05T16:51:21.502Z",
+      "email": "test@test.nl"
+    },
+    "user-3023a61a-9800-458f-b8ce-2999ac12f361": {
+      "id": "user-3023a61a-9800-458f-b8ce-2999ac12f361",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt",
+        "email": "",
+        "photo": "",
+        "favoriteSupermarket": "ah",
+        "gender": "",
+        "birthDate": ""
+      },
+      "importedRecipes": [],
+      "cookbooks": [],
+      "selectedCookbookId": "cookbook-1",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "recipe-1",
+      "selectedRecipeId": "recipe-1",
+      "createdAt": "2026-05-05T16:52:14.993Z",
+      "updatedAt": "2026-05-05T16:52:15.011Z",
+      "followedChannelIds": [
+        "ch-ah"
+      ],
+      "customChannels": [],
+      "language": "nl"
     }
   },
   "sessions": {
@@ -587,7 +651,8 @@
     "0d6c38b5229230aeb282d011c445ed6b25c61a1a0c24a297": "user-58cf1991-5485-4d4a-acd1-b4abd3908f27",
     "a42c8d266b2821186970820ea8d30180b6d6b67c990a6e95": "user-8377cb11-f49d-4918-bc8a-00541e83fdaa",
     "c85c074f5e1dbead75dc2db9e3f453646dd72482525c28f9": "user-fefa6f73-1057-45d2-9bae-233ed2dc40d2",
-    "cb63ee00f653f3c17466f78bc3e6344927174be20029c491": "user-4ed3dff5-55ae-40b5-82f7-1473753d8c78"
+    "cb63ee00f653f3c17466f78bc3e6344927174be20029c491": "user-4ed3dff5-55ae-40b5-82f7-1473753d8c78",
+    "e9153d1066cda22cba757fc5c7233f1b8e97ffe4dee6da3f": "user-3023a61a-9800-458f-b8ce-2999ac12f361"
   },
   "authSessions": {
     "06ef960ba8cefba3329bb5e5fcb585fe276b720f286a32e6": {
@@ -597,6 +662,10 @@
     "dcebbf993aac4f5ef2ad5ddb3fd76c5d8c9ac88fc68a86b2": {
       "userId": "user-7a545874-e2fd-448d-99f2-9d124b8a8563",
       "email": "pradix@me.com"
+    },
+    "32ace8e1804e937e1b2665ff13b0bd8b520c6a19b3f410ae": {
+      "userId": "user-755222d9-65cf-4d77-8a00-46864b8e50ba",
+      "email": "test@test.nl"
     }
   }
 }

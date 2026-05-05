@@ -5071,13 +5071,20 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/api/import" && request.method === "POST") {
-      const body = await readRequestBody(request);
-      // Strip surrounding text — extract the first http(s) URL from whatever was pasted
-      const rawInput = String(body.url || "").trim();
-      const urlMatch = rawInput.match(/https?:\/\/[^\s]+/);
-      const cleanUrl = urlMatch ? urlMatch[0] : rawInput;
-      const recipe = await importRecipe(cleanUrl, body.note || "", body.imageHint || "");
-      sendJson(response, 200, { ok: true, recipe });
+      try {
+        const body = await readRequestBody(request);
+        // Strip surrounding text — extract the first http(s) URL from whatever was pasted
+        const rawInput = String(body.url || "").trim();
+        const urlMatch = rawInput.match(/https?:\/\/[^\s]+/);
+        const cleanUrl = urlMatch ? urlMatch[0] : rawInput;
+        const recipe = await importRecipe(cleanUrl, body.note || "", body.imageHint || "");
+        sendJson(response, 200, { ok: true, recipe });
+      } catch (error) {
+        console.error("❌ Import error:", error.message);
+        const statusCode = error.statusCode || 400;
+        const errorMessage = error.message || "Import mislukt. Controleer de link en probeer opnieuw.";
+        sendJson(response, statusCode, { ok: false, error: errorMessage });
+      }
       return;
     }
 
