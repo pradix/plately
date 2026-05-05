@@ -1763,6 +1763,11 @@ img { display: block; max-width: 100%; }
 
 .grocery-group { display: grid; gap: 14px; }
 
+.grocery-group--smart {
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
 .grocery-group__header { display: block; }
 
 .grocery-group__header h2 {
@@ -1770,6 +1775,47 @@ img { display: block; max-width: 100%; }
   font-size: clamp(1.65rem, 6vw, 2.2rem);
   line-height: 1.02;
   letter-spacing: -0.04em;
+}
+
+.grocery-group--smart .grocery-group__header h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #91a48e;
+  margin-bottom: 8px;
+}
+
+.grocery-smart-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.grocery-smart-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(141, 164, 133, 0.08);
+  border: 1px solid rgba(120, 147, 111, 0.15);
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #3d3d3d;
+  transition: all 0.2s ease;
+}
+
+.grocery-smart-item:hover {
+  background: rgba(141, 164, 133, 0.15);
+  border-color: rgba(120, 147, 111, 0.25);
+}
+
+.grocery-smart-item__icon {
+  font-size: 1.2rem;
+}
+
+.grocery-smart-item__title {
+  white-space: nowrap;
 }
 
 .grocery-entry-wrapper {

@@ -2727,7 +2727,50 @@ function renderGroceryGroups() {
       }).join("");
   }
 
-  groceryGroups.innerHTML = html;
+  // Add smart pantry suggestions
+  const pantryItems = [
+    { title: "Olie", icon: "🫒" },
+    { title: "Peper", icon: "🫑" },
+    { title: "Zout", icon: "🧂" },
+    { title: "Knoflook", icon: "🧄" },
+    { title: "Ui", icon: "🧅" },
+  ];
+
+  const smartSection = `
+    <section class="grocery-group grocery-group--smart">
+      <div class="grocery-group__header">
+        <h2>Dit heb je misschien al in huis</h2>
+      </div>
+      <div class="grocery-smart-items">
+        ${pantryItems.map(item => `
+          <button class="grocery-smart-item" type="button" aria-label="Toevoegen: ${item.title}">
+            <span class="grocery-smart-item__icon">${item.icon}</span>
+            <span class="grocery-smart-item__title">${item.title}</span>
+          </button>
+        `).join("")}
+      </div>
+    </section>
+  `;
+
+  groceryGroups.innerHTML = smartSection + html;
+
+  // Handle smart pantry item clicks
+  document.querySelectorAll(".grocery-smart-item").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const title = e.currentTarget.querySelector(".grocery-smart-item__title").textContent;
+      // Add to grocery list
+      state.groceryItems.push({
+        id: "grocery-" + Date.now() + "-" + Math.random().toString(36).substr(2, 9),
+        title: title,
+        amount: "",
+        checked: false,
+        group: "Basis",
+        recipeTitle: "Overig"
+      });
+      renderGroceryGroups();
+      schedulePersistAppState();
+    });
+  });
 
   // Trigger background photo fetch for items without photos (debounced, safe to call always)
   debouncedFetchGroceryPhotos();
