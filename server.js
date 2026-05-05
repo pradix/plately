@@ -3135,6 +3135,7 @@ function parseMarkdownIngredientSection(text) {
       .split(/\n+/)
       .map((line) => sanitizeText(line))
       .filter((line) => line && !/^\(.*personen.*\)$/i.test(line))
+      .filter((line) => !/^#{1,6}\s/i.test(line)) // Filter out markdown headings like "### Dit heb je nodig"
       .map((line) => parseIngredientLine(line))
   );
 }
@@ -4421,17 +4422,22 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
  * Search AH Allerhande — tries the API with anonymous token.
  */
 async function searchAHRecipes(query, count = 4) {
+  console.log(`🔍 AH recipe search for: "${query}"`);
+
   // Try API first, but with a timeout
   try {
     const token = await fetchAHAnonymousToken();
     const url = `https://api.ah.nl/mobile-services/recipes/v2?query=${encodeURIComponent(query)}&size=${count}`;
+    console.log(`📡 Trying AH API: ${url}`);
     const resp = await fetch(url, {
       headers: { ...FETCH_HEADERS, authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(5000),
     });
+    console.log(`API response: ${resp.status}`);
     if (resp.ok) {
       const data = await resp.json();
       const recipes = data.recipes || [];
+      console.log(`✅ API returned ${recipes.length} recipes`);
       if (recipes.length > 0) {
         const mapped = recipes.slice(0, count).map((r) => {
           // Get highest quality image from API response
@@ -4466,24 +4472,30 @@ async function searchAHRecipes(query, count = 4) {
         if (mapped.length > 0) return mapped;
       }
     }
-  } catch { /* fall through to website scraping */ }
+  } catch (err) {
+    console.log(`⚠️  API failed: ${err.message}`);
+  }
 
   // Fallback: Use Jina reader to get AH search results as markdown
   try {
     const searchUrl = `https://www.ah.nl/allerhande/recepten-zoeken?query=${encodeURIComponent(query)}`;
     const readerUrl = `https://r.jina.ai/${encodeURIComponent(searchUrl)}`;
 
+    console.log(`📖 Trying Jina reader for: ${searchUrl}`);
     const resp = await fetch(readerUrl, {
       headers: FETCH_HEADERS,
       signal: AbortSignal.timeout(8000),
     });
 
+    console.log(`Jina response: ${resp.status}`);
     if (resp.ok) {
       const markdown = await resp.text();
+      console.log(`✅ Jina returned ${markdown.length} chars of markdown`);
 
       // Extract recipe links from markdown
       // Jina converts links to [Title](URL) format
       const links = [...markdown.matchAll(/\[([^\]]+)\]\((https:\/\/www\.ah\.nl\/allerhande\/recepten\/[^\)]+)\)/g)];
+      console.log(`Found ${links.length} recipe links in Jina markdown`);
 
       if (links.length > 0) {
         return links.slice(0, count).map((match) => ({
@@ -4497,12 +4509,16 @@ async function searchAHRecipes(query, count = 4) {
         })).filter((r) => r.title && r.url && r.title.length > 2);
       }
     }
-  } catch { /* fall through */ }
+  } catch (err) {
+    console.log(`⚠️  Jina failed: ${err.message}`);
+  }
 
   // Final fallback: Direct HTML scraping
   try {
     const searchUrl = `https://www.ah.nl/allerhande/recepten-zoeken?query=${encodeURIComponent(query)}`;
+    console.log(`🔗 Trying direct HTML scrape: ${searchUrl}`);
     const html = await fetchHtml(searchUrl);
+    console.log(`Got ${html.length} chars of HTML`);
 
     // Look for recipe links in the HTML
     const recipeUrls = new Set();
@@ -4539,10 +4555,14 @@ async function searchAHRecipes(query, count = 4) {
           }
         } catch { /* skip */ }
       }
+      console.log(`✅ HTML scraper found ${results.length} recipes`);
       return results;
     }
-  } catch { /* noop */ }
+  } catch (err) {
+    console.log(`⚠️  HTML scraper failed: ${err.message}`);
+  }
 
+  console.log(`❌ AH search for "${query}" returned no results`);
   return [];
 }
 
