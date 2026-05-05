@@ -4421,48 +4421,128 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
  * Search AH Allerhande — tries the API with anonymous token.
  */
 async function searchAHRecipes(query, count = 4) {
+  // Try API first, but with a timeout
   try {
     const token = await fetchAHAnonymousToken();
     const url = `https://api.ah.nl/mobile-services/recipes/v2?query=${encodeURIComponent(query)}&size=${count}`;
     const resp = await fetch(url, {
       headers: { ...FETCH_HEADERS, authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(5000),
     });
     if (resp.ok) {
       const data = await resp.json();
-      const mapped = (data.recipes || []).slice(0, count).map((r) => {
-        // Get highest quality image from API response
-        let imageUrl = "";
-        if (Array.isArray(r.images) && r.images.length > 0) {
-          // Find the largest image in the array
-          const largestImage = r.images.reduce((best, curr) => {
-            const currWidth = curr.width || 0;
-            const bestWidth = best.width || 0;
-            return currWidth > bestWidth ? curr : best;
-          });
-          imageUrl = largestImage.url || "";
-        } else if (r.image?.url) {
-          imageUrl = r.image.url;
-        }
+      const recipes = data.recipes || [];
+      if (recipes.length > 0) {
+        const mapped = recipes.slice(0, count).map((r) => {
+          // Get highest quality image from API response
+          let imageUrl = "";
+          if (Array.isArray(r.images) && r.images.length > 0) {
+            // Find the largest image in the array
+            const largestImage = r.images.reduce((best, curr) => {
+              const currWidth = curr.width || 0;
+              const bestWidth = best.width || 0;
+              return currWidth > bestWidth ? curr : best;
+            });
+            imageUrl = largestImage.url || "";
+          } else if (r.image?.url) {
+            imageUrl = r.image.url;
+          }
 
-        // Upgrade to highest quality variant if it's an AH CDN image
-        if (imageUrl && imageUrl.includes("static.ah.nl")) {
-          imageUrl = upgradeAhImageQuality(imageUrl);
-        }
+          // Upgrade to highest quality variant if it's an AH CDN image
+          if (imageUrl && imageUrl.includes("static.ah.nl")) {
+            imageUrl = upgradeAhImageQuality(imageUrl);
+          }
 
-        return {
-          title: sanitizeText(r.title || ""),
-          url: r.webPath ? `https://www.ah.nl${r.webPath}` : "",
-          thumbnail: imageUrl,
+          return {
+            title: sanitizeText(r.title || ""),
+            url: r.webPath ? `https://www.ah.nl${r.webPath}` : "",
+            thumbnail: imageUrl,
+            channel: "Allerhande",
+            channelId: "ch-ah",
+            description: sanitizeText((r.description || "").slice(0, 140)),
+            time: r.cookTime ? `${r.cookTime} min` : "",
+          };
+        }).filter((r) => r.title && r.url);
+        if (mapped.length > 0) return mapped;
+      }
+    }
+  } catch { /* fall through to website scraping */ }
+
+  // Fallback: Use Jina reader to get AH search results as markdown
+  try {
+    const searchUrl = `https://www.ah.nl/allerhande/recepten-zoeken?query=${encodeURIComponent(query)}`;
+    const readerUrl = `https://r.jina.ai/${encodeURIComponent(searchUrl)}`;
+
+    const resp = await fetch(readerUrl, {
+      headers: FETCH_HEADERS,
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (resp.ok) {
+      const markdown = await resp.text();
+
+      // Extract recipe links from markdown
+      // Jina converts links to [Title](URL) format
+      const links = [...markdown.matchAll(/\[([^\]]+)\]\((https:\/\/www\.ah\.nl\/allerhande\/recepten\/[^\)]+)\)/g)];
+
+      if (links.length > 0) {
+        return links.slice(0, count).map((match) => ({
+          title: sanitizeText(match[1] || ""),
+          url: match[2],
+          thumbnail: "",
           channel: "Allerhande",
           channelId: "ch-ah",
-          description: sanitizeText((r.description || "").slice(0, 140)),
-          time: r.cookTime ? `${r.cookTime} min` : "",
-        };
-      }).filter((r) => r.title && r.url);
-      if (mapped.length > 0) return mapped;
+          description: "",
+          time: "",
+        })).filter((r) => r.title && r.url && r.title.length > 2);
+      }
+    }
+  } catch { /* fall through */ }
+
+  // Final fallback: Direct HTML scraping
+  try {
+    const searchUrl = `https://www.ah.nl/allerhande/recepten-zoeken?query=${encodeURIComponent(query)}`;
+    const html = await fetchHtml(searchUrl);
+
+    // Look for recipe links in the HTML
+    const recipeUrls = new Set();
+    const matches = [...html.matchAll(/href=["']([^"']*\/allerhande\/recepten\/[^"']+)["']/gi)];
+
+    for (const match of matches) {
+      let url = match[1];
+      if (!url.startsWith("http")) {
+        url = `https://www.ah.nl${url}`;
+      }
+      recipeUrls.add(url);
+      if (recipeUrls.size >= count) break;
+    }
+
+    if (recipeUrls.size > 0) {
+      // Try to get titles by fetching the first few recipes
+      const results = [];
+      for (const url of Array.from(recipeUrls).slice(0, count)) {
+        try {
+          const recipeHtml = await fetchHtml(url);
+          const titleMatch = recipeHtml.match(/<h1[^>]*>([^<]+)<\/h1>/i) ||
+                           recipeHtml.match(/<title[^>]*>([^<]+)<\/title>/i);
+          const title = titleMatch ? sanitizeText(titleMatch[1]) : sanitizeText(url.split("/").pop() || "");
+          if (title.length > 2) {
+            results.push({
+              title,
+              url,
+              thumbnail: "",
+              channel: "Allerhande",
+              channelId: "ch-ah",
+              description: "",
+              time: "",
+            });
+          }
+        } catch { /* skip */ }
+      }
+      return results;
     }
   } catch { /* noop */ }
+
   return [];
 }
 
