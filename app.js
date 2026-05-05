@@ -1733,9 +1733,16 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
   const all = state.channelSearchAllResults;
 
   if (!all || all.length === 0) {
-    channelSearchSection.classList.add("hidden");
-    channelSearchResults.innerHTML = "";
-    renderChannelFilterChips([]);
+    // Only hide if we're not actively searching
+    if (!state.searchQuery.trim()) {
+      channelSearchSection.classList.add("hidden");
+      channelSearchResults.innerHTML = "";
+      renderChannelFilterChips([]);
+    } else {
+      // Show "no results" message when searching
+      channelSearchSection.classList.remove("hidden");
+      channelSearchResults.innerHTML = `<p class="ch-result__loading" style="grid-column:1/-1;text-align:center;padding:2rem">Geen resultaten gevonden in de geselecteerde kanalen</p>`;
+    }
     return;
   }
 
@@ -1745,7 +1752,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
   renderChannelFilterChips(all);
 
   if (!filtered.length) {
-    channelSearchResults.innerHTML = `<p class="ch-result__loading">Geen resultaten voor dit kanaal.</p>`;
+    channelSearchResults.innerHTML = `<p class="ch-result__loading" style="grid-column:1/-1;text-align:center;padding:2rem">Geen resultaten voor dit kanaal.</p>`;
     return;
   }
 
@@ -1809,6 +1816,12 @@ async function searchChannels(query) {
     renderChannelSearchResults([]);
     return;
   }
+
+  // Ensure Allerhande is always included
+  if (!state.followedChannelIds.includes("ch-ah")) {
+    state.followedChannelIds.push("ch-ah");
+  }
+
   if (channelSearchSection) {
     channelSearchSection.classList.remove("hidden");
     if (channelSearchResults) channelSearchResults.innerHTML = `<p class="ch-result__loading">Zoeken…</p>`;
@@ -1820,10 +1833,15 @@ async function searchChannels(query) {
     const customChannelsParam = followedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
     let url = `/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`;
     if (customChannelsParam) url += `&customChannels=${encodeURIComponent(customChannelsParam)}`;
+
+    console.log("🔍 Channel search:", { query: query.trim(), channels, url });
+
     const resp = await fetch(url);
     const data = await resp.json();
+    console.log("✅ Channel search results:", data.results?.length || 0, "results");
     renderChannelSearchResults(data.results || []);
-  } catch {
+  } catch (error) {
+    console.error("❌ Channel search error:", error);
     renderChannelSearchResults([]);
   }
 }
@@ -4372,6 +4390,11 @@ function applyPersistedAppState(user) {
     );
   }
 
+  // Always ensure Allerhande is in followed channels (primary Dutch recipe source)
+  if (!state.followedChannelIds.includes("ch-ah")) {
+    state.followedChannelIds.push("ch-ah");
+  }
+
   // Restore the view the user was on
   if (typeof user.currentView === "string" && ["home", "detail", "cookbook", "grocery", "profile", "import"].includes(user.currentView)) {
     state.view = user.currentView;
@@ -5651,14 +5674,23 @@ bindEvent(searchInput, "input", (event) => {
   state.searchQuery = event.target.value;
   renderRecipeGrid();
 
-  // Debounced channel search — fires after 600 ms of no typing
+  // Debounced channel search — fires after 300 ms of no typing (faster feedback)
   clearTimeout(channelSearchTimeout);
   const query = event.target.value.trim();
   if (query.length < 2) {
-    // Keep existing results visible — only "Sluiten" clears them
+    // Show empty channel results when query is too short
+    if (query.length === 0) {
+      renderChannelSearchResults([]);
+    }
     return;
   }
-  channelSearchTimeout = setTimeout(() => searchChannels(query), 600);
+
+  // Ensure followedChannelIds includes Allerhande at minimum
+  if (!state.followedChannelIds.includes("ch-ah")) {
+    state.followedChannelIds.push("ch-ah");
+  }
+
+  channelSearchTimeout = setTimeout(() => searchChannels(query), 300);
 });
 
 bindEvent(searchInput, "keydown", (event) => {
