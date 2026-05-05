@@ -3600,31 +3600,51 @@ async function importPinterest(sourceUrl) {
 }
 
 function extractAhRecipeImage(html) {
-  // Try og:image first (most reliable)
+  // Try og:image first (most reliable for high quality)
   const ogMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
   if (ogMatch && ogMatch[1]) {
-    return ogMatch[1];
+    // Upgrade static.ah.nl images to highest quality variant
+    let ogImage = ogMatch[1];
+    if (ogImage.includes("static.ah.nl")) {
+      ogImage = upgradeAhImageQuality(ogImage);
+    }
+    return ogImage;
   }
 
   // Try JSON-LD image
   const jsonLdMatch = html.match(/"image"\s*:\s*"([^"]+)"/i);
   if (jsonLdMatch && jsonLdMatch[1] && jsonLdMatch[1].startsWith("http")) {
-    return jsonLdMatch[1];
+    let image = jsonLdMatch[1];
+    if (image.includes("static.ah.nl")) {
+      image = upgradeAhImageQuality(image);
+    }
+    return image;
   }
 
-  // AH-specific: look for recipe hero image in the page
+  // AH-specific: look for recipe hero images - prefer highest quality
   // AH uses images with static.ah.nl domain for recipe images
-  const ahImageMatch = html.match(/https:\/\/static\.ah\.nl\/[^"'<>\s]+\.(?:jpg|jpeg|png|webp)/i);
-  if (ahImageMatch) {
-    return ahImageMatch[0];
+  // Get all AH image URLs and pick the highest quality one
+  const ahImages = [...html.matchAll(/https:\/\/static\.ah\.nl\/[^"'<>\s]+\.(?:jpg|jpeg|png|webp)/gi)];
+  if (ahImages.length > 0) {
+    // Try to find the largest resolution image (typically in filename)
+    let bestImage = ahImages[0][0];
+    for (const match of ahImages) {
+      const url = match[0];
+      // Look for images with dimensions in filename (e.g., 1224x900, 1200x800)
+      if (/\d{3,4}x\d{3,4}/.test(url)) {
+        bestImage = url;
+        break; // First one with dimensions is usually highest quality
+      }
+    }
+    return upgradeAhImageQuality(bestImage);
   }
 
-  // Fallback: first img tag that's not a tiny icon/logo
+  // Fallback: search all img tags for high-quality images
   const allImages = [...html.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi)];
   for (const match of allImages) {
     const src = match[1];
     if (src.startsWith("http") && (src.includes("static.ah.nl") || src.includes("recepten"))) {
-      return src;
+      return upgradeAhImageQuality(src);
     }
   }
 
@@ -3635,6 +3655,29 @@ function extractAhRecipeImage(html) {
   }
 
   return "";
+}
+
+function upgradeAhImageQuality(imageUrl) {
+  // AH CDN supports different size variants
+  // Upgrade smaller images to higher quality versions
+  // Example: converts *_123x456_* to *_1224x900_* for recipe images
+
+  // If already a high-quality size, return as-is
+  if (/\d{4}x\d{3,4}/.test(imageUrl)) {
+    return imageUrl;
+  }
+
+  // For smaller AH images, try to upgrade to larger variant
+  // AH recipe images often have variants like: 400x300, 800x600, 1200x900, 1224x900
+  // Replace small dimensions with larger ones
+  let upgraded = imageUrl.replace(/_\d{2,3}x\d{2,3}_/, "_1224x900_");
+
+  // If that didn't match, try other patterns
+  if (upgraded === imageUrl) {
+    upgraded = imageUrl.replace(/_\d{2,3}x\d{2,3}(?=\.)/, "_1224x900");
+  }
+
+  return upgraded.startsWith("http") ? upgraded : imageUrl;
 }
 
 async function importWebsite(sourceUrl) {
@@ -4387,15 +4430,36 @@ async function searchAHRecipes(query, count = 4) {
     });
     if (resp.ok) {
       const data = await resp.json();
-      const mapped = (data.recipes || []).slice(0, count).map((r) => ({
-        title: sanitizeText(r.title || ""),
-        url: r.webPath ? `https://www.ah.nl${r.webPath}` : "",
-        thumbnail: r.images?.[0]?.url || r.image?.url || "",
-        channel: "Allerhande",
-        channelId: "ch-ah",
-        description: sanitizeText((r.description || "").slice(0, 140)),
-        time: r.cookTime ? `${r.cookTime} min` : "",
-      })).filter((r) => r.title && r.url);
+      const mapped = (data.recipes || []).slice(0, count).map((r) => {
+        // Get highest quality image from API response
+        let imageUrl = "";
+        if (Array.isArray(r.images) && r.images.length > 0) {
+          // Find the largest image in the array
+          const largestImage = r.images.reduce((best, curr) => {
+            const currWidth = curr.width || 0;
+            const bestWidth = best.width || 0;
+            return currWidth > bestWidth ? curr : best;
+          });
+          imageUrl = largestImage.url || "";
+        } else if (r.image?.url) {
+          imageUrl = r.image.url;
+        }
+
+        // Upgrade to highest quality variant if it's an AH CDN image
+        if (imageUrl && imageUrl.includes("static.ah.nl")) {
+          imageUrl = upgradeAhImageQuality(imageUrl);
+        }
+
+        return {
+          title: sanitizeText(r.title || ""),
+          url: r.webPath ? `https://www.ah.nl${r.webPath}` : "",
+          thumbnail: imageUrl,
+          channel: "Allerhande",
+          channelId: "ch-ah",
+          description: sanitizeText((r.description || "").slice(0, 140)),
+          time: r.cookTime ? `${r.cookTime} min` : "",
+        };
+      }).filter((r) => r.title && r.url);
       if (mapped.length > 0) return mapped;
     }
   } catch { /* noop */ }
