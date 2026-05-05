@@ -4280,6 +4280,7 @@ function buildPersistedAppState() {
     followedChannelIds: [...state.followedChannelIds],
     customChannels: state.customChannels.map((ch) => ({ ...ch })),
     language: state.language || "nl",
+    currentView: state.view || "home",
   };
 }
 
@@ -4369,6 +4370,11 @@ function applyPersistedAppState(user) {
     state.followedChannelIds = user.followedChannelIds.filter((id) =>
       SEED_CHANNELS.some((ch) => ch.id === id) || state.customChannels.some((ch) => ch.id === id)
     );
+  }
+
+  // Restore the view the user was on
+  if (typeof user.currentView === "string" && ["home", "detail", "cookbook", "grocery", "profile", "import"].includes(user.currentView)) {
+    state.view = user.currentView;
   }
 }
 
@@ -4674,9 +4680,19 @@ async function bootstrapSession() {
       switchView("detail");
     }
 
-    renderAll();
+    // Restore the view user was on before refresh
+    // Use state.view which was restored from applyPersistedAppState
+    if (state.view === "detail" && state.selectedRecipeId && getRecipeById(state.selectedRecipeId)) {
+      switchView("detail");
+      renderDetailRecipe(true);
+    } else if (state.view !== "home") {
+      switchView(state.view);
+      renderAll();
+    } else {
+      renderAll();
+    }
 
-    // Only scroll to top if not viewing detail recipe
+    // Scroll to top for non-detail views
     if (state.view !== "detail") {
       window.scrollTo({ top: 0, behavior: "auto" });
     }
