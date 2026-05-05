@@ -4915,6 +4915,7 @@ const server = http.createServer(async (request, response) => {
           const result = await pool.query("SELECT * FROM plately_users ORDER BY created_at DESC");
           users = result.rows.map((u) => {
             const appState = typeof u.app_state === 'object' ? u.app_state : JSON.parse(u.app_state || '{}');
+            const profile = typeof u.profile === 'object' ? u.profile : JSON.parse(u.profile || '{}');
             return {
               id: u.id,
               email: u.email,
@@ -4923,7 +4924,9 @@ const server = http.createServer(async (request, response) => {
               groceryItems: (appState.groceryItems || []).length,
               createdAt: u.created_at,
               updatedAt: u.updated_at,
-              hasProfile: Boolean(u.profile?.name),
+              hasProfile: Boolean(profile.name),
+              profileName: profile.name || "",
+              profilePhoto: profile.photo || "",
             };
           });
           console.log(`✅ Loaded ${users.length} users from PostgreSQL`);
@@ -4962,6 +4965,48 @@ const server = http.createServer(async (request, response) => {
         });
       }
       return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/delete-user" && request.method === "POST") {
+      console.log("🗑️ /api/admin/delete-user called");
+
+      try {
+        let body = "";
+        for await (const chunk of request) body += chunk.toString();
+        const { userId } = JSON.parse(body);
+
+        if (!userId) {
+          return sendJson(response, 400, { ok: false, error: "userId required" });
+        }
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+
+          // Delete user
+          await pool.query("DELETE FROM plately_users WHERE id = $1", [userId]);
+          // Delete sessions
+          await pool.query("DELETE FROM plately_auth_sessions WHERE user_id = $1", [userId]);
+
+          console.log(`✅ Deleted user ${userId}`);
+          return sendJson(response, 200, { ok: true, message: "User deleted" });
+        } else {
+          // Delete from JSON file
+          const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+          const parsed = JSON.parse(rawFile);
+
+          if (parsed.users && parsed.users[userId]) {
+            delete parsed.users[userId];
+            await fsp.writeFile(DATA_FILE, JSON.stringify(parsed, null, 2));
+            console.log(`✅ Deleted user ${userId}`);
+            return sendJson(response, 200, { ok: true, message: "User deleted" });
+          }
+          return sendJson(response, 404, { ok: false, error: "User not found" });
+        }
+      } catch (error) {
+        console.error("❌ Error in /api/admin/delete-user:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
     }
 
     await serveStaticFile(requestUrl.pathname, response);

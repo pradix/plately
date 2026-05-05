@@ -505,9 +505,21 @@
       const user = allUsers.find(u => u.id === userId);
       if (!user) return;
 
+      let photoHtml = '';
+      if (user.profilePhoto) {
+        photoHtml = `
+          <h3>Profoto</h3>
+          <img src="${user.profilePhoto}" alt="Profoto" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; display: block; margin-bottom: 10px;">
+        `;
+      }
+
       const html = `
+        ${photoHtml}
+
         <h3>Email</h3>
         <p>${escapeHtml(user.email)}</p>
+
+        ${user.profileName ? `<h3>Naam</h3><p>${escapeHtml(user.profileName)}</p>` : ''}
 
         <h3>User ID</h3>
         <p><code>${user.id}</code></p>
@@ -529,6 +541,11 @@
 
         <h3>Laatst Actief</h3>
         <p>${formatDate(new Date(user.updatedAt))}</p>
+
+        <h3>Acties</h3>
+        <button onclick="deleteUser('${escapeHtml(user.id)}', '${escapeHtml(user.email)}')" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+          🗑️ Gebruiker verwijderen
+        </button>
       `;
 
       document.getElementById("detailName").textContent = escapeHtml(user.email) || "Guest User";
@@ -538,6 +555,32 @@
 
     function closeDetail() {
       document.getElementById("detailPanel").classList.remove("open");
+    }
+
+    async function deleteUser(userId, userEmail) {
+      if (!confirm(`Weet je zeker dat je ${escapeHtml(userEmail)} wilt verwijderen? Dit kan niet ongedaan gemaakt worden.`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/admin/delete-user", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId })
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          alert("Fout bij verwijderen: " + (data.error || "Onbekende fout"));
+          return;
+        }
+
+        alert("Gebruiker verwijderd!");
+        closeDetail();
+        loadStats();
+      } catch (error) {
+        alert("Fout: " + error.message);
+      }
     }
 
     function exportToCSV() {
