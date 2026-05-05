@@ -753,6 +753,17 @@
                   en boodschappenlijstjes te maken — uit TikTok, Instagram en je
                   favoriete websites.
                 </p>
+
+                <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--color-border-subtle);">
+                  <h3 style="margin-bottom: 12px; font-size: 14px; font-weight: 600; color: var(--color-text-primary);">iOS delen</h3>
+                  <p style="margin-bottom: 12px; font-size: 13px; color: var(--color-text-secondary); line-height: 1.5;">
+                    Voeg Plately toe aan je iOS Share Sheet om recepten direct vanuit Safari, TikTok en Instagram te importeren.
+                  </p>
+                  <button type="button" id="iosShareSetupBtn" style="display: inline-block; padding: 8px 16px; background-color: var(--color-accent); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer;">
+                    iOS-instelling bekijken
+                  </button>
+                </div>
+
                 <p class="about-app__copyright">© 2026 Plately</p>
               </div>
             </div>
@@ -1251,6 +1262,40 @@
       <div class="confirm-sheet__actions">
         <button class="confirm-sheet__btn confirm-sheet__btn--confirm" id="confirmSheetConfirmBtn" type="button">Bevestigen</button>
         <button class="confirm-sheet__btn confirm-sheet__btn--cancel" id="confirmSheetCancelBtn" type="button">Annuleren</button>
+      </div>
+    </div>
+
+    <!-- ══ iOS Share Setup Modal ══ -->
+    <div class="confirm-sheet-backdrop hidden" id="iosSetupBackdrop"></div>
+    <div class="confirm-sheet hidden" id="iosSetupSheet" role="alertdialog" aria-modal="true">
+      <div style="text-align: left;">
+        <h2 style="margin-bottom: 12px; font-size: 16px; font-weight: 600; color: var(--color-text-primary);">Plately toevoegen aan delen</h2>
+        <p style="margin-bottom: 16px; font-size: 14px; color: var(--color-text-secondary); line-height: 1.6;">
+          Maak een Siri Shortcut die Plately opent in het deel-menu van Safari, TikTok en Instagram.
+        </p>
+
+        <ol style="margin-bottom: 16px; padding-left: 20px; font-size: 13px; color: var(--color-text-secondary); line-height: 1.8;">
+          <li style="margin-bottom: 8px;">Open de <strong>Shortcuts-app</strong> op je iPhone</li>
+          <li style="margin-bottom: 8px;">Tik op <strong>"Nieuwe shortcut"</strong></li>
+          <li style="margin-bottom: 8px;">Voeg deze acties toe:
+            <ol style="padding-left: 16px; margin-top: 6px;">
+              <li style="margin-bottom: 4px;">Voeg <strong>"URL opvragen"</strong> toe</li>
+              <li style="margin-bottom: 4px;">Voeg <strong>"Text toevoegen aan tekst"</strong> toe</li>
+              <li style="margin-bottom: 4px;">Veld: "?importUrl=" + [URL uit stap 1]</li>
+              <li style="margin-bottom: 4px;">Voeg <strong>"Safari openen"</strong> toe en geef als URL: plately.app + [tekst uit vorige stap]</li>
+            </ol>
+          </li>
+          <li style="margin-bottom: 8px;">Tik op <strong>"Delen"</strong> (deel-icoon)</li>
+          <li style="margin-bottom: 8px;">Selecteer <strong>"Toevoegen aan deel-menu"</strong></li>
+          <li style="margin-bottom: 8px;">Geef het een naam en icoon naar keuze</li>
+        </ol>
+
+        <p style="margin-bottom: 16px; padding: 12px; background-color: var(--color-bg-secondary); border-radius: 6px; font-size: 13px; color: var(--color-text-secondary);">
+          💡 <strong>Tip:</strong> Na instelling verschijnt "Plately" in het deel-menu van Safari en apps. Tap het icoon om een URL automatisch in Plately in te voeren.
+        </p>
+      </div>
+      <div class="confirm-sheet__actions">
+        <button class="confirm-sheet__btn confirm-sheet__btn--cancel" id="iosSetupCloseBtn" type="button">Sluiten</button>
       </div>
     </div>
 

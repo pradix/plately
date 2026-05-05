@@ -837,6 +837,21 @@ function closeConfirmSheet() {
   confirmCallback = null;
 }
 
+function showIosSetupModal() {
+  const sheet = document.getElementById("iosSetupSheet");
+  const backdrop = document.getElementById("iosSetupBackdrop");
+  if (!sheet) return;
+  sheet.classList.remove("hidden");
+  backdrop?.classList.remove("hidden");
+}
+
+function closeIosSetupModal() {
+  const sheet = document.getElementById("iosSetupSheet");
+  const backdrop = document.getElementById("iosSetupBackdrop");
+  sheet?.classList.add("hidden");
+  backdrop?.classList.add("hidden");
+}
+
 function updateAuthUI() {
   if (!accountTitle || !accountCopy || !openRegisterButton || !openLoginButton || !logoutButton) {
     return;
@@ -7551,6 +7566,22 @@ bindEvent(document.getElementById("confirmSheetConfirmBtn"), "click", () => {
   closeConfirmSheet();
   if (typeof cb === "function") cb();
 });
+
+// ── iOS Share Setup Modal ─────────────────────────────────────────────────────
+const iosShareSetupBtn = document.getElementById("iosShareSetupBtn");
+if (iosShareSetupBtn) {
+  iosShareSetupBtn.addEventListener("click", showIosSetupModal);
+}
+
+const iosSetupBackdrop = document.getElementById("iosSetupBackdrop");
+if (iosSetupBackdrop) {
+  iosSetupBackdrop.addEventListener("click", closeIosSetupModal);
+}
+
+const iosSetupCloseBtn = document.getElementById("iosSetupCloseBtn");
+if (iosSetupCloseBtn) {
+  iosSetupCloseBtn.addEventListener("click", closeIosSetupModal);
+}
 
 // ── Admin Dashboard ────────────────────────────────────────────────────────────
 // Admin dashboard button in settings
