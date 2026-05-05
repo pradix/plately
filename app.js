@@ -4681,7 +4681,6 @@ bindEvent(detailSaveHeaderButton, "click", () => {
   const recipe = getSelectedRecipe();
   if (recipe) openCookbookSaveModal(recipe.id);
 });
-bindEvent(reviewImportButton, "click", () => openRecipeEditPanel(state.selectedRecipeId));
 bindEvent(document.getElementById("deleteRecipeButton"), "click", () => {
   const recipe = getSelectedRecipe();
   if (!recipe || SEED_RECIPE_IDS.has(recipe.id) || recipe.isSeed) return;
@@ -4785,6 +4784,7 @@ bindEvent(profileEditButton, "click", () => {
   const emailInput = document.getElementById("profileSubEmailInput");
   if (nameInput) nameInput.value = state.profile.name || "";
   if (emailInput) emailInput.value = state.profile.email || state.profile.handle?.replace(/^@/, "") || "";
+  renderAvatars();
   syncRemovePhotoBtn();
   openProfileSubPanel("profileSubAccount");
 });
