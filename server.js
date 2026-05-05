@@ -474,8 +474,13 @@ async function ensureDataFile() {
     // Create empty database instead of test data
     // Test data should only be used for development, not production
     const emptyDb = createEmptyDatabase();
-    await fsp.writeFile(DATA_FILE, JSON.stringify(emptyDb, null, 2), "utf8");
-    console.log("✅ Empty database created");
+    try {
+      await fsp.writeFile(DATA_FILE, JSON.stringify(emptyDb, null, 2), "utf8");
+      console.log("✅ Empty database created");
+    } catch (writeErr) {
+      console.log(`⚠️ Could not write database file: ${writeErr.message}`);
+      console.log("💾 Using in-memory database (will not persist between restarts)");
+    }
   }
 }
 
