@@ -280,7 +280,7 @@ async function createDevAuthSession(response, userId, email) {
     serializeCookie("plately_auth", token, {
       path: "/",
       httpOnly: process.env.NODE_ENV === "production",
-      sameSite: "Lax",
+      sameSite: "None",
       secure: process.env.NODE_ENV === "production",
       maxAge: 60 * 60 * 24 * 30, // 30 days
     })
@@ -343,7 +343,7 @@ async function clearDevAuthSession(request, response) {
     serializeCookie("plately_auth", "", {
       path: "/",
       httpOnly: true,
-      sameSite: "Lax",
+      sameSite: "None",
       secure: process.env.NODE_ENV === "production",
       maxAge: 1,
     })
@@ -713,7 +713,7 @@ async function createAuthSession(response, userId) {
       serializeCookie("plately_auth", token, {
         path: "/",
         httpOnly: process.env.NODE_ENV === "production",
-        sameSite: "Lax",
+        sameSite: "None",
         secure: process.env.NODE_ENV === "production",
         maxAge: 60 * 60 * 24 * 30,
       })
@@ -731,7 +731,7 @@ async function clearAuthSession(request, response) {
       serializeCookie("plately_auth", "", {
         path: "/",
         httpOnly: true,
-        sameSite: "Lax",
+        sameSite: "None",
         secure: process.env.NODE_ENV === "production",
         maxAge: 1,
       })
@@ -752,7 +752,7 @@ async function clearAuthSession(request, response) {
     serializeCookie("plately_auth", "", {
       path: "/",
       httpOnly: true,
-      sameSite: "Lax",
+      sameSite: "None",
       secure: process.env.NODE_ENV === "production",
       maxAge: 1,
     })
@@ -875,7 +875,7 @@ async function ensureUserSession(request, response) {
       serializeCookie("plately_session", sessionToken, {
         path: "/",
         httpOnly: true,
-        sameSite: "Lax",
+        sameSite: "None",
         secure: process.env.NODE_ENV === "production",
         maxAge: 60 * 60 * 24 * 365,
       })
