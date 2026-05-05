@@ -871,28 +871,51 @@ img { display: block; max-width: 100%; }
   position: relative;
 }
 
+/* Transparent topbar over hero image */
 .detail-screen .topbar--home {
-  display: none;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100vw, 430px);
+  background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0) 100%);
+  border: none;
+  box-shadow: none;
+  z-index: 25;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  backdrop-filter: blur(2px);
 }
 
-/* Floating favorite button on detail screen */
-.detail-screen #topbarFavoriteButton {
-  position: fixed;
-  top: 12px;
-  right: 16px;
-  z-index: 20;
-  width: 44px;
-  height: 44px;
+.detail-screen .topbar--home .brand-logo {
+  height: 24px;
+  width: auto;
+  max-width: 80px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+.detail-screen .topbar--home .topbar-actions {
+  gap: 8px;
+}
+
+.detail-screen .topbar--home .icon-button {
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.9);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.98);
-  border: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   color: #243c2b;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
+}
+
+.detail-screen .topbar--home .icon-button:active {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+/* Hide separate floating favorite button - use topbar button instead */
+.detail-screen #topbarFavoriteButton {
+  display: none;
 }
 
 .detail-hero {
@@ -900,18 +923,20 @@ img { display: block; max-width: 100%; }
   margin-left: calc(-50vw + 50%);
   margin-right: calc(-50vw + 50%);
   width: 100vw;
+  margin-top: 0;
+  padding-top: 0;
 }
 
 .detail-hero img {
   width: 100%;
-  height: 270px;
+  height: 320px;
   object-fit: cover;
   display: block;
 }
 
 .detail-hero__actions {
   position: absolute;
-  top: 70px;
+  top: 90px;
   right: 16px;
   display: flex;
   gap: 8px;
@@ -920,7 +945,7 @@ img { display: block; max-width: 100%; }
 
 .detail-sheet {
   position: relative;
-  margin-top: -28px;
+  margin-top: -40px;
   background: #f7f8f4;
   border-radius: 30px 30px 0 0;
   padding: 26px 16px 34px;
