@@ -2868,6 +2868,106 @@ function flattenJsonLd(node) {
   return items;
 }
 
+// Extract recipe using HTML5 Microdata (itemscope/itemtype/itemprop)
+function extractMicrodataRecipe(html) {
+  const doc = new JSDOM(html).window.document;
+
+  // Find recipe element with itemscope itemtype="*Recipe"
+  const recipeElement = doc.querySelector('[itemscope][itemtype*="Recipe"]');
+  if (!recipeElement) return null;
+
+  const recipe = {
+    title: '',
+    image: '',
+    ingredients: [],
+    instructions: []
+  };
+
+  // Extract title
+  const titleEl = recipeElement.querySelector('[itemprop="name"]');
+  if (titleEl) recipe.title = titleEl.textContent.trim();
+
+  // Extract image
+  const imageEl = recipeElement.querySelector('[itemprop="image"]');
+  if (imageEl) {
+    recipe.image = imageEl.getAttribute('src') || imageEl.getAttribute('content') || imageEl.textContent.trim();
+  }
+
+  // Extract ingredients
+  const ingredientEls = recipeElement.querySelectorAll('[itemprop="recipeIngredient"]');
+  ingredientEls.forEach(el => {
+    const text = el.textContent?.trim();
+    if (text && text.length > 2) {
+      recipe.ingredients.push(text);
+    }
+  });
+
+  // Extract instructions
+  const instructionEls = recipeElement.querySelectorAll('[itemprop="recipeInstructions"]');
+  instructionEls.forEach(el => {
+    const text = el.textContent?.trim();
+    if (text && text.length > 5) {
+      recipe.instructions.push(text);
+    }
+  });
+
+  // Return null if we didn't extract enough data
+  if (!recipe.title && recipe.ingredients.length < 2) return null;
+
+  return recipe.ingredients.length > 0 || recipe.instructions.length > 0 ? recipe : null;
+}
+
+// Extract recipe using RDFa (typeof/property attributes)
+function extractRdfaRecipe(html) {
+  const doc = new JSDOM(html).window.document;
+
+  // Find recipe element with typeof="*Recipe"
+  const recipeElement = doc.querySelector('[typeof*="Recipe"]');
+  if (!recipeElement) return null;
+
+  const recipe = {
+    title: '',
+    image: '',
+    ingredients: [],
+    instructions: []
+  };
+
+  // Extract title (property="schema:name" or property="name")
+  const titleEl = recipeElement.querySelector('[property*="name"]');
+  if (titleEl) {
+    recipe.title = titleEl.getAttribute('content') || titleEl.textContent.trim();
+  }
+
+  // Extract image
+  const imageEl = recipeElement.querySelector('[property*="image"]');
+  if (imageEl) {
+    recipe.image = imageEl.getAttribute('src') || imageEl.getAttribute('content') || imageEl.textContent.trim();
+  }
+
+  // Extract ingredients (property="schema:recipeIngredient")
+  const ingredientEls = recipeElement.querySelectorAll('[property*="recipeIngredient"]');
+  ingredientEls.forEach(el => {
+    const text = el.getAttribute('content') || el.textContent?.trim();
+    if (text && text.length > 2) {
+      recipe.ingredients.push(text);
+    }
+  });
+
+  // Extract instructions (property="schema:recipeInstructions")
+  const instructionEls = recipeElement.querySelectorAll('[property*="recipeInstructions"]');
+  instructionEls.forEach(el => {
+    const text = el.getAttribute('content') || el.textContent?.trim();
+    if (text && text.length > 5) {
+      recipe.instructions.push(text);
+    }
+  });
+
+  // Return null if we didn't extract enough data
+  if (!recipe.title && recipe.ingredients.length < 2) return null;
+
+  return recipe.ingredients.length > 0 || recipe.instructions.length > 0 ? recipe : null;
+}
+
 function findRecipeJsonLd(html) {
   const objects = extractJsonLdObjects(html).flatMap(flattenJsonLd);
   return (
@@ -3038,20 +3138,32 @@ function parseListAfterHeading(html, headingPattern) {
   // First remove common ad containers that might interrupt lists
   let cleanHtml = removeAdContainers(html);
 
-  // Allow optional trailing colon, whitespace, or any combination after the heading text
-  // Also allow nested tags within the heading (some sites wrap headings further)
-  const pattern = new RegExp(
-    `<(?:h1|h2|h3|h4|strong|p|b)[^>]*>\\s*(?:<[^>]+>\\s*)?(?:${headingPattern})\\s*[:：]?\\s*(?:[^<]*?)?<\\/(?:h1|h2|h3|h4|strong|p|b)>[\\s\\S]{0,400}?<(ul|ol)[^>]*>([\\s\\S]*?)<\\/\\1>`,
+  // Try ul/ol lists first (increased search distance from 400 to 800)
+  const listPattern = new RegExp(
+    `<(?:h1|h2|h3|h4|h5|h6|strong|p|b)[^>]*>\\s*(?:<[^>]+>\\s*)?(?:${headingPattern})\\s*[:：]?\\s*(?:[^<]*?)?<\\/(?:h1|h2|h3|h4|h5|h6|strong|p|b)>[\\s\\S]{0,800}?<(ul|ol)[^>]*>([\\s\\S]*?)<\\/\\1>`,
     "i"
   );
-  const match = cleanHtml.match(pattern);
-  if (!match) {
-    return [];
+  const listMatch = cleanHtml.match(listPattern);
+  if (listMatch) {
+    return [...listMatch[2].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)]
+      .map((item) => sanitizeText(stripTags(item[1])))
+      .filter(Boolean);
   }
 
-  return [...match[2].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)]
-    .map((item) => sanitizeText(stripTags(item[1])))
-    .filter(Boolean);
+  // Fallback: try definition lists (dl/dt/dd) which some recipe sites use
+  const dlPattern = new RegExp(
+    `<(?:h1|h2|h3|h4|h5|h6|strong|p|b)[^>]*>\\s*(?:<[^>]+>\\s*)?(?:${headingPattern})\\s*[:：]?\\s*(?:[^<]*?)?<\\/(?:h1|h2|h3|h4|h5|h6|strong|p|b)>[\\s\\S]{0,800}?<dl[^>]*>([\\s\\S]*?)<\\/dl>`,
+    "i"
+  );
+  const dlMatch = cleanHtml.match(dlPattern);
+  if (dlMatch) {
+    // Extract dd (definition) content from dl lists
+    return [...dlMatch[1].matchAll(/<dd[^>]*>([\s\S]*?)<\/dd>/gi)]
+      .map((item) => sanitizeText(stripTags(item[1])))
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 function parseParagraphsAfterHeading(html, headingPattern) {
@@ -3209,7 +3321,9 @@ function parseWebsiteRecipe(html, url) {
   const cleanHtml = removeAdContainers(html);
 
   const jsonLd = findRecipeJsonLd(cleanHtml);
-  const embeddedRecipe = extractEmbeddedRecipeFields(cleanHtml);
+  const microdataRecipe = !jsonLd ? extractMicrodataRecipe(cleanHtml) : null;
+  const rdfaRecipe = !jsonLd && !microdataRecipe ? extractRdfaRecipe(cleanHtml) : null;
+  const embeddedRecipe = !jsonLd && !microdataRecipe && !rdfaRecipe ? extractEmbeddedRecipeFields(cleanHtml) : null;
   const metaTitle = parseMetaTag(cleanHtml, "og:title") || parseTitleTag(cleanHtml);
   const metaDescription = parseMetaTag(cleanHtml, "og:description") || parseMetaTag(cleanHtml, "description", "name");
   const metaImage = parseMetaTag(cleanHtml, "og:image");
@@ -3219,8 +3333,8 @@ function parseWebsiteRecipe(html, url) {
     ...parseParagraphsAfterHeading(cleanHtml, "bereiding|bereidingswijze|instructions?|method|methode|aan de slag"),
   ];
 
-  if (jsonLd || embeddedRecipe) {
-    const recipeSource = jsonLd || embeddedRecipe;
+  if (jsonLd || microdataRecipe || rdfaRecipe || embeddedRecipe) {
+    const recipeSource = jsonLd || microdataRecipe || rdfaRecipe || embeddedRecipe;
     const recipeName = sanitizeText(recipeSource.name || metaTitle);
     const recipeDescription = sanitizeText(stripTags(recipeSource.description || metaDescription));
     const recipeIngredients = Array.isArray(recipeSource.recipeIngredient)
@@ -3317,10 +3431,11 @@ function parseWebsiteRecipe(html, url) {
           recipeSource.totalTime || recipeSource.cookTime || recipeSource.prepTime || jsonLd?.totalTime || jsonLd?.cookTime || jsonLd?.prepTime
         ) || estimateTime(recipeDescription),
       servings: recipeYield || "2",
-      // Flag for review whenever we have fewer than 2 ingredients or 2 instructions
+      // Flag for review whenever we have fewer than 3 ingredients or 4 instructions
       // — this triggers the Claude AI fallback in importWebsite when ANTHROPIC_API_KEY
       // is set, which can extract proper steps from messy article bodies.
-      needsReview: mergedIngredients.length < 2 || mergedInstructions.length < 2,
+      // Lower threshold (3 vs 2) means Claude is called more proactively for incomplete recipes.
+      needsReview: mergedIngredients.length < 3 || mergedInstructions.length < 4 || !recipe.image,
       sourceLabel: "Imported from Website",
     };
   }
