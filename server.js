@@ -3228,15 +3228,30 @@ function parseWebsiteRecipe(html, url) {
       : sanitizeText(recipeSource.recipeYield);
     // Pick the first non-empty image URL from the ld+json (arrays like ["", "url"] are common on AH)
     const recipeImage = (() => {
+      // Try JSON-LD image first
       if (Array.isArray(jsonLd?.image)) {
         const first = jsonLd.image.find((img) => typeof img === "string" && img.startsWith("http"));
         if (first) return first;
         const firstObj = jsonLd.image.find((img) => img?.url);
         if (firstObj) return firstObj.url;
-        return metaImage;
       }
       if (typeof jsonLd?.image === "string" && jsonLd.image) return jsonLd.image;
-      return jsonLd?.image?.url || metaImage;
+      if (jsonLd?.image?.url) return jsonLd.image.url;
+
+      // Try og:image meta tag
+      if (metaImage) return metaImage;
+
+      // Fallback: Extract first image from page (works better for AH recipes)
+      const imgMatch = cleanHtml.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
+      if (imgMatch && imgMatch[1]) {
+        const imgUrl = imgMatch[1];
+        // Only use if it's a valid image URL
+        if (imgUrl.startsWith("http") || imgUrl.startsWith("/")) {
+          return imgUrl;
+        }
+      }
+
+      return "";
     })();
 
     return {
