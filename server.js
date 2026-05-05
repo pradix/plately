@@ -3599,6 +3599,44 @@ async function importPinterest(sourceUrl) {
   return parseWebsiteRecipe(doc.body, doc.finalUrl || finalUrl);
 }
 
+function extractAhRecipeImage(html) {
+  // Try og:image first (most reliable)
+  const ogMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
+  if (ogMatch && ogMatch[1]) {
+    return ogMatch[1];
+  }
+
+  // Try JSON-LD image
+  const jsonLdMatch = html.match(/"image"\s*:\s*"([^"]+)"/i);
+  if (jsonLdMatch && jsonLdMatch[1] && jsonLdMatch[1].startsWith("http")) {
+    return jsonLdMatch[1];
+  }
+
+  // AH-specific: look for recipe hero image in the page
+  // AH uses images with static.ah.nl domain for recipe images
+  const ahImageMatch = html.match(/https:\/\/static\.ah\.nl\/[^"'<>\s]+\.(?:jpg|jpeg|png|webp)/i);
+  if (ahImageMatch) {
+    return ahImageMatch[0];
+  }
+
+  // Fallback: first img tag that's not a tiny icon/logo
+  const allImages = [...html.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi)];
+  for (const match of allImages) {
+    const src = match[1];
+    if (src.startsWith("http") && (src.includes("static.ah.nl") || src.includes("recepten"))) {
+      return src;
+    }
+  }
+
+  // Last resort: any img src that's a valid URL
+  const imgMatch = html.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
+  if (imgMatch && imgMatch[1] && (imgMatch[1].startsWith("http") || imgMatch[1].startsWith("/"))) {
+    return imgMatch[1];
+  }
+
+  return "";
+}
+
 async function importWebsite(sourceUrl) {
   const parsedUrl = new URL(sourceUrl);
   const isAllerhande = /(^|\.)ah\.nl$/i.test(parsedUrl.hostname) && (/\/allerhande\//i.test(parsedUrl.pathname) || /\/r\/\d+/.test(parsedUrl.pathname));
@@ -3614,6 +3652,9 @@ async function importWebsite(sourceUrl) {
         ? parseTextRecipeDocument(document.body, document.finalUrl || sourceUrl)
         : parseWebsiteRecipe(document.body, document.finalUrl || sourceUrl);
 
+    // Extract image specifically from the HTML (before we process it further)
+    const imageUrl = extractAhRecipeImage(document.body);
+
     if (readerDocument?.kind === "text") {
       const readerRecipe = parseTextRecipeDocument(readerDocument.body, readerDocument.finalUrl || sourceUrl);
       const readerIngredients = parseMarkdownIngredientSection(readerDocument.body);
@@ -3621,6 +3662,7 @@ async function importWebsite(sourceUrl) {
       const readerServings = parseMarkdownServings(readerDocument.body);
       return {
         ...primaryRecipe,
+        image: imageUrl || primaryRecipe.image,
         ingredients: readerIngredients.length ? readerIngredients : readerRecipe.ingredients.length ? readerRecipe.ingredients : primaryRecipe.ingredients,
         instructions:
           readerInstructions.length ? readerInstructions : readerRecipe.instructions.length ? readerRecipe.instructions : primaryRecipe.instructions,
@@ -3635,7 +3677,10 @@ async function importWebsite(sourceUrl) {
       };
     }
 
-    return primaryRecipe;
+    return {
+      ...primaryRecipe,
+      image: imageUrl || primaryRecipe.image,
+    };
   }
 
   const document = await fetchWebsiteDocument(sourceUrl);
