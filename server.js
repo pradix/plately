@@ -4913,16 +4913,19 @@ const server = http.createServer(async (request, response) => {
           await ensurePostgresSchema();
           const pool = await getPostgresPool();
           const result = await pool.query("SELECT * FROM plately_users ORDER BY created_at DESC");
-          users = result.rows.map((u) => ({
-            id: u.id,
-            email: u.email,
-            recipes: 0,
-            cookbooks: 0,
-            groceryItems: 0,
-            createdAt: u.created_at,
-            updatedAt: u.updated_at,
-            hasProfile: Boolean(u.profile?.name),
-          }));
+          users = result.rows.map((u) => {
+            const appState = typeof u.app_state === 'object' ? u.app_state : JSON.parse(u.app_state || '{}');
+            return {
+              id: u.id,
+              email: u.email,
+              recipes: (appState.importedRecipes || []).length,
+              cookbooks: (appState.cookbooks || []).length,
+              groceryItems: (appState.groceryItems || []).length,
+              createdAt: u.created_at,
+              updatedAt: u.updated_at,
+              hasProfile: Boolean(u.profile?.name),
+            };
+          });
           console.log(`✅ Loaded ${users.length} users from PostgreSQL`);
         } else {
           // Read from JSON file
