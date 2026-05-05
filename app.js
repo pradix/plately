@@ -890,6 +890,10 @@ function openAuthModal(mode = "login") {
   const nameField = document.getElementById("authNameField");
   if (nameField) nameField.style.display = isRegister ? "" : "none";
 
+  // Show/hide forgot password button (only for login, not register)
+  const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
+  if (forgotPasswordBtn) forgotPasswordBtn.style.display = isRegister ? "none" : "";
+
   // Submit button text
   if (submitAuthButton) submitAuthButton.textContent = isRegister ? "Account aanmaken" : "Inloggen";
 
