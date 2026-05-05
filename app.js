@@ -2282,13 +2282,13 @@ function renderRecipeGrid() {
   let gridHtml = "";
   if (state.auth.authenticated && !isSearching && !state.activeCookbookFilter) {
     gridHtml = `
-      <button class="recent-card recent-card--add-recipe" type="button" id="addRecipeCard">
-        <div class="recent-card__img" style="background: linear-gradient(135deg, #fde8d8 0%, #fef3c7 100%); display: flex; align-items: center; justify-content: center;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2.2" stroke-linecap="round" style="width: 32px; height: 32px;" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      <button class="recent-card recent-card--add" type="button" id="addRecipeCard">
+        <div class="recent-card__add-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
         </div>
         <div class="recent-card__body">
-          <p class="recent-card__title">Nieuw recept</p>
-          <p class="recent-card__meta">Importeer een recept</p>
+          <p class="recent-card__title">Recept toevoegen</p>
+          <p class="recent-card__meta">Importeer via link</p>
         </div>
       </button>
     `;
