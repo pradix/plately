@@ -362,10 +362,24 @@ async function getPostgresPool() {
     throw new HttpError(500, "Postgres is geconfigureerd, maar dependency 'pg' ontbreekt.");
   }
 
+  console.log("🐘 Connecting to PostgreSQL...");
   postgresPool = new pgModule.Pool({
     connectionString: DATABASE_URL,
     ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
   });
+
+  // Test the connection
+  try {
+    const client = await postgresPool.connect();
+    const result = await client.query("SELECT NOW()");
+    client.release();
+    console.log("✅ PostgreSQL connected successfully");
+  } catch (error) {
+    console.error("❌ PostgreSQL connection failed:", error.message);
+    postgresPool = null;
+    throw error;
+  }
+
   return postgresPool;
 }
 
@@ -654,27 +668,36 @@ function buildAppStateFromUser(user) {
 }
 
 async function createAuthSession(response, userId) {
-  await ensurePostgresSchema();
-  const pool = await getPostgresPool();
-  const token = crypto.randomBytes(24).toString("hex");
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
-  await pool.query(
-    `
-      INSERT INTO plately_auth_sessions (token, user_id, expires_at)
-      VALUES ($1, $2, $3)
-    `,
-    [token, userId, expiresAt]
-  );
-  appendSetCookie(
-    response,
-    serializeCookie("plately_auth", token, {
-      path: "/",
-      httpOnly: true,
-      sameSite: "Lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 30,
-    })
-  );
+  try {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const token = crypto.randomBytes(24).toString("hex");
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+
+    console.log(`🔐 Creating PostgreSQL auth session for user: ${userId}`);
+    await pool.query(
+      `
+        INSERT INTO plately_auth_sessions (token, user_id, expires_at)
+        VALUES ($1, $2, $3)
+      `,
+      [token, userId, expiresAt]
+    );
+    console.log(`✅ Auth session created: ${token.substring(0, 8)}...`);
+
+    appendSetCookie(
+      response,
+      serializeCookie("plately_auth", token, {
+        path: "/",
+        httpOnly: true,
+        sameSite: "Lax",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24 * 30,
+      })
+    );
+  } catch (error) {
+    console.error(`❌ Error creating PostgreSQL auth session: ${error.message}`);
+    throw error;
+  }
 }
 
 async function clearAuthSession(request, response) {
@@ -741,22 +764,29 @@ async function getAuthenticatedUser(request) {
 }
 
 async function createPostgresUser(email, password, currentState) {
-  await ensurePostgresSchema();
-  const pool = await getPostgresPool();
-  const userId = generateId("user");
-  const { salt, hash } = createPasswordHash(password);
-  const appState = sanitizeUserStatePayload(currentState, buildDefaultUserData(userId));
+  try {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const userId = generateId("user");
+    const { salt, hash } = createPasswordHash(password);
+    const appState = sanitizeUserStatePayload(currentState, buildDefaultUserData(userId));
 
-  const result = await pool.query(
-    `
-      INSERT INTO plately_users (id, email, password_hash, password_salt, profile, app_state)
-      VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
-      RETURNING *
-    `,
-    [userId, email, hash, salt, JSON.stringify(appState.profile), JSON.stringify(appState)]
-  );
+    console.log(`📝 Creating PostgreSQL user: ${email}`);
+    const result = await pool.query(
+      `
+        INSERT INTO plately_users (id, email, password_hash, password_salt, profile, app_state)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
+        RETURNING *
+      `,
+      [userId, email, hash, salt, JSON.stringify(appState.profile), JSON.stringify(appState)]
+    );
 
-  return result.rows[0];
+    console.log(`✅ User created in PostgreSQL: ${userId}`);
+    return result.rows[0];
+  } catch (error) {
+    console.error(`❌ Error creating PostgreSQL user: ${error.message}`);
+    throw error;
+  }
 }
 
 async function updateAuthenticatedUserState(userId, body) {
