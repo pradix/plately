@@ -4494,8 +4494,21 @@ async function searchAHRecipes(query, count = 4) {
 
       // Extract recipe links from markdown
       // Jina converts links to [Title](URL) format
-      const links = [...markdown.matchAll(/\[([^\]]+)\]\((https:\/\/www\.ah\.nl\/allerhande\/recepten\/[^\)]+)\)/g)];
-      console.log(`Found ${links.length} recipe links in Jina markdown`);
+      // Filter to only actual recipes, not category pages
+      // Categories have simple names (lenterecepten, bbq-recepten)
+      // Recipes have hyphenated names with multiple words (macaroni-met-kip, etc.)
+      const allLinks = [...markdown.matchAll(/\[([^\]]+)\]\((https:\/\/www\.ah\.nl\/allerhande\/recepten\/[^\)]+)\)/g)];
+      const links = allLinks.filter(match => {
+        const url = match[2];
+        const slug = url.split('/recepten/')[1];
+        // Filter out categories: skip if slug is less than 5 chars or ends with 'recepten'
+        // Real recipes have longer, specific names like "macaroni-met-kip"
+        if (!slug || slug.length < 8 || slug.endsWith('recepten')) {
+          return false;
+        }
+        return true;
+      });
+      console.log(`Found ${links.length} real recipe links (filtered from ${allLinks.length} total)`);
 
       if (links.length > 0) {
         // Fetch images for first few results
@@ -4588,6 +4601,13 @@ async function searchAHRecipes(query, count = 4) {
       if (!url.startsWith("http")) {
         url = `https://www.ah.nl${url}`;
       }
+
+      // Filter out categories: only keep recipe pages
+      const slug = url.split('/recepten/')[1];
+      if (!slug || slug.length < 8 || slug.endsWith('recepten')) {
+        continue; // Skip category pages
+      }
+
       recipeUrls.add(url);
       if (recipeUrls.size >= count) break;
     }
