@@ -1178,7 +1178,7 @@ img { display: block; max-width: 100%; }
 }
 
 .ingredient-quick-actions {
-  display: flex;
+  display: none;
   gap: 8px;
 }
 
@@ -5153,20 +5153,27 @@ img { display: block; max-width: 100%; }
 }
 
 .detail-icon-action {
-  width: 42px;
-  height: 42px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(120, 147, 111, 0.12);
+  border: none;
   border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #3d3d3d;
+  box-shadow: 0 6px 20px rgba(36, 60, 43, 0.12);
+  transition: all 0.2s ease;
+}
+
+.detail-icon-action:hover,
+.detail-icon-action:focus-visible {
   background: #fff;
-  color: #7f9879;
-  box-shadow: 0 4px 14px rgba(36, 60, 43, 0.04);
+  box-shadow: 0 8px 24px rgba(36, 60, 43, 0.18);
 }
 
 .detail-icon-action svg {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: block;
 }
 
