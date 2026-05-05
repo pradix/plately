@@ -3105,10 +3105,8 @@ function renderAvatars() {
       if (img) { img.src = photo; img.alt = state.profile.name || ""; }
       p2avatar.style.fontSize = "";
     } else {
-      if (img) { img.src = ""; img.alt = ""; }
-      const initial = (state.profile.name || "?")[0].toUpperCase();
-      p2avatar.style.fontSize = "2.2rem";
-      if (!img) p2avatar.textContent = initial;
+      if (img) { img.src = "assets/profile-avatar.svg"; img.alt = ""; }
+      p2avatar.style.fontSize = "";
     }
   });
 }
