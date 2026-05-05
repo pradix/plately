@@ -1153,8 +1153,40 @@ img { display: block; max-width: 100%; }
 
 .detail-servings-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 12px;
+  gap: 12px;
+}
+
+.ingredient-quick-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ingredient-quick-btn {
+  padding: 6px 12px;
+  background: var(--sage-deep);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s;
+}
+
+.ingredient-quick-btn:active {
+  transform: scale(0.95);
+}
+
+.ingredient-quick-btn:hover {
+  opacity: 0.9;
+}
+
+.ingredient-quick-btn--secondary {
+  background: rgba(141, 164, 133, 0.2);
+  color: var(--sage-deep);
 }
 
 /* ── Ingredient list — flat card ── */

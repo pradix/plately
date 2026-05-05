@@ -166,6 +166,11 @@
                 <span id="detailSourceLabel">Bron</span>
               </div>
               <div class="detail-origin__actions">
+                <button class="detail-icon-action" id="favoriteRecipeButton" type="button" aria-label="Toevoegen aan favorieten" title="Toevoegen aan favorieten">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+                  </svg>
+                </button>
                 <button class="detail-icon-action" id="saveRecipeButton" type="button" aria-label="Bewaar recept" title="Bewaar recept">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v13.2a.8.8 0 0 1-1.28.64L12 15.5l-6.22 4.34A.8.8 0 0 1 4.5 19.2V6A1.5 1.5 0 0 1 6 4.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
@@ -225,6 +230,10 @@
                   <button class="servings-btn" id="servingsDown" type="button" aria-label="Minder personen">−</button>
                   <span id="servingsDisplay">2 pers.</span>
                   <button class="servings-btn" id="servingsUp" type="button" aria-label="Meer personen">+</button>
+                </div>
+                <div class="ingredient-quick-actions">
+                  <button class="ingredient-quick-btn" id="checkAllIngredientsButton" type="button" aria-label="Alle ingrediënten checken">Alles checken</button>
+                  <button class="ingredient-quick-btn ingredient-quick-btn--secondary" id="uncheckAllIngredientsButton" type="button" aria-label="Alle ingrediënten uitvinken">Alles afhaken</button>
                 </div>
               </div>
               <ul class="ingredient-list" id="detailIngredientList"></ul>

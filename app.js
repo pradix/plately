@@ -560,6 +560,7 @@ const detailSourceLabel = document.getElementById("detailSourceLabel");
 const reviewImportButton = document.getElementById("reviewImportButton");
 const detailSaveHeaderButton = document.getElementById("detailSaveHeaderButton");
 const shareRecipeButton = document.getElementById("shareRecipeButton");
+const favoriteRecipeButton = document.getElementById("favoriteRecipeButton");
 const saveRecipeButton = document.getElementById("saveRecipeButton");
 const cookModeButton = document.getElementById("cookModeButton");
 const wakeLockButton = document.getElementById("wakeLockButton");
@@ -575,6 +576,8 @@ const detailStepCount = document.getElementById("detailStepCount");
 const detailIngredientCount = document.getElementById("detailIngredientCount");
 const servingsDisplay = document.getElementById("servingsDisplay");
 const detailIngredientList = document.getElementById("detailIngredientList");
+const checkAllIngredientsButton = document.getElementById("checkAllIngredientsButton");
+const uncheckAllIngredientsButton = document.getElementById("uncheckAllIngredientsButton");
 const detailStepList = document.getElementById("detailStepList");
 const addSelectedToGroceriesButton = document.getElementById("addSelectedToGroceriesButton");
 const grocerySubtitle = document.getElementById("grocerySubtitle");
@@ -2506,6 +2509,13 @@ function renderDetailRecipe(resetServings = false) {
   if (detailSaveHeaderButton) {
     detailSaveHeaderButton.classList.toggle("is-active", isRecipeSaved(recipe.id));
   }
+  if (favoriteRecipeButton) {
+    const isFavorited = isRecipeFavorited(recipe.id);
+    const favoriteLabel = isFavorited ? "Verwijder uit favorieten" : "Toevoegen aan favorieten";
+    favoriteRecipeButton.setAttribute("aria-label", favoriteLabel);
+    favoriteRecipeButton.setAttribute("title", favoriteLabel);
+    favoriteRecipeButton.classList.toggle("is-active", isFavorited);
+  }
   if (saveRecipeButton) {
     const saveLabel = isRecipeSaved(recipe.id) ? "Recept bewaard" : "Bewaar recept";
     saveRecipeButton.setAttribute("aria-label", saveLabel);
@@ -3075,6 +3085,33 @@ function toggleIngredientChecked(index) {
   schedulePersistAppState();
 }
 
+function checkAllIngredients() {
+  const recipe = getSelectedRecipe();
+  if (!recipe) return;
+
+  const progress = getRecipeProgress(recipe.id);
+  recipe.ingredients.forEach((ingredient, index) => {
+    const key = getIngredientProgressKey(ingredient, index);
+    if (!progress.checkedIngredients.includes(key)) {
+      progress.checkedIngredients.push(key);
+    }
+  });
+
+  renderDetailRecipe(false);
+  schedulePersistAppState();
+}
+
+function uncheckAllIngredients() {
+  const recipe = getSelectedRecipe();
+  if (!recipe) return;
+
+  const progress = getRecipeProgress(recipe.id);
+  progress.checkedIngredients = [];
+
+  renderDetailRecipe(false);
+  schedulePersistAppState();
+}
+
 function setCookModeStep(nextStepIndex) {
   const recipe = getSelectedRecipe();
   const progress = getRecipeProgress(recipe.id);
@@ -3473,6 +3510,44 @@ function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId) {
   schedulePersistAppState();
   renderCookbookSaveList(recipeId);
   showToast(`Opgeslagen in ${cookbook.name}.`);
+}
+
+function getOrCreateFavoritesBookmark() {
+  let favoritesBookmark = state.cookbooks.find((cb) => cb.name === "❤️ Favorieten");
+  if (!favoritesBookmark) {
+    favoritesBookmark = {
+      id: `cookbook-favorites-${Date.now()}`,
+      name: "❤️ Favorieten",
+      recipeIds: [],
+    };
+    state.cookbooks.unshift(favoritesBookmark);
+    schedulePersistAppState();
+  }
+  return favoritesBookmark;
+}
+
+function isRecipeFavorited(recipeId) {
+  const favoritesBookmark = state.cookbooks.find((cb) => cb.name === "❤️ Favorieten");
+  return favoritesBookmark ? favoritesBookmark.recipeIds.includes(recipeId) : false;
+}
+
+function toggleRecipeFavorite(recipeId) {
+  const favoritesBookmark = getOrCreateFavoritesBookmark();
+  const index = favoritesBookmark.recipeIds.indexOf(recipeId);
+
+  if (index !== -1) {
+    // Remove from favorites
+    favoritesBookmark.recipeIds.splice(index, 1);
+    showToast("Verwijderd uit favorieten.");
+  } else {
+    // Add to favorites
+    favoritesBookmark.recipeIds.unshift(recipeId);
+    showToast("Toegevoegd aan favorieten!");
+  }
+
+  renderDetailRecipe(false);
+  renderCookbookList();
+  schedulePersistAppState();
 }
 
 function createCookbook(name) {
@@ -4877,6 +4952,19 @@ brandHomeButtons.forEach((button) => {
   button.addEventListener("click", goHome);
 });
 bindEvent(shareRecipeButton, "click", shareSelectedRecipe);
+bindEvent(favoriteRecipeButton, "click", () => {
+  const recipe = getSelectedRecipe();
+  if (recipe) toggleRecipeFavorite(recipe.id);
+});
+
+bindEvent(checkAllIngredientsButton, "click", () => {
+  checkAllIngredients();
+});
+
+bindEvent(uncheckAllIngredientsButton, "click", () => {
+  uncheckAllIngredients();
+});
+
 bindEvent(saveRecipeButton, "click", () => {
   const recipe = getSelectedRecipe();
   if (recipe) openCookbookSaveModal(recipe.id);
