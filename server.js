@@ -3684,6 +3684,38 @@ function upgradeAhImageQuality(imageUrl) {
 async function importWebsite(sourceUrl) {
   const parsedUrl = new URL(sourceUrl);
   const isAllerhande = /(^|\.)ah\.nl$/i.test(parsedUrl.hostname) && (/\/allerhande\//i.test(parsedUrl.pathname) || /\/r\/\d+/.test(parsedUrl.pathname));
+  const isLekkerSimpel = /lekkerensimpel\.com$/i.test(parsedUrl.hostname);
+
+  if (isLekkerSimpel) {
+    // Use dedicated Lekker & Simpel parser for better extraction
+    const document = await fetchWebsiteDocument(sourceUrl);
+
+    if (document.kind === "html") {
+      const parsed = parseLekkerSimpel(document.body, "https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les", 1);
+      if (parsed && parsed.length > 0) {
+        const recipeData = parsed[0];
+        // Fetch the full recipe page to get complete ingredients/instructions
+        const fullPageHtml = document.body;
+        const recipe = parseWebsiteRecipe(fullPageHtml, document.finalUrl || sourceUrl);
+
+        return {
+          ...recipe,
+          title: recipeData.title || recipe.title,
+          thumbnail: recipeData.thumbnail || recipe.image,
+          // Keep parsed ingredients if available
+          ingredients: recipe.ingredients.length >= 2 ? recipe.ingredients : [],
+          instructions: recipe.instructions.length >= 1 ? recipe.instructions : [],
+        };
+      }
+    }
+
+    // Fallback to generic parsing
+    const primaryRecipe = document.kind === "text"
+      ? parseTextRecipeDocument(document.body, document.finalUrl || sourceUrl)
+      : parseWebsiteRecipe(document.body, document.finalUrl || sourceUrl);
+
+    return primaryRecipe;
+  }
 
   if (isAllerhande) {
     const [document, readerDocument] = await Promise.all([
