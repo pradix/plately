@@ -4484,7 +4484,7 @@ async function searchAHRecipes(query, count = 4) {
     console.log(`📖 Trying Jina reader for: ${searchUrl}`);
     const resp = await fetch(readerUrl, {
       headers: FETCH_HEADERS,
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(15000), // Increased timeout to 15s (AH can be slow)
     });
 
     console.log(`Jina response: ${resp.status}`);
@@ -4513,11 +4513,28 @@ async function searchAHRecipes(query, count = 4) {
     console.log(`⚠️  Jina failed: ${err.message}`);
   }
 
-  // Final fallback: Direct HTML scraping
+  // Final fallback: Direct HTML scraping with browser-like headers
   try {
     const searchUrl = `https://www.ah.nl/allerhande/recepten-zoeken?query=${encodeURIComponent(query)}`;
     console.log(`🔗 Trying direct HTML scrape: ${searchUrl}`);
-    const html = await fetchHtml(searchUrl);
+
+    // Fetch with browser-like headers to avoid 403
+    const html = await fetch(searchUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "nl-NL,nl;q=0.9",
+        "Accept-Encoding": "gzip, deflate",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+      },
+      signal: AbortSignal.timeout(8000),
+    }).then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    });
+
     console.log(`Got ${html.length} chars of HTML`);
 
     // Look for recipe links in the HTML
