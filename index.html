@@ -577,6 +577,22 @@
                   <label class="profile-subpanel__label" for="profileSubEmailInput">E-mailadres</label>
                   <input class="profile-subpanel__input" id="profileSubEmailInput" type="email" placeholder="jij@voorbeeld.nl" autocomplete="email" />
                 </div>
+                <div class="profile2-row-divider"></div>
+                <div class="profile-subpanel__field">
+                  <label class="profile-subpanel__label" for="profileSubGenderInput">Geslacht</label>
+                  <select class="profile-subpanel__input" id="profileSubGenderInput">
+                    <option value="">Selecteer geslacht</option>
+                    <option value="male">Man</option>
+                    <option value="female">Vrouw</option>
+                    <option value="other">Anders</option>
+                    <option value="prefer_not">Liever niet zeggen</option>
+                  </select>
+                </div>
+                <div class="profile2-row-divider"></div>
+                <div class="profile-subpanel__field">
+                  <label class="profile-subpanel__label" for="profileSubBirthDateInput">Geboortedatum</label>
+                  <input class="profile-subpanel__input" id="profileSubBirthDateInput" type="date" />
+                </div>
               </div>
               <button class="profile-subpanel__save-btn" id="profileSubAccountSave" type="button">Opslaan</button>
               <button class="profile-subpanel__remove-photo-btn" id="profileRemovePhotoBtn" type="button" style="display:none">Foto verwijderen</button>
@@ -617,7 +633,7 @@
             </div>
 
             <!-- Processing message -->
-            <div class="channel-processing-notice">
+            <div class="channel-processing-notice" style="display:none;">
               <svg class="channel-processing-hourglass" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M6 2c-1.1 0-2 .9-2 2v1h2V4h12v1h2V4c0-1.1-.9-2-2-2H6zm0 5h12v7c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1V7zm12 9H6v1c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2v-1z"/>
               </svg>
@@ -1399,6 +1415,20 @@
             <div class="auth-field">
               <label class="auth-field__label" for="onboardingHandle">Gebruikersnaam</label>
               <input class="auth-field__input" id="onboardingHandle" type="text" placeholder="bijv. jouw_naam" />
+            </div>
+            <div class="auth-field">
+              <label class="auth-field__label" for="onboardingGender">Geslacht</label>
+              <select class="auth-field__input" id="onboardingGender">
+                <option value="">Selecteer geslacht</option>
+                <option value="male">Man</option>
+                <option value="female">Vrouw</option>
+                <option value="other">Anders</option>
+                <option value="prefer_not">Liever niet zeggen</option>
+              </select>
+            </div>
+            <div class="auth-field">
+              <label class="auth-field__label" for="onboardingBirthDate">Geboortedatum</label>
+              <input class="auth-field__input" id="onboardingBirthDate" type="date" />
             </div>
           </div>
           <div class="onboarding-actions">

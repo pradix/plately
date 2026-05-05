@@ -4328,16 +4328,23 @@ async function bootstrapSession() {
 
 async function submitAuth(mode, email, password) {
   const endpoint = mode === "register" ? "/api/auth/register" : "/api/auth/login";
+  const body = {
+    email,
+    password,
+  };
+
+  // For login, sync the current client state with server
+  // For registration, create a clean account without inheriting old data
+  if (mode === "login") {
+    body.currentState = buildPersistedAppState();
+  }
+
   const payload = await fetchJson(`${state.apiBase}${endpoint}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      email,
-      password,
-      currentState: buildPersistedAppState(),
-    }),
+    body: JSON.stringify(body),
   });
 
   if (payload?.auth) {
@@ -4934,6 +4941,18 @@ function openProfileSubPanel(id) {
   panel.setAttribute("aria-hidden", "false");
   // Scroll panel to top to avoid showing content from previous state
   panel.scrollTop = 0;
+
+  // Show processing notice only if user has added custom channels
+  if (id === "profileSubChannels") {
+    const notice = document.querySelector(".channel-processing-notice");
+    if (notice) {
+      if (state.customChannels.length > 0) {
+        notice.style.display = "flex";
+      } else {
+        notice.style.display = "none";
+      }
+    }
+  }
 }
 
 function closeProfileSubPanel(id) {
@@ -4979,8 +4998,12 @@ function syncRemovePhotoBtn() {
 bindEvent(profileEditButton, "click", () => {
   const nameInput = document.getElementById("profileSubNameInput");
   const emailInput = document.getElementById("profileSubEmailInput");
+  const genderInput = document.getElementById("profileSubGenderInput");
+  const birthDateInput = document.getElementById("profileSubBirthDateInput");
   if (nameInput) nameInput.value = state.profile.name || "";
   if (emailInput) emailInput.value = state.profile.email || state.profile.handle?.replace(/^@/, "") || "";
+  if (genderInput) genderInput.value = state.profile.gender || "";
+  if (birthDateInput) birthDateInput.value = state.profile.birthDate || "";
   renderAvatars();
   syncRemovePhotoBtn();
   openProfileSubPanel("profileSubAccount");
@@ -5027,10 +5050,16 @@ bindEvent(document.getElementById("profileRemovePhotoBtn"), "click", () => {
 bindEvent(document.getElementById("profileSubAccountSave"), "click", () => {
   const nameInput = document.getElementById("profileSubNameInput");
   const emailInput = document.getElementById("profileSubEmailInput");
+  const genderInput = document.getElementById("profileSubGenderInput");
+  const birthDateInput = document.getElementById("profileSubBirthDateInput");
   const newName = (nameInput?.value || "").trim();
   const newEmail = (emailInput?.value || "").trim();
+  const newGender = (genderInput?.value || "").trim();
+  const newBirthDate = (birthDateInput?.value || "").trim();
   if (newName) state.profile.name = newName;
   if (newEmail) state.profile.email = newEmail;
+  if (newGender) state.profile.gender = newGender;
+  if (newBirthDate) state.profile.birthDate = newBirthDate;
   renderProfileSummary();
   schedulePersistAppState();
   closeProfileSubPanel("profileSubAccount");
@@ -6898,6 +6927,12 @@ function finishOnboarding() {
   if (onboardingData.photoData) {
     state.profile.photo = onboardingData.photoData;
   }
+  if (onboardingData.gender) {
+    state.profile.gender = onboardingData.gender;
+  }
+  if (onboardingData.birthDate) {
+    state.profile.birthDate = onboardingData.birthDate;
+  }
 
   // Save favorite supermarket
   state.profile.favoriteSupermarket = onboardingData.supermarket || "ah";
@@ -7002,6 +7037,8 @@ bindEvent(document.getElementById("onboardingStep4Skip"), "click", () => {
 
 bindEvent(document.getElementById("onboardingStep4Finish"), "click", () => {
   onboardingData.handle = document.getElementById("onboardingHandle")?.value.trim() || "";
+  onboardingData.gender = document.getElementById("onboardingGender")?.value || "";
+  onboardingData.birthDate = document.getElementById("onboardingBirthDate")?.value || "";
   finishOnboarding();
 });
 

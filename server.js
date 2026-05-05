@@ -202,6 +202,8 @@ const DEFAULT_PROFILE = {
   name: "Sarah de Vries",
   handle: "@sarahkookt",
   favoriteSupermarket: "ah",
+  gender: "",
+  birthDate: "",
 };
 
 const DEFAULT_COOKBOOKS = [
@@ -922,12 +924,18 @@ function sanitizeProfilePayload(profile) {
   const allowedSupermarkets = ["ah", "jumbo", "picnic", "vomar", "dirk", "lidl", "aldi", "coop", "hoogvliet"];
   const rawSupermarket = String(profile?.favoriteSupermarket || "ah").toLowerCase();
   const favoriteSupermarket = allowedSupermarkets.includes(rawSupermarket) ? rawSupermarket : "ah";
+  const allowedGenders = ["male", "female", "other", "prefer_not"];
+  const rawGender = String(profile?.gender || "").toLowerCase();
+  const gender = allowedGenders.includes(rawGender) ? rawGender : "";
+  const birthDate = /^\d{4}-\d{2}-\d{2}$/.test(profile?.birthDate) ? profile.birthDate : "";
   return {
     name,
     handle: handle.slice(0, 40),
     email,
     photo,
     favoriteSupermarket,
+    gender,
+    birthDate,
   };
 }
 
