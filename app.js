@@ -2113,8 +2113,24 @@ function renderHomeCookbooks() {
 
   strip.innerHTML = top.map((cookbook) => {
     const recipes = cookbook.recipeIds.map((id) => getRecipeById(id)).filter(Boolean);
-    const coverImg = recipes[0]?.image || "";
     const count = cookbook.recipeIds.length;
+
+    // Show "+" button for empty cookbooks instead of regular card
+    if (count === 0) {
+      return `
+        <button class="home-cb-card home-cb-card--add" type="button" id="homeCookbookAdd${escapeHtml(cookbook.id)}" aria-label="Recepten toevoegen aan ${escapeHtml(cookbook.name)}">
+          <div class="home-cb-card__cover home-cb-card__cover--add">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" style="width:32px;height:32px;opacity:.55"><path d="M12 5v14M5 12h14"/></svg>
+          </div>
+          <div class="home-cb-card__body">
+            <p class="home-cb-card__name">${escapeHtml(cookbook.name)}</p>
+            <p class="home-cb-card__count">Voeg recepten toe</p>
+          </div>
+        </button>
+      `;
+    }
+
+    const coverImg = recipes[0]?.image || "";
     const coverHtml = coverImg
       ? `<div class="home-cb-card__cover home-cb-card__cover--photo" style="background-image:url('${escapeHtml(coverImg)}')">${
           recipes.length > 1
@@ -2634,20 +2650,32 @@ function renderGroceryGroups() {
 
   function renderGroceryItem(item) {
     return `
-      <button class="grocery-entry ${item.checked ? "is-checked" : ""}" type="button" data-grocery-id="${item.id}">
-        <span class="grocery-check"></span>
-        <span class="grocery-entry__content">
-          <p class="grocery-entry__title">${item.title}</p>
-          ${multiRecipe && item.recipeTitle && item.recipeTitle.includes(",")
-            ? `<p class="grocery-entry__overlap">Gedeeld ingrediënt</p>` : ""}
-        </span>
-        <span class="grocery-entry__amount">${item.amount}</span>
-        <span class="grocery-entry__img" aria-hidden="true">
-          ${item.imageUrl
-            ? `<img class="grocery-entry__ah-img" src="${escapeHtml(item.imageUrl)}" alt="" loading="lazy" />`
-            : getIngredientVisualMarkup(item.title)}
-        </span>
-      </button>
+      <div class="grocery-entry-wrapper">
+        <button class="grocery-entry-action grocery-entry-action--delete" type="button" data-action="delete" data-grocery-id="${item.id}" aria-label="Verwijderen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4.5 7.5h15M9 7.5V5.25a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 .75.75V7.5M10.5 11.25v6M13.5 11.25v6M5.625 7.5l.9 10.875A1.5 1.5 0 0 0 8.02 19.8h7.96a1.5 1.5 0 0 0 1.495-1.425L18.375 7.5"/>
+          </svg>
+        </button>
+        <button class="grocery-entry ${item.checked ? "is-checked" : ""}" type="button" data-grocery-id="${item.id}">
+          <span class="grocery-check"></span>
+          <span class="grocery-entry__content">
+            <p class="grocery-entry__title">${item.title}</p>
+            ${multiRecipe && item.recipeTitle && item.recipeTitle.includes(",")
+              ? `<p class="grocery-entry__overlap">Gedeeld ingrediënt</p>` : ""}
+          </span>
+          <span class="grocery-entry__amount">${item.amount}</span>
+          <span class="grocery-entry__img" aria-hidden="true">
+            ${item.imageUrl
+              ? `<img class="grocery-entry__ah-img" src="${escapeHtml(item.imageUrl)}" alt="" loading="lazy" />`
+              : getIngredientVisualMarkup(item.title)}
+          </span>
+        </button>
+        <button class="grocery-entry-action grocery-entry-action--add" type="button" data-action="add" data-grocery-id="${item.id}" aria-label="Toevoegen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </button>
+      </div>
     `;
   }
 
@@ -5604,6 +5632,31 @@ bindEvent(reviewSuggestions, "click", (event) => {
 bindEvent(groceryGroups, "click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) {
+    return;
+  }
+
+  // Handle action buttons (delete/add)
+  const actionBtn = target.closest(".grocery-entry-action");
+  if (actionBtn instanceof HTMLElement) {
+    const groceryId = actionBtn.dataset.groceryId;
+    const action = actionBtn.dataset.action;
+    const itemIndex = state.groceryItems.findIndex((item) => item.id === groceryId);
+
+    if (itemIndex === -1) return;
+
+    if (action === "delete") {
+      state.groceryItems.splice(itemIndex, 1);
+    } else if (action === "add") {
+      // Duplicate the item
+      const item = state.groceryItems[itemIndex];
+      state.groceryItems.push({
+        ...item,
+        id: "grocery-" + Date.now() + "-" + Math.random().toString(36).substr(2, 9),
+      });
+    }
+
+    renderGroceryGroups();
+    schedulePersistAppState();
     return;
   }
 

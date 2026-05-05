@@ -53,7 +53,6 @@ img { display: block; max-width: 100%; }
   width: min(100%, 430px);
   margin: 0 auto;
   min-height: 100vh;
-  position: relative;
   padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px));
   background: transparent;
   overflow-x: hidden;
@@ -867,8 +866,16 @@ img { display: block; max-width: 100%; }
 /* ── Detail screen ── */
 .detail-screen { background: var(--bg); }
 
+/* Hide topbar on detail screen */
+.detail-screen .topbar--home {
+  display: none;
+}
+
 .detail-hero {
   position: relative;
+  margin-left: calc(-50vw + 50%);
+  margin-right: calc(-50vw + 50%);
+  width: 100vw;
 }
 
 .detail-hero img {
@@ -1743,6 +1750,44 @@ img { display: block; max-width: 100%; }
   letter-spacing: -0.04em;
 }
 
+.grocery-entry-wrapper {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.grocery-entry-action {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(120, 147, 111, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.98);
+  color: #91a48e;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all 0.2s ease;
+}
+
+.grocery-entry-action svg {
+  width: 20px;
+  height: 20px;
+}
+
+.grocery-entry-action--delete:hover {
+  background: rgba(220, 100, 90, 0.1);
+  color: #dc645a;
+  border-color: rgba(220, 100, 90, 0.3);
+}
+
+.grocery-entry-action--add:hover {
+  background: rgba(120, 147, 111, 0.1);
+  color: #78936f;
+  border-color: rgba(120, 147, 111, 0.3);
+}
+
 .grocery-entry {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) auto 48px;
@@ -1750,7 +1795,7 @@ img { display: block; max-width: 100%; }
   padding: 14px 16px;
   align-items: center;
   border: 1px solid rgba(120, 147, 111, 0.08);
-  width: 100%;
+  flex: 1;
   text-align: left;
   background: rgba(255,255,255,0.98);
   border-radius: 999px;
