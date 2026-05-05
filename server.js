@@ -743,24 +743,38 @@ async function getAuthenticatedUser(request) {
   const cookies = parseCookies(request.headers.cookie);
   const authToken = cookies.plately_auth || "";
   if (!authToken) {
+    console.log("🔍 No auth cookie found in request");
     return null;
   }
 
-  await ensurePostgresSchema();
-  const pool = await getPostgresPool();
-  const result = await pool.query(
-    `
-      SELECT u.*
-      FROM plately_auth_sessions s
-      JOIN plately_users u ON u.id = s.user_id
-      WHERE s.token = $1
-        AND s.expires_at > NOW()
-      LIMIT 1
-    `,
-    [authToken]
-  );
+  try {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    console.log(`🔐 Looking up auth token: ${authToken.substring(0, 8)}...`);
 
-  return result.rows[0] || null;
+    const result = await pool.query(
+      `
+        SELECT u.*
+        FROM plately_auth_sessions s
+        JOIN plately_users u ON u.id = s.user_id
+        WHERE s.token = $1
+          AND s.expires_at > NOW()
+        LIMIT 1
+      `,
+      [authToken]
+    );
+
+    if (result.rows[0]) {
+      console.log(`✅ Auth session valid for user: ${result.rows[0].email}`);
+      return result.rows[0];
+    } else {
+      console.log(`⚠️  Auth token not found or expired: ${authToken.substring(0, 8)}...`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`❌ Error validating auth session: ${error.message}`);
+    return null;
+  }
 }
 
 async function createPostgresUser(email, password, currentState) {
