@@ -4785,6 +4785,72 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/auth/change-password" && request.method === "POST") {
+      const authUser = await getDevAuthenticatedUser(request);
+      if (!authUser) {
+        throw new HttpError(401, "Niet ingelogd.");
+      }
+
+      const body = await readRequestBody(request);
+      const currentPassword = String(body.currentPassword || "");
+      const newPassword = String(body.newPassword || "");
+
+      if (newPassword.length < 8) {
+        throw new HttpError(400, "Wachtwoord moet minstens 8 tekens zijn.");
+      }
+
+      if (isPostgresEnabled()) {
+        // Postgres-backed password change
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        const result = await pool.query(`SELECT * FROM plately_users WHERE id = $1 LIMIT 1`, [authUser.id]);
+        const user = result.rows[0];
+        if (!user) {
+          throw new HttpError(401, "Gebruiker niet gevonden.");
+        }
+
+        const { hash } = createPasswordHash(currentPassword, user.password_salt);
+        if (hash !== user.password_hash) {
+          throw new HttpError(401, "Huidig wachtwoord is incorrect.");
+        }
+
+        const { hash: newHash, salt: newSalt } = createPasswordHash(newPassword);
+        await pool.query(
+          `UPDATE plately_users SET password_hash = $1, password_salt = $2 WHERE id = $3`,
+          [newHash, newSalt, authUser.id]
+        );
+
+        sendJson(response, 200, {
+          success: true,
+          message: "Wachtwoord succesvol gewijzigd.",
+        });
+        return;
+      } else {
+        // Dev fallback: in-memory password change
+        const db = await loadDatabase();
+        const user = db.users[authUser.id];
+        if (!user) {
+          throw new HttpError(401, "Gebruiker niet gevonden.");
+        }
+
+        const { hash } = createPasswordHash(currentPassword, user.password_salt);
+        if (hash !== user.password_hash) {
+          throw new HttpError(401, "Huidig wachtwoord is incorrect.");
+        }
+
+        const { hash: newHash, salt: newSalt } = createPasswordHash(newPassword);
+        user.password_hash = newHash;
+        user.password_salt = newSalt;
+        await saveDatabase(db);
+
+        sendJson(response, 200, {
+          success: true,
+          message: "Wachtwoord succesvol gewijzigd.",
+        });
+        return;
+      }
+    }
+
     if (requestUrl.pathname === "/api/grocery-suggest" && request.method === "GET") {
       const raw = sanitizeText(requestUrl.searchParams.get("q") || "");
       if (!raw || raw.length < 2) {

@@ -3087,9 +3087,15 @@ function renderProfileSummary() {
     profileName.textContent = state.profile.name;
   }
   if (profileHandle) {
-    // Prefer verified email from auth, then profile email, then handle
-    const displayEmail = state.auth.email || state.profile.email || state.profile.handle || "";
-    profileHandle.textContent = displayEmail;
+    // Hide email when authenticated
+    if (state.auth.authenticated) {
+      profileHandle.style.display = "none";
+    } else {
+      profileHandle.style.display = "";
+      // Prefer verified email from auth, then profile email, then handle
+      const displayEmail = state.auth.email || state.profile.email || state.profile.handle || "";
+      profileHandle.textContent = displayEmail;
+    }
   }
   if (profileRecipeCount) {
     profileRecipeCount.textContent = String(state.recipes.length);
@@ -3439,6 +3445,7 @@ function deleteCookbook(cookbookId) {
   }
   renderCookbookList();
   renderCookbookFilterBar();
+  renderAll();
   schedulePersistAppState();
   showToast(`${name} verwijderd.`);
 }
@@ -4943,6 +4950,76 @@ bindEvent(document.getElementById("profileSubLanguageSave"), "click", () => {
   closeProfileSubPanel("profileSubLanguage");
   showToast(state.language === "nl" ? "Taal opgeslagen." : "Language saved.");
 });
+
+// Password change button
+bindEvent(document.getElementById("goToPasswordChangeBtn"), "click", () => {
+  // Clear password fields when opening
+  const currentInput = document.getElementById("passwordCurrentInput");
+  const newInput = document.getElementById("passwordNewInput");
+  const confirmInput = document.getElementById("passwordConfirmInput");
+  if (currentInput) currentInput.value = "";
+  if (newInput) newInput.value = "";
+  if (confirmInput) confirmInput.value = "";
+  openProfileSubPanel("profileSubPasswordChange");
+});
+
+// Password change back button
+bindEvent(document.getElementById("profileSubPasswordChangeBack"), "click", () => closeProfileSubPanel("profileSubPasswordChange"));
+
+// Password change save button
+bindEvent(document.getElementById("profileSubPasswordChangeSave"), "click", async () => {
+  const currentInput = document.getElementById("passwordCurrentInput");
+  const newInput = document.getElementById("passwordNewInput");
+  const confirmInput = document.getElementById("passwordConfirmInput");
+
+  const currentPassword = (currentInput?.value || "").trim();
+  const newPassword = (newInput?.value || "").trim();
+  const confirmPassword = (confirmInput?.value || "").trim();
+
+  // Validation
+  if (!currentPassword) {
+    showToast("Voer je huidigie wachtwoord in.");
+    return;
+  }
+  if (!newPassword) {
+    showToast("Voer je nieuwe wachtwoord in.");
+    return;
+  }
+  if (newPassword.length < 8) {
+    showToast("Wachtwoord moet minstens 8 tekens zijn.");
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    showToast("Wachtwoorden komen niet overeen.");
+    return;
+  }
+
+  try {
+    const response = await fetchJson("/api/auth/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        currentPassword,
+        newPassword,
+      }),
+    });
+
+    if (response.success) {
+      showToast("Wachtwoord succesvol gewijzigd.");
+      closeProfileSubPanel("profileSubPasswordChange");
+      // Clear inputs
+      if (currentInput) currentInput.value = "";
+      if (newInput) newInput.value = "";
+      if (confirmInput) confirmInput.value = "";
+    } else {
+      showToast(response.message || "Wachtwoord wijzigen mislukt.");
+    }
+  } catch (error) {
+    showToast("Fout bij wachtwoord wijzigen.");
+    console.error("Password change error:", error);
+  }
+});
+
 bindEvent(premiumButton, "click", () => showToast("Premium preview staat klaar voor later."));
 bindEvent(openRegisterButton, "click", () => openAuthModal("register"));
 bindEvent(openLoginButton, "click", () => openAuthModal("login"));
