@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=plately-banani-55" />
+    <link rel="stylesheet" href="styles.css?v=plately-banani-supermarket-1" />
   </head>
   <body>
     <main class="page">
@@ -418,6 +418,9 @@
 
           <!-- Profile header: name + stats -->
           <div class="profile2-hero" id="profileHero">
+            <div class="profile2-hero-avatar" id="profileHeroAvatar">
+              <img src="assets/profile-avatar.svg" alt="" class="profile2-avatar__img" aria-hidden="true" />
+            </div>
             <h1 class="profile2-name" id="profileName">Sarah de Vries</h1>
             <p class="profile2-email" id="profileHandle">sarah@example.com</p>
 
@@ -456,6 +459,15 @@
               </span>
               <span class="profile2-row__label">Gekoppelde kanalen</span>
               <span class="profile2-row__meta" id="profileChannelMeta"></span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <div class="profile2-row-divider"></div>
+            <button class="profile2-row" type="button" id="goToSupermarketBtn">
+              <span class="profile2-row__icon" style="background:#fff3d6">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h2l2.4 12.6a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 2-1.5L22 7H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
+              </span>
+              <span class="profile2-row__label">Favoriete supermarkt</span>
+              <span class="profile2-row__meta" id="profileSupermarketMeta"></span>
               <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
             </button>
             <div class="profile2-row-divider"></div>
@@ -582,6 +594,28 @@
             </header>
             <div class="channel-settings-list" id="channelSettingsList"></div>
             <button class="profile-subpanel__save-btn" id="profileSubChannelsSave" type="button">Opslaan</button>
+          </div>
+
+          <!-- ══ Sub-panel: Favoriete supermarkt ══ -->
+          <div class="profile-subpanel" id="profileSubSupermarket" aria-hidden="true">
+            <header class="topbar--sub">
+              <button class="topbar-back-btn" id="profileSubSupermarketBack" type="button" aria-label="Terug">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <h1 class="topbar-title">Favoriete supermarkt</h1>
+              <span class="topbar-spacer"></span>
+            </header>
+            <div class="profile-subpanel__body">
+              <div id="profileSupermarketList" class="onboarding-channels"></div>
+              <p class="onboarding-supermarket-note">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 16v-4M12 8h.01"/>
+                </svg>
+                Op dit moment werken boodschappen alleen met Albert Heijn. De overige supermarkten volgen binnenkort.
+              </p>
+            </div>
+            <button class="profile-subpanel__save-btn" id="profileSubSupermarketSave" type="button">Opslaan</button>
           </div>
 
           <!-- ══ Sub-panel: Nieuw in Plately (changelog) ══ -->
@@ -1156,6 +1190,7 @@
           <span class="onboarding-progress-dot" data-step="1"></span>
           <span class="onboarding-progress-dot" data-step="2"></span>
           <span class="onboarding-progress-dot" data-step="3"></span>
+          <span class="onboarding-progress-dot" data-step="4"></span>
         </div>
 
         <!-- Step 1: Channels -->
@@ -1255,7 +1290,34 @@
           </div>
           <div class="onboarding-actions">
             <button class="onboarding-btn onboarding-btn--secondary" id="onboardingStep3Skip" type="button">Overslaan</button>
-            <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep3Finish" type="button">Klaar! ✓</button>
+            <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep3Next" type="button">Volgende →</button>
+          </div>
+        </div>
+
+        <!-- Step 4: Favoriete supermarkt -->
+        <div class="onboarding-step hidden" id="onboardingStep4">
+          <div class="onboarding-header">
+            <div class="onboarding-hero-icon onboarding-hero-icon--supermarket" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3h2l2.4 12.6a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 2-1.5L22 7H6"/>
+                <circle cx="9" cy="20" r="1.5"/>
+                <circle cx="18" cy="20" r="1.5"/>
+              </svg>
+            </div>
+            <h2 class="onboarding-title">Je favoriete supermarkt</h2>
+            <p class="onboarding-subtitle">Bij welke supermarkt wil je je boodschappen doen?</p>
+          </div>
+          <div id="onboardingSupermarketsList" class="onboarding-channels"></div>
+          <p class="onboarding-supermarket-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 16v-4M12 8h.01"/>
+            </svg>
+            Op dit moment werken boodschappen alleen met Albert Heijn. De overige supermarkten volgen binnenkort.
+          </p>
+          <div class="onboarding-actions">
+            <button class="onboarding-btn onboarding-btn--secondary" id="onboardingStep4Skip" type="button">Overslaan</button>
+            <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep4Finish" type="button">Klaar! ✓</button>
           </div>
         </div>
       </div>
@@ -1346,6 +1408,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=plately-banani-bearer-1"></script>
+    <script src="app.js?v=plately-banani-supermarket-1"></script>
   </body>
 </html>

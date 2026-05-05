@@ -440,6 +440,7 @@ const state = {
     handle: "@sarahkookt",
     email: "",
     photo: "",
+    favoriteSupermarket: "ah",
   },
   language: "nl",
   groceryItems: [],
@@ -484,6 +485,22 @@ const CUSTOM_CHANNEL_COLORS = [
   "#6c63ff", "#e8605a", "#43aa8b", "#f4a261", "#457b9d",
   "#e9c46a", "#9b5de5", "#00b4d8", "#f15bb5", "#06d6a0",
 ];
+
+const SUPERMARKETS = [
+  { id: "ah",        name: "Albert Heijn", color: "#0071c2", url: "https://www.ah.nl",        supported: true  },
+  { id: "jumbo",     name: "Jumbo",        color: "#fdc500", url: "https://www.jumbo.com",    supported: false },
+  { id: "picnic",    name: "Picnic",       color: "#e60000", url: "https://picnic.app",       supported: false },
+  { id: "vomar",     name: "Vomar",        color: "#e30613", url: "https://www.vomar.nl",     supported: false },
+  { id: "dirk",      name: "Dirk",         color: "#e30613", url: "https://www.dirk.nl",      supported: false },
+  { id: "lidl",      name: "Lidl",         color: "#0050aa", url: "https://www.lidl.nl",      supported: false },
+  { id: "aldi",      name: "Aldi",         color: "#00549f", url: "https://www.aldi.nl",      supported: false },
+  { id: "coop",      name: "Coop",         color: "#e2001a", url: "https://www.coop.nl",      supported: false },
+  { id: "hoogvliet", name: "Hoogvliet",    color: "#e30613", url: "https://www.hoogvliet.com", supported: false },
+];
+
+function getSupermarketById(id) {
+  return SUPERMARKETS.find((s) => s.id === id) || SUPERMARKETS[0];
+}
 
 function getAllChannels() {
   return [...SEED_CHANNELS, ...state.customChannels];
@@ -3081,6 +3098,12 @@ function renderProfileSummary() {
   if (channelCountEl) channelCountEl.textContent = String(state.followedChannelIds.length);
   const channelMetaEl = document.getElementById("profileChannelMeta");
   if (channelMetaEl) channelMetaEl.textContent = `${state.followedChannelIds.length} gekoppeld`;
+  // Favorite supermarket meta
+  const supermarketMetaEl = document.getElementById("profileSupermarketMeta");
+  if (supermarketMetaEl) {
+    const sm = getSupermarketById(state.profile.favoriteSupermarket);
+    supermarketMetaEl.textContent = sm.name;
+  }
   updateLanguagePanel();
   renderAvatars();
 }
@@ -3103,8 +3126,8 @@ function renderAvatars() {
     }
   });
 
-  // Update profile2 avatars (bottom nav + sub-panel)
-  ["profileAvatarDisplay", "profileSubAvatarDisplay"].forEach((id) => {
+  // Update profile2 avatars (bottom nav + sub-panel + hero on profile screen)
+  ["profileAvatarDisplay", "profileSubAvatarDisplay", "profileHeroAvatar"].forEach((id) => {
     const p2avatar = document.getElementById(id);
     if (!p2avatar) return;
     const img = p2avatar.querySelector(".profile2-avatar__img");
@@ -3908,6 +3931,7 @@ function applyPersistedAppState(user) {
       handle: user.profile.handle || state.profile.handle,
       email: user.profile.email || state.profile.email || "",
       photo: user.profile.photo || state.profile.photo || "",
+      favoriteSupermarket: user.profile.favoriteSupermarket || state.profile.favoriteSupermarket || "ah",
     };
   }
   if (typeof user.language === "string" && user.language) {
@@ -5363,6 +5387,55 @@ bindEvent(document.getElementById("goToChannelsBtn"), "click", () => {
   openProfileSubPanel("profileSubChannels");
 });
 
+// "Favoriete supermarkt" on profile → open sub-panel
+let supermarketDraft = "ah";
+function renderSupermarketSettings() {
+  const list = document.getElementById("profileSupermarketList");
+  if (!list) return;
+  supermarketDraft = state.profile.favoriteSupermarket || "ah";
+  list.innerHTML = SUPERMARKETS.map((sm) => {
+    const faviconUrl = getSourceIconUrl(sm.url);
+    const isSelected = supermarketDraft === sm.id;
+    const supportedBadge = sm.supported
+      ? ""
+      : `<span class="onboarding-supermarket-item__badge">Binnenkort</span>`;
+    return `
+      <label class="onboarding-channel-item onboarding-supermarket-item${isSelected ? " selected" : ""}" data-supermarket-id="${escapeHtml(sm.id)}">
+        <input type="radio" name="profileSupermarket" data-supermarket-radio="${escapeHtml(sm.id)}" ${isSelected ? "checked" : ""} />
+        <span class="onboarding-channel-avatar" style="background:${escapeHtml(sm.color)}1a">
+          ${faviconUrl ? `<img class="onboarding-channel-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(sm.name[0])}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(sm.name[0])}</span>`}
+        </span>
+        <span>${escapeHtml(sm.name)}</span>
+        ${supportedBadge}
+      </label>
+    `;
+  }).join("");
+
+  list.querySelectorAll("input[type=radio]").forEach((radio) => {
+    radio.addEventListener("change", (e) => {
+      supermarketDraft = e.target.dataset.supermarketRadio;
+      list.querySelectorAll(".onboarding-supermarket-item").forEach((label) => {
+        label.classList.toggle("selected", label.dataset.supermarketId === supermarketDraft);
+      });
+    });
+  });
+}
+
+bindEvent(document.getElementById("goToSupermarketBtn"), "click", () => {
+  renderSupermarketSettings();
+  openProfileSubPanel("profileSubSupermarket");
+});
+
+bindEvent(document.getElementById("profileSubSupermarketBack"), "click", () => closeProfileSubPanel("profileSubSupermarket"));
+
+bindEvent(document.getElementById("profileSubSupermarketSave"), "click", () => {
+  state.profile.favoriteSupermarket = supermarketDraft || "ah";
+  schedulePersistAppState();
+  renderProfileSummary();
+  closeProfileSubPanel("profileSubSupermarket");
+  showToast("Voorkeur opgeslagen.");
+});
+
 // "Taal" on profile → open language sub-panel
 bindEvent(document.getElementById("goToLanguageBtn"), "click", () => {
   updateLanguagePanel();
@@ -6444,6 +6517,7 @@ let onboardingData = {
   cookbook: "",
   handle: "",
   photoData: null,
+  supermarket: "ah",
 };
 
 function showOnboarding() {
@@ -6457,12 +6531,14 @@ function showOnboarding() {
 
   showOnboardingStep(1);
   renderOnboardingChannels();
+  renderOnboardingSupermarkets();
 }
 
 function showOnboardingStep(step) {
   document.getElementById("onboardingStep1")?.classList.add("hidden");
   document.getElementById("onboardingStep2")?.classList.add("hidden");
   document.getElementById("onboardingStep3")?.classList.add("hidden");
+  document.getElementById("onboardingStep4")?.classList.add("hidden");
   document.getElementById(`onboardingStep${step}`)?.classList.remove("hidden");
   updateOnboardingProgress(step);
 }
@@ -6508,6 +6584,38 @@ function renderOnboardingChannels() {
   });
 }
 
+function renderOnboardingSupermarkets() {
+  const list = document.getElementById("onboardingSupermarketsList");
+  if (!list) return;
+  list.innerHTML = SUPERMARKETS.map((sm) => {
+    const faviconUrl = getSourceIconUrl(sm.url);
+    const isSelected = onboardingData.supermarket === sm.id;
+    const supportedBadge = sm.supported
+      ? ""
+      : `<span class="onboarding-supermarket-item__badge">Binnenkort</span>`;
+    return `
+      <label class="onboarding-channel-item onboarding-supermarket-item${isSelected ? " selected" : ""}" data-supermarket-id="${escapeHtml(sm.id)}">
+        <input type="radio" name="onboardingSupermarket" data-supermarket-radio="${escapeHtml(sm.id)}" ${isSelected ? "checked" : ""} />
+        <span class="onboarding-channel-avatar" style="background:${escapeHtml(sm.color)}1a">
+          ${faviconUrl ? `<img class="onboarding-channel-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(sm.name[0])}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(sm.name[0])}</span>`}
+        </span>
+        <span>${escapeHtml(sm.name)}</span>
+        ${supportedBadge}
+      </label>
+    `;
+  }).join("");
+
+  list.querySelectorAll("input[type=radio]").forEach((radio) => {
+    radio.addEventListener("change", (e) => {
+      const id = e.target.dataset.supermarketRadio;
+      onboardingData.supermarket = id;
+      list.querySelectorAll(".onboarding-supermarket-item").forEach((label) => {
+        label.classList.toggle("selected", label.dataset.supermarketId === id);
+      });
+    });
+  });
+}
+
 function finishOnboarding() {
   // Apply channels
   if (onboardingData.channels.length > 0) {
@@ -6537,6 +6645,9 @@ function finishOnboarding() {
   if (onboardingData.photoData) {
     state.profile.photo = onboardingData.photoData;
   }
+
+  // Save favorite supermarket
+  state.profile.favoriteSupermarket = onboardingData.supermarket || "ah";
 
   persistAppState();
   onboardingScreen.classList.add("hidden");
@@ -6625,11 +6736,19 @@ document.querySelectorAll(".onboarding-suggestion-pill").forEach((pill) => {
 });
 
 bindEvent(document.getElementById("onboardingStep3Skip"), "click", () => {
+  showOnboardingStep(4);
+});
+
+bindEvent(document.getElementById("onboardingStep3Next"), "click", () => {
+  onboardingData.handle = document.getElementById("onboardingHandle")?.value.trim() || "";
+  showOnboardingStep(4);
+});
+
+bindEvent(document.getElementById("onboardingStep4Skip"), "click", () => {
   finishOnboarding();
 });
 
-bindEvent(document.getElementById("onboardingStep3Finish"), "click", () => {
-  onboardingData.handle = document.getElementById("onboardingHandle")?.value.trim() || "";
+bindEvent(document.getElementById("onboardingStep4Finish"), "click", () => {
   finishOnboarding();
 });
 

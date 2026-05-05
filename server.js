@@ -201,6 +201,7 @@ const TIKTOK_TITLE_FIELD_PATTERN = /(title|shareTitle|seoTitle|recipeName|name)/
 const DEFAULT_PROFILE = {
   name: "Sarah de Vries",
   handle: "@sarahkookt",
+  favoriteSupermarket: "ah",
 };
 
 const DEFAULT_COOKBOOKS = [
@@ -918,11 +919,15 @@ function sanitizeProfilePayload(profile) {
   const photo = (rawPhoto.startsWith("data:image/") || rawPhoto.startsWith("https://") || rawPhoto.startsWith("http://"))
     ? rawPhoto.slice(0, 400_000)
     : "";
+  const allowedSupermarkets = ["ah", "jumbo", "picnic", "vomar", "dirk", "lidl", "aldi", "coop", "hoogvliet"];
+  const rawSupermarket = String(profile?.favoriteSupermarket || "ah").toLowerCase();
+  const favoriteSupermarket = allowedSupermarkets.includes(rawSupermarket) ? rawSupermarket : "ah";
   return {
     name,
     handle: handle.slice(0, 40),
     email,
     photo,
+    favoriteSupermarket,
   };
 }
 
