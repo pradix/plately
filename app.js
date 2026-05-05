@@ -4601,8 +4601,19 @@ async function bootstrapSession() {
   } finally {
     console.log("🔄 Bootstrap session finally block - authenticated:", state.auth.authenticated, "sessionCheckSucceeded:", sessionCheckSucceeded);
     state.session.ready = true;
+
+    // Restore view to detail if a recipe was selected before refresh
+    if (state.selectedRecipeId && getRecipeById(state.selectedRecipeId)) {
+      switchView("detail");
+    }
+
     renderAll();
-    window.scrollTo({ top: 0, behavior: "auto" });
+
+    // Only scroll to top if not viewing detail recipe
+    if (state.view !== "detail") {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+
     // Show auth modal to all unauthenticated users
     // IMPORTANT: Check state.auth.authenticated (from server) NOT cached localStorage
     if (sessionCheckSucceeded && state.auth.authenticated === false) {
