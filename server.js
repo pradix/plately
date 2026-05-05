@@ -4514,37 +4514,59 @@ async function searchAHRecipes(query, count = 4) {
     const readerUrl = `https://r.jina.ai/${encodeURIComponent(searchUrl)}`;
 
     console.log(`📖 Trying Jina reader for: ${searchUrl}`);
-    const resp = await fetch(readerUrl, {
-      headers: FETCH_HEADERS,
-      signal: AbortSignal.timeout(15000), // Increased timeout to 15s (AH can be slow)
-    });
 
-    console.log(`Jina response: ${resp.status}`);
-    if (resp.ok) {
-      const markdown = await resp.text();
-      console.log(`✅ Jina returned ${markdown.length} chars of markdown`);
+    // Also fetch raw HTML to extract images
+    const [markdownResp, htmlResp] = await Promise.all([
+      fetch(readerUrl, {
+        headers: FETCH_HEADERS,
+        signal: AbortSignal.timeout(15000),
+      }),
+      fetch(searchUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        },
+        signal: AbortSignal.timeout(8000),
+      }).catch(() => null),
+    ]);
+
+    console.log(`Jina response: ${markdownResp.status}`);
+    if (markdownResp.ok) {
+      const markdown = await markdownResp.text();
+      const html = htmlResp?.ok ? await htmlResp.text() : "";
+      console.log(`✅ Jina returned ${markdown.length} chars, HTML: ${html.length} chars`);
 
       // Extract recipe links from markdown
-      // Jina converts links to [Title](URL) format
-      // Filter to only actual recipes, not category pages
       const allLinks = [...markdown.matchAll(/\[([^\]]+)\]\((https:\/\/www\.ah\.nl\/allerhande\/recepten\/[^\)]+)\)/g)];
+
+      // Extract images from HTML (search results page images)
+      const imageMap = new Map();
+      if (html) {
+        // Look for images in srcset or img src attributes
+        const imgMatches = [...html.matchAll(/<img[^>]+src=["']([^"']+static\.ah\.nl[^"']*)["'][^>]*alt=["']([^"']*)["']/gi)];
+        for (const match of imgMatches) {
+          const imgUrl = match[1];
+          const altText = match[2];
+          // Map alt text to image URL
+          if (altText) {
+            imageMap.set(altText.toLowerCase(), upgradeAhImageQuality(imgUrl));
+          }
+        }
+        console.log(`📸 Found ${imageMap.size} images in search results HTML`);
+      }
+
       const links = allLinks.filter(match => {
         const url = match[2];
         const slug = url.split('/recepten/')[1] || "";
 
-        // Skip categories: pages that end with 'recepten' or have few words
         if (slug.endsWith('recepten') || slug.endsWith('gerechten')) {
           return false;
         }
 
-        // Real recipes have hyphens (multi-word names like "macaroni-met-spekjes")
-        // Categories are single words or generic terms
         const wordCount = (slug.match(/-/g) || []).length + 1;
         if (wordCount < 2) {
-          return false; // Skip single-word pages
+          return false;
         }
 
-        // Skip pages with number-only slugs (pagination)
         if (/^\d+/.test(slug)) {
           return false;
         }
@@ -4554,18 +4576,32 @@ async function searchAHRecipes(query, count = 4) {
       console.log(`Found ${links.length} real recipe links (filtered from ${allLinks.length} total)`);
 
       if (links.length > 0) {
-        // Note: AH blocks individual recipe page fetches (403)
-        // Return recipes without images from search results
-        console.log(`🔗 Returning ${Math.min(links.length, count)} AH search results`);
-        return links.slice(0, count).map((match) => ({
-          title: sanitizeText(match[1] || ""),
-          url: match[2],
-          thumbnail: "", // Can't fetch images due to AH 403 blocking
-          channel: "Allerhande",
-          channelId: "ch-ah",
-          description: "",
-          time: "",
-        })).filter((r) => r.title && r.url && r.title.length > 2);
+        const results = links.slice(0, count).map((match) => {
+          const title = sanitizeText(match[1] || "");
+          // Try to match image from HTML by recipe title
+          let thumbnail = "";
+          if (imageMap.size > 0) {
+            const titleLower = title.toLowerCase();
+            for (const [altText, imgUrl] of imageMap.entries()) {
+              if (titleLower.includes(altText) || altText.includes(titleLower.split(' ')[0])) {
+                thumbnail = imgUrl;
+                break;
+              }
+            }
+          }
+          return {
+            title,
+            url: match[2],
+            thumbnail,
+            channel: "Allerhande",
+            channelId: "ch-ah",
+            description: "",
+            time: "",
+          };
+        }).filter((r) => r.title && r.url && r.title.length > 2);
+
+        console.log(`🔗 Returning ${results.length} AH search results with ${results.filter(r => r.thumbnail).length} images`);
+        return results;
       }
     }
   } catch (err) {
