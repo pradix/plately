@@ -3601,7 +3601,7 @@ async function importPinterest(sourceUrl) {
 
 async function importWebsite(sourceUrl) {
   const parsedUrl = new URL(sourceUrl);
-  const isAllerhande = /(^|\.)ah\.nl$/i.test(parsedUrl.hostname) && /\/allerhande\//i.test(parsedUrl.pathname);
+  const isAllerhande = /(^|\.)ah\.nl$/i.test(parsedUrl.hostname) && (/\/allerhande\//i.test(parsedUrl.pathname) || /\/r\/\d+/.test(parsedUrl.pathname));
 
   if (isAllerhande) {
     const [document, readerDocument] = await Promise.all([
