@@ -2798,6 +2798,50 @@ async function fetchGroceryPhotos() {
   }
 }
 
+function singularizeIngredientName(name) {
+  // Convert plural to singular for better search results
+  // e.g., "kipfilets" -> "kipfilet", "tomaten" -> "tomaat"
+  const lowerName = name.toLowerCase().trim();
+
+  // Common Dutch plural patterns
+  const pluralPatterns = [
+    { plural: /en$/, singular: '' }, // e.g., "tomaten" -> "tomaat"
+    { plural: /s$/, singular: '' }, // e.g., "ui" -> "ui" (no change if already ends in s)
+  ];
+
+  // Specific Dutch singularization rules
+  const singularMap = {
+    'tomaten': 'tomaat',
+    'kipfilets': 'kipfilet',
+    'bonnen': 'boon',
+    'erwten': 'erwt',
+    'bonen': 'boon',
+    'pepers': 'peper',
+    'uien': 'ui',
+    'aardappelen': 'aardappel',
+    'wortelstukken': 'wortelstuk',
+    'bosjes': 'bosje',
+    'bosjes': 'bosje',
+    'kruidenbouillon': 'kruidenbuillon',
+  };
+
+  if (singularMap[lowerName]) {
+    return singularMap[lowerName];
+  }
+
+  // Pattern-based singularization
+  if (lowerName.endsWith('en')) {
+    const base = lowerName.slice(0, -2);
+    // If removing 'en' leaves a valid word, use it
+    if (base.length > 2) {
+      return base;
+    }
+  }
+
+  // If it ends with 's' but isn't a plural (keep original)
+  return lowerName;
+}
+
 async function fetchIngredientPhotos() {
   const recipe = getSelectedRecipe();
   if (!recipe) return;
@@ -2808,25 +2852,44 @@ async function fetchIngredientPhotos() {
   if (!ingredientsWithoutPhoto.length) return;
 
   try {
+    // Create search variations: original name and singular form
+    const itemsToSearch = ingredientsWithoutPhoto.map((item) => {
+      const singular = singularizeIngredientName(item.name);
+      return {
+        id: item.name,
+        title: item.name,
+        searchTerms: [item.name, singular].filter((t, i, arr) => arr.indexOf(t) === i), // Remove duplicates
+      };
+    });
+
     const resp = await fetch("/api/grocery-photos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        items: ingredientsWithoutPhoto.map((item) => ({ id: item.name, title: item.name })),
+        items: itemsToSearch.map((item) => ({
+          id: item.id,
+          title: item.searchTerms[0], // Try singular first, then original
+        })),
       }),
     });
     if (!resp.ok) return;
     const data = await resp.json();
     const photos = data.photos || {};
     let changed = false;
-    for (const [ingredientName, url] of Object.entries(photos)) {
-      if (!url) continue;
-      const ingredient = recipe.ingredients.find((i) => i.name === ingredientName);
-      if (ingredient && !ingredient.imageUrl) {
-        ingredient.imageUrl = url;
-        changed = true;
+
+    // Map results back to ingredients
+    for (const item of itemsToSearch) {
+      // Try singular form first, then original name
+      let url = photos[item.searchTerms[0]] || photos[item.searchTerms[1]] || null;
+      if (url) {
+        const ingredient = recipe.ingredients.find((i) => i.name === item.id);
+        if (ingredient && !ingredient.imageUrl) {
+          ingredient.imageUrl = url;
+          changed = true;
+        }
       }
     }
+
     if (changed && state.view === "detail") {
       updateIngredientImages();
     }
