@@ -3119,6 +3119,7 @@ function parseTextRecipeDocument(text, url) {
 }
 
 function parseMarkdownIngredientSection(text) {
+  // Fix: Allow ## or ### heading levels (Jina uses ##)
   const ingredientSection = extractMarkdownSection(
     text,
     "ingredi[eë]nten|ingredienten|ingredients?|dit heb je nodig",
