@@ -518,6 +518,7 @@ const settingsScreen = document.getElementById("settingsScreen");
 const cookbooksScreen = document.getElementById("cookbooksScreen");
 const importScreen = document.getElementById("importScreen");
 const reviewScreen = document.getElementById("reviewScreen");
+const adminScreen = document.getElementById("adminScreen");
 const modal = document.getElementById("importModal");
 const toast = document.getElementById("toast");
 const importForm = document.getElementById("importForm");
@@ -865,6 +866,15 @@ function updateAuthUI() {
   openRegisterButton.classList.remove("hidden");
   openLoginButton.classList.remove("hidden");
   logoutButton.classList.add("hidden");
+
+  // Show/hide admin dashboard button based on authentication
+  const adminBtn = document.getElementById("adminDashboardBtn");
+  const adminDivider = document.getElementById("adminDashboardDivider");
+  if (adminBtn && adminDivider) {
+    const shouldShowAdmin = isAdmin();
+    adminBtn.style.display = shouldShowAdmin ? "" : "none";
+    adminDivider.style.display = shouldShowAdmin ? "" : "none";
+  }
 }
 
 function openAuthModal(mode = "login") {
@@ -1336,6 +1346,7 @@ function switchView(view) {
   if (cookbooksScreen) cookbooksScreen.classList.toggle("screen--active", view === "cookbooks");
   importScreen.classList.toggle("screen--active", view === "import");
   reviewScreen.classList.toggle("screen--active", view === "review");
+  if (adminScreen) adminScreen.classList.toggle("screen--active", view === "admin");
 
   navItems.forEach((item) => {
     const isRecipesNav = item.dataset.view === "home" && (view === "home" || view === "detail" || view === "import" || view === "review");
@@ -1803,7 +1814,8 @@ async function searchChannels(query) {
   }
   try {
     const channels = state.followedChannelIds.join(",");
-    const followedCustomChannels = state.customChannels.filter((ch) => state.followedChannelIds.includes(ch.id));
+    // Only include approved custom channels in search
+    const followedCustomChannels = state.customChannels.filter((ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved");
     const customChannelsParam = followedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
     let url = `/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`;
     if (customChannelsParam) url += `&customChannels=${encodeURIComponent(customChannelsParam)}`;
@@ -1829,7 +1841,8 @@ async function searchChannelsOnImportScreen(query) {
   if (orRow) orRow.classList.add("hidden");
   try {
     const channels = state.followedChannelIds.join(",");
-    const followedCustomChannels = state.customChannels.filter((ch) => state.followedChannelIds.includes(ch.id));
+    // Only include approved custom channels in search
+    const followedCustomChannels = state.customChannels.filter((ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved");
     const customChannelsParam = followedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
     let url = `/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`;
     if (customChannelsParam) url += `&customChannels=${encodeURIComponent(customChannelsParam)}`;
@@ -2145,19 +2158,34 @@ function renderChannelSettings() {
       </label>`;
   }).join("");
 
-  const customRows = state.customChannels.map((ch) => {
-    const followed = state.followedChannelIds.includes(ch.id);
-    const faviconUrl = getSourceIconUrl(ch.url);
-    return `
-      <div class="channel-toggle-row channel-toggle-row--custom" data-channel-id="${escapeHtml(ch.id)}">
-        <span class="channel-toggle-avatar">
-          ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
-        </span>
-        <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
-        <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>
-        <button class="channel-delete-btn" type="button" aria-label="Verwijder ${escapeHtml(ch.name)}" data-delete-channel="${escapeHtml(ch.id)}">×</button>
-      </div>`;
-  }).join("");
+  // Separate custom channels section
+  let customHTML = "";
+  if (state.customChannels.length > 0) {
+    customHTML += `<div class="channel-section-label">MIJN KANALEN</div>`;
+
+    const customRows = state.customChannels.map((ch) => {
+      const followed = state.followedChannelIds.includes(ch.id);
+      const faviconUrl = getSourceIconUrl(ch.url);
+      const status = ch.status || "approved";
+      const statusClass = status === "pending" ? "channel-status-badge--pending" : "channel-status-badge--approved";
+      const statusLabel = status === "pending" ? "In behandeling" : "Goedgekeurd";
+
+      return `
+        <div class="channel-toggle-row channel-toggle-row--custom" data-channel-id="${escapeHtml(ch.id)}">
+          <span class="channel-toggle-avatar">
+            ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
+          </span>
+          <div class="channel-toggle-info">
+            <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
+            <span class="channel-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+          </div>
+          <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>
+          <button class="channel-delete-btn" type="button" aria-label="Verwijder ${escapeHtml(ch.name)}" data-delete-channel="${escapeHtml(ch.id)}">×</button>
+        </div>`;
+    }).join("");
+
+    customHTML += customRows;
+  }
 
   const addButton = `
     <button class="channel-add-btn" type="button" id="addCustomChannelButton">
@@ -2165,7 +2193,7 @@ function renderChannelSettings() {
       Kanaal toevoegen
     </button>`;
 
-  container.innerHTML = seedRows + customRows + addButton;
+  container.innerHTML = seedRows + customHTML + addButton;
 
   // Reset form and hide it
   const form = document.getElementById("customChannelForm");
@@ -4211,6 +4239,79 @@ function renderRecipeSlider() {
   `).join("");
 }
 
+// ── Admin Dashboard ───────────────────────────────────────────────────────────
+const ADMIN_EMAIL = "pradix@me.com";
+
+function isAdmin() {
+  return state.auth.authenticated && state.auth.email === ADMIN_EMAIL;
+}
+
+async function fetchAdminStats() {
+  try {
+    const stats = await fetchJson(`${state.apiBase}/api/admin/stats`);
+    return stats || { users: [], totalUsers: 0, totalRecipes: 0 };
+  } catch (err) {
+    console.error("Failed to fetch admin stats:", err);
+    return { users: [], totalUsers: 0, totalRecipes: 0 };
+  }
+}
+
+async function deleteAdminUser(userId) {
+  try {
+    await fetchJson(`${state.apiBase}/api/admin/delete-user`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    showToast("Gebruiker verwijderd");
+    renderAdminScreen();
+  } catch (err) {
+    showToast("Verwijdering mislukt: " + err.message);
+  }
+}
+
+async function renderAdminScreen() {
+  if (!isAdmin()) {
+    // Hide admin screen if user is not admin
+    if (adminScreen) adminScreen.setAttribute("aria-hidden", "true");
+    return;
+  }
+
+  // Show admin screen
+  if (adminScreen) adminScreen.removeAttribute("aria-hidden");
+
+  // Fetch admin stats
+  const stats = await fetchAdminStats();
+
+  // Update analytics cards
+  const userCountEl = document.getElementById("adminUserCount");
+  const recipeCountEl = document.getElementById("adminRecipeCount");
+
+  if (userCountEl) userCountEl.textContent = stats.totalUsers || 0;
+  if (recipeCountEl) recipeCountEl.textContent = stats.totalRecipes || 0;
+
+  // Render user list
+  const usersList = document.getElementById("adminUsersList");
+  if (usersList) {
+    if (!stats.users || stats.users.length === 0) {
+      usersList.innerHTML = "<p style='padding:16px;color:#989188'>Geen gebruikers gevonden</p>";
+    } else {
+      usersList.innerHTML = stats.users.map((user) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border-bottom:1px solid #f3f5ef">
+          <div style="flex:1">
+            <div style="font-weight:500;color:#3d3d3b">${escapeHtml(user.email || "Onbekend")}</div>
+            <div style="font-size:0.85rem;color:#989188;margin-top:4px">
+              ${user.recipeCount || 0} recepten • ${user.cookbookCount || 0} kookboeken
+            </div>
+            ${user.createdAt ? `<div style="font-size:0.8rem;color:#b9ada0;margin-top:2px">Aangemaakt: ${new Date(user.createdAt).toLocaleDateString('nl-NL')}</div>` : ''}
+          </div>
+          <button class="secondary-button" type="button" style="margin-left:8px;white-space:nowrap" data-admin-delete-user="${escapeHtml(user.id)}">Verwijderen</button>
+        </div>
+      `).join("");
+    }
+  }
+}
+
 function renderAll() {
   renderHomeStats();
   renderRecentImports();
@@ -4230,6 +4331,10 @@ function renderAll() {
   renderAvatars();
   updateAuthUI();
   closeBasketModal();
+  // Render admin screen (async, non-blocking)
+  if (isAdmin()) {
+    renderAdminScreen();
+  }
 }
 
 function normalizeUiErrorMessage(message) {
@@ -6120,6 +6225,9 @@ bindEvent(document.getElementById("customChannelForm"), "submit", async (event) 
       url: trimmedUrl,
       initials,
       color,
+      status: "pending",
+      createdBy: state.auth.userId || null,
+      createdAt: new Date().toISOString(),
     };
 
     state.customChannels.push(newChannel);
@@ -7162,3 +7270,54 @@ bindEvent(document.getElementById("confirmSheetConfirmBtn"), "click", () => {
   closeConfirmSheet();
   if (typeof cb === "function") cb();
 });
+
+// ── Admin Dashboard ────────────────────────────────────────────────────────────
+// Admin dashboard button in settings
+const adminDashboardBtn = document.getElementById("adminDashboardBtn");
+if (adminDashboardBtn) {
+  adminDashboardBtn.addEventListener("click", () => {
+    switchView("admin");
+    renderAdminScreen();
+  });
+}
+
+// Home button in admin screen
+if (adminScreen) {
+  const adminHomeBtn = adminScreen.querySelector(".brand-lockup");
+  if (adminHomeBtn) {
+    adminHomeBtn.addEventListener("click", () => switchView("home"));
+  }
+}
+
+// User search filter
+const adminUserSearch = document.getElementById("adminUserSearch");
+if (adminUserSearch) {
+  adminUserSearch.addEventListener("input", (e) => {
+    const searchTerm = e.target.value.toLowerCase();
+    const userItems = document.querySelectorAll("#adminUsersList > div");
+    userItems.forEach((item) => {
+      const email = item.querySelector("div").textContent.toLowerCase();
+      item.style.display = email.includes(searchTerm) ? "" : "none";
+    });
+  });
+}
+
+// User delete buttons (delegated event handling)
+const adminUsersList = document.getElementById("adminUsersList");
+if (adminUsersList) {
+  adminUsersList.addEventListener("click", (event) => {
+    const deleteBtn = event.target.closest("[data-admin-delete-user]");
+    if (deleteBtn instanceof HTMLElement && deleteBtn.dataset.adminDeleteUser) {
+      const userId = deleteBtn.dataset.adminDeleteUser;
+      const userEmail = deleteBtn.closest("div")?.querySelector("div")?.textContent || "gebruiker";
+
+      // Show confirmation
+      showConfirmSheet(
+        `Verwijder "${userEmail}"?`,
+        "Deze actie kan niet ongedaan gemaakt worden.",
+        "Verwijderen",
+        () => deleteAdminUser(userId)
+      );
+    }
+  });
+}

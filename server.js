@@ -5046,7 +5046,8 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/admin" && request.method === "GET") {
-      // Serve admin.html for /admin route
+      // Serve admin.html - authentication check happens in admin.html with fetch calls
+      // The API endpoints (/api/admin/*) will enforce authentication
       await serveStaticFile("/admin.html", response);
       return;
     }
@@ -5192,6 +5193,147 @@ const server = http.createServer(async (request, response) => {
         }
       } catch (error) {
         console.error("❌ Error in /api/admin/delete-user:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/pending-channels" && request.method === "GET") {
+      console.log("⏳ /api/admin/pending-channels called");
+
+      try {
+        const ADMIN_EMAIL = "pradix@me.com";
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser || authUser.email !== ADMIN_EMAIL) {
+          return sendJson(response, 403, { ok: false, error: "Unauthorized" });
+        }
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const result = await pool.query(
+            "SELECT u.id, u.data FROM plately_users u WHERE u.data->>'customChannels' IS NOT NULL"
+          );
+
+          const pendingChannels = [];
+          for (const row of result.rows) {
+            const data = JSON.parse(row.data);
+            const customChannels = Array.isArray(data.customChannels) ? data.customChannels : [];
+            for (const ch of customChannels) {
+              if (ch.status === "pending") {
+                pendingChannels.push({
+                  id: ch.id,
+                  name: ch.name,
+                  url: ch.url,
+                  createdAt: ch.createdAt || new Date().toISOString(),
+                  createdById: ch.createdBy,
+                  createdByEmail: data.email || "unknown"
+                });
+              }
+            }
+          }
+
+          return sendJson(response, 200, { ok: true, channels: pendingChannels });
+        } else {
+          // JSON file
+          const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+          const parsed = JSON.parse(rawFile);
+          const pendingChannels = [];
+
+          for (const [userId, user] of Object.entries(parsed.users || {})) {
+            const customChannels = Array.isArray(user.customChannels) ? user.customChannels : [];
+            for (const ch of customChannels) {
+              if (ch.status === "pending") {
+                pendingChannels.push({
+                  id: ch.id,
+                  name: ch.name,
+                  url: ch.url,
+                  createdAt: ch.createdAt || new Date().toISOString(),
+                  createdById: ch.createdBy,
+                  createdByEmail: user.email || "unknown"
+                });
+              }
+            }
+          }
+
+          return sendJson(response, 200, { ok: true, channels: pendingChannels });
+        }
+      } catch (error) {
+        console.error("❌ Error in /api/admin/pending-channels:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/approve-channel" && request.method === "POST") {
+      console.log("✅ /api/admin/approve-channel called");
+
+      try {
+        const ADMIN_EMAIL = "pradix@me.com";
+        const authUser = await getAuthenticatedUser(request);
+        if (!authUser || authUser.email !== ADMIN_EMAIL) {
+          return sendJson(response, 403, { ok: false, error: "Unauthorized" });
+        }
+
+        let body = "";
+        for await (const chunk of request) body += chunk.toString();
+        const { channelId, status } = JSON.parse(body);
+
+        if (!channelId || !status) {
+          return sendJson(response, 400, { ok: false, error: "channelId and status required" });
+        }
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const result = await pool.query(
+            "SELECT id, data FROM plately_users u WHERE u.data->>'customChannels' IS NOT NULL"
+          );
+
+          let found = false;
+          for (const row of result.rows) {
+            const data = JSON.parse(row.data);
+            const customChannels = Array.isArray(data.customChannels) ? data.customChannels : [];
+            const channelIndex = customChannels.findIndex(ch => ch.id === channelId);
+            if (channelIndex !== -1) {
+              customChannels[channelIndex].status = status;
+              data.customChannels = customChannels;
+              await pool.query(
+                "UPDATE plately_users SET data = $1 WHERE id = $2",
+                [JSON.stringify(data), row.id]
+              );
+              found = true;
+              break;
+            }
+          }
+
+          if (found) {
+            return sendJson(response, 200, { ok: true, message: `Channel ${status}` });
+          }
+          return sendJson(response, 404, { ok: false, error: "Channel not found" });
+        } else {
+          // JSON file
+          const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+          const parsed = JSON.parse(rawFile);
+
+          let found = false;
+          for (const [userId, user] of Object.entries(parsed.users || {})) {
+            const customChannels = Array.isArray(user.customChannels) ? user.customChannels : [];
+            const channelIndex = customChannels.findIndex(ch => ch.id === channelId);
+            if (channelIndex !== -1) {
+              customChannels[channelIndex].status = status;
+              user.customChannels = customChannels;
+              found = true;
+              break;
+            }
+          }
+
+          if (found) {
+            await fsp.writeFile(DATA_FILE, JSON.stringify(parsed, null, 2));
+            return sendJson(response, 200, { ok: true, message: `Channel ${status}` });
+          }
+          return sendJson(response, 404, { ok: false, error: "Channel not found" });
+        }
+      } catch (error) {
+        console.error("❌ Error in /api/admin/approve-channel:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
       }
     }

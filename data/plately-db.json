@@ -377,6 +377,143 @@
       "createdAt": "2026-05-05T12:12:42.384Z",
       "updatedAt": "2026-05-05T12:12:42.384Z",
       "email": "newuser2026@example.com"
+    },
+    "user-7a545874-e2fd-448d-99f2-9d124b8a8563": {
+      "id": "user-7a545874-e2fd-448d-99f2-9d124b8a8563",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt",
+        "favoriteSupermarket": "ah"
+      },
+      "importedRecipes": [],
+      "cookbooks": [],
+      "selectedCookbookId": "",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "",
+      "selectedRecipeId": "",
+      "createdAt": "2026-05-05T13:59:21.839Z",
+      "updatedAt": "2026-05-05T13:59:21.839Z",
+      "email": "pradix@me.com"
+    },
+    "user-bc1fa5b0-f0d1-4464-a747-8f84e446a20c": {
+      "id": "user-bc1fa5b0-f0d1-4464-a747-8f84e446a20c",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt",
+        "favoriteSupermarket": "ah"
+      },
+      "importedRecipes": [],
+      "cookbooks": [],
+      "selectedCookbookId": "",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "",
+      "selectedRecipeId": "",
+      "createdAt": "2026-05-05T14:05:34.162Z",
+      "updatedAt": "2026-05-05T14:05:34.162Z"
+    },
+    "user-479b85f4-2d66-47b3-b958-a255f01b2fdd": {
+      "id": "user-479b85f4-2d66-47b3-b958-a255f01b2fdd",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt",
+        "favoriteSupermarket": "ah",
+        "gender": "",
+        "birthDate": ""
+      },
+      "importedRecipes": [],
+      "cookbooks": [],
+      "selectedCookbookId": "",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "",
+      "selectedRecipeId": "",
+      "createdAt": "2026-05-05T14:06:09.565Z",
+      "updatedAt": "2026-05-05T14:06:09.565Z"
+    },
+    "user-58cf1991-5485-4d4a-acd1-b4abd3908f27": {
+      "id": "user-58cf1991-5485-4d4a-acd1-b4abd3908f27",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt",
+        "favoriteSupermarket": "ah",
+        "gender": "",
+        "birthDate": ""
+      },
+      "importedRecipes": [],
+      "cookbooks": [],
+      "selectedCookbookId": "",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "",
+      "selectedRecipeId": "",
+      "createdAt": "2026-05-05T14:07:31.233Z",
+      "updatedAt": "2026-05-05T14:07:31.233Z"
+    },
+    "user-8377cb11-f49d-4918-bc8a-00541e83fdaa": {
+      "id": "user-8377cb11-f49d-4918-bc8a-00541e83fdaa",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt",
+        "favoriteSupermarket": "ah",
+        "gender": "",
+        "birthDate": ""
+      },
+      "importedRecipes": [],
+      "cookbooks": [],
+      "selectedCookbookId": "",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "",
+      "selectedRecipeId": "",
+      "createdAt": "2026-05-05T14:09:58.878Z",
+      "updatedAt": "2026-05-05T14:09:58.878Z"
     }
   },
   "sessions": {
@@ -388,16 +525,20 @@
     "21fa79e45d851f34780ace8a22e306c64c51c5acf0770b9f": "user-e98993f6-c1df-438e-b612-8af073ff0bfa",
     "11215866b8aa28e77c40a21dd60f7c7f7f9b510af577875e": "user-86d45ebc-6ae5-403b-b95e-9e572f59b66d",
     "7aaf8d890412bb809c3edc490623295d3b25c30d7df2ff4e": "user-abed8354-c53c-4598-ac70-ea8884cbfab8",
-    "7b532ed828b4fe64a1cb4b4806ff82763b020140145bd7d6": "user-92b793bc-14c8-4c6b-8c32-d8bcc5b4a567"
+    "7b532ed828b4fe64a1cb4b4806ff82763b020140145bd7d6": "user-92b793bc-14c8-4c6b-8c32-d8bcc5b4a567",
+    "76cb26b5bd0d0faec4967e0a3d72d2f995a24a3c19d51b2f": "user-bc1fa5b0-f0d1-4464-a747-8f84e446a20c",
+    "8fb979461cbee8a045802e27395f1e7b66fcd51c83437719": "user-479b85f4-2d66-47b3-b958-a255f01b2fdd",
+    "0d6c38b5229230aeb282d011c445ed6b25c61a1a0c24a297": "user-58cf1991-5485-4d4a-acd1-b4abd3908f27",
+    "a42c8d266b2821186970820ea8d30180b6d6b67c990a6e95": "user-8377cb11-f49d-4918-bc8a-00541e83fdaa"
   },
   "authSessions": {
     "06ef960ba8cefba3329bb5e5fcb585fe276b720f286a32e6": {
       "userId": "user-7100d198-0a10-4553-b526-d5cefe0ea002",
       "email": "testuser@example.com"
     },
-    "269337e0a2859edc8b6cdebc1f5171695ef52b284c36d409": {
-      "userId": "user-c4f5dffa-4629-436e-a6c9-95d56e86e3ee",
-      "email": "newuser2026@example.com"
+    "dcebbf993aac4f5ef2ad5ddb3fd76c5d8c9ac88fc68a86b2": {
+      "userId": "user-7a545874-e2fd-448d-99f2-9d124b8a8563",
+      "email": "pradix@me.com"
     }
   }
 }

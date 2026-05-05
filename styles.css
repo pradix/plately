@@ -3889,71 +3889,67 @@ img { display: block; max-width: 100%; }
 }
 
 .auth-screen__social-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 8px;
 }
 
 .auth-screen__social-buttons--single {
-  grid-template-columns: 1fr;
-}
-
-.auth-screen__social-buttons {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  justify-content: center;
 }
 
 .auth-screen__social-btn {
   text-decoration: none;
-}
-
-.auth-screen__social-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: 8px;
   border: none;
-  border-radius: 14px;
+  border-radius: 50%;
   font-family: inherit;
   cursor: pointer;
-  transition: transform 0.15s ease, opacity 0.15s ease;
-  color: #fff;
-  min-height: 56px;
+  transition: all 0.2s ease;
+  width: 40px;
+  height: 40px;
+  background: #f0f0f0;
+  color: #333;
+}
+
+.auth-screen__social-btn:hover {
+  background: #e0e0e0;
+  transform: translateY(-2px);
 }
 
 .auth-screen__social-btn:active {
-  transform: scale(0.98);
+  transform: scale(0.95);
 }
 
 .auth-screen__social-btn svg {
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   display: block;
 }
 
 .auth-screen__social-btn--tiktok {
-  background: #000;
+  background: #f0f0f0;
 }
 
 .auth-screen__social-btn--tiktok:hover {
-  opacity: 0.9;
-}
-
-.auth-screen__social-btn--whatsapp {
-  background: #25d366;
-}
-
-.auth-screen__social-btn--whatsapp:hover {
-  opacity: 0.9;
+  background: #e0e0e0;
 }
 
 .auth-screen__social-btn--instagram {
-  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  background: #f0f0f0;
 }
 
 .auth-screen__social-btn--instagram:hover {
-  opacity: 0.9;
+  background: #fce7f3;
+}
+
+.auth-screen__social-btn--instagram svg {
+  color: #e4405f;
+  fill: #e4405f;
 }
 
 /* ══ Onboarding screen ════════════════════════════════════════════════════════ */
@@ -7673,6 +7669,45 @@ body {
   font-size: 1.2rem;
   line-height: 1;
   font-weight: 400;
+}
+
+.channel-section-label {
+  padding: 12px 14px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #8da485;
+  letter-spacing: 0.05em;
+  background: #fafaf9;
+  border-top: 1px solid rgba(0,0,0,0.05);
+}
+
+.channel-toggle-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.channel-status-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  width: fit-content;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.channel-status-badge--pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.channel-status-badge--approved {
+  background: #dcfce7;
+  color: #166534;
 }
 
 /* ── Custom channel form ────────────────────────────────────────────────────── */

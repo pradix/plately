@@ -459,6 +459,14 @@
               <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
             </button>
             <div class="profile2-row-divider"></div>
+            <button class="profile2-row" id="adminDashboardBtn" type="button" style="display:none">
+              <span class="profile2-row__icon" style="background:#e0e7ff">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              </span>
+              <span class="profile2-row__label">Admin Dashboard</span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <div class="profile2-row-divider" id="adminDashboardDivider" style="display:none"></div>
             <button class="profile2-row" type="button" id="goToChannelsBtn">
               <span class="profile2-row__icon" style="background:#ede9fe">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
@@ -1005,6 +1013,43 @@
               </div>
             </form>
           </section>
+
+        <!-- Admin Dashboard Screen (Hidden, only for admin) -->
+        <section class="screen" id="adminScreen" aria-hidden="true" style="display:none">
+          <header class="topbar">
+            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar home">
+              <img class="brand-logo" src="assets/plately.png" alt="Plately" />
+            </button>
+            <h1 style="margin:0;font-size:1.2rem;flex:1;text-align:center">Admin Dashboard</h1>
+            <div style="width:44px"></div>
+          </header>
+
+          <section style="padding:16px;overflow-y:auto;padding-bottom:100px">
+            <!-- Analytics Cards -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
+              <div class="profile2-card" style="text-align:center;padding:16px">
+                <div style="font-size:2rem;font-weight:700;color:#8da485" id="adminUserCount">0</div>
+                <div style="font-size:0.85rem;color:#989188">Geregistreerde users</div>
+              </div>
+              <div class="profile2-card" style="text-align:center;padding:16px">
+                <div style="font-size:2rem;font-weight:700;color:#8da485" id="adminRecipeCount">0</div>
+                <div style="font-size:0.85rem;color:#989188">Totaal recepten</div>
+              </div>
+            </div>
+
+            <!-- User Management Section -->
+            <p class="profile2-section-label">USER MANAGEMENT</p>
+            <div class="profile2-card">
+              <input type="text" id="adminUserSearch" placeholder="Zoek op email..." style="width:100%;padding:12px;border:1px solid #e0d5c7;border-radius:8px;font-size:0.9rem;margin-bottom:12px" />
+              <div id="adminUsersList" style="max-height:400px;overflow-y:auto;border:1px solid #f3f5ef;border-radius:8px"></div>
+            </div>
+
+            <!-- Content Moderation Section -->
+            <p class="profile2-section-label" style="margin-top:24px">CONTENT MODERATION</p>
+            <div class="profile2-card">
+              <div id="adminReviewsList" style="max-height:400px;overflow-y:auto"></div>
+            </div>
+          </section>
         </section>
 
         <nav class="bottom-nav" aria-label="Hoofdnavigatie">
@@ -1268,16 +1313,11 @@
           <p class="auth-screen__reset-note">Je ontvangt een e-mail met een link om je wachtwoord opnieuw in te stellen.</p>
         </div>
 
-        <div class="auth-screen__divider"><span>Deel of volg</span></div>
+        <div class="auth-screen__divider"><span>Volg ons</span></div>
 
         <div class="auth-screen__social-buttons">
-          <a class="auth-screen__social-btn auth-screen__social-btn--whatsapp" href="https://wa.me/?text=Ik%20gebruik%20Plately%20om%20recepten%20te%20bewaren.%20Probeer%20het%20ook!%20https://www.plately.app" target="_blank" rel="noopener noreferrer" aria-label="Deel op WhatsApp">
-            <svg viewBox="0 0 24 24" fill="#ffffff" aria-hidden="true">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.67-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.076 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421-7.403h-.004a9.87 9.87 0 00-4.95 1.186l-.355.182-.368-.06a9.924 9.924 0 00-3.03-.46 9.924 9.924 0 003.03 8.95l.382.383-.092.368a6.33 6.33 0 00-.5 2.034 9.933 9.933 0 005.23-1.438l.355-.182.368.061a10.065 10.065 0 003.03.461 9.924 9.924 0 00-3.03-8.95l-.382-.382.092-.368a6.31 6.31 0 00.501-2.036 9.944 9.944 0 00-5.23 1.438l-.354.182-.368-.061z"/>
-            </svg>
-          </a>
           <a class="auth-screen__social-btn auth-screen__social-btn--instagram" href="https://www.instagram.com/plately.app" target="_blank" rel="noopener noreferrer" aria-label="Volg ons op Instagram">
-            <svg viewBox="0 0 24 24" fill="#ffffff" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
             </svg>
           </a>
