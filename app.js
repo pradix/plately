@@ -4037,10 +4037,29 @@ function normalizeUiErrorMessage(message) {
   return text;
 }
 
+const AUTH_TOKEN_KEY = "plately-auth-token";
+
+function getStoredAuthToken() {
+  try { return localStorage.getItem(AUTH_TOKEN_KEY) || ""; } catch { return ""; }
+}
+
+function storeAuthToken(token) {
+  try {
+    if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
+    else localStorage.removeItem(AUTH_TOKEN_KEY);
+  } catch {}
+}
+
 async function fetchJson(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  const token = getStoredAuthToken();
+  if (token && !headers.Authorization && !headers.authorization) {
+    headers.Authorization = `Bearer ${token}`;
+  }
   const response = await fetch(url, {
     credentials: "same-origin",
     ...options,
+    headers,
   });
   const payload = await response.json().catch(() => null);
 
@@ -4188,6 +4207,7 @@ async function submitAuth(mode, email, password) {
     state.auth.enabled = Boolean(payload.auth.enabled);
     state.auth.authenticated = Boolean(payload.auth.authenticated);
     state.auth.email = payload.auth.email || "";
+    if (payload.auth.token) storeAuthToken(payload.auth.token);
   }
   applyPersistedAppState(payload.user);
   if (state.auth.authenticated) markUserAsAuthed();
@@ -4208,6 +4228,7 @@ async function logoutAccount() {
     method: "POST",
   });
 
+  storeAuthToken("");
   if (payload?.auth) {
     state.auth.enabled = Boolean(payload.auth.enabled);
     state.auth.authenticated = Boolean(payload.auth.authenticated);

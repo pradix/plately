@@ -285,14 +285,15 @@ async function createDevAuthSession(response, userId, email) {
       maxAge: 60 * 60 * 24 * 30, // 30 days
     })
   );
+
+  return token;
 }
 
 // Dev-only fallback: get authenticated user from dev auth session
 async function getDevAuthenticatedUser(request) {
-  const cookies = parseCookies(request.headers.cookie);
-  const authToken = cookies.plately_auth || "";
+  const authToken = extractAuthToken(request);
   if (!authToken) {
-    console.log("🔍 getDevAuthenticatedUser: no auth cookie found");
+    console.log("🔍 getDevAuthenticatedUser: no auth token found");
     return null;
   }
 
@@ -718,6 +719,8 @@ async function createAuthSession(response, userId) {
         maxAge: 60 * 60 * 24 * 30,
       })
     );
+
+    return token;
   } catch (error) {
     console.error(`❌ Error creating PostgreSQL auth session: ${error.message}`);
     throw error;
@@ -739,8 +742,7 @@ async function clearAuthSession(request, response) {
     return;
   }
 
-  const cookies = parseCookies(request.headers.cookie);
-  const authToken = cookies.plately_auth || "";
+  const authToken = extractAuthToken(request);
   if (authToken) {
     await ensurePostgresSchema();
     const pool = await getPostgresPool();
@@ -759,15 +761,25 @@ async function clearAuthSession(request, response) {
   );
 }
 
+function extractAuthToken(request) {
+  // Prefer Authorization: Bearer <token> header (works around cookie issues)
+  const authHeader = request.headers.authorization || request.headers.Authorization || "";
+  if (authHeader.startsWith("Bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+  // Fallback: legacy cookie-based auth
+  const cookies = parseCookies(request.headers.cookie);
+  return cookies.plately_auth || "";
+}
+
 async function getAuthenticatedUser(request) {
   if (!isPostgresEnabled()) {
     return null;
   }
 
-  const cookies = parseCookies(request.headers.cookie);
-  const authToken = cookies.plately_auth || "";
+  const authToken = extractAuthToken(request);
   if (!authToken) {
-    console.log("🔍 No auth cookie found in request");
+    console.log("🔍 No auth token found (header or cookie)");
     return null;
   }
 
@@ -4640,7 +4652,7 @@ const server = http.createServer(async (request, response) => {
         }
 
         const createdUser = await createPostgresUser(email, password, body.currentState || {});
-        await createAuthSession(response, createdUser.id);
+        const token = await createAuthSession(response, createdUser.id);
         sendJson(response, 200, {
           ok: true,
           user: buildAppStateFromUser(createdUser),
@@ -4648,6 +4660,7 @@ const server = http.createServer(async (request, response) => {
             enabled: true,
             authenticated: true,
             email: createdUser.email,
+            token,
           },
         });
         return;
@@ -4665,7 +4678,7 @@ const server = http.createServer(async (request, response) => {
         db.users[userId] = user;
         await persistDatabase();
 
-        await createDevAuthSession(response, userId, email);
+        const token = await createDevAuthSession(response, userId, email);
         sendJson(response, 200, {
           ok: true,
           user: { ...user, authenticated: true, email },
@@ -4673,6 +4686,7 @@ const server = http.createServer(async (request, response) => {
             enabled: false,
             authenticated: true,
             email: email,
+            token,
           },
         });
         return;
@@ -4699,7 +4713,7 @@ const server = http.createServer(async (request, response) => {
           throw new HttpError(401, "Onjuiste inloggegevens.");
         }
 
-        await createAuthSession(response, user.id);
+        const token = await createAuthSession(response, user.id);
         sendJson(response, 200, {
           ok: true,
           user: buildAppStateFromUser(user),
@@ -4707,6 +4721,7 @@ const server = http.createServer(async (request, response) => {
             enabled: true,
             authenticated: true,
             email: user.email,
+            token,
           },
         });
         return;
@@ -4727,7 +4742,7 @@ const server = http.createServer(async (request, response) => {
           throw new HttpError(401, "Onjuiste inloggegevens.");
         }
 
-        await createDevAuthSession(response, userId, email);
+        const token = await createDevAuthSession(response, userId, email);
         sendJson(response, 200, {
           ok: true,
           user: { ...user, authenticated: true, email },
@@ -4735,6 +4750,7 @@ const server = http.createServer(async (request, response) => {
             enabled: false,
             authenticated: true,
             email: user.email,
+            token,
           },
         });
         return;
