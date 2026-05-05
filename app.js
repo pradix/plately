@@ -4573,6 +4573,7 @@ async function submitAuth(mode, email, password) {
   } else {
     closeAuthModal();
     showToast("Je bent ingelogd.");
+    window.scrollTo({ top: 0, behavior: "auto" });
   }
 }
 
@@ -7036,7 +7037,7 @@ startOnboarding();
 // Restore last view the user was on before a page refresh
 try {
   const savedView = sessionStorage.getItem("plately-view");
-  if (savedView && ["home", "grocery", "settings", "mealplan"].includes(savedView) && savedView !== "home") {
+  if (savedView && ["home", "grocery", "settings", "mealplan", "cookbooks"].includes(savedView)) {
     switchView(savedView);
   }
 } catch { /* ignore */ }
