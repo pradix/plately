@@ -4357,18 +4357,31 @@ async function submitAuth(mode, email, password) {
 
 async function logoutAccount() {
   console.log("🔓 Logging out...");
-  const payload = await fetchJson(`${state.apiBase}/api/auth/logout`, {
-    method: "POST",
-  });
 
+  // Clear token immediately
   storeAuthToken("");
-  if (payload?.auth) {
-    state.auth.enabled = Boolean(payload.auth.enabled);
-    state.auth.authenticated = Boolean(payload.auth.authenticated);
-    state.auth.email = payload.auth.email || "";
-    console.log("✅ Logout auth state updated - authenticated:", state.auth.authenticated);
+
+  try {
+    const payload = await fetchJson(`${state.apiBase}/api/auth/logout`, {
+      method: "POST",
+    });
+
+    if (payload?.auth) {
+      state.auth.enabled = Boolean(payload.auth.enabled);
+      state.auth.authenticated = Boolean(payload.auth.authenticated);
+      state.auth.email = payload.auth.email || "";
+      console.log("✅ Logout auth state updated - authenticated:", state.auth.authenticated);
+    }
+    if (payload?.user) {
+      applyPersistedAppState(payload.user);
+    }
+  } catch (error) {
+    console.log("⚠️ Logout request failed, but continuing:", error.message);
+    // Even if server request fails, clear auth state client-side
+    state.auth.authenticated = false;
+    state.auth.email = "";
   }
-  applyPersistedAppState(payload.user);
+
   clearUserAuthedMark();
   renderAll();
   showToast("Je bent uitgelogd.");
@@ -5154,6 +5167,15 @@ bindEvent(shareProfileButton, "click", async () => {
 
 navItems.forEach((item) => {
   item.addEventListener("click", () => {
+    // If clicking settings while in settings, close any open sub-panel
+    if (item.dataset.view === "settings" && state.view === "settings") {
+      // Close all open sub-panels
+      document.querySelectorAll(".profile-subpanel--active").forEach((panel) => {
+        panel.classList.remove("profile-subpanel--active");
+        panel.setAttribute("aria-hidden", "true");
+      });
+      return;
+    }
     switchView(item.dataset.view);
   });
 });
