@@ -2169,9 +2169,11 @@ function renderChannelSettings() {
       const status = ch.status || "approved";
       const statusClass = status === "pending" ? "channel-status-badge--pending" : "channel-status-badge--approved";
       const statusLabel = status === "pending" ? "In behandeling" : "Goedgekeurd";
+      const isPending = status === "pending";
+      const toggleDisabled = isPending ? "disabled" : "";
 
       return `
-        <div class="channel-toggle-row channel-toggle-row--custom" data-channel-id="${escapeHtml(ch.id)}">
+        <div class="channel-toggle-row channel-toggle-row--custom ${isPending ? "channel-toggle-row--disabled" : ""}" data-channel-id="${escapeHtml(ch.id)}">
           <span class="channel-toggle-avatar">
             ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
           </span>
@@ -2179,7 +2181,7 @@ function renderChannelSettings() {
             <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
             <span class="channel-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
           </div>
-          <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>
+          <span class="toggle-switch ${followed ? "toggle-switch--on" : ""} ${toggleDisabled}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}" ${toggleDisabled}></span>
           <button class="channel-delete-btn" type="button" aria-label="Verwijder ${escapeHtml(ch.name)}" data-delete-channel="${escapeHtml(ch.id)}">×</button>
         </div>`;
     }).join("");
@@ -6173,6 +6175,14 @@ bindEvent(document.getElementById("channelSettingsList"), "click", (event) => {
   if (!(row instanceof HTMLElement)) return;
   const id = row.dataset.channelId;
   if (!id) return;
+
+  // Check if it's a custom channel that's still pending approval
+  const customChannel = state.customChannels.find((c) => c.id === id);
+  if (customChannel && (customChannel.status || "approved") === "pending") {
+    showToast("Dit kanaal is nog in behandeling. Je kunt het gebruiken zodra het is goedgekeurd.");
+    return;
+  }
+
   if (state.followedChannelIds.includes(id)) {
     if (state.followedChannelIds.length <= 1) { showToast("Volg minstens één kanaal."); return; }
     state.followedChannelIds = state.followedChannelIds.filter((c) => c !== id);
