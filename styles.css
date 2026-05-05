@@ -3171,9 +3171,9 @@ img { display: block; max-width: 100%; }
 
 /* Make logo larger on login/welcome screen */
 .profile-login-banner .brand-logo {
-  height: 100px;
-  max-width: 280px;
-  margin-bottom: 12px;
+  height: 160px;
+  max-width: 380px;
+  margin-bottom: 16px;
 }
 
 .profile-login-banner__title {
