@@ -102,7 +102,7 @@ const RECIPE_TITLE_HINT_PATTERN =
 const INSTRUCTION_START_PATTERN =
   /^(mix|add|bake|cook|toast|top|serve|blend|heat|roast|whisk|slice|spread|bak|voeg|snij|snijd|halveer|serveer|kook|maak|meng|verhit|roer|leg|dek|bestrooi|giet|laat|verwarm|doe|gooi|strooi|breng|schenk|haal|verwijder|pel|marineer|kruid|klop|stamp|prak|pureer|grill|oven|stir|fry|airfry|season|drizzle|combine|wash|was|dry|droog|scheur|cut|place|zet|wip|blus)\b/i;
 const INGREDIENT_WORD_PATTERN =
-  /\b(avocado|tomaat|ui|knoflook|kaas|kip|pasta|olie|citroen|koriander|sla|paprika|room|ei|eieren|melk|honing|boter|brood|rijst|zalm|champignon|courgette|spinazie|yoghurt|bloem|suiker|bouillon|peper|zout|salt|pepper|cheese|garlic|onion|egg|rice|bread|flour|butter|cream|lemon|lime|chicken|beef|pork|salmon|shrimp|tomato|potato|beans|lentils|tofu|mushroom|parsley|basil|oregano|cumin|mayonnaise|mayo|sauce)\b/i;
+  /\b(avocado|tomaat|ui|knoflook|kaas|kip|pasta|olie|citroen|koriander|sla|paprika|room|ei|eieren|melk|honing|boter|brood|rijst|zalm|champignon|courgette|spinazie|yoghurt|bloem|suiker|bouillon|peper|zout|salt|pepper|cheese|garlic|onion|egg|rice|bread|flour|butter|cream|lemon|lime|chicken|beef|pork|salmon|shrimp|tomato|potato|beans|lentils|tofu|mushroom|parsley|basil|oregano|cumin|mayonnaise|mayo|sauce|aubergine|bloemkool|broccoli|wortel|selderij|komkommer|paprika|rode|groene|gele|pimiento|rode|witte|bloemkool|bleekselderij|rucola|andijvie|radicchio|witlof|aardappel|zoete|bataat|zwam|eekhoorntjesbrood|ostermossel|inktvis|kabeljauw|schol|tong|forel|baars|paling|gerookt|geraspte|gesneden|fijngehakt|mager|vol|volle|magere|halfvolle|verse|bevroren|ingevroren|gezouten|gerookt|gegrild|gebakken|gekookt|gekookte|instantnoodles|noodles|spaghetti|fettuccini|penne|rigatoni|lasagna|lasagne|macaroni|ravioli|tortellini|risotto|couscous|bulgur|quinoa|haver|muesli|granola|meel|maïzena|bloem|tapioca|polenta|linzen|kikkererwten|snijbonen|tuinbonen|doperwten|erwten|linzen|rode|groene|bruine|onderslagerbonen|abrikoos|aardbei|blauwe|bosbes|framboze|braam|kers|kiwi|mango|papaja|ananas|banaan|appel|peer|druif|watermeloen|meloen|sinaasappel|grapefruit|limoen|augurkje|olijf|kappertjes|ansjovis|tomatenpuree|tomatensaus|rode|witte|balsamico|appelazijn|rijstazijn|honing|stroop|melasse|rietsuiker|bruinsuiker|vanille|vanille-essence|kaneel|kruidnagel|muskaat|gemberpoeder|mosterd|worcestershiresaus|tabasco|pittig|mild|warm|heet|chilisaus|sojasaus|tamari|teriyaki|ketjap|pindakaas|tahini|hummus|avocado-olie|sesam-olie|walnoot-olie|pompoenpitolie|arachideolie|zonnebloemolie|maïsolie|slaaolie|boter|margarine|kokosboter|reuzel|schmaltz|ansjovis|kappertjes|olijven|onderzetjes|augurken|zuurkoolsla|rode|witte|gemarineerde|geconserveerde|vers|gedroogd|gerookt|ingelegd|gekonfijt|gegrild|geroosterd|gebakken|gekookt|ruw|zacht|stevig|kruimig|stijf|luchtig|schuimig|romig|glad|ruw|klonterig|dun|dik|stroperig|schoon|kleurrijk|smakelijk|gezond|voedzaam|lekker)\b/i;
 const NON_FOOD_INGREDIENT_PATTERN =
   /\b(keukenpapier|bakpapier|sat[ée]prikkers?|cocktailprikkers?|aluminiumfolie|folie|servetten?|touw|spiesen?|prikker|tandpasta|tandgel|tandenborstel|mondspoeling|floss|shampoo|conditioner|douchegel|bodylotion|bodywash|handlotion|handcrème|zeep|vloeibare\s+zeep|wasmiddel|vaatwasmiddel|afwasmiddel|schoonmaakmiddel|allesreiniger|wc-reiniger|toiletblok|deodorant|anti-transpirant|parfum|eau\s+de|aftershave|scheerschuim|scheermesje?|scheergel|mascara|make-?up|foundation|lipstick|lippenstift|nagellak|zonnebrand|sunscreen|moisturizer|dagcrème|nachtcrème|toiletpapier|wc-papier|tissues?|wegwerpluier|maandverband|tampon|batterij(?:en)?|gloeilamp(?:en)?|spaarlamp|led-lamp|vuilniszak(?:ken)?|afvalzak|handdoek(?:en)?|washandje?|spons|sponzen|schuurspons|dweil|stofdoek)\b/i;
 
@@ -1792,19 +1792,22 @@ function isLikelyIngredientLine(line) {
 
 function isLikelyInstructionLine(line) {
   const clean = cleanListLine(line);
-  if (!clean || clean.length < 12) {
+  // Lower minimum length to catch shorter instructions like "Bak 5 min"
+  if (!clean || clean.length < 8) {
     return false;
   }
   if (INSTRUCTION_HEADING_PATTERN.test(clean)) {
     return true;
   }
+  // Numbered list detection: 1. , 2) , 3- , etc
   if (/^\d+\s*[.)-]\s*/.test(String(line || ""))) {
     return true;
   }
   if (INSTRUCTION_START_PATTERN.test(clean)) {
     return true;
   }
-  return /\b(oven|minutes?|minuten|bake|cook|bak|kook|mix|meng|serveer|serve)\b/i.test(clean);
+  // Expanded cooking verbs - covers most common cooking actions in Dutch/English
+  return /\b(oven|minutes?|minuten|bake|cook|bak|kook|mix|meng|serveer|serve|add|voeg|toevoegen|snij|snijd|slice|slice|finely|fijnsnijden|dice|hakken|chop|hacken|grate|rasp|blend|blender|puree|purreren|beat|klop|whisk|whisk|knead|kneden|knead|fold|vouwen|combine|combineer|combine|combine|combine|stir|roer|stir|fry|bakken|sauté|fruiten|roast|rooster|grill|grillen|toast|roosteren|boil|kook|simmer|sudderen|braise|schmoren|poach|pocheren|steam|stomen|baste|begoten|marinate|marineer|season|kruiden|taste|proeven|adjust|afstellen|transfer|overplaatsen|drain|afgieten|rinse|uitspoelen|wash|was|wassen|peel|pel|peal|schil|core|ontpitten|pit|pitten|pit|stem|steeltje|remove|verwijderen|discard|weggooien|top|garnish|garneren|dust|bestrooien|sprinkle|strooien|drizzle|druppelen|pour|gieten|scoop|scheppen|layer|laag|layer|cool|afkoelen|chill|koud|koel|rest|laten|rest|set|zetten|sit|zit|sit|sit|serve|serveer|plate|presenteren|plate|rest|rustigen|prep|voorbereiden|prep|par|gedeeltelijk|prep|blanch|blancheren|blanch|shock|shock|shock|glaze|glaceer|glaze|caramelize|carameliseren|candy|suiker|candy|candy|candy|pickle|inleggen|pickle|candy|candy|candy|candy|preserve|conserveren|pickle|candy|candy|candy|syrup|stroop|candy|candy|candy|candy|candy|jam|jam|jam|marmalade|marmelade|preserve|jam|jam|jam|candy|candy|candy|candy|candy|candy|candy|candy|candy|candy|jam|jam|jam|jam|jam|jam|jam|jam|jam|jam|jam|jam|jam|laat|wait|wacht|wait|rest|temperature|temperatuur|merk|merk|mark|mark|sear|sear|brown|bruin|bruinen|char|branden|blacken|verbranden|singe|schroeien|smoke|rook|roking|roast|roaster|braise|braiser|stew|stoofpot|mull|overwegen|mulled|glühwein|mulled|mulled|punch|ponch|punch|punch|punch|mulled|punch|punch|punch|punch|punch|punch|punch|punch|punch|punch|punch|punch|punch|punch|punch|punch|punch|punch|punch|punch)\b/i.test(clean);
 }
 
 // Splits "Verhit olie. Bak de ui. Voeg toe." into separate steps when each
