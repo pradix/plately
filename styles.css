@@ -867,12 +867,23 @@ img { display: block; max-width: 100%; }
 /* ── Detail screen ── */
 .detail-screen { background: var(--bg); }
 
-.detail-hero { position: relative; }
+.detail-hero {
+  position: relative;
+}
 
 .detail-hero img {
   width: 100%;
   height: 270px;
   object-fit: cover;
+}
+
+.detail-hero__actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  flex-direction: column;
 }
 
 .detail-sheet {
