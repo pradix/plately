@@ -4527,73 +4527,45 @@ async function searchAHRecipes(query, count = 4) {
       // Extract recipe links from markdown
       // Jina converts links to [Title](URL) format
       // Filter to only actual recipes, not category pages
-      // Categories have simple names (lenterecepten, bbq-recepten)
-      // Recipes have hyphenated names with multiple words (macaroni-met-kip, etc.)
       const allLinks = [...markdown.matchAll(/\[([^\]]+)\]\((https:\/\/www\.ah\.nl\/allerhande\/recepten\/[^\)]+)\)/g)];
       const links = allLinks.filter(match => {
         const url = match[2];
-        const slug = url.split('/recepten/')[1];
-        // Filter out categories: skip if slug is less than 5 chars or ends with 'recepten'
-        // Real recipes have longer, specific names like "macaroni-met-kip"
-        if (!slug || slug.length < 8 || slug.endsWith('recepten')) {
+        const slug = url.split('/recepten/')[1] || "";
+
+        // Skip categories: pages that end with 'recepten' or have few words
+        if (slug.endsWith('recepten') || slug.endsWith('gerechten')) {
           return false;
         }
+
+        // Real recipes have hyphens (multi-word names like "macaroni-met-spekjes")
+        // Categories are single words or generic terms
+        const wordCount = (slug.match(/-/g) || []).length + 1;
+        if (wordCount < 2) {
+          return false; // Skip single-word pages
+        }
+
+        // Skip pages with number-only slugs (pagination)
+        if (/^\d+/.test(slug)) {
+          return false;
+        }
+
         return true;
       });
       console.log(`Found ${links.length} real recipe links (filtered from ${allLinks.length} total)`);
 
       if (links.length > 0) {
-        // Fetch images for first few results
-        const results = await Promise.all(
-          links.slice(0, count).map(async (match) => {
-            const title = sanitizeText(match[1] || "");
-            const url = match[2];
-            let thumbnail = "";
-
-            // Try to fetch the recipe page and extract image
-            try {
-              console.log(`  📄 Fetching recipe page: ${url}`);
-              const recipeHtml = await fetch(url, {
-                headers: {
-                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                },
-                signal: AbortSignal.timeout(5000),
-              }).then(r => {
-                console.log(`  Response: ${r.status}`);
-                return r.ok ? r.text() : "";
-              }).catch((err) => {
-                console.log(`  Fetch error: ${err.message}`);
-                return "";
-              });
-
-              if (recipeHtml && recipeHtml.length > 100) {
-                const image = extractAhRecipeImage(recipeHtml);
-                if (image) {
-                  thumbnail = image;
-                  console.log(`  ✅ Found image: ${thumbnail.substring(0, 60)}...`);
-                } else {
-                  console.log(`  ⚠️  No image found in HTML`);
-                }
-              } else {
-                console.log(`  ⚠️  HTML too short: ${recipeHtml.length} chars`);
-              }
-            } catch (err) {
-              console.log(`  ❌ Image fetch error: ${err.message}`);
-            }
-
-            return {
-              title,
-              url,
-              thumbnail,
-              channel: "Allerhande",
-              channelId: "ch-ah",
-              description: "",
-              time: "",
-            };
-          })
-        );
-
-        return results.filter((r) => r.title && r.url && r.title.length > 2);
+        // Note: AH blocks individual recipe page fetches (403)
+        // Return recipes without images from search results
+        console.log(`🔗 Returning ${Math.min(links.length, count)} AH search results`);
+        return links.slice(0, count).map((match) => ({
+          title: sanitizeText(match[1] || ""),
+          url: match[2],
+          thumbnail: "", // Can't fetch images due to AH 403 blocking
+          channel: "Allerhande",
+          channelId: "ch-ah",
+          description: "",
+          time: "",
+        })).filter((r) => r.title && r.url && r.title.length > 2);
       }
     }
   } catch (err) {
@@ -4635,9 +4607,22 @@ async function searchAHRecipes(query, count = 4) {
       }
 
       // Filter out categories: only keep recipe pages
-      const slug = url.split('/recepten/')[1];
-      if (!slug || slug.length < 8 || slug.endsWith('recepten')) {
-        continue; // Skip category pages
+      const slug = url.split('/recepten/')[1] || "";
+
+      // Skip if ends with common category indicators
+      if (slug.endsWith('recepten') || slug.endsWith('gerechten')) {
+        continue;
+      }
+
+      // Only keep multi-word recipe names (with hyphens)
+      const wordCount = (slug.match(/-/g) || []).length + 1;
+      if (wordCount < 2) {
+        continue; // Skip single-word pages
+      }
+
+      // Skip numeric slugs (pagination)
+      if (/^\d+/.test(slug)) {
+        continue;
       }
 
       recipeUrls.add(url);
