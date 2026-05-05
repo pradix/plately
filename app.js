@@ -493,10 +493,14 @@ const SUPERMARKETS = [
   { id: "vomar",     name: "Vomar",        color: "#e30613", url: "https://www.vomar.nl",     supported: false },
   { id: "dirk",      name: "Dirk",         color: "#e30613", url: "https://www.dirk.nl",      supported: false },
   { id: "lidl",      name: "Lidl",         color: "#0050aa", url: "https://www.lidl.nl",      supported: false },
-  { id: "aldi",      name: "Aldi",         color: "#00549f", url: "https://www.aldi.nl",      supported: false },
+  { id: "aldi",      name: "Aldi",         color: "#00549f", url: "https://www.aldi.nl",      supported: false, logo: "assets/supermarkt-aldi.png" },
   { id: "coop",      name: "Coop",         color: "#e2001a", url: "https://www.coop.nl",      supported: false },
-  { id: "hoogvliet", name: "Hoogvliet",    color: "#e30613", url: "https://www.hoogvliet.com", supported: false },
+  { id: "hoogvliet", name: "Hoogvliet",    color: "#e30613", url: "https://www.hoogvliet.com", supported: false, logo: "assets/supermarkt-hoogvliet.png" },
 ];
+
+function getSupermarketIconUrl(sm) {
+  return sm.logo || getSourceIconUrl(sm.url);
+}
 
 function getSupermarketById(id) {
   return SUPERMARKETS.find((s) => s.id === id) || SUPERMARKETS[0];
@@ -5394,7 +5398,7 @@ function renderSupermarketSettings() {
   if (!list) return;
   supermarketDraft = state.profile.favoriteSupermarket || "ah";
   list.innerHTML = SUPERMARKETS.map((sm) => {
-    const faviconUrl = getSourceIconUrl(sm.url);
+    const faviconUrl = getSupermarketIconUrl(sm);
     const isSelected = supermarketDraft === sm.id;
     const supportedBadge = sm.supported
       ? ""
@@ -6588,7 +6592,7 @@ function renderOnboardingSupermarkets() {
   const list = document.getElementById("onboardingSupermarketsList");
   if (!list) return;
   list.innerHTML = SUPERMARKETS.map((sm) => {
-    const faviconUrl = getSourceIconUrl(sm.url);
+    const faviconUrl = getSupermarketIconUrl(sm);
     const isSelected = onboardingData.supermarket === sm.id;
     const supportedBadge = sm.supported
       ? ""
