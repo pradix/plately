@@ -6079,7 +6079,7 @@ bindEvent(document.getElementById("goToLanguageBtn"), "click", () => {
 });
 
 // "Over deze App" → about sub-panel
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.8";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
