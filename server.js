@@ -4552,10 +4552,11 @@ async function searchAHRecipes(query, count = 4) {
       // Extract recipe links from markdown
       const allLinks = [...markdown.matchAll(/\[([^\]]+)\]\((https:\/\/www\.ah\.nl\/allerhande\/recepten\/[^\)]+)\)/g)];
 
-      // Extract images from HTML (search results page images)
+      // Extract images - try HTML first, then Jina markdown
       const imageMap = new Map();
+
       if (html && html.length > 100) {
-        // Look for images in srcset or img src attributes - be flexible with patterns
+        // Try to extract from HTML
         const imgMatches = [
           ...html.matchAll(/<img[^>]+src=["']([^"']*static\.ah\.nl[^"']*jpg[^"']*)["'][^>]*alt=["']([^"']*)["']/gi),
           ...html.matchAll(/<img[^>]+alt=["']([^"']*)["'][^>]*src=["']([^"']*static\.ah\.nl[^"']*jpg[^"']*)["']/gi),
@@ -4565,57 +4566,84 @@ async function searchAHRecipes(query, count = 4) {
           let imgUrl = match[1] || match[2];
           let altText = match[2] || match[1];
 
-          // Validate it's actually an image URL
           if (imgUrl && imgUrl.includes('static.ah.nl')) {
             if (altText) {
               imageMap.set(altText.toLowerCase(), upgradeAhImageQuality(imgUrl));
             }
           }
         }
-        console.log(`📸 Found ${imageMap.size} images in search results HTML`);
-      } else if (html.length === 0) {
-        console.log(`📸 No HTML content to extract images from`);
+        console.log(`📸 Found ${imageMap.size} images in HTML`);
       }
 
-      const links = allLinks.filter(match => {
-        const title = match[1] || "";
-        const url = match[2];
-        const slug = url.split('/recepten/')[1] || "";
-
-        // Filter out obvious categories
-        if (slug.endsWith('recepten') || slug.endsWith('gerechten')) {
-          return false;
+      // Fallback: Try to extract images from Jina markdown
+      // Jina converts images to ![alt](url) format
+      if (imageMap.size === 0) {
+        const markdownImages = [...markdown.matchAll(/!\[([^\]]*)\]\((https:\/\/[^)]*static\.ah\.nl[^)]*\.(?:jpg|jpeg|png|webp))\)/gi)];
+        for (const match of markdownImages) {
+          const altText = match[1] || "";
+          const imgUrl = match[2];
+          if (imgUrl && altText) {
+            imageMap.set(altText.toLowerCase(), upgradeAhImageQuality(imgUrl));
+          }
         }
-
-        // Need multi-word recipe names
-        const wordCount = (slug.match(/-/g) || []).length + 1;
-        if (wordCount < 2) {
-          return false;
+        if (markdownImages.length > 0) {
+          console.log(`📸 Found ${markdownImages.length} images in Jina markdown`);
         }
+      }
 
-        // Skip numeric slugs
-        if (/^\d+/.test(slug)) {
-          return false;
-        }
+      const links = allLinks
+        .map(match => ({
+          title: match[1] || "",
+          url: match[2],
+          slug: (match[2].split('/recepten/')[1] || "").toLowerCase(),
+        }))
+        .filter(item => {
+          const { title, slug } = item;
 
-        // **NEW: Filter for search relevance**
-        // Only keep recipes that mention the search query in title or URL
-        const searchWords = query.toLowerCase().split(/\s+/);
-        const titleLower = title.toLowerCase();
-        const slugLower = slug.toLowerCase();
+          // 1. Filter out obvious categories
+          if (slug.endsWith('recepten') || slug.endsWith('gerechten') || slug.includes('categor')) {
+            return false;
+          }
 
-        // At least one search word should be in title or URL
-        const hasMatchingWord = searchWords.some(word =>
-          (word.length > 2 && (titleLower.includes(word) || slugLower.includes(word)))
-        );
+          // 2. Need multi-word recipe names (2+ hyphens = 3+ words)
+          const wordCount = (slug.match(/-/g) || []).length + 1;
+          if (wordCount < 2) {
+            return false;
+          }
 
-        if (!hasMatchingWord) {
-          return false; // Skip recipes that don't match search query
-        }
+          // 3. Skip numeric/pagination slugs
+          if (/^\d+/.test(slug)) {
+            return false;
+          }
 
-        return true;
-      });
-      console.log(`Found ${links.length} relevant recipe links (filtered from ${allLinks.length} total for query "${query}")`);
+          // 4. Skip very short titles (likely not real recipes)
+          if (title.trim().length < 5) {
+            return false;
+          }
+
+          // 5. Search query relevance - STRICT matching
+          const searchWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+          const titleLower = title.toLowerCase();
+          const slugLower = slug;
+
+          // ALL major search words should be in title OR url
+          // This is strict - ensures we only get highly relevant results
+          const matchScore = searchWords.reduce((score, word) => {
+            if (titleLower.includes(word)) return score + 2;
+            if (slugLower.includes(word)) return score + 1;
+            return score;
+          }, 0);
+
+          // Need at least 50% of search words to match
+          const minMatches = Math.ceil(searchWords.length * 0.5);
+          if (matchScore < minMatches) {
+            return false;
+          }
+
+          return true;
+        });
+
+      console.log(`Found ${links.length} highly relevant recipes (filtered from ${allLinks.length} total for "${query}")`);
 
       if (links.length > 0) {
         const results = links.slice(0, count).map((match) => {
