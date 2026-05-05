@@ -279,7 +279,7 @@ async function createDevAuthSession(response, userId, email) {
     response,
     serializeCookie("plately_auth", token, {
       path: "/",
-      httpOnly: true,
+      httpOnly: process.env.NODE_ENV === "production",
       sameSite: "Lax",
       secure: process.env.NODE_ENV === "production",
       maxAge: 60 * 60 * 24 * 30, // 30 days
@@ -712,7 +712,7 @@ async function createAuthSession(response, userId) {
       response,
       serializeCookie("plately_auth", token, {
         path: "/",
-        httpOnly: true,
+        httpOnly: process.env.NODE_ENV === "production",
         sameSite: "Lax",
         secure: process.env.NODE_ENV === "production",
         maxAge: 60 * 60 * 24 * 30,

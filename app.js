@@ -4158,6 +4158,7 @@ async function bootstrapSession() {
     console.log("🔄 Bootstrap session finally block - authenticated:", state.auth.authenticated, "sessionCheckSucceeded:", sessionCheckSucceeded);
     state.session.ready = true;
     renderAll();
+    window.scrollTo({ top: 0, behavior: "auto" });
     // Show auth modal to all unauthenticated users
     // IMPORTANT: Check state.auth.authenticated (from server) NOT cached localStorage
     if (sessionCheckSucceeded && state.auth.authenticated === false) {
@@ -4405,7 +4406,7 @@ function bindEvent(element, eventName, handler) {
 }
 
 // + button and filter button → navigate to import screen (universal import)
-document.querySelectorAll("#openImportButton, #openImportButton2, #groceryImportButton, #mealplanImportButton, #reviewImportButton").forEach((btn) => {
+document.querySelectorAll("#openImportButton, #openImportButton2, #groceryImportButton, #mealplanImportButton, #reviewImportButton, #profileImportButton").forEach((btn) => {
   if (btn) btn.addEventListener("click", () => {
     if (!state.auth.authenticated) {
       showAuthModal();
