@@ -4877,11 +4877,17 @@ async function searchAHRecipes(query, count = 4) {
       }
 
       const links = allLinks
-        .map(match => ({
-          title: match[1] || "",
-          url: match[2],
-          slug: (match[2].split('/recepten/')[1] || "").toLowerCase(),
-        }))
+        .map(match => {
+          // Extract slug from URL (handle both /recept/ and /recepten/)
+          const slugParts = match[2].split(/\/recept(?:en)?\/);
+          const slugFromUrl = (slugParts[1] || "").toLowerCase();
+          return {
+            title: match[1] || "",
+            url: match[2],
+            slug: slugFromUrl,
+            recipeId: match.recipeId || "", // Preserve recipe ID from earlier extraction
+          };
+        })
         .filter(item => {
           const { title, slug } = item;
 
@@ -4946,8 +4952,10 @@ async function searchAHRecipes(query, count = 4) {
           const recipeId = linkItem.recipeId || "";
 
           // Format display title with ID prefix if available
-          const displayTitle = recipeId && title
-            ? `${recipeId} ${title}`
+          // Replace hyphens in ID with spaces (e.g., "R-R1202302" → "R R1202302")
+          const formattedId = recipeId.replace(/-/g, ' ');
+          const displayTitle = formattedId && title
+            ? `${formattedId} ${title}`
             : title;
 
           // Try to match image from HTML by recipe title or ID
