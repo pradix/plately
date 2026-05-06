@@ -4831,7 +4831,9 @@ async function searchAHRecipes(query, count = 4) {
 
         // Derive title from slug - this is most reliable
         // Examples: "surinaamse-bami" → "Surinaamse Bami"
-        const title = slug
+        // Slugs can be "R1202302/surinaamse-bami" — only keep the recipe part
+        const recipeSlug = String(slug || "").split("/").pop() || "";
+        const title = recipeSlug
           .split('-')
           .map(word => word.charAt(0).toUpperCase() + word.slice(1))
           .join(' ');
@@ -4998,13 +5000,6 @@ async function searchAHRecipes(query, count = 4) {
           const title = sanitizeText(linkItem.title || "");
           const recipeId = linkItem.recipeId || "";
 
-          // Format display title with ID prefix if available
-          // Replace hyphens in ID with spaces (e.g., "R-R1202302" → "R R1202302")
-          const formattedId = recipeId.replace(/-/g, ' ');
-          const displayTitle = formattedId && title
-            ? `${formattedId} ${title}`
-            : title;
-
           // Try to match image from HTML by recipe title or ID
           let thumbnail = "";
           if (imageMap.size > 0) {
@@ -5034,13 +5029,17 @@ async function searchAHRecipes(query, count = 4) {
           if (!thumbnail && imagesByUrl.size > 0) {
             thumbnail = imagesByUrl.entries().next().value[1] || "";
           }
+          // Final fallback: if we only have an alt-text map, take the first image
+          if (!thumbnail && imageMap.size > 0) {
+            thumbnail = imageMap.values().next().value || "";
+          }
 
-          console.log(`  📄 Mapping: "${displayTitle}" (ID: ${recipeId || 'none'}) - Image: ${thumbnail ? 'found' : 'missing'}`);
+          console.log(`  📄 Mapping: "${title}" (ID: ${recipeId || 'none'}) - Image: ${thumbnail ? 'found' : 'missing'}`);
           return {
-            title: displayTitle,
+            title,
             url: linkItem.url,
             thumbnail,
-            channel: "Allerhande",
+            channel: "ALLERHANDE",
             channelId: "ch-ah",
             description: "",
             time: "",
