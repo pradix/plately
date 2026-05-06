@@ -4823,8 +4823,21 @@ async function searchAHRecipes(query, count = 4) {
           return { 0: null, 1: title, 2: url };
         });
 
-      const allLinks = pattern1.length > 0 ? pattern1 : pattern2;
-      console.log(`🔗 Found links: ${allLinks.length} (pattern1: ${pattern1.length}, pattern2: ${pattern2.length})`);
+      // Pattern 3: Search for recipe names with search query in them
+      // Jina might output recipe names + URLs on separate lines
+      const searchTerms = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      const pattern3 = [];
+      if (searchTerms.length > 0) {
+        const recipePattern = new RegExp(`(.*?${searchTerms[0]}[^\\n]*?)\\s*(https://www\\.ah\\.nl/allerhande/recepten/[^\\s)]+)`, 'gi');
+        for (const match of markdown.matchAll(recipePattern)) {
+          const title = match[1].trim().replace(/^[-*•]\s*/, ''); // Remove bullet points
+          const url = match[2];
+          pattern3.push({ 0: null, 1: title, 2: url });
+        }
+      }
+
+      const allLinks = pattern1.length > pattern3.length ? pattern1 : (pattern3.length > 0 ? pattern3 : pattern2);
+      console.log(`🔗 Found links: ${allLinks.length} (pattern1: ${pattern1.length}, pattern2: ${pattern2.length}, pattern3: ${pattern3.length})`);
 
       // Extract images - try HTML first, then Jina markdown
       const imageMap = new Map();
@@ -4874,8 +4887,10 @@ async function searchAHRecipes(query, count = 4) {
         .filter(item => {
           const { title, slug } = item;
 
-          // 1. Filter out obvious categories
-          if (slug.endsWith('recepten') || slug.endsWith('gerechten') || slug.includes('categor')) {
+          // 1. Filter out obvious categories and generic pages
+          // More specific: reject if slug is ONLY generic words without search-term specificity
+          if (slug === 'recepten' || slug === 'gerechten' || slug.includes('categor') ||
+              /^(lente|bbq|picknick|airfryer|makkelijke|snelle|gezonde|zomer|herfst|winter)(-recepten)?$/.test(slug)) {
             console.log(`  ❌ Category filter: "${title}" (${slug})`);
             return false;
           }
