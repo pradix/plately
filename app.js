@@ -1424,6 +1424,14 @@ function goHome() {
 }
 
 function switchView(view) {
+  // Enforce authentication for all protected views
+  if (!state.auth.authenticated && view !== "detail") {
+    // Allow detail view (might be switching from authenticated state)
+    // but require login for all other views
+    openAuthModal("login");
+    return;
+  }
+
   state.view = view;
   homeScreen.classList.toggle("screen--active", view === "home");
   detailScreen.classList.toggle("screen--active", view === "detail");

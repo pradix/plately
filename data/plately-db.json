@@ -719,6 +719,170 @@
       "selectedRecipeId": "",
       "createdAt": "2026-05-05T17:35:22.897Z",
       "updatedAt": "2026-05-05T17:35:22.898Z"
+    },
+    "user-0cbdcdeb-9462-4f1b-9eec-9f63922a3646": {
+      "id": "user-0cbdcdeb-9462-4f1b-9eec-9f63922a3646",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt",
+        "email": "",
+        "photo": "",
+        "favoriteSupermarket": "ah",
+        "gender": "",
+        "birthDate": ""
+      },
+      "importedRecipes": [
+        {
+          "id": "recipe-1778015671120",
+          "title": "Pasta met spinazie en zalm",
+          "description": "Wel eens van spaghetti aglio e olio gehoord? Het is een hele simpele pasta met een ‘saus’ van olie en knoflook. Dit simpele recept staat binnen 15 minuten op tafel.",
+          "time": "15 min",
+          "kcal": "510 kcal",
+          "servings": "2 Pers.",
+          "mealTag": "Tussendoor",
+          "sourceUrl": "https://www.lekkerensimpel.com/spaghetti-aglio-e-olio/",
+          "image": "https://www.lekkerensimpel.com/wp-content/uploads/2020/09/IMG_4638-1.jpg",
+          "alt": "Pasta met spinazie en zalm",
+          "platform": "website",
+          "caption": "Wel eens van spaghetti aglio e olio gehoord? Het is een hele simpele pasta met een ‘saus’ van olie en knoflook. Dit simpele recept staat binnen 15 minuten op tafel.",
+          "author": "Lekker en Simpel",
+          "ingredients": [
+            {
+              "quantity": "250",
+              "unit": "gr",
+              "name": "spaghetti"
+            },
+            {
+              "quantity": "2",
+              "unit": "tenen",
+              "name": "knoflook"
+            },
+            {
+              "quantity": "3",
+              "unit": "el",
+              "name": "olijfolie"
+            },
+            {
+              "quantity": "1",
+              "unit": "tl",
+              "name": "chili vlokken"
+            },
+            {
+              "quantity": "",
+              "unit": "",
+              "name": "parmezaanse kaas"
+            },
+            {
+              "quantity": "1",
+              "unit": "handje",
+              "name": "peterselie"
+            }
+          ],
+          "instructions": [
+            "Kook de pasta volgens de aanwijzingen op de verpakking. Zelf eten we dit gerecht het liefst met pasta die al dente (beetgaar) gekookt is. Als de pasta helemaal gaar is, vinden we dit recept een stuk minder gek genoeg.",
+            "Snijd ondertussen de knoflook fijn. Doe de olijfolie in een hapjespan. Als de olie warm is, kunnen de knoflook en de chilivlokken erbij.",
+            "Bak de knoflook totdat het goud begint te kleuren. Zet dan het vuur uit en doe een klein beetje, ongeveer 3 eetlepels, van het kookvocht van de pasta erbij.",
+            "Zodra de pasta klaar is, giet je het water af en doe je de gekookte pasta in de pan met olie.",
+            "Rasp hier nog parmezaanse kaas over en doe er lekker wat verse peterselie bij (wees niet te zuinig) en mengen maar."
+          ],
+          "isSeed": false
+        },
+        {
+          "id": "recipe-1778015572624",
+          "title": "Macaroni met spekjes en tomatensaus",
+          "description": "Zin in een lekker snel en simpel pastagerecht? De macaroni met spekjes en tomatensaus staat binnen 30 minuten op tafel. Eet smakelijk!",
+          "time": "30 min",
+          "kcal": "280 kcal",
+          "servings": "2 Pers.",
+          "mealTag": "Avond",
+          "sourceUrl": "https://www.lekkerensimpel.com/macaroni-met-spekjes-en-tomatensaus/",
+          "image": "https://www.lekkerensimpel.com/wp-content/uploads/2022/03/588A1402.jpg",
+          "alt": "Macaroni met spekjes en tomatensaus",
+          "platform": "website",
+          "caption": "Zin in een lekker snel en simpel pastagerecht? De macaroni met spekjes en tomatensaus staat binnen 30 minuten op tafel. Eet smakelijk!",
+          "author": "lekkerensimpel.com",
+          "ingredients": [
+            {
+              "quantity": "1",
+              "unit": "x",
+              "name": "Controleer originele bron"
+            }
+          ],
+          "instructions": [
+            "Gebruik je geen zakje macaroni groente, begin dan met het snijden van de ui, prei en paprika. Bak de spekjes uit in ongeveer 4-5 minuten in een (hapjes)pan zonder olie. Haal de spekjes uit de pan en laat even uitlekken op een keukenpapiertje. Doe dan de gesneden groente in dezelfde en bak 5 minuten in het vet dat uit de spekjes is vrijgekomen. Bak de laatste minuut de kruiden mee en voeg dan de tomatenblokjes en tomatenfrito toe. Laat de saus nu ongeveer 15-20 minuten zachtjes pruttelen. Kook ondertussen de macaroni volgens de instructies op de verpakking. Giet het water van de macaroni af en roer daarna samen met de spekjes door de tomatensaus. Verdeel de macaroni over twee borden en serveer lekker met wat geraspte kaas.",
+            "Bewaar dit recept op Pinterest en bekijk hier onze andere pasta recepten !"
+          ],
+          "isSeed": false
+        }
+      ],
+      "cookbooks": [],
+      "selectedCookbookId": "cookbook-1",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {
+        "recipe-1778015572624": {
+          "checkedIngredients": [],
+          "currentStep": 0,
+          "cookMode": false
+        },
+        "recipe-1778015671120": {
+          "checkedIngredients": [],
+          "currentStep": 0,
+          "cookMode": false
+        }
+      },
+      "featuredRecipeId": "recipe-1778015671120",
+      "selectedRecipeId": "recipe-1778015671120",
+      "createdAt": "2026-05-05T21:10:59.106Z",
+      "updatedAt": "2026-05-05T21:14:32.209Z",
+      "followedChannelIds": [
+        "ch-ah",
+        "ch-ek",
+        "ch-mj",
+        "ch-up",
+        "ch-clf",
+        "ch-les",
+        "ch-lb"
+      ],
+      "customChannels": [],
+      "language": "nl"
+    },
+    "user-53d8f38f-19cb-4aa1-9229-b75f4e410b87": {
+      "id": "user-53d8f38f-19cb-4aa1-9229-b75f4e410b87",
+      "profile": {
+        "name": "Sarah de Vries",
+        "handle": "@sarahkookt",
+        "favoriteSupermarket": "ah",
+        "gender": "",
+        "birthDate": ""
+      },
+      "importedRecipes": [],
+      "cookbooks": [],
+      "selectedCookbookId": "",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "",
+      "selectedRecipeId": "",
+      "createdAt": "2026-05-05T21:11:54.003Z",
+      "updatedAt": "2026-05-05T21:11:54.003Z",
+      "email": "test@plately.local"
     }
   },
   "sessions": {
@@ -739,7 +903,8 @@
     "cb63ee00f653f3c17466f78bc3e6344927174be20029c491": "user-4ed3dff5-55ae-40b5-82f7-1473753d8c78",
     "e9153d1066cda22cba757fc5c7233f1b8e97ffe4dee6da3f": "user-3023a61a-9800-458f-b8ce-2999ac12f361",
     "20b3a541cc94d14afea418a3e69090348022ef7dc9ce0805": "user-302d18b0-1ead-4338-8e4d-1f861698ee4d",
-    "7f777b75255df76cec217fb720ce789f4a7b6a6ec97ec715": "user-a01c5846-f665-497a-a098-9d6329d65fd2"
+    "7f777b75255df76cec217fb720ce789f4a7b6a6ec97ec715": "user-a01c5846-f665-497a-a098-9d6329d65fd2",
+    "4bab924e6d9547845137955f3cbe91d189becdac0c48e8b2": "user-0cbdcdeb-9462-4f1b-9eec-9f63922a3646"
   },
   "authSessions": {
     "06ef960ba8cefba3329bb5e5fcb585fe276b720f286a32e6": {
@@ -757,6 +922,10 @@
     "94538256d999c85632737da2c368dbb86fa1d9a91d0ea410": {
       "userId": "user-9fdd1a1a-9111-4b89-b73e-ef43e774eb33",
       "email": "test@example.com"
+    },
+    "e5d25a6b8a38d4f9ed1f04293d9c276d9e5132ab4bcc1bd7": {
+      "userId": "user-53d8f38f-19cb-4aa1-9229-b75f4e410b87",
+      "email": "test@plately.local"
     }
   }
 }
