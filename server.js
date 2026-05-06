@@ -4055,6 +4055,26 @@ function upgradeAhImageQuality(imageUrl) {
   return upgraded.startsWith("http") ? upgraded : imageUrl;
 }
 
+async function fetchAhRecipeThumbnail(recipeUrl) {
+  try {
+    const html = await fetch(recipeUrl, {
+      headers: {
+        ...FETCH_HEADERS,
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        referer: "https://www.ah.nl/allerhande/",
+      },
+      signal: AbortSignal.timeout(5000),
+    }).then((response) => {
+      if (!response.ok) return "";
+      return response.text();
+    });
+
+    return html ? extractAhRecipeImage(html) : "";
+  } catch {
+    return "";
+  }
+}
+
 async function importWebsite(sourceUrl) {
   const parsedUrl = new URL(sourceUrl);
   const isAllerhande = /(^|\.)ah\.nl$/i.test(parsedUrl.hostname) && (/\/allerhande\//i.test(parsedUrl.pathname) || /\/r\/\d+/.test(parsedUrl.pathname));
@@ -5135,7 +5155,7 @@ async function searchAHRecipes(query, count = 4) {
       console.log(`Found ${links.length} highly relevant recipes (filtered from ${allLinks.length} total for "${query}")`);
 
       if (links.length > 0) {
-        const results = links.slice(0, count).map((linkItem, idx) => {
+        let results = links.slice(0, count).map((linkItem, idx) => {
           const title = sanitizeText(linkItem.title || "");
           const recipeId = linkItem.recipeId || "";
 
@@ -5201,6 +5221,19 @@ async function searchAHRecipes(query, count = 4) {
           }
           return pass;
         });
+
+        if (results.some((r) => !r.thumbnail)) {
+          results = await Promise.all(results.map(async (result) => {
+            if (result.thumbnail) return result;
+            const thumbnail = await fetchAhRecipeThumbnail(result.url);
+            if (thumbnail) {
+              console.log(`  🖼️  Recipe page image fallback: "${result.title}" - found`);
+              return { ...result, thumbnail };
+            }
+            console.log(`  🖼️  Recipe page image fallback: "${result.title}" - missing`);
+            return result;
+          }));
+        }
 
         console.log(`🔗 Returning ${results.length} AH search results with ${results.filter(r => r.thumbnail).length} images`);
         return results;
