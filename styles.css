@@ -5381,7 +5381,19 @@ img { display: block; max-width: 100%; }
   display: block;
 }
 
-.detail-icon-action.is-active {
+/* Favorite button active state - RED heart */
+#favoriteRecipeButton.is-active,
+#topbarFavoriteButton.is-active {
+  color: #e74c3c;
+}
+
+#favoriteRecipeButton.is-active svg,
+#topbarFavoriteButton.is-active svg {
+  fill: #e74c3c;
+}
+
+/* Generic active state for other buttons */
+.detail-icon-action.is-active:not(#favoriteRecipeButton):not(#topbarFavoriteButton) {
   background: rgba(141,164,133,0.18);
   border-color: rgba(120,147,111,0.18);
   color: #6d8767;

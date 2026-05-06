@@ -2180,7 +2180,13 @@ async function extractWithClaude(caption, note) {
 
   const userPrompt = [
     "Maak een gestructureerd recept op basis van onderstaande tekst (social media post of video-omschrijving).",
-    "Als de tekst expliciete ingrediënten en bereidingsstappen bevat, extraheer die dan letterlijk.",
+    "BELANGRIJK: Dit is waarschijnlijk een Instagram reel/post. Zoek naar:",
+    "- Ingrediënten: kunnen gelabeld zijn met 'Ingrediënten:', '🥘 Ingrediënten', '📝', of gewoon opsomming",
+    "- Bereiding: kunnen gelabeld zijn met 'Stappen:', 'Bereiding:', '👨‍🍳', of genummerd (1., 2., etc)",
+    "- Emojis kunnen sectie-scheidingen zijn (🥘 = ingrediënten, 👨‍🍳 = bereiding)",
+    "",
+    "Als de tekst expliciete ingrediënten en bereidingsstappen bevat, extraheer die dan LETTERLIJK.",
+    "Lees zeer zorgvuldig door emoji's en formattering heen.",
     "Als de tekst alleen een gerechtnaam of korte beschrijving bevat, genereer dan zelf een volledig en realistisch recept.",
     "",
     "Tekst:",
