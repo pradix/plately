@@ -2323,31 +2323,16 @@ function renderChannelSettings() {
   // Separate custom channels section
   let customHTML = "";
 
-  // Show pending channels info message
-  const pendingChannels = state.customChannels.filter(ch => (ch.status || "approved") === "pending");
-  if (pendingChannels.length > 0) {
-    const names = pendingChannels.map(ch => `"${ch.name}"`).join(", ");
-    customHTML += `
-      <div class="channel-pending-info">
-        <div class="channel-pending-header">
-          <div class="channel-pending-hourglass">⏳</div>
-          <div class="channel-pending-title">We verwerken je kanaalverzoek</div>
-        </div>
-        <div class="channel-pending-desc">
-          We testen momenteel de import van ${names} om te zien of alles goed werkt. Zodra het is goedgekeurd, ontvang je een melding en kun je het gebruiken in het zoekscherm.
-        </div>
-      </div>
-    `;
-  }
-
   if (state.customChannels.length > 0) {
     customHTML += `<div class="channel-section-label">MIJN KANALEN</div>`;
 
+    // Sort channels alphabetically (A-Z) and show non-rejected ones
     const customRows = state.customChannels
       .filter((ch) => {
         // Hide rejected channels from the user's list
         return (ch.status || "approved") !== "rejected";
       })
+      .sort((a, b) => a.name.localeCompare(b.name)) // Sort A-Z alphabetically
       .map((ch) => {
       const followed = state.followedChannelIds.includes(ch.id);
       const faviconUrl = getSourceIconUrl(ch.url);
@@ -2379,6 +2364,23 @@ function renderChannelSettings() {
     }).join("");
 
     customHTML += customRows;
+  }
+
+  // Show pending channels info message at the bottom
+  const pendingChannels = state.customChannels.filter(ch => (ch.status || "approved") === "pending");
+  if (pendingChannels.length > 0) {
+    const names = pendingChannels.map(ch => `"${ch.name}"`).join(", ");
+    customHTML += `
+      <div class="channel-pending-info">
+        <div class="channel-pending-header">
+          <div class="channel-pending-hourglass">⏳</div>
+          <div class="channel-pending-title">We verwerken je kanaalverzoek</div>
+        </div>
+        <div class="channel-pending-desc">
+          We testen momenteel de import van ${names} om te zien of alles goed werkt. Zodra het is goedgekeurd, ontvang je een melding en kun je het gebruiken in het zoekscherm.
+        </div>
+      </div>
+    `;
   }
 
   const addButton = `
