@@ -4913,8 +4913,8 @@ async function searchAHRecipes(query, count = 4) {
       console.log(`Found ${links.length} highly relevant recipes (filtered from ${allLinks.length} total for "${query}")`);
 
       if (links.length > 0) {
-        const results = links.slice(0, count).map((match) => {
-          const title = sanitizeText(match[1] || "");
+        const results = links.slice(0, count).map((linkItem) => {
+          const title = sanitizeText(linkItem.title || "");
           // Try to match image from HTML by recipe title
           let thumbnail = "";
           if (imageMap.size > 0) {
@@ -4926,16 +4926,23 @@ async function searchAHRecipes(query, count = 4) {
               }
             }
           }
+          console.log(`  📄 Mapping: "${title}" from ${linkItem.url}`);
           return {
             title,
-            url: match[2],
+            url: linkItem.url,
             thumbnail,
             channel: "Allerhande",
             channelId: "ch-ah",
             description: "",
             time: "",
           };
-        }).filter((r) => r.title && r.url && r.title.length > 2);
+        }).filter((r) => {
+          const pass = r.title && r.url && r.title.length > 2;
+          if (!pass) {
+            console.log(`  ⚠️  Filtered out: title="${r.title}" (length=${r.title.length}), url=${r.url ? 'present' : 'missing'}`);
+          }
+          return pass;
+        });
 
         console.log(`🔗 Returning ${results.length} AH search results with ${results.filter(r => r.thumbnail).length} images`);
         return results;
