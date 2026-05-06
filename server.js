@@ -4879,7 +4879,7 @@ async function searchAHRecipes(query, count = 4) {
       const links = allLinks
         .map(match => {
           // Extract slug from URL (handle both /recept/ and /recepten/)
-          const slugParts = match[2].split(/\/recept(?:en)?\/);
+          const slugParts = match[2].split(/\/recept(?:en)?\//);
           const slugFromUrl = (slugParts[1] || "").toLowerCase();
           return {
             title: match[1] || "",
