@@ -7540,7 +7540,9 @@ body {
   padding: 7px 12px;
   cursor: pointer;
   transition: background 0.15s, transform 0.15s;
-  white-space: nowrap;
+  min-height: 32px;
+  text-align: center;
+  white-space: normal;
 }
 .ch-card__import:hover { background: #78936f; transform: scale(1.03); }
 .ch-card__import:disabled { opacity: 0.5; cursor: default; transform: none; }

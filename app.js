@@ -1938,6 +1938,10 @@ function getChannelThumbnailMarkup(result, channel, channelColor) {
     />`;
 }
 
+function getChannelImportLoadingMarkup() {
+  return `<svg class="spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Plately is bezig...</span>`;
+}
+
 function renderChannelSearchResults(results, filter = state.channelSearchFilter) {
   if (!channelSearchSection || !channelSearchResults) return;
 
@@ -6051,10 +6055,10 @@ bindEvent(channelSearchResults, "click", async (event) => {
   const imageHint = btn.dataset.channelImportThumb || "";
 
   btn.disabled = true;
-  btn.innerHTML = `<svg class="spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+  btn.innerHTML = getChannelImportLoadingMarkup();
 
   try {
-    showToast("Recept importeren…");
+    showToast("Plately is bezig met importeren…");
     const resp = await fetch("/api/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -7351,10 +7355,10 @@ bindEvent(document.getElementById("importChannelSearchResults"), "click", async 
   const imageHint = btn.dataset.channelImportThumb || "";
 
   btn.disabled = true;
-  btn.innerHTML = `<svg class="spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+  btn.innerHTML = getChannelImportLoadingMarkup();
 
   try {
-    showToast("Recept importeren…");
+    showToast("Plately is bezig met importeren…");
     const resp = await fetch("/api/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -8,7 +8,7 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="3.0.1" />
+    <meta name="plately-build" content="3.0.2" />
     <meta name="theme-color" content="#8da485" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -20,7 +20,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=3.0.0" />
+    <link rel="stylesheet" href="styles.css?v=3.0.2" />
   </head>
   <body>
     <main class="page">
@@ -961,16 +961,10 @@
         <section class="screen review-screen" id="reviewScreen">
           <header class="topbar topbar--home">
             <img class="brand-logo review-logo" src="assets/plately.png" alt="Plately" />
-            <div class="topbar-actions">
-              <button class="icon-button icon-button--filled-green" id="reviewImportButton" type="button" aria-label="Ander recept importeren">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-                </svg>
-              </button>
-            </div>
           </header>
 
           <div class="review-container">
+            <h1 class="review-title">Recept controleren</h1>
             <section class="review-card">
               <div class="review-preview">
                 <img id="reviewPreviewImage" src="assets/hero-burger.svg" alt="Recept preview" />
@@ -1037,8 +1031,6 @@
                 </div>
               </form>
             </section>
-
-            <h1 class="review-title">Recept controleren</h1>
           </div>
 
         <!-- Admin Dashboard Screen (Hidden, only for admin) -->
@@ -1661,6 +1653,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=3.0.1"></script>
+    <script src="app.js?v=3.0.2"></script>
   </body>
 </html>
