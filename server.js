@@ -4925,11 +4925,13 @@ async function searchAHRecipes(query, count = 4) {
         .filter(item => {
           const { title, slug } = item;
 
+          console.log(`  📌 Processing: "${title}" (slug: ${slug})`);
+
           // 1. Filter out obvious categories and generic pages
           // More specific: reject if slug is ONLY generic words without search-term specificity
           if (slug === 'recepten' || slug === 'gerechten' || slug.includes('categor') ||
               /^(lente|bbq|picknick|airfryer|makkelijke|snelle|gezonde|zomer|herfst|winter)(-recepten)?$/.test(slug)) {
-            console.log(`  ❌ Category filter: "${title}" (${slug})`);
+            console.log(`    ❌ Category filter`);
             return false;
           }
 
@@ -4937,7 +4939,7 @@ async function searchAHRecipes(query, count = 4) {
           // RELAXED: Allow single-word recipes too (like "Surinaamse")
           const wordCount = (slug.match(/-/g) || []).length + 1;
           if (wordCount < 1) {
-            console.log(`  ❌ Too short slug: "${title}" (${slug}) - ${wordCount} words`);
+            console.log(`    ❌ Too short slug (${wordCount} words)`);
             return false;
           }
 
@@ -4966,10 +4968,13 @@ async function searchAHRecipes(query, count = 4) {
 
           // Need at least 50% of search words to match
           const minMatches = Math.ceil(searchWords.length * 0.5);
+          console.log(`    🔍 Relevance: score=${matchScore}, min=${minMatches}, words=[${searchWords.join(',')}]`);
           if (matchScore < minMatches) {
+            console.log(`    ❌ Relevance filter failed`);
             return false;
           }
 
+          console.log(`    ✅ PASSED all filters`);
           return true;
         });
 
