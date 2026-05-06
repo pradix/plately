@@ -1903,11 +1903,12 @@ let channelSearchTimeout = null;
 function normalizeChannelThumbnailUrl(url) {
   const raw = String(url || "").trim();
   if (!raw) return "";
-  // Some CDNs (notably AH) can block hotlinking/referrers — proxy via our backend.
-  if (raw.includes("static.ah.nl/")) {
+  // Some CDNs/sites block hotlinking/referrers — proxy via our backend.
+  // The proxy has a strict hostname allowlist server-side.
+  if (/^https?:\/\//i.test(raw)) {
     return `/api/image-proxy?url=${encodeURIComponent(raw)}`;
   }
-  return raw;
+  return raw; // assets/..., relative paths, etc.
 }
 
 function renderChannelSearchResults(results, filter = state.channelSearchFilter) {

@@ -56,8 +56,22 @@ function isAllowedImageProxyUrl(rawUrl) {
   try {
     const u = new URL(rawUrl);
     if (u.protocol !== "https:") return false;
-    // Only allow known safe image CDNs (avoid SSRF).
-    if (u.hostname === "static.ah.nl") return true;
+    // Only allow known safe image CDNs / publishers (avoid SSRF).
+    const host = u.hostname.toLowerCase();
+    const ALLOW_HOSTS = new Set([
+      "static.ah.nl",
+      "www.lekkerensimpel.com",
+      "lekkerensimpel.com",
+      "www.lekkeren-simpel.nl",
+      "lekkeren-simpel.nl",
+      // Common WordPress image CDN used by many recipe blogs
+      "i0.wp.com",
+      "i1.wp.com",
+      "i2.wp.com",
+    ]);
+    if (ALLOW_HOSTS.has(host)) return true;
+    // Allow subdomains of static.ah.nl (defensive; usually not needed)
+    if (host.endsWith(".static.ah.nl")) return true;
     return false;
   } catch {
     return false;
