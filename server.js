@@ -4057,19 +4057,16 @@ function upgradeAhImageQuality(imageUrl) {
 
 async function fetchAhRecipeThumbnail(recipeUrl) {
   try {
-    const html = await fetch(recipeUrl, {
-      headers: {
-        ...FETCH_HEADERS,
-        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        referer: "https://www.ah.nl/allerhande/",
-      },
-      signal: AbortSignal.timeout(5000),
-    }).then((response) => {
-      if (!response.ok) return "";
-      return response.text();
-    });
+    const document = await fetchWebsiteDocument(recipeUrl, 0);
+    const image = extractAhRecipeImage(document.body);
+    if (image) return image;
+  } catch {
+    /* Try reader fallback below. */
+  }
 
-    return html ? extractAhRecipeImage(html) : "";
+  try {
+    const readerDocument = await fetchReaderFallback(recipeUrl);
+    return extractAhRecipeImage(readerDocument.body);
   } catch {
     return "";
   }
