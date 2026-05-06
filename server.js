@@ -4813,40 +4813,31 @@ async function searchAHRecipes(query, count = 4) {
       // Strategy 1: Direct URLs - extract ALL recipe URLs first, then filter out categories
       const allRecipeUrls = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recepten\/([^\s\)]+)/g)];
 
-      // Strategy 2: Try to pair URLs with nearby text for titles
+      // Strategy 2: Extract URLs and derive titles from slug (most reliable)
       const urlsWithContext = [];
-      const lines = markdown.split('\n');
 
-      for (let i = 0; i < lines.length; i++) {
-        const urlMatch = lines[i].match(/https:\/\/www\.ah\.nl\/allerhande\/recepten\/([^\s\)]+)/);
-        if (urlMatch) {
-          const url = urlMatch[0];
-          const slug = urlMatch[1];
+      // Find all recipe URLs
+      const urlMatches = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recepten\/([^\s\)]+)/g)];
 
-          // Skip obvious category links
-          if (slug.endsWith('recepten') || slug.endsWith('gerechten') || slug.includes('categor')) {
-            continue;
-          }
+      for (const match of urlMatches) {
+        const url = match[0];
+        const slug = match[1];
 
-          // Try to get title from this line or previous lines
-          let title = lines[i]
-            .replace(/https:\/\/www\.ah\.nl\/allerhande\/recepten\/[^\s)]+/g, '')
-            .replace(/[\[\(\)\*_\-#]/g, ' ')
-            .trim();
+        // Skip obvious category links
+        if (slug.endsWith('recepten') || slug.endsWith('gerechten') || slug.includes('categor') ||
+            /^(lente|bbq|picknick|airfryer|makkelijke|snelle|gezonde|zomer|herfst|winter)(-recepten)?$/.test(slug)) {
+          continue;
+        }
 
-          if (!title) {
-            // Try previous line for title
-            title = lines[i-1]?.trim().replace(/[\[\(\)\*_\-#]/g, ' ').trim() || '';
-          }
+        // Derive title from slug - this is most reliable
+        // Examples: "surinaamse-bami" → "Surinaamse Bami"
+        const title = slug
+          .split('-')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
 
-          if (!title) {
-            // Fallback: derive from slug
-            title = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-          }
-
-          if (title.length > 2) {
-            urlsWithContext.push({ 0: null, 1: title, 2: url });
-          }
+        if (title.length > 2) {
+          urlsWithContext.push({ 0: null, 1: title, 2: url });
         }
       }
 
