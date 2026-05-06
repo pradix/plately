@@ -5916,6 +5916,9 @@ bindEvent(searchInput, "input", (event) => {
     return;
   }
 
+  // Reset filter when starting a new search so results aren't hidden by old filter
+  state.channelSearchFilter = null;
+
   // Ensure followedChannelIds includes Allerhande at minimum
   if (!state.followedChannelIds.includes("ch-ah")) {
     state.followedChannelIds.push("ch-ah");
