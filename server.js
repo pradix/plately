@@ -4802,8 +4802,28 @@ async function searchAHRecipes(query, count = 4) {
           if (slug.endsWith('recepten') || slug.endsWith('gerechten')) {
             return null;
           }
-          const title = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-          return { 0: null, 1: title, 2: url };
+
+          // Parse slug: "R1202302/surinaamse-eiersalade" → ID + recipe name
+          const parts = slug.split('/');
+          let recipeId = '';
+          let recipeName = '';
+
+          if (parts.length === 2) {
+            // Has ID/name format
+            recipeId = parts[0];
+            recipeName = parts[1];
+          } else {
+            // Just recipe name, no ID
+            recipeName = slug;
+          }
+
+          // Format title: capitalize words from recipe name
+          const title = recipeName
+            .split('-')
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(' ');
+
+          return { 0: null, 1: title, 2: url, recipeId };
         }).filter(Boolean);
 
       const allLinks = pattern2.length > 0 ? pattern2 : pattern1;
@@ -4811,6 +4831,7 @@ async function searchAHRecipes(query, count = 4) {
 
       // Extract images - try HTML first, then Jina markdown
       const imageMap = new Map();
+      const imagesByUrl = new Map(); // Alternative map by URL for fallback matching
 
       if (html && html.length > 100) {
         // Try to extract from HTML
@@ -4824,9 +4845,12 @@ async function searchAHRecipes(query, count = 4) {
           let altText = match[2] || match[1];
 
           if (imgUrl && imgUrl.includes('static.ah.nl')) {
+            const upgraded = upgradeAhImageQuality(imgUrl);
             if (altText) {
-              imageMap.set(altText.toLowerCase(), upgradeAhImageQuality(imgUrl));
+              imageMap.set(altText.toLowerCase(), upgraded);
             }
+            // Also store by URL pattern for matching
+            imagesByUrl.set(imgUrl, upgraded);
           }
         }
         console.log(`📸 Found ${imageMap.size} images in HTML`);
@@ -4839,8 +4863,12 @@ async function searchAHRecipes(query, count = 4) {
         for (const match of markdownImages) {
           const altText = match[1] || "";
           const imgUrl = match[2];
-          if (imgUrl && altText) {
-            imageMap.set(altText.toLowerCase(), upgradeAhImageQuality(imgUrl));
+          if (imgUrl) {
+            const upgraded = upgradeAhImageQuality(imgUrl);
+            if (altText) {
+              imageMap.set(altText.toLowerCase(), upgraded);
+            }
+            imagesByUrl.set(imgUrl, upgraded);
           }
         }
         if (markdownImages.length > 0) {
@@ -4915,20 +4943,46 @@ async function searchAHRecipes(query, count = 4) {
       if (links.length > 0) {
         const results = links.slice(0, count).map((linkItem) => {
           const title = sanitizeText(linkItem.title || "");
-          // Try to match image from HTML by recipe title
+          const recipeId = linkItem.recipeId || "";
+
+          // Format display title with ID prefix if available
+          const displayTitle = recipeId && title
+            ? `${recipeId} ${title}`
+            : title;
+
+          // Try to match image from HTML by recipe title or ID
           let thumbnail = "";
           if (imageMap.size > 0) {
             const titleLower = title.toLowerCase();
+            const idLower = recipeId.toLowerCase();
+
+            // Try matching by title first
             for (const [altText, imgUrl] of imageMap.entries()) {
               if (titleLower.includes(altText) || altText.includes(titleLower.split(' ')[0])) {
                 thumbnail = imgUrl;
                 break;
               }
             }
+
+            // Try matching by ID if title match failed
+            if (!thumbnail && idLower) {
+              for (const [altText, imgUrl] of imageMap.entries()) {
+                if (altText.includes(idLower)) {
+                  thumbnail = imgUrl;
+                  break;
+                }
+              }
+            }
           }
-          console.log(`  📄 Mapping: "${title}" from ${linkItem.url}`);
+
+          // Fallback: use first available image if no specific match
+          if (!thumbnail && imagesByUrl.size > 0) {
+            thumbnail = imagesByUrl.entries().next().value[1] || "";
+          }
+
+          console.log(`  📄 Mapping: "${displayTitle}" (ID: ${recipeId || 'none'}) - Image: ${thumbnail ? 'found' : 'missing'}`);
           return {
-            title,
+            title: displayTitle,
             url: linkItem.url,
             thumbnail,
             channel: "Allerhande",
