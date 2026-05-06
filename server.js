@@ -4809,8 +4809,22 @@ async function searchAHRecipes(query, count = 4) {
       }
       console.log(`✅ Jina returned ${markdown.length} chars, HTML: ${html.length} chars`);
 
-      // Extract recipe links from markdown
-      const allLinks = [...markdown.matchAll(/\[([^\]]+)\]\((https:\/\/www\.ah\.nl\/allerhande\/recepten\/[^\)]+)\)/g)];
+      // Extract recipe links from markdown - try multiple patterns
+      // Pattern 1: [title](url) - standard markdown links
+      const pattern1 = [...markdown.matchAll(/\[([^\]]+)\]\((https:\/\/www\.ah\.nl\/allerhande\/recepten\/[^\)]+)\)/g)];
+
+      // Pattern 2: Direct URLs (in case Jina formats them differently)
+      const pattern2 = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recepten\/([^\s\)]+)/g)]
+        .map((m, idx) => {
+          const url = m[0];
+          const slug = m[1];
+          // Try to extract title from URL slug (replace hyphens with spaces, capitalize)
+          const title = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          return { 0: null, 1: title, 2: url };
+        });
+
+      const allLinks = pattern1.length > 0 ? pattern1 : pattern2;
+      console.log(`🔗 Found links: ${allLinks.length} (pattern1: ${pattern1.length}, pattern2: ${pattern2.length})`);
 
       // Extract images - try HTML first, then Jina markdown
       const imageMap = new Map();
@@ -4862,12 +4876,15 @@ async function searchAHRecipes(query, count = 4) {
 
           // 1. Filter out obvious categories
           if (slug.endsWith('recepten') || slug.endsWith('gerechten') || slug.includes('categor')) {
+            console.log(`  ❌ Category filter: "${title}" (${slug})`);
             return false;
           }
 
           // 2. Need multi-word recipe names (2+ hyphens = 3+ words)
+          // RELAXED: Allow single-word recipes too (like "Surinaamse")
           const wordCount = (slug.match(/-/g) || []).length + 1;
-          if (wordCount < 2) {
+          if (wordCount < 1) {
+            console.log(`  ❌ Too short slug: "${title}" (${slug}) - ${wordCount} words`);
             return false;
           }
 
