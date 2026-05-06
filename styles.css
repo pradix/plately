@@ -7171,6 +7171,12 @@ body {
   pointer-events: none;
 }
 
+/* Allow delete button to be clickable even when row is disabled */
+.channel-toggle-row--disabled .channel-delete-btn {
+  pointer-events: auto;
+  opacity: 1;
+}
+
 /* ── Channel filter chips in search results ──────────────────────────────── */
 .channel-filter-row {
   display: flex;
