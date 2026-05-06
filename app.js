@@ -4912,6 +4912,10 @@ async function bootstrapSession() {
       openAuthModal("login");
     } else {
       console.log("✅ User is authenticated or session check failed. state.auth.authenticated:", state.auth.authenticated);
+      // Show tooltips once per login session
+      if (state.auth.authenticated) {
+        startOnboarding();
+      }
     }
   }
 }
@@ -4962,6 +4966,9 @@ async function logoutAccount() {
 
   // Clear token immediately
   storeAuthToken("");
+
+  // Clear session tooltip flag so user will see tooltips again on next login
+  try { sessionStorage.removeItem(ONBOARDING_SESSION_KEY); } catch {}
 
   try {
     const payload = await fetchJson(`${state.apiBase}/api/auth/logout`, {
@@ -7282,6 +7289,7 @@ syncPlatformUI();
 
 // ── Onboarding ───────────────────────────────────────────────────────────────
 const ONBOARDING_KEY = "plately-onboarding-v2";
+const ONBOARDING_SESSION_KEY = "plately-tooltips-shown-this-session"; // One-time per login session
 
 const ONBOARDING_STEPS = [
   {
@@ -7414,9 +7422,15 @@ function _obFinish() {
 }
 
 function startOnboarding() {
-  // Only show tooltips for authenticated users on their first time
+  // Show tooltips once per login session (not persisted across sessions)
   if (!state.auth.authenticated) return;
-  try { if (localStorage.getItem(ONBOARDING_KEY)) return; } catch {}
+
+  // Check if we already showed tooltips in this session
+  try { if (sessionStorage.getItem(ONBOARDING_SESSION_KEY)) return; } catch {}
+
+  // Mark tooltips as shown for this session
+  try { sessionStorage.setItem(ONBOARDING_SESSION_KEY, "1"); } catch {}
+
   _obStep = 0;
   setTimeout(() => _obShow(0), 600);
 }

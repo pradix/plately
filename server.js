@@ -3683,8 +3683,12 @@ async function importInstagram(sourceUrl, note) {
   const captionCandidates = [ogDescription, textDerivedCaption, ...htmlSignals.captions, oembed?.title];
   const bestCaption = pickBestCaptionCandidate(captionCandidates) || sanitizeText(ogDescription || oembed?.title || "");
 
-  if (bestCaption) {
-    const claudeResult = await extractWithClaude(bestCaption, note || "");
+  // Try Claude extraction even if caption is short/doesn't score high enough
+  // (Instagram captions might not have explicit "ingredients" keyword but still contain recipe data)
+  const captionForClaude = bestCaption || sanitizeText(ogDescription || textDerivedCaption || oembed?.title || "");
+
+  if (captionForClaude && captionForClaude.length >= 10) {
+    const claudeResult = await extractWithClaude(captionForClaude, note || "");
     if (claudeResult) {
       const parsedIngredients = Array.isArray(claudeResult.ingredients)
         ? claudeResult.ingredients.map((ingredient) =>
@@ -3697,7 +3701,7 @@ async function importInstagram(sourceUrl, note) {
         sourceUrl,
         title: normalizeSocialRecipeTitle(claudeResult.title) || "Geïmporteerd recept",
         description: compactSocialDescription(claudeResult.description || "", claudeResult.title || ""),
-        caption: stripSocialNoise(bestCaption),
+        caption: stripSocialNoise(captionForClaude),
         image,
         author,
         ingredients: normalizeIngredientList(parsedIngredients),

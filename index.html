@@ -623,7 +623,7 @@
                 <span class="profile2-row__label">Wachtwoord wijzigen</span>
                 <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
               </button>
-              <button class="profile2-row" id="installAppBtn" type="button" style="margin-top: 0.5rem; padding: 1rem; display: none;">
+              <button class="profile2-row" id="installAppBtn" type="button" style="margin-top: 0.5rem; padding: 1rem;">
                 <span class="profile2-row__icon" style="background:#dcfce7">
                   <svg viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M19 13v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6M12 17V7M7 12h10"/></svg>
                 </span>
@@ -968,73 +968,73 @@
 
           <div class="review-container">
             <section class="review-card">
-            <div class="review-preview">
-              <img id="reviewPreviewImage" src="assets/hero-burger.svg" alt="Recept preview" />
-              <div class="review-preview__copy">
-                <span class="meal-pill" id="reviewPreviewMealTag">Avond</span>
-                <p id="reviewPreviewHost">Geïmporteerde bron</p>
-              </div>
-            </div>
-
-            <form class="review-form" id="reviewForm">
-              <section class="review-summary" id="reviewSummary"></section>
-              <section class="review-insights" id="reviewInsights"></section>
-              <section class="review-suggestions" id="reviewSuggestions"></section>
-
-              <label>
-                Titel
-                <input id="reviewTitleInput" type="text" maxlength="80" placeholder="Naam van het gerecht" required />
-              </label>
-
-              <label>
-                Omschrijving
-                <textarea id="reviewDescriptionInput" rows="3" placeholder="Korte, duidelijke omschrijving van het recept"></textarea>
-              </label>
-
-              <div class="review-meta-grid">
-                <label>
-                  Tijd
-                  <input id="reviewTimeInput" type="text" placeholder="25 min" />
-                </label>
-                <label>
-                  Porties
-                  <input id="reviewServingsInput" type="text" placeholder="2 Pers." />
-                </label>
-              </div>
-
-              <div class="review-field">
-                <span class="review-label">Categorie</span>
-                <div class="meal-tag-chips" id="mealTagChips" role="group" aria-label="Kies categorie">
-                  <button type="button" class="meal-chip meal-chip--active" data-tag="Avond">🍽️ Avond</button>
-                  <button type="button" class="meal-chip" data-tag="Ontbijt">🌅 Ontbijt</button>
-                  <button type="button" class="meal-chip" data-tag="Lunch">🥗 Lunch</button>
-                  <button type="button" class="meal-chip" data-tag="Snack">🍎 Snack</button>
-                  <button type="button" class="meal-chip" data-tag="Dessert">🍮 Dessert</button>
-                  <button type="button" class="meal-chip" data-tag="Bakken">🥐 Bakken</button>
+              <div class="review-preview">
+                <img id="reviewPreviewImage" src="assets/hero-burger.svg" alt="Recept preview" />
+                <div class="review-preview__copy">
+                  <span class="meal-pill" id="reviewPreviewMealTag">Avond</span>
+                  <p id="reviewPreviewHost">Geïmporteerde bron</p>
                 </div>
-                <input type="hidden" id="reviewMealTagInput" value="Avond" />
               </div>
 
-              <label>
-                Ingrediënten
-                <textarea id="reviewIngredientsInput" rows="8" placeholder="Eén ingrediënt per regel"></textarea>
-              </label>
+              <form class="review-form" id="reviewForm">
+                <section class="review-summary" id="reviewSummary"></section>
+                <section class="review-insights" id="reviewInsights"></section>
+                <section class="review-suggestions" id="reviewSuggestions"></section>
 
-              <label>
-                Bereiding
-                <textarea id="reviewInstructionsInput" rows="10" placeholder="Eén stap per regel"></textarea>
-              </label>
+                <label>
+                  Titel
+                  <input id="reviewTitleInput" type="text" maxlength="80" placeholder="Naam van het gerecht" required />
+                </label>
 
-              <p class="helper-text" id="reviewFeedback">Maak de import rustig netjes voordat je verdergaat.</p>
+                <label>
+                  Omschrijving
+                  <textarea id="reviewDescriptionInput" rows="3" placeholder="Korte, duidelijke omschrijving van het recept"></textarea>
+                </label>
 
-              <div class="review-actions">
-                <button class="primary-button" id="saveReviewButton" type="submit">Opslaan en openen</button>
-                <button class="secondary-button" id="skipReviewButton" type="button">Later nalopen</button>
-              </div>
-            </form>
+                <div class="review-meta-grid">
+                  <label>
+                    Tijd
+                    <input id="reviewTimeInput" type="text" placeholder="25 min" />
+                  </label>
+                  <label>
+                    Porties
+                    <input id="reviewServingsInput" type="text" placeholder="2 Pers." />
+                  </label>
+                </div>
+
+                <div class="review-field">
+                  <span class="review-label">Categorie</span>
+                  <div class="meal-tag-chips" id="mealTagChips" role="group" aria-label="Kies categorie">
+                    <button type="button" class="meal-chip meal-chip--active" data-tag="Avond">🍽️ Avond</button>
+                    <button type="button" class="meal-chip" data-tag="Ontbijt">🌅 Ontbijt</button>
+                    <button type="button" class="meal-chip" data-tag="Lunch">🥗 Lunch</button>
+                    <button type="button" class="meal-chip" data-tag="Snack">🍎 Snack</button>
+                    <button type="button" class="meal-chip" data-tag="Dessert">🍮 Dessert</button>
+                    <button type="button" class="meal-chip" data-tag="Bakken">🥐 Bakken</button>
+                  </div>
+                  <input type="hidden" id="reviewMealTagInput" value="Avond" />
+                </div>
+
+                <label>
+                  Ingrediënten
+                  <textarea id="reviewIngredientsInput" rows="8" placeholder="Eén ingrediënt per regel"></textarea>
+                </label>
+
+                <label>
+                  Bereiding
+                  <textarea id="reviewInstructionsInput" rows="10" placeholder="Eén stap per regel"></textarea>
+                </label>
+
+                <p class="helper-text" id="reviewFeedback">Maak de import rustig netjes voordat je verdergaat.</p>
+
+                <div class="review-actions">
+                  <button class="primary-button" id="saveReviewButton" type="submit">Opslaan en openen</button>
+                  <button class="secondary-button" id="skipReviewButton" type="button">Later nalopen</button>
+                </div>
+              </form>
+            </section>
 
             <h1 class="review-title">Recept controleren</h1>
-          </section>
           </div>
 
         <!-- Admin Dashboard Screen (Hidden, only for admin) -->

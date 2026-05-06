@@ -5464,16 +5464,26 @@ img { display: block; max-width: 100%; }
 
 /* Container for review card and title side-by-side */
 .review-container {
-  display: grid;
-  grid-template-columns: 1fr 140px;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   margin: 16px;
-  align-items: flex-start;
+  align-items: stretch;
+}
+
+.review-card {
+  flex: 1;
 }
 
 .review-title {
   margin: 0;
   font-family: var(--font-display);
+  font-size: clamp(1.4rem, 4vw, 1.8rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  padding: 0 16px;
+  color: var(--text);
   font-size: clamp(1.2rem, 5vw, 2.2rem);
   line-height: 1.1;
   letter-spacing: -0.04em;
