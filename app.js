@@ -4797,13 +4797,30 @@ async function bootstrapSession() {
 
     renderAll();
 
-    // Restore the view user was on before refresh (already in state from applyPersistedAppState)
-    // Only switch to a non-home view if that's where they were
-    if (state.view === "detail" && state.selectedRecipeId && getRecipeById(state.selectedRecipeId)) {
+    // Restore the view user was on before refresh
+    // Priority: sessionStorage > state.view > default to home
+    let viewToRestore = "home";
+    try {
+      const savedView = sessionStorage.getItem("plately-view");
+      if (savedView && ["home", "grocery", "settings", "mealplan", "cookbooks"].includes(savedView)) {
+        viewToRestore = savedView;
+      }
+    } catch { /* ignore */ }
+
+    // If no saved view, use state.view from persisted app state
+    if (viewToRestore === "home" && state.view && state.view !== "home" && ["detail", "import", "review", "grocery", "settings", "mealplan", "cookbooks"].includes(state.view)) {
+      viewToRestore = state.view;
+    }
+
+    // Switch to the restored view
+    if (viewToRestore === "detail" && state.selectedRecipeId && getRecipeById(state.selectedRecipeId)) {
       switchView("detail");
       renderDetailRecipe(true);
-    } else if (state.view !== "home") {
-      switchView(state.view);
+    } else if (viewToRestore !== "home") {
+      switchView(viewToRestore);
+    } else {
+      // Explicitly switch to home to ensure proper initialization
+      switchView("home");
     }
 
     // Scroll to top for non-detail views
