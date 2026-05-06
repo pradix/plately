@@ -4824,19 +4824,57 @@ async function searchAHRecipes(query, count = 4) {
         });
 
       // Pattern 3: Search for recipe names with search query in them
-      // Jina might output recipe names + URLs on separate lines
+      // Jina might output recipe names + URLs on separate lines or in complex structure
       const searchTerms = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
       const pattern3 = [];
+
       if (searchTerms.length > 0) {
-        const recipePattern = new RegExp(`(.*?${searchTerms[0]}[^\\n]*?)\\s*(https://www\\.ah\\.nl/allerhande/recepten/[^\\s)]+)`, 'gi');
-        for (const match of markdown.matchAll(recipePattern)) {
-          const title = match[1].trim().replace(/^[-*•]\s*/, ''); // Remove bullet points
-          const url = match[2];
-          pattern3.push({ 0: null, 1: title, 2: url });
+        // Look for lines containing search term + nearby URLs
+        // This handles cases where Jina outputs: "Recept name with Surinaamse ... https://url"
+        const lines = markdown.split('\n');
+        for (const line of lines) {
+          if (line.toLowerCase().includes(searchTerms[0])) {
+            // Check if this line or nearby context has a recipe URL
+            const urlMatch = line.match(/https:\/\/www\.ah\.nl\/allerhande\/recepten\/([^\s)]+)/);
+            if (urlMatch) {
+              // Extract title from the line (remove URLs and formatting)
+              const title = line
+                .replace(/https:\/\/www\.ah\.nl\/allerhande\/recepten\/[^\s)]+/g, '')
+                .replace(/[\[\(\)\*_\-]/g, ' ')
+                .trim();
+
+              if (title.length > 3) {
+                pattern3.push({ 0: null, 1: title, 2: urlMatch[0] });
+              }
+            }
+          }
         }
       }
 
-      const allLinks = pattern1.length > pattern3.length ? pattern1 : (pattern3.length > 0 ? pattern3 : pattern2);
+      // Also try extracting from any line that has a URL + nearby recipe context
+      if (pattern3.length === 0) {
+        const urlLines = markdown.split('\n').filter(l => l.includes('https://www.ah.nl/allerhande/recepten/'));
+        for (const line of urlLines) {
+          const urlMatch = line.match(/https:\/\/www\.ah\.nl\/allerhande\/recepten\/([^\s)]+)/);
+          if (urlMatch) {
+            // Check if line contains search terms or looks like a recipe (not category)
+            const slug = urlMatch[1];
+            if (!slug.endsWith('recepten') && !slug.endsWith('gerechten')) {
+              const title = line
+                .replace(/https:\/\/www\.ah\.nl\/allerhande\/recepten\/[^\s)]+/g, '')
+                .replace(/[\[\(\)\*_\-]/g, ' ')
+                .replace(/^[-*•]\s*/, '')
+                .trim();
+
+              if (title.length > 3) {
+                pattern3.push({ 0: null, 1: title, 2: urlMatch[0] });
+              }
+            }
+          }
+        }
+      }
+
+      const allLinks = pattern1.length > 10 && pattern3.length === 0 ? pattern1 : (pattern3.length > 0 ? pattern3 : pattern2);
       console.log(`🔗 Found links: ${allLinks.length} (pattern1: ${pattern1.length}, pattern2: ${pattern2.length}, pattern3: ${pattern3.length})`);
 
       // Extract images - try HTML first, then Jina markdown
