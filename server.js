@@ -3435,7 +3435,7 @@ function parseWebsiteRecipe(html, url) {
       // — this triggers the Claude AI fallback in importWebsite when ANTHROPIC_API_KEY
       // is set, which can extract proper steps from messy article bodies.
       // Lower threshold (3 vs 2) means Claude is called more proactively for incomplete recipes.
-      needsReview: mergedIngredients.length < 3 || mergedInstructions.length < 4 || !recipe.image,
+      needsReview: mergedIngredients.length < 3 || mergedInstructions.length < 4 || !recipeImage,
       sourceLabel: "Imported from Website",
     };
   }
