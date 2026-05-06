@@ -100,6 +100,36 @@ function cleanImageUrl(url) {
   return String(url || "").trim().replace(/[\\'"]+$/g, "");
 }
 
+function getHtmlAttr(tag, attrName) {
+  const match = String(tag || "").match(new RegExp(`${attrName}\\s*=\\s*["']([^"']+)["']`, "i"));
+  return match ? decodeHtmlEntities(match[1]) : "";
+}
+
+function normalizeImageMatchKey(value) {
+  return decodeHtmlEntities(stripHtmlTags(value || ""))
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function pickLargestSrcsetImage(srcset) {
+  const candidates = String(srcset || "")
+    .split(",")
+    .map((part) => {
+      const [rawUrl, rawWidth = ""] = part.trim().split(/\s+/);
+      const url = cleanImageUrl(rawUrl);
+      const width = Number((rawWidth.match(/(\d+)w/) || [])[1] || 0);
+      const dimensionWidth = Number((url.match(/_(\d{3,4})x\d{3,4}_/i) || [])[1] || 0);
+      return { url, width: width || dimensionWidth };
+    })
+    .filter((item) => item.url && /static\.ah\.nl/i.test(item.url) && !isDecorativeImageUrl(item.url));
+
+  candidates.sort((a, b) => b.width - a.width);
+  return candidates[0]?.url || "";
+}
+
 
 async function proxyImage(requestUrl, response) {
   const raw = requestUrl.searchParams.get("url") || "";
@@ -4974,25 +5004,25 @@ async function searchAHRecipes(query, count = 4) {
       const fallbackImages = []; // Ordered list fallback (best-effort)
 
       if (html && html.length > 100) {
-        // Try to extract from HTML
-        const imgMatches = [
-          ...html.matchAll(/<img[^>]+src=["']([^"']*static\.ah\.nl[^"']*jpg[^"']*)["'][^>]*alt=["']([^"']*)["']/gi),
-          ...html.matchAll(/<img[^>]+alt=["']([^"']*)["'][^>]*src=["']([^"']*static\.ah\.nl[^"']*jpg[^"']*)["']/gi),
-        ];
+        // Try to extract from AH search cards. AH often puts the real recipe
+        // photo only in img[srcset], with the recipe title in alt.
+        const imgTags = [...html.matchAll(/<img\b[^>]*(?:static\.ah\.nl|card-image_image__)[^>]*>/gi)];
+        for (const tagMatch of imgTags) {
+          const tag = tagMatch[0];
+          const altText = getHtmlAttr(tag, "alt");
+          const srcsetImage = pickLargestSrcsetImage(getHtmlAttr(tag, "srcset"));
+          const srcImage = cleanImageUrl(getHtmlAttr(tag, "src"));
+          const imgUrl = srcsetImage || srcImage;
 
-        for (const match of imgMatches) {
-          let imgUrl = cleanImageUrl(match[1] || match[2]);
-          let altText = match[2] || match[1];
-
-          if (imgUrl && imgUrl.includes('static.ah.nl')) {
+          if (imgUrl && imgUrl.includes("static.ah.nl") && !isDecorativeImageUrl(imgUrl)) {
             const upgraded = upgradeAhImageQuality(imgUrl);
             if (altText) {
-              imageMap.set(altText.toLowerCase(), upgraded);
+              imageMap.set(normalizeImageMatchKey(altText), upgraded);
             }
-            // Also store by URL pattern for matching
             imagesByUrl.set(imgUrl, upgraded);
           }
         }
+
         // Additional fallback: the search page often uses <source srcset>, data-attrs, or JSON blobs.
         // Capture any static.ah.nl image URLs in order of appearance.
         const looseMatches = [
@@ -5024,7 +5054,7 @@ async function searchAHRecipes(query, count = 4) {
             if (isDecorativeImageUrl(imgUrl)) continue;
             const upgraded = upgradeAhImageQuality(imgUrl);
             if (altText) {
-              imageMap.set(altText.toLowerCase(), upgraded);
+              imageMap.set(normalizeImageMatchKey(altText), upgraded);
             }
             imagesByUrl.set(imgUrl, upgraded);
           }
@@ -5112,12 +5142,19 @@ async function searchAHRecipes(query, count = 4) {
           // Try to match image from HTML by recipe title or ID
           let thumbnail = "";
           if (imageMap.size > 0) {
-            const titleLower = title.toLowerCase();
+            const titleKey = normalizeImageMatchKey(title);
+            const titleWords = titleKey.split(/\s+/).filter((word) => word.length > 2);
             const idLower = recipeId.toLowerCase();
 
             // Try matching by title first
-            for (const [altText, imgUrl] of imageMap.entries()) {
-              if (titleLower.includes(altText) || altText.includes(titleLower.split(' ')[0])) {
+            for (const [altKey, imgUrl] of imageMap.entries()) {
+              const altWords = altKey.split(/\s+/).filter((word) => word.length > 2);
+              const sharedWords = altWords.filter((word) => titleWords.includes(word)).length;
+              if (
+                titleKey.includes(altKey) ||
+                altKey.includes(titleKey) ||
+                (altWords.length > 0 && sharedWords >= Math.min(2, altWords.length))
+              ) {
                 thumbnail = imgUrl;
                 break;
               }
@@ -5125,8 +5162,8 @@ async function searchAHRecipes(query, count = 4) {
 
             // Try matching by ID if title match failed
             if (!thumbnail && idLower) {
-              for (const [altText, imgUrl] of imageMap.entries()) {
-                if (altText.includes(idLower)) {
+              for (const [altKey, imgUrl] of imageMap.entries()) {
+                if (altKey.includes(idLower)) {
                   thumbnail = imgUrl;
                   break;
                 }
