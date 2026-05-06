@@ -5342,17 +5342,18 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/api/session" && request.method === "GET") {
-      const cookies = parseCookies(request.headers.cookie);
-      console.log(`🔐 /api/session - Raw Cookie header: ${request.headers.cookie || "EMPTY"}`);
-      console.log(`🔐 /api/session - Parsed cookies: ${Object.keys(cookies).join(", ") || "NONE"}`);
-      console.log(`🔐 /api/session - Auth cookie: ${cookies.plately_auth ? cookies.plately_auth.substring(0, 8) + "..." : "NONE"}`);
+      try {
+        const cookies = parseCookies(request.headers.cookie);
+        console.log(`🔐 /api/session - Raw Cookie header: ${request.headers.cookie || "EMPTY"}`);
+        console.log(`🔐 /api/session - Parsed cookies: ${Object.keys(cookies).join(", ") || "NONE"}`);
+        console.log(`🔐 /api/session - Auth cookie: ${cookies.plately_auth ? cookies.plately_auth.substring(0, 8) + "..." : "NONE"}`);
 
-      // Prevent any cached /api/session responses (browser or proxy)
-      response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
-      response.setHeader("Pragma", "no-cache");
-      response.setHeader("Expires", "0");
+        // Prevent any cached /api/session responses (browser or proxy)
+        response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+        response.setHeader("Pragma", "no-cache");
+        response.setHeader("Expires", "0");
 
-      let authUser = await getAuthenticatedUser(request);
+        let authUser = await getAuthenticatedUser(request);
 
       // Fallback to dev auth if Postgres not available
       if (!authUser && !isPostgresEnabled()) {
@@ -5380,22 +5381,50 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
-      const user = await ensureUserSession(request, response);
-      console.log(`🔐 /api/session - RESPONSE: authenticated=false (guest user_id=${user?.user_id || "?"})`);
-      sendJson(response, 200, {
-        ok: true,
-        user: {
-          ...user,
-          authenticated: false,
-          email: "",
-        },
-        auth: {
-          enabled: isPostgresEnabled(),
-          authenticated: false,
-          email: "",
-        },
-      });
-      return;
+        const user = await ensureUserSession(request, response);
+        console.log(`🔐 /api/session - RESPONSE: authenticated=false (guest user_id=${user?.user_id || "?"})`);
+        sendJson(response, 200, {
+          ok: true,
+          user: {
+            ...user,
+            authenticated: false,
+            email: "",
+          },
+          auth: {
+            enabled: isPostgresEnabled(),
+            authenticated: false,
+            email: "",
+          },
+        });
+        return;
+      } catch (error) {
+        console.error(`❌ /api/session error: ${error.message}`);
+        // Return guest session even if auth check fails
+        try {
+          const user = await ensureUserSession(request, response);
+          sendJson(response, 200, {
+            ok: true,
+            user: {
+              ...user,
+              authenticated: false,
+              email: "",
+            },
+            auth: {
+              enabled: false,
+              authenticated: false,
+              email: "",
+            },
+          });
+        } catch {
+          // Fallback: return minimal guest session
+          sendJson(response, 200, {
+            ok: true,
+            user: { authenticated: false, email: "", recipes: [], cookbooks: [] },
+            auth: { enabled: false, authenticated: false, email: "" },
+          });
+        }
+        return;
+      }
     }
 
     if (requestUrl.pathname === "/api/app-state" && request.method === "PUT") {
