@@ -462,7 +462,7 @@ const state = {
   },
   searchQuery: "",
   activeCookbookFilter: null,
-  followedChannelIds: ["ch-ah", "ch-ek", "ch-mj", "ch-up", "ch-clf", "ch-les", "ch-lb"],
+  followedChannelIds: ["ch-ah", "ch-24k", "ch-ek", "ch-mj", "ch-up", "ch-clf", "ch-les", "ch-lb"],
   customChannels: [],
   channelSearchFilter: null,
   channelSearchAllResults: [],
@@ -473,6 +473,7 @@ const SEED_RECIPE_IDS = new Set(initialRecipes.map((recipe) => recipe.id));
 
 const SEED_CHANNELS = [
   { id: "ch-ah",  initials: "AH",  name: "Allerhande",          color: "#0071c2", url: "https://www.ah.nl/allerhande" },
+  { id: "ch-24k", initials: "24K", name: "24 Kitchen",          color: "#e82828", url: "https://www.24kitchen.nl/recepten" },
   { id: "ch-ek",  initials: "EK",  name: "Eef Kookt Zo",        color: "#d4789e", url: "https://www.eefkooktzo.nl" },
   { id: "ch-mj",  initials: "MJ",  name: "Miljuschka",           color: "#2d2d2d", url: "https://miljuschka.nl" },
   { id: "ch-up",  initials: "UP",  name: "Uit Paulines Keuken",  color: "#e8a020", url: "https://uitpaulineskeuken.nl" },
