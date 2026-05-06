@@ -4762,14 +4762,15 @@ async function searchAHRecipes(query, count = 4) {
       console.log(`✅ Jina returned ${markdown.length} chars, HTML: ${html.length} chars`);
 
       // Extract recipe links from Jina output - multiple strategies
-      // Strategy 1: Direct URLs - extract ALL recipe URLs first, then filter out categories
-      const allRecipeUrls = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recepten\/([^\s\)]+)/g)];
+      // Strategy 1: Direct URLs - extract ALL recipe URLs (both /recepten/ and /recept/)
+      // Note: Individual recipes use /recept/ (singular), categories use /recepten/ (plural)
+      const allRecipeUrls = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recept\/([^\s\)]+)/g)];
 
       // Strategy 2: Extract URLs and derive titles from slug (most reliable)
       const urlsWithContext = [];
 
-      // Find all recipe URLs
-      const urlMatches = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recepten\/([^\s\)]+)/g)];
+      // Find all recipe URLs - BOTH patterns
+      const urlMatches = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recept(?:en)?\/([^\s\)]+)/g)];
 
       for (const match of urlMatches) {
         const url = match[0];
@@ -4968,9 +4969,9 @@ async function searchAHRecipes(query, count = 4) {
 
     console.log(`Got ${html.length} chars of HTML`);
 
-    // Look for recipe links in the HTML
+    // Look for recipe links in the HTML (both /recept/ and /recepten/)
     const recipeUrls = new Set();
-    const matches = [...html.matchAll(/href=["']([^"']*\/allerhande\/recepten\/[^"']+)["']/gi)];
+    const matches = [...html.matchAll(/href=["']([^"']*\/allerhande\/recept(?:en)?\/[^"']+)["']/gi)];
 
     for (const match of matches) {
       let url = match[1];
