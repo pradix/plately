@@ -7359,6 +7359,16 @@ body {
   font-size: 0.88rem;
   color: #888;
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ch-result__loading::before {
+  content: "⏳";
+  display: inline-block;
+  animation: flip-hourglass 2.5s ease-in-out infinite;
+  font-size: 1.1rem;
 }
 
 /* ── Channel search result cards ──────────────────────────────────────────── */

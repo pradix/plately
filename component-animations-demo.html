@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plately - Component Animations Demo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #fbf7f1 0%, #f7f2ea 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 50px;
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      color: #25211d;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      font-size: 1.1rem;
+      color: #726b63;
+    }
+
+    .demos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 30px;
+      margin-bottom: 50px;
+    }
+
+    .demo-card {
+      background: white;
+      border-radius: 22px;
+      padding: 30px;
+      box-shadow: 0 4px 12px rgba(116, 111, 98, 0.08);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .demo-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(116, 111, 98, 0.15);
+    }
+
+    .demo-card h2 {
+      font-size: 1.4rem;
+      color: #25211d;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .demo-icon {
+      font-size: 1.8rem;
+    }
+
+    .demo-card p {
+      color: #726b63;
+      line-height: 1.6;
+      margin-bottom: 15px;
+    }
+
+    .animation-preview {
+      width: 100%;
+      height: 250px;
+      background: #f9f7f4;
+      border-radius: 16px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+      border: 2px solid #f3f5ef;
+    }
+
+    /* Animation: Recipe Import Flow */
+    .import-animation {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .import-step {
+      width: 100%;
+      padding: 12px 15px;
+      border-radius: 12px;
+      text-align: center;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: all 0.4s ease;
+    }
+
+    .import-step:nth-child(1) {
+      animation: slideIn 2s ease-in-out infinite;
+      background: #dce8dc;
+      color: #25211d;
+    }
+
+    .import-step:nth-child(2) {
+      animation: slideIn 2s ease-in-out 0.6s infinite;
+      background: #f6b69d;
+      color: #25211d;
+    }
+
+    .import-step:nth-child(3) {
+      animation: slideIn 2s ease-in-out 1.2s infinite;
+      background: #fff1e7;
+      color: #25211d;
+    }
+
+    @keyframes slideIn {
+      0%, 100% { opacity: 0; transform: translateX(-20px); }
+      20%, 80% { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Animation: Search & Filter */
+    .search-animation {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 15px;
+    }
+
+    .search-bar {
+      width: 100%;
+      height: 40px;
+      background: white;
+      border: 2px solid #dce8dc;
+      border-radius: 8px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .search-bar::before {
+      content: '🔍';
+      margin-right: 8px;
+    }
+
+    .search-results {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .search-result {
+      height: 30px;
+      background: #f3f5ef;
+      border-radius: 6px;
+      animation: fadeInSlide 1.5s ease-in-out infinite;
+    }
+
+    .search-result:nth-child(1) { animation-delay: 0s; width: 95%; }
+    .search-result:nth-child(2) { animation-delay: 0.3s; width: 85%; }
+    .search-result:nth-child(3) { animation-delay: 0.6s; width: 80%; }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(141, 164, 133, 0.7); }
+      50% { box-shadow: 0 0 0 8px rgba(141, 164, 133, 0); }
+    }
+
+    @keyframes fadeInSlide {
+      0% { opacity: 0; transform: translateX(-10px); }
+      50% { opacity: 1; }
+      100% { opacity: 0.5; }
+    }
+
+    /* Animation: Ingredient Addition */
+    .ingredient-animation {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 15px;
+    }
+
+    .ingredient-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #dce8dc;
+      border-radius: 8px;
+      color: #25211d;
+      font-size: 0.9rem;
+      animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    .ingredient-item:nth-child(1) { animation-delay: 0s; }
+    .ingredient-item:nth-child(2) { animation-delay: 0.2s; opacity: 0; }
+    .ingredient-item:nth-child(3) { animation-delay: 0.4s; opacity: 0; }
+    .ingredient-item:nth-child(4) { animation-delay: 0.6s; opacity: 0; }
+
+    .ingredient-item::before {
+      content: '✓';
+      font-weight: 600;
+      color: #8da485;
+    }
+
+    @keyframes popIn {
+      0% { opacity: 0; transform: scale(0.8) translateY(10px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    /* Animation: Channel Toggle */
+    .channel-animation {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 15px;
+    }
+
+    .channel-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: #f9f7f4;
+      border-radius: 10px;
+      font-size: 0.9rem;
+    }
+
+    .channel-item span:first-child {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .toggle {
+      width: 44px;
+      height: 24px;
+      background: #c83c3c;
+      border-radius: 12px;
+      position: relative;
+      animation: toggleSwitch 1.5s ease-in-out infinite;
+    }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      transition: left 0.3s;
+    }
+
+    @keyframes toggleSwitch {
+      0%, 25% { background: #dce8dc; }
+      25% { left: 22px; }
+      50%, 75% { background: #dce8dc; left: 3px; }
+      75% { background: #8da485; }
+      100% { background: #8da485; left: 22px; }
+    }
+
+    /* Animation: Meal Plan */
+    .mealplan-animation {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      padding: 15px;
+    }
+
+    .meal-day {
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #726b63;
+      margin-bottom: 8px;
+    }
+
+    .meal-slot {
+      aspect-ratio: 1;
+      background: #f3f5ef;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      animation: shimmer 2s ease-in-out infinite;
+    }
+
+    .meal-slot:nth-child(4) { animation-delay: 0.1s; }
+    .meal-slot:nth-child(5) { animation-delay: 0.2s; }
+    .meal-slot:nth-child(6) { animation-delay: 0.3s; }
+    .meal-slot:nth-child(7) { animation-delay: 0.4s; }
+    .meal-slot:nth-child(8) { animation-delay: 0.5s; }
+    .meal-slot:nth-child(9) { animation-delay: 0.6s; }
+
+    @keyframes shimmer {
+      0%, 100% { background: #f3f5ef; }
+      50% { background: #dce8dc; }
+    }
+
+    /* Animation: Grocery Checkbox */
+    .grocery-animation {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 15px;
+    }
+
+    .grocery-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      background: #f9f7f4;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      color: #25211d;
+    }
+
+    .checkbox {
+      width: 24px;
+      height: 24px;
+      border: 2px solid #8da485;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: checkAnimation 0.8s ease-in-out infinite;
+    }
+
+    .checkbox.checked {
+      background: #8da485;
+      color: white;
+      font-weight: 600;
+    }
+
+    .grocery-item:nth-child(1) .checkbox { animation-delay: 0s; }
+    .grocery-item:nth-child(2) .checkbox { animation-delay: 0.8s; }
+    .grocery-item:nth-child(3) .checkbox { animation-delay: 1.6s; }
+
+    @keyframes checkAnimation {
+      0%, 20% { content: ''; }
+      30% { background: #8da485; }
+      50% { content: '✓'; }
+      100% { background: #8da485; content: '✓'; }
+    }
+
+    /* Steps explanation */
+    .steps {
+      font-size: 0.85rem;
+      color: #726b63;
+    }
+
+    .steps li {
+      margin-left: 20px;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #dce8dc;
+      color: #25211d;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+
+    footer {
+      text-align: center;
+      color: #726b63;
+      margin-top: 60px;
+      padding-top: 30px;
+      border-top: 1px solid #f3f5ef;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🍳 Plately - Component Animations</h1>
+      <p>Interactive demonstrations of key Plately features</p>
+    </div>
+
+    <div class="demos-grid">
+      <!-- Recipe Import Animation -->
+      <div class="demo-card">
+        <h2><span class="demo-icon">📸</span> Recipe Import Flow</h2>
+        <p>Automatic recipe extraction from links</p>
+        <div class="animation-preview">
+          <div class="import-animation">
+            <div class="import-step">Paste Instagram Link</div>
+            <div class="import-step">→ Extract Data</div>
+            <div class="import-step">✓ Recipe Saved</div>
+          </div>
+        </div>
+        <div class="steps">
+          <strong>Animation shows:</strong>
+          <ul>
+            <li>Pasting a recipe URL</li>
+            <li>Claude AI extracting ingredients & instructions</li>
+            <li>Recipe being saved to collection</li>
+          </ul>
+        </div>
+        <span class="badge">Key Feature</span>
+      </div>
+
+      <!-- Search & Filter Animation -->
+      <div class="demo-card">
+        <h2><span class="demo-icon">🔍</span> Search & Discovery</h2>
+        <p>Finding recipes with intelligent filters</p>
+        <div class="animation-preview">
+          <div class="search-animation">
+            <div class="search-bar">Search recipes...</div>
+            <div class="search-results">
+              <div class="search-result"></div>
+              <div class="search-result"></div>
+              <div class="search-result"></div>
+            </div>
+          </div>
+        </div>
+        <div class="steps">
+          <strong>Animation shows:</strong>
+          <ul>
+            <li>Type to search recipes</li>
+            <li>Filter by meal type (Avond/Lunch)</li>
+            <li>Real-time results appearing</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Ingredient Parsing Animation -->
+      <div class="demo-card">
+        <h2><span class="demo-icon">🥘</span> Ingredient Validation</h2>
+        <p>Smart parsing with quantity checking</p>
+        <div class="animation-preview">
+          <div class="ingredient-animation">
+            <div class="ingredient-item">2 cups flour</div>
+            <div class="ingredient-item">250 gr butter</div>
+            <div class="ingredient-item">3 eggs</div>
+            <div class="ingredient-item">1 tsp vanilla</div>
+          </div>
+        </div>
+        <div class="steps">
+          <strong>Animation shows:</strong>
+          <ul>
+            <li>Ingredients being added</li>
+            <li>Automatic quantity validation</li>
+            <li>Unit normalization (gr → g)</li>
+          </ul>
+        </div>
+        <span class="badge">Recently Fixed</span>
+      </div>
+
+      <!-- Channel Management Animation -->
+      <div class="demo-card">
+        <h2><span class="demo-icon">📺</span> Channel Management</h2>
+        <p>Follow recipe sources and add custom channels</p>
+        <div class="animation-preview">
+          <div class="channel-animation">
+            <div class="channel-item">
+              <span>🍽️ <strong>FoodBlog</strong></span>
+              <div class="toggle"></div>
+            </div>
+            <div class="channel-item">
+              <span>👨‍🍳 <strong>MasterChef</strong></span>
+              <div class="toggle"></div>
+            </div>
+            <div class="channel-item">
+              <span>🥗 <strong>HealthyLife</strong></span>
+              <div class="toggle"></div>
+            </div>
+          </div>
+        </div>
+        <div class="steps">
+          <strong>Animation shows:</strong>
+          <ul>
+            <li>Toggle channels on/off</li>
+            <li>Add custom website channels</li>
+            <li>Manage recipe source subscriptions</li>
+          </ul>
+        </div>
+        <span class="badge">Recently Fixed</span>
+      </div>
+
+      <!-- Meal Plan Animation -->
+      <div class="demo-card">
+        <h2><span class="demo-icon">📅</span> Weekly Meal Planning</h2>
+        <p>Organize your week at a glance</p>
+        <div class="animation-preview">
+          <div class="mealplan-animation">
+            <div class="meal-day">Ma</div>
+            <div class="meal-day">Di</div>
+            <div class="meal-day">Wo</div>
+            <div class="meal-slot">🍝</div>
+            <div class="meal-slot">🍔</div>
+            <div class="meal-slot">🥘</div>
+            <div class="meal-slot">🍜</div>
+            <div class="meal-slot">🥗</div>
+            <div class="meal-slot">🍕</div>
+          </div>
+        </div>
+        <div class="steps">
+          <strong>Animation shows:</strong>
+          <ul>
+            <li>Drag recipes to meal plan</li>
+            <li>See weekly overview</li>
+            <li>Auto-generate shopping list</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Grocery List Animation -->
+      <div class="demo-card">
+        <h2><span class="demo-icon">🛒</span> Smart Grocery List</h2>
+        <p>Shopping with Albert Heijn integration</p>
+        <div class="animation-preview">
+          <div class="grocery-animation">
+            <div class="grocery-item">
+              <div class="checkbox checked">✓</div>
+              <span>Melk (1L)</span>
+            </div>
+            <div class="grocery-item">
+              <div class="checkbox checked">✓</div>
+              <span>Eieren (12st)</span>
+            </div>
+            <div class="grocery-item">
+              <div class="checkbox">☐</div>
+              <span>Boter (250g)</span>
+            </div>
+          </div>
+        </div>
+        <div class="steps">
+          <strong>Animation shows:</strong>
+          <ul>
+            <li>Check items while shopping</li>
+            <li>Link to Albert Heijn products</li>
+            <li>Organize by category</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>💡 These animations represent key Plately features available at <strong>plately-19f9.onrender.com</strong></p>
+      <p style="margin-top: 15px; font-size: 0.9rem;">Built with ❤️ for efficient recipe management</p>
+    </footer>
+  </div>
+</body>
+</html>

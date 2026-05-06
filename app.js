@@ -1857,12 +1857,13 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
 
   if (!all || all.length === 0) {
     // Only hide if we're not actively searching
-    if (!state.searchQuery.trim()) {
+    if (!state.searchQuery || state.searchQuery.trim().length === 0) {
+      // Only hide if truly no search is active AND no previous results
       channelSearchSection.classList.add("hidden");
       channelSearchResults.innerHTML = "";
       renderChannelFilterChips([]);
     } else {
-      // Show "no results" message when searching
+      // Show "no results" message when actively searching but got nothing
       channelSearchSection.classList.remove("hidden");
       channelSearchResults.innerHTML = `<p class="ch-result__loading" style="grid-column:1/-1;text-align:center;padding:2rem">Geen resultaten gevonden in de geselecteerde kanalen</p>`;
     }
