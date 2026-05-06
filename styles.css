@@ -7994,35 +7994,25 @@ body {
 
 .channel-pending-info {
   display: flex;
-  gap: 12px;
-  padding: 14px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
   margin: 0 0 16px 0;
-  background: #fef3c7;
-  border: 1px solid #fde68a;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
   border-radius: 12px;
-  align-items: flex-start;
-}
-
-.channel-pending-icon {
-  font-size: 1.3rem;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.channel-pending-text {
-  flex: 1;
 }
 
 .channel-pending-title {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  color: #92400e;
-  margin-bottom: 4px;
+  color: #166534;
+  margin-bottom: 2px;
 }
 
 .channel-pending-desc {
   font-size: 0.85rem;
-  color: #78350f;
+  color: #15803d;
   line-height: 1.4;
 }
 

@@ -2328,13 +2328,9 @@ function renderChannelSettings() {
     const names = pendingChannels.map(ch => `"${ch.name}"`).join(", ");
     customHTML += `
       <div class="channel-pending-info">
-        <span class="channel-pending-icon">⏳</span>
-        <div class="channel-pending-text">
-          <div class="channel-pending-title">We verwerken je kanaalverzoek</div>
-          <div class="channel-pending-desc">
-            We testen momenteel de import van ${names} om te zien of alles goed werkt.
-            Zodra het is goedgekeurd, ontvang je een melding en kun je het gebruiken in het zoekscherm.
-          </div>
+        <div class="channel-pending-title">We verwerken je kanaalverzoek</div>
+        <div class="channel-pending-desc">
+          We testen momenteel de import van ${names} om te zien of alles goed werkt. Zodra het is goedgekeurd, ontvang je een melding en kun je het gebruiken in het zoekscherm.
         </div>
       </div>
     `;
