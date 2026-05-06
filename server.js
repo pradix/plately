@@ -4881,6 +4881,7 @@ async function searchAHRecipes(query, count = 4) {
       // Extract images - try HTML first, then Jina markdown
       const imageMap = new Map();
       const imagesByUrl = new Map(); // Alternative map by URL for fallback matching
+      const fallbackImages = []; // Ordered list fallback (best-effort)
 
       if (html && html.length > 100) {
         // Try to extract from HTML
@@ -4902,7 +4903,23 @@ async function searchAHRecipes(query, count = 4) {
             imagesByUrl.set(imgUrl, upgraded);
           }
         }
-        console.log(`📸 Found ${imageMap.size} images in HTML`);
+        // Additional fallback: the search page often uses <source srcset>, data-attrs, or JSON blobs.
+        // Capture any static.ah.nl image URLs in order of appearance.
+        const looseMatches = [
+          ...html.matchAll(/https?:\/\/static\.ah\.nl\/[^"'<>\s]+\.(?:jpg|jpeg|png|webp)[^"'<>\s]*/gi),
+          ...html.matchAll(/\/\/static\.ah\.nl\/[^"'<>\s]+\.(?:jpg|jpeg|png|webp)[^"'<>\s]*/gi),
+        ];
+        const seen = new Set();
+        for (const m of looseMatches) {
+          const rawUrl = m[0].startsWith("//") ? `https:${m[0]}` : m[0];
+          if (!rawUrl) continue;
+          const upgraded = upgradeAhImageQuality(rawUrl);
+          if (!seen.has(upgraded)) {
+            seen.add(upgraded);
+            fallbackImages.push(upgraded);
+          }
+        }
+        console.log(`📸 Found ${imageMap.size} alt-mapped images + ${fallbackImages.length} fallback images in HTML`);
       }
 
       // Fallback: Try to extract images from Jina markdown
@@ -4996,7 +5013,7 @@ async function searchAHRecipes(query, count = 4) {
       console.log(`Found ${links.length} highly relevant recipes (filtered from ${allLinks.length} total for "${query}")`);
 
       if (links.length > 0) {
-        const results = links.slice(0, count).map((linkItem) => {
+        const results = links.slice(0, count).map((linkItem, idx) => {
           const title = sanitizeText(linkItem.title || "");
           const recipeId = linkItem.recipeId || "";
 
@@ -5032,6 +5049,10 @@ async function searchAHRecipes(query, count = 4) {
           // Final fallback: if we only have an alt-text map, take the first image
           if (!thumbnail && imageMap.size > 0) {
             thumbnail = imageMap.values().next().value || "";
+          }
+          // Ordered fallback: map nth result to nth image found on page (best-effort)
+          if (!thumbnail && fallbackImages.length > 0) {
+            thumbnail = fallbackImages[idx] || fallbackImages[0] || "";
           }
 
           console.log(`  📄 Mapping: "${title}" (ID: ${recipeId || 'none'}) - Image: ${thumbnail ? 'found' : 'missing'}`);
