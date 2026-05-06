@@ -462,7 +462,7 @@ const state = {
   },
   searchQuery: "",
   activeCookbookFilter: null,
-  followedChannelIds: ["ch-ah", "ch-24k", "ch-ek", "ch-mj", "ch-up", "ch-clf", "ch-les", "ch-lb"],
+  followedChannelIds: ["ch-ah"], // Start with only Allerhande (primary Dutch recipe source)
   customChannels: [],
   channelSearchFilter: null,
   channelSearchAllResults: [],
