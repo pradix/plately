@@ -52,6 +52,52 @@ const FETCH_HEADERS = {
   "accept-language": "en-US,en;q=0.9,nl;q=0.8",
 };
 
+function isAllowedImageProxyUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl);
+    if (u.protocol !== "https:") return false;
+    // Only allow known safe image CDNs (avoid SSRF).
+    if (u.hostname === "static.ah.nl") return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+async function proxyImage(requestUrl, response) {
+  const raw = requestUrl.searchParams.get("url") || "";
+  if (!raw || !isAllowedImageProxyUrl(raw)) {
+    sendJson(response, 400, { ok: false, error: "Invalid image url." });
+    return;
+  }
+  try {
+    const upstream = await fetch(raw, {
+      headers: {
+        ...FETCH_HEADERS,
+        accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!upstream.ok) {
+      sendJson(response, 502, { ok: false, error: `Upstream error (${upstream.status})` });
+      return;
+    }
+
+    const contentType = upstream.headers.get("content-type") || "application/octet-stream";
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    response.writeHead(200, {
+      ...HTTP_HEADERS,
+      "Content-Type": contentType,
+      // Cache proxied images aggressively; they're immutable URLs on the CDN.
+      "Cache-Control": "public, max-age=604800, immutable",
+    });
+    response.end(buffer);
+  } catch (err) {
+    sendJson(response, 502, { ok: false, error: "Image proxy failed." });
+  }
+}
+
 const HTML_FETCH_PROFILES = [
   {
     accept:
@@ -5434,6 +5480,11 @@ const server = http.createServer(async (request, response) => {
           website: { configured: true },
         },
       });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/image-proxy" && request.method === "GET") {
+      await proxyImage(requestUrl, response);
       return;
     }
 

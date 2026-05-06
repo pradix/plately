@@ -1561,12 +1561,65 @@ function normalizeUnit(unit) {
 }
 
 function normalizeIngredientKey(name) {
-  return String(name || "")
+  let t = String(name || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
     .trim();
+
+  // Remove parenthetical notes: "kip (zonder bot)" → "kip"
+  t = t.replace(/\s*\([^)]*\)/g, " ").trim();
+
+  // Strip leading quantity + unit-ish tokens
+  t = t.replace(
+    /^[\d\s½¼¾.,/+-]+\s*(?:g|gr|kg|mg|ml|dl|cl|l\b|el|tl|tbsp|tsp|oz|lb|stuk(?:s|ken)?|stuks?|krop(?:pen)?|bosje[s]?|zakje[s]?|pot(?:je|jes)?|blik(?:je|jes)?|eetlepels?|theelepels?|teen(?:tjes|en)?|snuf(?:je|jes)?|plak(?:je|jes)?|handje[s]?|scheut(?:je)?|takje[s]?|blaadje[s]?|blokje[s]?|reepje[s]?|filet(?:s)?|verpakking(?:en)?|pak(?:ken)?|rol(?:len)?)?\s+/i,
+    ""
+  );
+
+  // Strip common descriptors (repeat to catch doubles like "verse fijngesneden ui")
+  const DESC =
+    /^(vers(?:e|en)?|biologisch(?:e)?|bio|extra\s+vierge?|extra|groot(?:e)?|klein(?:e)?|fijn(?:gesneden)?|grof(?:gesneden)?|gesneden|gehakt(?:e)?|geraspt(?:e)?|gedroogd(?:e)?|gezouten|ongezouten|gepeld(?:e)?|gewassen|rood(?:e)?|groen(?:e)?|geel(?:e)?|wit(?:te)?|zwart(?:e)?|halve?|half|vol(?:le)?|mager(?:e)?|licht(?:e)?|geroosterd(?:e)?|gebakken|gekookt(?:e)?|rauw(?:e)?|warm(?:e)?|koud(?:e)?|in\s+reepjes|in\s+blokjes)\s+/i;
+  t = t.replace(DESC, "").replace(DESC, "").trim();
+
+  // Normalize punctuation and collapse spaces
+  t = t.replace(/[^a-z0-9]+/g, " ").trim();
+  if (!t) return "";
+
+  // Word-level normalizations (Dutch + common variants)
+  const MAP = new Map([
+    ["uien", "ui"],
+    ["uitjes", "ui"],
+    ["tomaten", "tomaat"],
+    ["eieren", "ei"],
+    ["aardappelen", "aardappel"],
+    ["krieltjes", "aardappel"],
+    ["knoflooktenen", "knoflook"],
+    ["knoflookteen", "knoflook"],
+    ["citroenen", "citroen"],
+    ["limoenen", "limoen"],
+    ["bananen", "banaan"],
+    ["paprikas", "paprika"],
+    ["champignons", "champignon"],
+    ["paddenstoelen", "paddenstoel"],
+    ["noedels", "noedel"],
+    ["noodles", "noedel"],
+    ["spagetti", "spaghetti"],
+    ["creme", "creme"],
+    ["cremefraiche", "creme fraiche"],
+  ]);
+
+  const words = t.split(/\s+/).filter(Boolean).map((w) => MAP.get(w) || w);
+
+  // Very small plural-to-singular fallback for Dutch-ish plurals (safe-ish)
+  const singularized = words.map((w) => {
+    if (MAP.has(w)) return MAP.get(w);
+    if (w.length > 4 && w.endsWith("en")) return w.slice(0, -2);
+    if (w.length > 4 && w.endsWith("s")) return w.slice(0, -1);
+    return w;
+  });
+
+  // Keep up to 3 words to avoid over-specific keys
+  return singularized.slice(0, 3).join(" ").trim();
 }
 
 function parseAmountLabel(value) {
@@ -1847,6 +1900,16 @@ function getImportedRecipes() {
 
 let channelSearchTimeout = null;
 
+function normalizeChannelThumbnailUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  // Some CDNs (notably AH) can block hotlinking/referrers — proxy via our backend.
+  if (raw.includes("static.ah.nl/")) {
+    return `/api/image-proxy?url=${encodeURIComponent(raw)}`;
+  }
+  return raw;
+}
+
 function renderChannelSearchResults(results, filter = state.channelSearchFilter) {
   if (!channelSearchSection || !channelSearchResults) return;
 
@@ -1899,13 +1962,14 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
   channelSearchResults.innerHTML = `<div class="ch-result-grid">${filtered.map((r) => {
     const allCh = getAllChannels();
     const channelColor = allCh.find((ch) => ch.id === r.channelId)?.color || "#8da485";
-    const thumbHtml = r.thumbnail
-      ? `<img class="ch-card__img" src="${escapeHtml(r.thumbnail)}" alt="${escapeHtml(r.title)}" loading="lazy" onerror="this.parentElement.style.background='${channelColor}33'" />`
+    const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
+    const thumbHtml = thumbUrl
+      ? `<img class="ch-card__img" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(r.title)}" loading="lazy" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.parentElement.style.background='${channelColor}33'" />`
       : `<div class="ch-card__img ch-card__img--placeholder" style="background:${escapeHtml(channelColor)}22">
            <span style="font-size:2rem;opacity:.4">${escapeHtml(allCh.find(ch => ch.id === r.channelId)?.initials || "?")}</span>
          </div>`;
     return `
-      <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}" data-ch-card-thumb="${escapeHtml(r.thumbnail || "")}">
+      <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}" data-ch-card-thumb="${escapeHtml(thumbUrl || "")}">
         <div class="ch-card__visual">
           ${thumbHtml}
           <span class="ch-card__badge" style="background:${escapeHtml(channelColor)}">${escapeHtml(r.channel)}</span>
@@ -1922,7 +1986,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
           </a>
           <button class="ch-card__import" type="button"
             data-channel-import-url="${escapeHtml(r.url)}"
-            data-channel-import-thumb="${escapeHtml(r.thumbnail || "")}"
+            data-channel-import-thumb="${escapeHtml(thumbUrl || "")}"
             aria-label="Importeer ${escapeHtml(r.title)}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
             Importeer
@@ -2025,8 +2089,9 @@ async function searchChannelsOnImportScreen(query) {
       results.innerHTML = `<div class="ch-result-grid">${all.map((r) => {
         const allCh = getAllChannels();
         const channelColor = allCh.find((ch) => ch.id === r.channelId)?.color || "#8da485";
-        const thumbHtml = r.thumbnail
-          ? `<img class="ch-card__img" src="${escapeHtml(r.thumbnail)}" alt="${escapeHtml(r.title)}" loading="lazy" onerror="this.parentElement.style.background='${channelColor}33'" />`
+        const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
+        const thumbHtml = thumbUrl
+          ? `<img class="ch-card__img" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(r.title)}" loading="lazy" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.parentElement.style.background='${channelColor}33'" />`
           : `<div class="ch-card__img ch-card__img--placeholder" style="background:${escapeHtml(channelColor)}22">
                <span style="font-size:2rem;opacity:.4">${escapeHtml(allCh.find(ch => ch.id === r.channelId)?.initials || "?")}</span>
              </div>`;
@@ -2047,7 +2112,7 @@ async function searchChannelsOnImportScreen(query) {
               </a>
               <button class="ch-card__import" type="button"
                 data-channel-import-url="${escapeHtml(r.url)}"
-                data-channel-import-thumb="${escapeHtml(r.thumbnail || "")}"
+                data-channel-import-thumb="${escapeHtml(thumbUrl || "")}"
                 aria-label="Importeer ${escapeHtml(r.title)}">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
                 Importeer
@@ -4104,7 +4169,7 @@ function addRecipeToGrocery(recipe) {
       (item) =>
         !item.checked &&
         normalizeIngredientKey(item.title) === normalizedTitle &&
-        item.group === getIngredientGroup(ingredient.name)
+        item.group === getIngredientGroup(normalizedTitle || ingredient.name)
     );
 
     if (existingItem) {
@@ -7317,7 +7382,10 @@ bindEvent(document.getElementById("homeCookbooksSectionHead"), "click", (event) 
 syncPlatformUI();
 
 // ── Onboarding ───────────────────────────────────────────────────────────────
-const ONBOARDING_KEY = "plately-onboarding-v2";
+function getOnboardingDoneKey() {
+  const email = String(state?.auth?.email || "").trim().toLowerCase();
+  return `plately-onboarding-v2:${email || "unknown"}`;
+}
 const ONBOARDING_SESSION_KEY = "plately-tooltips-shown-this-session"; // One-time per login session
 const INSTALL_APP_SESSION_KEY = "plately-install-shown-this-session"; // One-time install modal per login session
 
@@ -7452,13 +7520,16 @@ function _obShow(index) {
 function _obFinish() {
   const overlay = document.getElementById("onboardingOverlay");
   if (overlay) { overlay.hidden = true; overlay.setAttribute("aria-hidden", "true"); }
-  try { localStorage.setItem(ONBOARDING_KEY, "1"); } catch {}
+  try { localStorage.setItem(getOnboardingDoneKey(), "1"); } catch {}
   window.scrollTo(0, 0);
 }
 
 function startOnboarding() {
-  // Show tooltips once per login session (not persisted across sessions)
+  // Show tooltips only once per account (persisted across sessions)
   if (!state.auth.authenticated) return;
+
+  // If already completed for this account, skip
+  try { if (localStorage.getItem(getOnboardingDoneKey())) return; } catch {}
 
   // Check if we already showed tooltips in this session
   try { if (sessionStorage.getItem(ONBOARDING_SESSION_KEY)) return; } catch {}
