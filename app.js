@@ -1425,7 +1425,8 @@ function goHome() {
 
 function switchView(view) {
   // Enforce authentication for all protected views
-  if (!state.auth.authenticated && view !== "detail") {
+  // Only enforce after session check is complete (state.session.ready)
+  if (state.session.ready && !state.auth.authenticated && view !== "detail") {
     // Allow detail view (might be switching from authenticated state)
     // but require login for all other views
     openAuthModal("login");
