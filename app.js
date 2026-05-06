@@ -7333,16 +7333,8 @@ document.getElementById("onboardingNext")?.addEventListener("click", () => {
 });
 document.getElementById("onboardingSkip")?.addEventListener("click", _obFinish);
 
-renderAll();
-startOnboarding();
-
-// Restore last view the user was on before a page refresh
-try {
-  const savedView = sessionStorage.getItem("plately-view");
-  if (savedView && ["home", "grocery", "settings", "mealplan", "cookbooks"].includes(savedView)) {
-    switchView(savedView);
-  }
-} catch { /* ignore */ }
+// Don't render yet - wait for bootstrapSession() to check authentication first
+// startOnboarding();
 
 // Logo altijd terug naar home
 document.querySelectorAll(".brand-logo").forEach((logo) => {
@@ -7352,6 +7344,8 @@ document.querySelectorAll(".brand-logo").forEach((logo) => {
 
 refreshBackendStatus();
 registerServiceWorker();
+
+// Bootstrap session - this will render the app AFTER checking authentication
 bootstrapSession();
 
 // ── URL Scheme Handler (for iOS share integration) ────────────────────────────
