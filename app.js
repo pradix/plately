@@ -2329,7 +2329,10 @@ function renderChannelSettings() {
     const names = pendingChannels.map(ch => `"${ch.name}"`).join(", ");
     customHTML += `
       <div class="channel-pending-info">
-        <div class="channel-pending-title">We verwerken je kanaalverzoek</div>
+        <div class="channel-pending-header">
+          <div class="channel-pending-hourglass">⏳</div>
+          <div class="channel-pending-title">We verwerken je kanaalverzoek</div>
+        </div>
         <div class="channel-pending-desc">
           We testen momenteel de import van ${names} om te zien of alles goed werkt. Zodra het is goedgekeurd, ontvang je een melding en kun je het gebruiken in het zoekscherm.
         </div>

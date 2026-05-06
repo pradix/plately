@@ -8016,6 +8016,39 @@ body {
   line-height: 1.4;
 }
 
+.channel-pending-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.channel-pending-hourglass {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  animation: flip-hourglass 2.5s ease-in-out infinite;
+}
+
+@keyframes flip-hourglass {
+  0% {
+    transform: rotateZ(0deg);
+  }
+  25% {
+    transform: rotateZ(0deg);
+  }
+  50% {
+    transform: rotateZ(180deg);
+  }
+  75% {
+    transform: rotateZ(180deg);
+  }
+  100% {
+    transform: rotateZ(360deg);
+  }
+}
+
 /* ── Custom channel form ────────────────────────────────────────────────────── */
 .channel-add-form {
   padding: 20px;

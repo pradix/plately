@@ -2502,7 +2502,7 @@ async function fetchWithProfile(url, profileHeaders = {}, referer = "") {
 
   return fetch(url, {
     headers,
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(8000), // Reduced from 15s → 8s for faster search results
     redirect: "follow",
   });
 }
@@ -5102,46 +5102,88 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     return fn();
   }
 
-  const searches = await Promise.allSettled([
-    maybeSearch("ch-ah", () => searchAHRecipes(query, 4)),
-    // Lekker & Simpel — confirmed working HTML scraper
+  // Compile results: prioritize fast channels (show them first and prominently)
+  const all = [];
+  const processResults = (searches, maxPerChannel = 4) => {
+    const channelResults = searches
+      .filter((s) => s.status === "fulfilled" && s.value)
+      .map((s) => s.value.slice(0, maxPerChannel));
+
+    const maxLen = channelResults.length ? Math.max(...channelResults.map((r) => r.length)) : 0;
+    for (let i = 0; i < maxLen; i++) {
+      for (const ch of channelResults) {
+        if (ch[i]) all.push(ch[i]);
+      }
+    }
+  };
+
+  // PHASE 1: Fast channels (appear first, more generous with results)
+  // These are reliable and respond quickly
+  const fastSearches = Promise.allSettled([
+    maybeSearch("ch-ah", () => searchAHRecipes(query, 6)), // AH: Albert Heijn, trusted primary source
+    // Lekker & Simpel — fast HTML scraper, always responsive
     maybeSearch("ch-les", () => scrapeOrRest("https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les",
       `https://www.lekkerensimpel.com/?s=${q}&maaltijd=all&gerecht=all`,
-      parseLekkerSimpel, 4)),
-    // Laura's Bakery — confirmed working HTML scraper
+      parseLekkerSimpel, 6)),
+    // Laura's Bakery — reliable HTML scraper
     maybeSearch("ch-lb", () => scrapeOrRest("https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb",
       `https://www.laurasbakery.nl/zoeken/?_search=${q}`,
-      parseLaurasBakery, 4)),
+      parseLaurasBakery, 5)),
+    // 24 Kitchen — fast WordPress REST API
+    maybeSearch("ch-24k", () => wpRestSearch("https://www.24kitchen.nl", "24 Kitchen", "ch-24k", query, 6)),
+  ]);
+  const fastResults = await fastSearches;
+  processResults(fastResults, 6);
+
+  // PHASE 2: Medium-speed channels (with 4-second timeout)
+  const mediumSearches = Promise.allSettled([
     // Eef Kookt Zo — may block (403), fallback to REST
     maybeSearch("ch-ek", () => scrapeOrRest("https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek",
       `https://www.eefkooktzo.nl/?s=${q}`,
       parseWPStandard, 4)),
-    // Uit Paulines Keuken — AJAX search; REST fallback with recipe-URL filter
-    maybeSearch("ch-up", () => wpRestSearch("https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 8)
+    // Uit Paulines Keuken — REST API, sometimes slow
+    maybeSearch("ch-up", () => wpRestSearch("https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 4)
       .then((items) => items.filter((r) => !/\/\d{4}\/\d{2}\//.test(r.url)).slice(0, 4))),
-    // Miljuschka — may block (403), fallback to REST
-    maybeSearch("ch-mj", () => scrapeOrRest("https://miljuschka.nl", "Miljuschka", "ch-mj",
-      `https://miljuschka.nl/?s=${q}`,
-      parseWPStandard, 4)),
-    // Chicks Love Food — server-rendered recipe-list, scrape with custom parser
+    // Chicks Love Food — HTML scraper
     maybeSearch("ch-clf", () => scrapeOrRest("https://www.chickslovefood.com", "Chicks Love Food", "ch-clf",
       `https://www.chickslovefood.com/?s=${q}`,
       parseChicksLoveFood, 4)),
   ]);
 
-  // Interleave results from each channel so no single channel dominates
-  const channelResults = searches
-    .filter((s) => s.status === "fulfilled")
-    .map((s) => s.value.slice(0, 4)); // max 4 per channel
-
-  const all = [];
-  const maxLen = Math.max(...channelResults.map((r) => r.length));
-  for (let i = 0; i < maxLen; i++) {
-    for (const ch of channelResults) {
-      if (ch[i]) all.push(ch[i]);
-    }
+  // Execute medium searches with timeout (don't wait forever)
+  try {
+    const mediumWithTimeout = Promise.race([
+      mediumSearches,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 4000))
+    ]);
+    const mediumResults = await mediumWithTimeout;
+    processResults([mediumResults], 4);
+  } catch {
+    // Medium searches timed out — show what we have from fast channels
   }
-  return all.slice(0, 20);
+
+  // PHASE 3: Slower channels (Miljoeska, etc.) - aggressive timeout (3 seconds)
+  // These appear if they respond quickly, otherwise we skip them
+  const slowSearches = Promise.allSettled([
+    // Miljuschka — slow server, may block. Give more results when it does respond
+    maybeSearch("ch-mj", () => scrapeOrRest("https://miljuschka.nl", "Miljuschka", "ch-mj",
+      `https://miljuschka.nl/?s=${q}`,
+      parseWPStandard, 5)),
+  ]);
+
+  // Try to get slow results but don't wait long
+  try {
+    const slowWithTimeout = Promise.race([
+      slowSearches,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000))
+    ]);
+    const slowResults = await slowWithTimeout;
+    processResults([slowResults], 5);
+  } catch {
+    // Slow searches timed out — continue without them
+  }
+
+  return all.slice(0, 25); // Increased from 20 to 25 to include more variety
 }
 
 async function buildStoreBasket(body) {
