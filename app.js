@@ -1948,7 +1948,7 @@ async function searchChannels(query) {
 
   if (channelSearchSection) {
     channelSearchSection.classList.remove("hidden");
-    if (channelSearchResults) channelSearchResults.innerHTML = `<p class="ch-result__loading">Zoeken…</p>`;
+    if (channelSearchResults) channelSearchResults.innerHTML = `<p class="ch-result__loading"><span class="plately-hourglass"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M6 2h12v6c0 2-2 3-6 3s-6-1-6-3V2z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><path d="M6 22h12v-6c0-2-2-3-6-3s-6 1-6 3v6z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><rect x="11" y="9" width="2" height="6" fill="#f6b69d"/></svg></span>Zoeken…</p>`;
   }
   try {
     const channels = state.followedChannelIds.join(",");
@@ -1980,7 +1980,7 @@ async function searchChannelsOnImportScreen(query) {
     return;
   }
   if (section) section.classList.remove("hidden");
-  if (results) results.innerHTML = `<p class="ch-result__loading">Zoeken…</p>`;
+  if (results) results.innerHTML = `<p class="ch-result__loading"><span class="plately-hourglass"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M6 2h12v6c0 2-2 3-6 3s-6-1-6-3V2z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><path d="M6 22h12v-6c0-2-2-3-6-3s-6 1-6 3v6z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><rect x="11" y="9" width="2" height="6" fill="#f6b69d"/></svg></span>Zoeken…</p>`;
   if (orRow) orRow.classList.add("hidden");
   try {
     const channels = state.followedChannelIds.join(",");
@@ -2327,13 +2327,21 @@ function renderChannelSettings() {
   if (state.customChannels.length > 0) {
     customHTML += `<div class="channel-section-label">MIJN KANALEN</div>`;
 
-    // Sort channels alphabetically (A-Z) and show non-rejected ones
+    // Show non-rejected channels: approved first (sorted A-Z), then pending (sorted A-Z)
     const customRows = state.customChannels
       .filter((ch) => {
         // Hide rejected channels from the user's list
         return (ch.status || "approved") !== "rejected";
       })
-      .sort((a, b) => a.name.localeCompare(b.name)) // Sort A-Z alphabetically
+      .sort((a, b) => {
+        // Approved channels first, then pending
+        const aStatus = a.status || "approved";
+        const bStatus = b.status || "approved";
+        if (aStatus === "approved" && bStatus !== "approved") return -1;
+        if (aStatus !== "approved" && bStatus === "approved") return 1;
+        // Within same status, sort alphabetically (A-Z)
+        return a.name.localeCompare(b.name);
+      })
       .map((ch) => {
       const followed = state.followedChannelIds.includes(ch.id);
       const faviconUrl = getSourceIconUrl(ch.url);
@@ -2365,23 +2373,6 @@ function renderChannelSettings() {
     }).join("");
 
     customHTML += customRows;
-  }
-
-  // Show pending channels info message at the bottom
-  const pendingChannels = state.customChannels.filter(ch => (ch.status || "approved") === "pending");
-  if (pendingChannels.length > 0) {
-    const names = pendingChannels.map(ch => `"${ch.name}"`).join(", ");
-    customHTML += `
-      <div class="channel-pending-info">
-        <div class="channel-pending-header">
-          <div class="channel-pending-hourglass">⏳</div>
-          <div class="channel-pending-title">We verwerken je kanaalverzoek</div>
-        </div>
-        <div class="channel-pending-desc">
-          We testen momenteel de import van ${names} om te zien of alles goed werkt. Zodra het is goedgekeurd, ontvang je een melding en kun je het gebruiken in het zoekscherm.
-        </div>
-      </div>
-    `;
   }
 
   const addButton = `
@@ -7213,7 +7204,7 @@ if (importSearchInput) {
       if (orRow) orRow.classList.remove("hidden");
       return;
     }
-    if (results) results.innerHTML = `<p class="ch-result__loading">Zoeken…</p>`;
+    if (results) results.innerHTML = `<p class="ch-result__loading"><span class="plately-hourglass"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M6 2h12v6c0 2-2 3-6 3s-6-1-6-3V2z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><path d="M6 22h12v-6c0-2-2-3-6-3s-6 1-6 3v6z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><rect x="11" y="9" width="2" height="6" fill="#f6b69d"/></svg></span>Zoeken…</p>`;
     if (section) section.classList.remove("hidden");
     if (orRow) orRow.classList.add("hidden");
     importSearchTimeout = setTimeout(() => searchChannelsOnImportScreen(q), 600);

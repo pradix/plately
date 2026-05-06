@@ -2502,7 +2502,7 @@ async function fetchWithProfile(url, profileHeaders = {}, referer = "") {
 
   return fetch(url, {
     headers,
-    signal: AbortSignal.timeout(8000), // Reduced from 15s → 8s for faster search results
+    signal: AbortSignal.timeout(6000), // Reduced from 15s → 6s for fast search results
     redirect: "follow",
   });
 }
@@ -4675,7 +4675,7 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
     try {
       const resp = await fetch(`${baseUrl}/wp-json/wp/v2/${type}?${params}`, {
         headers,
-        signal: AbortSignal.timeout(5000), // Reduced from 7s → 5s for faster search
+        signal: AbortSignal.timeout(4000), // Aggressive timeout for quick results
       });
       if (resp.ok) {
         const data = await resp.json();
@@ -4711,7 +4711,7 @@ async function searchAHRecipes(query, count = 4) {
     console.log(`📡 Trying AH API: ${url}`);
     const resp = await fetch(url, {
       headers: { ...FETCH_HEADERS, authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(3500), // Reduced from 5s → 3.5s for faster response
+      signal: AbortSignal.timeout(3000), // Reduced for faster results
     });
     console.log(`API response: ${resp.status}`);
     if (resp.ok) {

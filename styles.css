@@ -7361,14 +7361,23 @@ body {
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-.ch-result__loading::before {
-  content: "⏳";
-  display: inline-block;
+/* Custom Plately hourglass SVG */
+.plately-hourglass {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
   animation: flip-hourglass 2.5s ease-in-out infinite;
-  font-size: 1.1rem;
+}
+
+.plately-hourglass svg {
+  width: 100%;
+  height: 100%;
 }
 
 /* ── Channel search result cards ──────────────────────────────────────────── */
