@@ -1476,8 +1476,13 @@ function switchView(view) {
   try {
     if (["home", "detail", "grocery", "settings", "mealplan", "cookbooks", "import", "review"].includes(view)) {
       sessionStorage.setItem("plately-view", view);
+      // Also persist selectedRecipeId for detail view
+      if (view === "detail" && state.selectedRecipeId) {
+        sessionStorage.setItem("plately-selected-recipe", state.selectedRecipeId);
+      }
     } else {
       sessionStorage.removeItem("plately-view");
+      sessionStorage.removeItem("plately-selected-recipe");
     }
   } catch { /* ignore */ }
 }
@@ -4800,10 +4805,15 @@ async function bootstrapSession() {
     // Restore the view user was on before refresh
     // Priority: sessionStorage > state.view > default to home
     let viewToRestore = "home";
+    let recipeIdToRestore = null;
     try {
       const savedView = sessionStorage.getItem("plately-view");
-      if (savedView && ["home", "grocery", "settings", "mealplan", "cookbooks"].includes(savedView)) {
+      if (savedView && ["home", "detail", "grocery", "settings", "mealplan", "cookbooks", "import", "review"].includes(savedView)) {
         viewToRestore = savedView;
+      }
+      // Also restore selectedRecipeId if on detail view
+      if (viewToRestore === "detail") {
+        recipeIdToRestore = sessionStorage.getItem("plately-selected-recipe");
       }
     } catch { /* ignore */ }
 
@@ -4813,9 +4823,17 @@ async function bootstrapSession() {
     }
 
     // Switch to the restored view
-    if (viewToRestore === "detail" && state.selectedRecipeId && getRecipeById(state.selectedRecipeId)) {
-      switchView("detail");
-      renderDetailRecipe(true);
+    if (viewToRestore === "detail") {
+      // Use saved recipe ID if available, otherwise use current state
+      const recipeId = recipeIdToRestore || state.selectedRecipeId;
+      if (recipeId && getRecipeById(recipeId)) {
+        state.selectedRecipeId = recipeId;
+        switchView("detail");
+        renderDetailRecipe(true);
+      } else {
+        // Recipe not found, fallback to home
+        switchView("home");
+      }
     } else if (viewToRestore !== "home") {
       switchView(viewToRestore);
     } else {
