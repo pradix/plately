@@ -1855,6 +1855,14 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
 
   const all = state.channelSearchAllResults;
 
+  console.log("📊 renderChannelSearchResults:", {
+    receivedResults: results ? results.length : 0,
+    allResults: all ? all.length : 0,
+    activeFilter: filter,
+    searchQuery: state.searchQuery,
+    results: all ? all.slice(0, 3) : []  // Show first 3 results for debugging
+  });
+
   if (!all || all.length === 0) {
     // Only hide if we're not actively searching
     if (!state.searchQuery || state.searchQuery.trim().length === 0) {
@@ -1872,10 +1880,18 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
 
   const filtered = filter ? all.filter((r) => r.channelId === filter) : all;
 
+  console.log("📊 Filtered results:", {
+    filterApplied: !!filter,
+    filteredCount: filtered.length,
+    filterChannelId: filter,
+    resultChannelIds: all.map(r => r.channelId)
+  });
+
   channelSearchSection.classList.remove("hidden");
   renderChannelFilterChips(all);
 
   if (!filtered.length) {
+    console.warn("⚠️  No filtered results! Filter:", filter, "All results channel IDs:", all.map(r => r.channelId));
     channelSearchResults.innerHTML = `<p class="ch-result__loading" style="grid-column:1/-1;text-align:center;padding:2rem">Geen resultaten voor dit kanaal.</p>`;
     return;
   }
@@ -1963,6 +1979,14 @@ async function searchChannels(query) {
     const resp = await fetch(url);
     const data = await resp.json();
     console.log("✅ Channel search results:", data.results?.length || 0, "results");
+    if (data.results && data.results.length > 0) {
+      console.log("📦 First result details:", {
+        title: data.results[0].title,
+        channelId: data.results[0].channelId,
+        channel: data.results[0].channel,
+        url: data.results[0].url?.substring(0, 80)
+      });
+    }
     renderChannelSearchResults(data.results || []);
   } catch (error) {
     console.error("❌ Channel search error:", error);
