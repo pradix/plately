@@ -3692,10 +3692,9 @@ async function importInstagram(sourceUrl, note) {
       `- Short, abbreviated text (Instagram style)\n\n` +
       `Caption:\n${normalizedCaption}\n\n` +
       (hashtagIngredients.length > 0 ? `Hashtag hints: ${hashtagIngredients.join(", ")}\n\n` : "") +
-      (note ? `Additional note: ${note}\n\n` : "") +
       `Extract structured recipe data.`;
 
-    const claudeResult = await extractWithClaude(claudePrompt, "");
+    const claudeResult = await extractWithClaude(claudePrompt, note || "");
     if (claudeResult) {
       // Merge Claude results with any pre-parsed Instagram structure
       const mergedIngredients = [
@@ -3727,6 +3726,20 @@ async function importInstagram(sourceUrl, note) {
         sourceLabel: "Imported from Instagram",
       };
     }
+  }
+
+  // Fallback when Claude fails or no caption available
+  if (bestCaption || html || textFallback) {
+    return buildSocialRecipe({
+      platform: "instagram",
+      sourceUrl,
+      rawTitle: ogTitle || oembed?.title || textDerivedTitle,
+      rawCaption: bestCaption ? normalizeInstagramCaption(bestCaption) : (oembed?.title || ""),
+      image,
+      author,
+      titleCandidates: [ogTitle, oembed?.title, textDerivedTitle, ...htmlSignals.titles],
+      captionCandidates,
+    });
   }
 
   if (!oembed && !html && !textFallback) {
@@ -3763,16 +3776,10 @@ async function importInstagram(sourceUrl, note) {
     );
   }
 
-  return buildSocialRecipe({
-    platform: "instagram",
-    sourceUrl,
-    rawTitle: ogTitle || oembed?.title || textDerivedTitle,
-    rawCaption: normalizeInstagramCaption(bestCaption || oembed?.title || ""),
-    image,
-    author,
-    titleCandidates: [ogTitle, oembed?.title, textDerivedTitle, ...htmlSignals.titles],
-    captionCandidates,
-  });
+  throw new HttpError(
+    400,
+    "Instagram post kon niet geladen worden. Probeer een ander post of zet je account op public."
+  );
 }
 
 async function importFacebook(sourceUrl, note) {
