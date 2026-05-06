@@ -1901,14 +1901,41 @@ function getImportedRecipes() {
 let channelSearchTimeout = null;
 
 function normalizeChannelThumbnailUrl(url) {
-  const raw = String(url || "").trim();
+  const raw = String(url || "").trim().replace(/[\\'"]+$/g, "");
   if (!raw) return "";
-  // Some CDNs/sites block hotlinking/referrers — proxy via our backend.
-  // The proxy has a strict hostname allowlist server-side.
   if (/^https?:\/\//i.test(raw)) {
-    return `/api/image-proxy?url=${encodeURIComponent(raw)}`;
+    try {
+      const host = new URL(raw).hostname.replace(/^www\./, "").toLowerCase();
+      const proxyHosts = new Set(["static.ah.nl", "lekkerensimpel.com", "lekkeren-simpel.nl", "i0.wp.com", "i1.wp.com", "i2.wp.com", "i3.wp.com"]);
+      if (proxyHosts.has(host) || host.endsWith(".static.ah.nl")) {
+        return `/api/image-proxy?url=${encodeURIComponent(raw)}`;
+      }
+    } catch {
+      return raw;
+    }
+    return raw;
   }
   return raw; // assets/..., relative paths, etc.
+}
+
+function getChannelFallbackVisual(channel, channelColor) {
+  return `<div class="ch-card__img ch-card__img--placeholder" style="background:${escapeHtml(channelColor)}22">
+    <span style="font-size:2rem;opacity:.4">${escapeHtml(channel?.initials || "?")}</span>
+  </div>`;
+}
+
+function getChannelThumbnailMarkup(result, channel, channelColor) {
+  const thumbUrl = normalizeChannelThumbnailUrl(result.thumbnail);
+  if (!thumbUrl) return getChannelFallbackVisual(channel, channelColor);
+  return `
+    <img
+      class="ch-card__img"
+      src="${escapeHtml(thumbUrl)}"
+      alt="${escapeHtml(result.title)}"
+      loading="lazy"
+      referrerpolicy="no-referrer"
+      onerror="this.outerHTML='${escapeHtml(getChannelFallbackVisual(channel, channelColor))}'"
+    />`;
 }
 
 function renderChannelSearchResults(results, filter = state.channelSearchFilter) {
@@ -1962,13 +1989,10 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
 
   channelSearchResults.innerHTML = `<div class="ch-result-grid">${filtered.map((r) => {
     const allCh = getAllChannels();
-    const channelColor = allCh.find((ch) => ch.id === r.channelId)?.color || "#8da485";
+    const channel = allCh.find((ch) => ch.id === r.channelId);
+    const channelColor = channel?.color || "#8da485";
     const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
-    const thumbHtml = thumbUrl
-      ? `<img class="ch-card__img" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(r.title)}" loading="lazy" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.parentElement.style.background='${channelColor}33'" />`
-      : `<div class="ch-card__img ch-card__img--placeholder" style="background:${escapeHtml(channelColor)}22">
-           <span style="font-size:2rem;opacity:.4">${escapeHtml(allCh.find(ch => ch.id === r.channelId)?.initials || "?")}</span>
-         </div>`;
+    const thumbHtml = getChannelThumbnailMarkup(r, channel, channelColor);
     return `
       <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}" data-ch-card-thumb="${escapeHtml(thumbUrl || "")}">
         <div class="ch-card__visual">
@@ -2089,13 +2113,10 @@ async function searchChannelsOnImportScreen(query) {
     if (results) {
       results.innerHTML = `<div class="ch-result-grid">${all.map((r) => {
         const allCh = getAllChannels();
-        const channelColor = allCh.find((ch) => ch.id === r.channelId)?.color || "#8da485";
+        const channel = allCh.find((ch) => ch.id === r.channelId);
+        const channelColor = channel?.color || "#8da485";
         const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
-        const thumbHtml = thumbUrl
-          ? `<img class="ch-card__img" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(r.title)}" loading="lazy" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.parentElement.style.background='${channelColor}33'" />`
-          : `<div class="ch-card__img ch-card__img--placeholder" style="background:${escapeHtml(channelColor)}22">
-               <span style="font-size:2rem;opacity:.4">${escapeHtml(allCh.find(ch => ch.id === r.channelId)?.initials || "?")}</span>
-             </div>`;
+        const thumbHtml = getChannelThumbnailMarkup(r, channel, channelColor);
         return `
           <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}">
             <div class="ch-card__visual">

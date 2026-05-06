@@ -64,10 +64,24 @@ function isAllowedImageProxyUrl(rawUrl) {
       "lekkerensimpel.com",
       "www.lekkeren-simpel.nl",
       "lekkeren-simpel.nl",
+      "www.eefkooktzo.nl",
+      "eefkooktzo.nl",
+      "miljuschka.nl",
+      "www.miljuschka.nl",
+      "static.24kitchen.nl",
+      "cdn.24kitchen.nl",
+      "uitpaulineskeuken.nl",
+      "www.uitpaulineskeuken.nl",
+      "www.chickslovefood.com",
+      "chickslovefood.com",
+      "www.laurasbakery.nl",
+      "laurasbakery.nl",
       // Common WordPress image CDN used by many recipe blogs
       "i0.wp.com",
       "i1.wp.com",
       "i2.wp.com",
+      "i3.wp.com",
+      "s0.wp.com",
     ]);
     if (ALLOW_HOSTS.has(host)) return true;
     // Allow subdomains of static.ah.nl (defensive; usually not needed)
@@ -77,6 +91,15 @@ function isAllowedImageProxyUrl(rawUrl) {
     return false;
   }
 }
+
+function isDecorativeImageUrl(url) {
+  return /favicon|apple-touch-icon|logo/i.test(url);
+}
+
+function cleanImageUrl(url) {
+  return String(url || "").trim().replace(/[\\'"]+$/g, "");
+}
+
 
 async function proxyImage(requestUrl, response) {
   const raw = requestUrl.searchParams.get("url") || "";
@@ -4637,6 +4660,59 @@ function parseWPStandard(html, _baseUrl, channelName, channelId, count) {
   return results;
 }
 
+function parseReaderSearchResults(markdown, channelName, channelId, count, query) {
+  const results = [];
+  const seenUrls = new Set();
+  const imageLinks = [...String(markdown || "").matchAll(/\[!\[([^\]]*)\]\((https?:\/\/[^)\s]+\.(?:jpe?g|png|webp)(?:\?[^)]*)?)\)\]\((https?:\/\/[^)\s]+)\)/gi)];
+
+  for (let i = 0; i < imageLinks.length && results.length < count; i += 1) {
+    const match = imageLinks[i];
+    const alt = decodeHtmlEntities(match[1] || "").replace(/^Image\s+\d+:\s*/i, "").trim();
+    const thumbnail = cleanImageUrl(match[2] || "");
+    const imageLinkUrl = match[3] || "";
+    const nextIndex = imageLinks[i + 1]?.index ?? markdown.length;
+    const nearby = markdown.slice((match.index || 0) + match[0].length, nextIndex);
+    const headingMatch = nearby.match(/#{1,4}\s+\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/i);
+
+    const title = sanitizeText(decodeHtmlEntities(headingMatch?.[1] || alt));
+    const url = sanitizeText(headingMatch?.[2] || imageLinkUrl);
+    if (!title || !url || seenUrls.has(url)) continue;
+    if (/\.svg(?:\?|$)/i.test(thumbnail) || isDecorativeImageUrl(thumbnail)) continue;
+    if (!urlLooksLikeRecipe(url) || !titleLooksLikeRecipe(title) || !titleMatchesQuery(title, query)) continue;
+
+    seenUrls.add(url);
+    results.push({
+      title,
+      url,
+      thumbnail,
+      channel: channelName,
+      channelId,
+      description: "",
+      time: "",
+    });
+  }
+
+  return results
+    .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
+    .slice(0, count);
+}
+
+async function readerSearchFallback(searchUrl, channelName, channelId, count, query) {
+  try {
+    const readerUrl = `https://r.jina.ai/http://${searchUrl}`;
+    const response = await fetch(readerUrl, {
+      headers: FETCH_HEADERS,
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return [];
+
+    const markdown = await response.text();
+    return parseReaderSearchResults(markdown, channelName, channelId, count, query || "");
+  } catch {
+    return [];
+  }
+}
+
 /** WP REST API fallback — returns results mapped to our format. */
 // URL patterns that strongly suggest a non-recipe (blog/article/tip/news) post
 const BLOG_POST_URL_RE = /\/(blog|artikel|artikelen|nieuws|tips?|advies|inspiratie|over-ons|contact|vacature|actie|winactie|review|test|colofon|interviews?|winnen|video|videos|podcast|categorie|category|tag|author|auteur|page|zoeken|search|webshop|shop|product|cadeau|aanbieding|kookboek)\//i;
@@ -4905,7 +4981,7 @@ async function searchAHRecipes(query, count = 4) {
         ];
 
         for (const match of imgMatches) {
-          let imgUrl = match[1] || match[2];
+          let imgUrl = cleanImageUrl(match[1] || match[2]);
           let altText = match[2] || match[1];
 
           if (imgUrl && imgUrl.includes('static.ah.nl')) {
@@ -4925,8 +5001,9 @@ async function searchAHRecipes(query, count = 4) {
         ];
         const seen = new Set();
         for (const m of looseMatches) {
-          const rawUrl = m[0].startsWith("//") ? `https:${m[0]}` : m[0];
+          const rawUrl = cleanImageUrl(m[0].startsWith("//") ? `https:${m[0]}` : m[0]);
           if (!rawUrl) continue;
+          if (isDecorativeImageUrl(rawUrl)) continue;
           const upgraded = upgradeAhImageQuality(rawUrl);
           if (!seen.has(upgraded)) {
             seen.add(upgraded);
@@ -4942,8 +5019,9 @@ async function searchAHRecipes(query, count = 4) {
         const markdownImages = [...markdown.matchAll(/!\[([^\]]*)\]\((https:\/\/[^)]*static\.ah\.nl[^)]*\.(?:jpg|jpeg|png|webp))\)/gi)];
         for (const match of markdownImages) {
           const altText = match[1] || "";
-          const imgUrl = match[2];
+          const imgUrl = cleanImageUrl(match[2]);
           if (imgUrl) {
+            if (isDecorativeImageUrl(imgUrl)) continue;
             const upgraded = upgradeAhImageQuality(imgUrl);
             if (altText) {
               imageMap.set(altText.toLowerCase(), upgraded);
@@ -5233,7 +5311,9 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
       if (filtered.length > 0) return filtered;
     }
   } catch { /* fall through */ }
-  return wpRestSearch(baseUrl, channelName, channelId, query || "", count);
+  const rest = await wpRestSearch(baseUrl, channelName, channelId, query || "", count);
+  if (rest.length > 0) return rest;
+  return readerSearchFallback(searchUrl, channelName, channelId, count, query || "");
 }
 
 async function searchChannelRecipes(query, allowedChannels = null) {
@@ -5259,7 +5339,9 @@ async function searchChannelRecipes(query, allowedChannels = null) {
         if (filtered.length > 0) return filtered;
       }
     } catch { /* fall through */ }
-    return wpRestSearch(baseUrl, channelName, channelId, query, count);
+    const rest = await wpRestSearch(baseUrl, channelName, channelId, query, count);
+    if (rest.length > 0) return rest;
+    return readerSearchFallback(searchUrl, channelName, channelId, count, query);
   }
 
   function maybeSearch(channelId, fn) {
