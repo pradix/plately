@@ -3678,68 +3678,30 @@ async function importInstagram(sourceUrl, note) {
   const bestCaption = pickBestCaptionCandidate(captionCandidates) || sanitizeText(ogDescription || oembed?.title || "");
 
   if (bestCaption) {
-    // Phase 1 improvement: Use Instagram-specific caption parsing before Claude
-    const normalizedCaption = normalizeInstagramCaption(bestCaption);
-    const structuredRecipe = extractRecipeFromInstagramCaption(normalizedCaption);
-    const hashtagIngredients = extractInstagramHashtagIngredients(bestCaption);
-
-    // Prepare enhanced input for Claude with Instagram-specific formatting hints
-    const claudePrompt =
-      `Extract recipe details from this Instagram post caption. The caption may use:\n` +
-      `- Emoji separators: 🥘 Ingredients / 👨‍🍳 Method\n` +
-      `- Section headers: Ingrediënten, Bereiding, Method, Steps\n` +
-      `- Hashtag ingredients: #ingredient_name\n` +
-      `- Short, abbreviated text (Instagram style)\n\n` +
-      `Caption:\n${normalizedCaption}\n\n` +
-      (hashtagIngredients.length > 0 ? `Hashtag hints: ${hashtagIngredients.join(", ")}\n\n` : "") +
-      `Extract structured recipe data.`;
-
-    const claudeResult = await extractWithClaude(claudePrompt, note || "");
+    const claudeResult = await extractWithClaude(bestCaption, note || "");
     if (claudeResult) {
-      // Merge Claude results with any pre-parsed Instagram structure
-      const mergedIngredients = [
-        ...(Array.isArray(claudeResult.ingredients) ? claudeResult.ingredients : []),
-        ...structuredRecipe.ingredients.filter(ing => ing.length > 2),
-      ];
-      const mergedInstructions = [
-        ...(Array.isArray(claudeResult.instructions) ? claudeResult.instructions : []),
-        ...structuredRecipe.instructions.filter(inst => inst.length > 5),
-      ];
-
-      const parsedIngredients = mergedIngredients
-        .map((ingredient) => (typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient))
-        .filter((ing) => ing?.name); // Remove null/invalid entries
+      const parsedIngredients = Array.isArray(claudeResult.ingredients)
+        ? claudeResult.ingredients.map((ingredient) =>
+            typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient
+          )
+        : [];
 
       return {
         platform: "instagram",
         sourceUrl,
         title: normalizeSocialRecipeTitle(claudeResult.title) || "Geïmporteerd recept",
         description: compactSocialDescription(claudeResult.description || "", claudeResult.title || ""),
-        caption: stripSocialNoise(normalizedCaption),
+        caption: stripSocialNoise(bestCaption),
         image,
         author,
         ingredients: normalizeIngredientList(parsedIngredients),
-        instructions: Array.isArray(mergedInstructions) ? finalizeInstructionSteps(mergedInstructions) : [],
+        instructions: Array.isArray(claudeResult.instructions) ? finalizeInstructionSteps(claudeResult.instructions) : [],
         time: sanitizeText(claudeResult.time || "30 min"),
         servings: sanitizeText(String(claudeResult.servings || "2")),
         needsReview: parsedIngredients.length === 0,
         sourceLabel: "Imported from Instagram",
       };
     }
-  }
-
-  // Fallback when Claude fails or no caption available
-  if (bestCaption || html || textFallback) {
-    return buildSocialRecipe({
-      platform: "instagram",
-      sourceUrl,
-      rawTitle: ogTitle || oembed?.title || textDerivedTitle,
-      rawCaption: bestCaption ? normalizeInstagramCaption(bestCaption) : (oembed?.title || ""),
-      image,
-      author,
-      titleCandidates: [ogTitle, oembed?.title, textDerivedTitle, ...htmlSignals.titles],
-      captionCandidates,
-    });
   }
 
   if (!oembed && !html && !textFallback) {
@@ -3776,10 +3738,16 @@ async function importInstagram(sourceUrl, note) {
     );
   }
 
-  throw new HttpError(
-    400,
-    "Instagram post kon niet geladen worden. Probeer een ander post of zet je account op public."
-  );
+  return buildSocialRecipe({
+    platform: "instagram",
+    sourceUrl,
+    rawTitle: ogTitle || oembed?.title || textDerivedTitle,
+    rawCaption: bestCaption || oembed?.title || "",
+    image,
+    author,
+    titleCandidates: [ogTitle, oembed?.title, textDerivedTitle, ...htmlSignals.titles],
+    captionCandidates,
+  });
 }
 
 async function importFacebook(sourceUrl, note) {
