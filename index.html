@@ -1223,17 +1223,28 @@
 
           <label>
             Link
-            <input
-              id="recipeUrl"
-              name="recipeUrl"
-              type="text"
-              inputmode="url"
-              placeholder="https://www.tiktok.com/@creator/video/123..."
-            />
+            <div class="input-with-helper">
+              <input
+                id="recipeUrl"
+                name="recipeUrl"
+                type="text"
+                inputmode="url"
+                placeholder="https://www.tiktok.com/@creator/video/123..."
+                title="Plak de link van je TikTok, Instagram post of receptwebsite"
+              />
+              <button
+                class="helper-button hidden"
+                id="instagramPasteHelper"
+                type="button"
+                title="Kopieer een Instagram post URL en klik hier om te plakken"
+              >
+                📋 Plak
+              </button>
+            </div>
           </label>
 
           <label>
-            Notitie
+            Beschrijving
             <textarea
               id="recipeNote"
               name="recipeNote"
@@ -1245,8 +1256,9 @@
           <button class="primary-button" id="submitImport" type="submit">Recept importeren</button>
           <button class="secondary-button" id="closeImportSecondaryButton" type="button">Sluiten</button>
           <p class="helper-text" id="importFeedback">
-            De app roept nu een backend importer aan. TikTok werkt direct voor publieke posts; Instagram
-            vraagt om een Meta app-token.
+            <span id="feedbackTikTok">De app roept nu een backend importer aan. TikTok werkt direct voor publieke posts.</span>
+            <span id="feedbackInstagram" class="hidden">De app probeert de Instagram post te laden. Zet je post op public als het niet werkt.</span>
+            <span id="feedbackWebsite" class="hidden">De app zoekt receptinformatie op de website.</span>
           </p>
         </form>
       </section>

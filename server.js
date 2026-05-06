@@ -3504,6 +3504,87 @@ function buildSocialRecipe({ platform, sourceUrl, rawTitle, rawCaption, image, a
   };
 }
 
+// Instagram caption parsing helpers (Phase 1 improvements)
+function normalizeInstagramCaption(text) {
+  if (!text) return "";
+
+  let normalized = String(text);
+
+  // Remove common Instagram artifacts
+  normalized = normalized.replace(/^📍\s*/, ""); // Remove location emoji at start
+  normalized = normalized.replace(/\n\s*#\w+/g, "\n"); // Move hashtags to end, clean lines
+  normalized = normalized.replace(/@\w+/g, ""); // Remove @mentions
+
+  // Handle emoji separators
+  normalized = normalized.replace(/🥘|👨‍🍳|👩‍🍳/g, "\n"); // Convert recipe emojis to newlines
+
+  // Normalize whitespace (multiple spaces → single, multiple newlines → double)
+  normalized = normalized.replace(/  +/g, " ");
+  normalized = normalized.replace(/\n{3,}/g, "\n\n");
+
+  return normalized.trim();
+}
+
+function extractRecipeFromInstagramCaption(caption) {
+  if (!caption || caption.length < 10) return { ingredients: [], instructions: [] };
+
+  const normalized = normalizeInstagramCaption(caption);
+  const lines = normalized.split(/\n+/);
+
+  const result = { ingredients: [], instructions: [] };
+  let currentSection = null; // 'ingredients' or 'instructions'
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Detect section headers
+    if (/^(ingrediënten|ingredients|materiaal|supplies|onderdelen)/i.test(trimmed)) {
+      currentSection = "ingredients";
+      continue;
+    }
+    if (/(bereid|bereiding|instructions?|method|stappen|steps|werkwijze)/i.test(trimmed)) {
+      currentSection = "instructions";
+      continue;
+    }
+
+    // Extract content based on current section
+    if (currentSection === "ingredients") {
+      // Ingredient lines often start with: ✓, ✅, •, -, emoji, or number
+      if (/^[\s•\-✓✅\d\.🥘👨‍🍳👩‍🍳]*/.test(trimmed)) {
+        const ingredient = trimmed.replace(/^[\s•\-✓✅\d\.🥘👨‍🍳👩‍🍳]*/, "").trim();
+        if (ingredient && ingredient.length > 2) {
+          result.ingredients.push(ingredient);
+        }
+      }
+    } else if (currentSection === "instructions") {
+      // Instruction lines
+      if (trimmed.length > 5) {
+        result.instructions.push(trimmed.replace(/^[\d\.]*\s*/, "")); // Remove numbering
+      }
+    }
+  }
+
+  return result;
+}
+
+function extractInstagramHashtagIngredients(caption) {
+  // Extract ingredient hints from hashtags like #ingredient_name
+  if (!caption) return [];
+
+  const hashtags = caption.match(/#\w+/g) || [];
+  const ingredients = [];
+
+  for (const tag of hashtags) {
+    const ingredient = tag.slice(1).replace(/_/g, " "); // Remove # and replace underscores
+    if (ingredient.length > 2 && ingredient.length < 30 && !/^[a-z]{1,3}$/.test(ingredient)) {
+      ingredients.push(ingredient);
+    }
+  }
+
+  return ingredients;
+}
+
 async function importTikTok(sourceUrl, note) {
   const [oembed, document] = await Promise.all([
     fetchJson(`https://www.tiktok.com/oembed?url=${encodeURIComponent(sourceUrl)}`),
@@ -3597,24 +3678,49 @@ async function importInstagram(sourceUrl, note) {
   const bestCaption = pickBestCaptionCandidate(captionCandidates) || sanitizeText(ogDescription || oembed?.title || "");
 
   if (bestCaption) {
-    const claudeResult = await extractWithClaude(bestCaption, note || "");
+    // Phase 1 improvement: Use Instagram-specific caption parsing before Claude
+    const normalizedCaption = normalizeInstagramCaption(bestCaption);
+    const structuredRecipe = extractRecipeFromInstagramCaption(normalizedCaption);
+    const hashtagIngredients = extractInstagramHashtagIngredients(bestCaption);
+
+    // Prepare enhanced input for Claude with Instagram-specific formatting hints
+    const claudePrompt =
+      `Extract recipe details from this Instagram post caption. The caption may use:\n` +
+      `- Emoji separators: 🥘 Ingredients / 👨‍🍳 Method\n` +
+      `- Section headers: Ingrediënten, Bereiding, Method, Steps\n` +
+      `- Hashtag ingredients: #ingredient_name\n` +
+      `- Short, abbreviated text (Instagram style)\n\n` +
+      `Caption:\n${normalizedCaption}\n\n` +
+      (hashtagIngredients.length > 0 ? `Hashtag hints: ${hashtagIngredients.join(", ")}\n\n` : "") +
+      (note ? `Additional note: ${note}\n\n` : "") +
+      `Extract structured recipe data.`;
+
+    const claudeResult = await extractWithClaude(claudePrompt, "");
     if (claudeResult) {
-      const parsedIngredients = Array.isArray(claudeResult.ingredients)
-        ? claudeResult.ingredients.map((ingredient) =>
-            typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient
-          )
-        : [];
+      // Merge Claude results with any pre-parsed Instagram structure
+      const mergedIngredients = [
+        ...(Array.isArray(claudeResult.ingredients) ? claudeResult.ingredients : []),
+        ...structuredRecipe.ingredients.filter(ing => ing.length > 2),
+      ];
+      const mergedInstructions = [
+        ...(Array.isArray(claudeResult.instructions) ? claudeResult.instructions : []),
+        ...structuredRecipe.instructions.filter(inst => inst.length > 5),
+      ];
+
+      const parsedIngredients = mergedIngredients
+        .map((ingredient) => (typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient))
+        .filter((ing) => ing?.name); // Remove null/invalid entries
 
       return {
         platform: "instagram",
         sourceUrl,
         title: normalizeSocialRecipeTitle(claudeResult.title) || "Geïmporteerd recept",
         description: compactSocialDescription(claudeResult.description || "", claudeResult.title || ""),
-        caption: stripSocialNoise(bestCaption),
+        caption: stripSocialNoise(normalizedCaption),
         image,
         author,
         ingredients: normalizeIngredientList(parsedIngredients),
-        instructions: Array.isArray(claudeResult.instructions) ? finalizeInstructionSteps(claudeResult.instructions) : [],
+        instructions: Array.isArray(mergedInstructions) ? finalizeInstructionSteps(mergedInstructions) : [],
         time: sanitizeText(claudeResult.time || "30 min"),
         servings: sanitizeText(String(claudeResult.servings || "2")),
         needsReview: parsedIngredients.length === 0,
@@ -3628,20 +3734,32 @@ async function importInstagram(sourceUrl, note) {
     if (/Meta oEmbed Read|oEmbed Read|Insufficient Permission/i.test(oembedErrorMessage)) {
       throw new HttpError(
         503,
-        "Instagram import wacht nog op Meta-goedkeuring. Probeer: (1) Kopieer de recept-URL van je browser en importeer die direct, (2) Deel de receptpost naar een website-link, of (3) Probeer met een openbare post."
+        "Instagram import wacht nog op Meta-goedkeuring. 📱 Probeer:\n" +
+        "1️⃣ Zet je post op public\n" +
+        "2️⃣ Copy de link rechtstreeks uit je browser\n" +
+        "3️⃣ Plak de link hier opnieuw\n\n" +
+        "Of gebruik een public receptwebsite-link."
       );
     }
 
     if (!META_APP_ID || !META_APP_SECRET) {
       throw new HttpError(
         501,
-        "Instagram public fallback mislukt. Probeer: (1) Kopieer de directe URL van de post en importeer die, (2) Gebruik een publieke recipe website-link in je bio, of (3) Voeg je recept handmatig in."
+        "Meta app niet geconfigureerd. 🔧 Probeer:\n" +
+        "1️⃣ Zet je post op public\n" +
+        "2️⃣ Copy de URL uit je browser\n" +
+        "3️⃣ Plak hier opnieuw\n\n" +
+        "Of voeg je recept handmatig in."
       );
     }
 
     throw new HttpError(
       502,
-      "Instagram post kon niet geladen worden (privé account of verwijderde post?). Probeer: (1) Link een openbare receptwebsite in plaats daarvan, (2) Deel de recepttekst rechtstreeks, of (3) Probeer een ander post."
+      "Instagram post kon niet geladen worden. 🤔 Mogelijke oorzaken:\n" +
+      "- Privéaccount\n" +
+      "- Verwijderde post\n" +
+      "- URL fout\n\n" +
+      "Probeer: Link een receptwebsite in je bio, of voeg handmatig in."
     );
   }
 
@@ -3649,7 +3767,7 @@ async function importInstagram(sourceUrl, note) {
     platform: "instagram",
     sourceUrl,
     rawTitle: ogTitle || oembed?.title || textDerivedTitle,
-    rawCaption: bestCaption || oembed?.title || "",
+    rawCaption: normalizeInstagramCaption(bestCaption || oembed?.title || ""),
     image,
     author,
     titleCandidates: [ogTitle, oembed?.title, textDerivedTitle, ...htmlSignals.titles],

@@ -1222,6 +1222,22 @@ function syncPlatformUI() {
     state.selectedPlatform === "website"
       ? "Plak hier een receptwebsite..."
       : `Plak hier je ${getPlatformLabel(state.selectedPlatform)}-link...`;
+
+  // Phase 1: Instagram UI improvements
+  // Show/hide Instagram paste helper button
+  const instagramPasteHelper = document.getElementById("instagramPasteHelper");
+  if (instagramPasteHelper) {
+    instagramPasteHelper.classList.toggle("hidden", state.selectedPlatform !== "instagram");
+  }
+
+  // Update feedback messages based on platform
+  const feedbackTikTok = document.getElementById("feedbackTikTok");
+  const feedbackInstagram = document.getElementById("feedbackInstagram");
+  const feedbackWebsite = document.getElementById("feedbackWebsite");
+
+  if (feedbackTikTok) feedbackTikTok.classList.toggle("hidden", state.selectedPlatform !== "tiktok");
+  if (feedbackInstagram) feedbackInstagram.classList.toggle("hidden", state.selectedPlatform !== "instagram");
+  if (feedbackWebsite) feedbackWebsite.classList.toggle("hidden", state.selectedPlatform !== "website");
 }
 
 function openModal(platform = state.selectedPlatform) {
@@ -6728,6 +6744,21 @@ document.addEventListener("visibilitychange", () => {
     !state.wakeLockSentinel
   ) {
     requestWakeLock();
+  }
+});
+
+// Phase 1: Instagram paste helper button
+bindEvent(document.getElementById("instagramPasteHelper"), "click", async (event) => {
+  event.preventDefault();
+  try {
+    const clipboardText = await navigator.clipboard.readText();
+    if (clipboardText) {
+      recipeUrlInput.value = clipboardText;
+      recipeUrlInput.focus();
+      showToast("Instagram link geplakt!");
+    }
+  } catch (err) {
+    showToast("Kan clipboard niet lezen. Plak handmatig.");
   }
 });
 
