@@ -4939,8 +4939,6 @@ async function bootstrapSession() {
       // Show tooltips once per login session
       if (state.auth.authenticated) {
         startOnboarding();
-        // Show install app modal once per login session
-        setTimeout(() => showInstallAppModal(), 1200);
       }
     }
   }
