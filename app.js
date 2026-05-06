@@ -4915,6 +4915,8 @@ async function bootstrapSession() {
       // Show tooltips once per login session
       if (state.auth.authenticated) {
         startOnboarding();
+        // Show install app modal once per login session
+        setTimeout(() => showInstallAppModal(), 1200);
       }
     }
   }
@@ -4967,8 +4969,10 @@ async function logoutAccount() {
   // Clear token immediately
   storeAuthToken("");
 
-  // Clear session tooltip flag so user will see tooltips again on next login
+  // Clear session flags so user will see tooltips and install modal again on next login
   try { sessionStorage.removeItem(ONBOARDING_SESSION_KEY); } catch {}
+  try { sessionStorage.removeItem(INSTALL_APP_SESSION_KEY); } catch {}
+  closeInstallAppModal();
 
   try {
     const payload = await fetchJson(`${state.apiBase}/api/auth/logout`, {
@@ -7290,6 +7294,7 @@ syncPlatformUI();
 // ── Onboarding ───────────────────────────────────────────────────────────────
 const ONBOARDING_KEY = "plately-onboarding-v2";
 const ONBOARDING_SESSION_KEY = "plately-tooltips-shown-this-session"; // One-time per login session
+const INSTALL_APP_SESSION_KEY = "plately-install-shown-this-session"; // One-time install modal per login session
 
 const ONBOARDING_STEPS = [
   {
@@ -7875,6 +7880,8 @@ if (adminUsersList) {
 
 let installPrompt = null;
 const installAppBtn = document.getElementById("installAppBtn");
+const installAppSheet = document.getElementById("installAppSheet");
+const installAppBackdrop = document.getElementById("installAppBackdrop");
 
 // Detect iOS
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
@@ -7882,6 +7889,30 @@ const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 // Always show install button (Android has beforeinstallprompt, iOS has manual method)
 if (installAppBtn) {
   installAppBtn.style.display = "";
+}
+
+// Show install app modal once per session (after login)
+function showInstallAppModal() {
+  if (!state.auth.authenticated) return;
+
+  // Check if we already showed the modal this session
+  try { if (sessionStorage.getItem(INSTALL_APP_SESSION_KEY)) return; } catch {}
+
+  // Mark modal as shown for this session
+  try { sessionStorage.setItem(INSTALL_APP_SESSION_KEY, "1"); } catch {}
+
+  if (installAppSheet && installAppBackdrop) {
+    installAppSheet.classList.remove("hidden");
+    installAppBackdrop.classList.remove("hidden");
+  }
+}
+
+// Close install app modal
+function closeInstallAppModal() {
+  if (installAppSheet && installAppBackdrop) {
+    installAppSheet.classList.add("hidden");
+    installAppBackdrop.classList.add("hidden");
+  }
 }
 
 // Listen for the beforeinstallprompt event (Android only)
@@ -7892,7 +7923,7 @@ window.addEventListener("beforeinstallprompt", (event) => {
   installPrompt = event;
 });
 
-// Handle install button click
+// Handle install button click (from Account > Plately section)
 if (installAppBtn) {
   installAppBtn.addEventListener("click", async () => {
     // Android: Show install prompt if available
@@ -7918,6 +7949,30 @@ if (installAppBtn) {
       "📱 Uw browser ondersteunt app-installatie niet via deze knop"
     );
   });
+}
+
+// Handle modal buttons
+const installAppConfirmBtn = document.getElementById("installAppConfirmBtn");
+const installAppSkipBtn = document.getElementById("installAppSkipBtn");
+
+if (installAppConfirmBtn) {
+  installAppConfirmBtn.addEventListener("click", async () => {
+    closeInstallAppModal();
+    // Trigger the same installation flow as the button
+    if (installAppBtn) {
+      installAppBtn.click();
+    }
+  });
+}
+
+if (installAppSkipBtn) {
+  installAppSkipBtn.addEventListener("click", () => {
+    closeInstallAppModal();
+  });
+}
+
+if (installAppBackdrop) {
+  installAppBackdrop.addEventListener("click", closeInstallAppModal);
 }
 
 // Hide install button when app is already installed

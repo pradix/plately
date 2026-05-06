@@ -504,6 +504,14 @@
           <!-- PLATELY section -->
           <p class="profile2-section-label">PLATELY</p>
           <div class="profile2-card">
+            <button class="profile2-row" type="button" id="installAppBtn">
+              <span class="profile2-row__icon" style="background:#dcfce7">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M19 13v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6M12 17V7M7 12h10"/></svg>
+              </span>
+              <span class="profile2-row__label">Voeg toe aan homescreen</span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <div class="profile2-row-divider"></div>
             <button class="profile2-row" type="button" id="goToChangelogBtn">
               <span class="profile2-row__icon" style="background:#fef9c3">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#ca8a04" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
@@ -621,13 +629,6 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="#6b21a8" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 </span>
                 <span class="profile2-row__label">Wachtwoord wijzigen</span>
-                <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
-              </button>
-              <button class="profile2-row" id="installAppBtn" type="button" style="margin-top: 0.5rem; padding: 1rem;">
-                <span class="profile2-row__icon" style="background:#dcfce7">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M19 13v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6M12 17V7M7 12h10"/></svg>
-                </span>
-                <span class="profile2-row__label">Voeg toe aan homescreen</span>
                 <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
               </button>
             </div>
@@ -1315,6 +1316,24 @@
       </div>
       <div class="confirm-sheet__actions">
         <button class="confirm-sheet__btn confirm-sheet__btn--cancel" id="iosSetupCloseBtn" type="button">Sluiten</button>
+      </div>
+    </div>
+
+    <!-- ══ Install App Modal ══ -->
+    <div class="confirm-sheet-backdrop hidden" id="installAppBackdrop"></div>
+    <div class="confirm-sheet hidden" id="installAppSheet" role="alertdialog" aria-modal="true">
+      <div style="text-align: center;">
+        <div style="margin-bottom: 16px; width: 80px; height: 80px; margin-left: auto; margin-right: auto; background: linear-gradient(135deg, #8da485 0%, #a8c8a0 100%); border-radius: 24px; display: flex; align-items: center; justify-content: center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" style="width: 40px; height: 40px;" aria-hidden="true"><path d="M19 13v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6M12 17V7M7 12h10"/></svg>
+        </div>
+        <h2 style="margin-bottom: 8px; font-size: 18px; font-weight: 700; color: var(--text);">Plately op je homescreen</h2>
+        <p style="margin-bottom: 20px; font-size: 14px; color: var(--muted-strong); line-height: 1.6;">
+          Voeg Plately toe aan je homescreen voor snelle toegang. Open recepten direct van je telefoon! 📱
+        </p>
+      </div>
+      <div class="confirm-sheet__actions">
+        <button class="confirm-sheet__btn confirm-sheet__btn--cancel" id="installAppSkipBtn" type="button">Later</button>
+        <button class="confirm-sheet__btn confirm-sheet__btn--confirm" id="installAppConfirmBtn" type="button">Installeer</button>
       </div>
     </div>
 
