@@ -141,7 +141,7 @@ async function proxyImage(requestUrl, response) {
     const upstream = await fetch(raw, {
       headers: {
         ...FETCH_HEADERS,
-        accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        accept: "image/jpeg,image/png,image/webp,image/*,*/*;q=0.8",
       },
       signal: AbortSignal.timeout(8000),
     });
