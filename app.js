@@ -2334,7 +2334,7 @@ function renderChannelSettings() {
       const toggleDisabled = isPending ? "disabled" : "";
 
       return `
-        <div class="channel-toggle-row channel-toggle-row--custom ${isPending ? "channel-toggle-row--disabled" : ""}" data-channel-id="${escapeHtml(ch.id)}">
+        <div class="channel-toggle-row channel-toggle-row--custom ${isPending ? "channel-toggle-row--disabled" : ""}" data-channel-id="${ch.id}">
           <span class="channel-toggle-avatar">
             ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
           </span>
@@ -2342,8 +2342,8 @@ function renderChannelSettings() {
             <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
             <span class="channel-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
           </div>
-          <span class="toggle-switch ${followed ? "toggle-switch--on" : ""} ${toggleDisabled}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}" ${toggleDisabled}></span>
-          <button class="channel-delete-btn" type="button" aria-label="Verwijder ${escapeHtml(ch.name)}" data-delete-channel="${escapeHtml(ch.id)}">×</button>
+          <span class="toggle-switch ${followed ? "toggle-switch--on" : ""} ${toggleDisabled}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${ch.id}" ${toggleDisabled}></span>
+          <button class="channel-delete-btn" type="button" aria-label="Verwijder ${escapeHtml(ch.name)}" data-delete-channel="${ch.id}">×</button>
         </div>`;
     }).join("");
 
