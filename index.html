@@ -623,6 +623,13 @@
                 <span class="profile2-row__label">Wachtwoord wijzigen</span>
                 <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
               </button>
+              <button class="profile2-row" id="installAppBtn" type="button" style="margin-top: 0.5rem; padding: 1rem; display: none;">
+                <span class="profile2-row__icon" style="background:#dcfce7">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M19 13v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6M12 17V7M7 12h10"/></svg>
+                </span>
+                <span class="profile2-row__label">Voeg toe aan homescreen</span>
+                <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+              </button>
             </div>
           </div>
 
@@ -959,11 +966,8 @@
             </div>
           </header>
 
-          <section class="review-hero">
-            <h1>Recept controleren</h1>
-          </section>
-
-          <section class="review-card">
+          <div class="review-container">
+            <section class="review-card">
             <div class="review-preview">
               <img id="reviewPreviewImage" src="assets/hero-burger.svg" alt="Recept preview" />
               <div class="review-preview__copy">
@@ -1028,7 +1032,10 @@
                 <button class="secondary-button" id="skipReviewButton" type="button">Later nalopen</button>
               </div>
             </form>
+
+            <h1 class="review-title">Recept controleren</h1>
           </section>
+          </div>
 
         <!-- Admin Dashboard Screen (Hidden, only for admin) -->
         <section class="screen" id="adminScreen" aria-hidden="true" style="display:none">

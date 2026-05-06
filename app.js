@@ -7849,3 +7849,52 @@ if (adminUsersList) {
     }
   });
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// PWA: Add to Home Screen
+// ────────────────────────────────────────────────────────────────────────────
+
+let installPrompt = null;
+const installAppBtn = document.getElementById("installAppBtn");
+
+// Listen for the beforeinstallprompt event
+window.addEventListener("beforeinstallprompt", (event) => {
+  // Prevent the mini-infobar from appearing automatically
+  event.preventDefault();
+  // Store the event for later use
+  installPrompt = event;
+  // Show the install button
+  if (installAppBtn) {
+    installAppBtn.style.display = "";
+  }
+});
+
+// Handle install button click
+if (installAppBtn) {
+  installAppBtn.addEventListener("click", async () => {
+    if (!installPrompt) return;
+
+    // Show the install prompt
+    installPrompt.prompt();
+
+    // Wait for the user to respond
+    const { outcome } = await installPrompt.userChoice;
+    console.log(`User response to install prompt: ${outcome}`);
+
+    // Reset the prompt
+    installPrompt = null;
+
+    // Hide the install button
+    if (installAppBtn) {
+      installAppBtn.style.display = "none";
+    }
+  });
+}
+
+// Hide install button when app is already installed
+window.addEventListener("appinstalled", () => {
+  console.log("✅ Plately installed successfully!");
+  if (installAppBtn) {
+    installAppBtn.style.display = "none";
+  }
+});
