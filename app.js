@@ -1474,7 +1474,7 @@ function switchView(view) {
 
   // Persist view so refresh restores the same tab
   try {
-    if (["home", "grocery", "settings", "mealplan", "cookbooks"].includes(view)) {
+    if (["home", "detail", "grocery", "settings", "mealplan", "cookbooks", "import", "review"].includes(view)) {
       sessionStorage.setItem("plately-view", view);
     } else {
       sessionStorage.removeItem("plately-view");
