@@ -2324,14 +2324,26 @@ function renderChannelSettings() {
   if (state.customChannels.length > 0) {
     customHTML += `<div class="channel-section-label">MIJN KANALEN</div>`;
 
-    const customRows = state.customChannels.map((ch) => {
+    const customRows = state.customChannels
+      .filter((ch) => {
+        // Hide rejected channels from the user's list
+        return (ch.status || "approved") !== "rejected";
+      })
+      .map((ch) => {
       const followed = state.followedChannelIds.includes(ch.id);
       const faviconUrl = getSourceIconUrl(ch.url);
       const status = ch.status || "approved";
-      const statusClass = status === "pending" ? "channel-status-badge--pending" : "channel-status-badge--approved";
-      const statusLabel = status === "pending" ? "In behandeling" : "Goedgekeurd";
+      const statusClass =
+        status === "pending" ? "channel-status-badge--pending" :
+        status === "rejected" ? "channel-status-badge--rejected" :
+        "channel-status-badge--approved";
+      const statusLabel =
+        status === "pending" ? "In behandeling" :
+        status === "rejected" ? "Afgekeurd" :
+        "Goedgekeurd";
       const isPending = status === "pending";
-      const toggleDisabled = isPending ? "disabled" : "";
+      const isRejected = status === "rejected";
+      const toggleDisabled = (isPending || isRejected) ? "disabled" : "";
 
       return `
         <div class="channel-toggle-row channel-toggle-row--custom ${isPending ? "channel-toggle-row--disabled" : ""}" data-channel-id="${ch.id}">

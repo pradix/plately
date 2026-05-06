@@ -7171,10 +7171,11 @@ body {
   pointer-events: none;
 }
 
-/* Allow delete button to be clickable even when row is disabled */
+/* Allow delete button to be clickable even when row is disabled (pending/rejected) */
 .channel-toggle-row--disabled .channel-delete-btn {
   pointer-events: auto;
   opacity: 1;
+  cursor: pointer;
 }
 
 /* ── Channel filter chips in search results ──────────────────────────────── */
@@ -7984,6 +7985,11 @@ body {
 .channel-status-badge--approved {
   background: #dcfce7;
   color: #166534;
+}
+
+.channel-status-badge--rejected {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 /* ── Custom channel form ────────────────────────────────────────────────────── */
