@@ -2321,6 +2321,25 @@ function renderChannelSettings() {
 
   // Separate custom channels section
   let customHTML = "";
+
+  // Show pending channels info message
+  const pendingChannels = state.customChannels.filter(ch => (ch.status || "approved") === "pending");
+  if (pendingChannels.length > 0) {
+    const names = pendingChannels.map(ch => `"${ch.name}"`).join(", ");
+    customHTML += `
+      <div class="channel-pending-info">
+        <span class="channel-pending-icon">⏳</span>
+        <div class="channel-pending-text">
+          <div class="channel-pending-title">We verwerken je kanaalverzoek</div>
+          <div class="channel-pending-desc">
+            We testen momenteel de import van ${names} om te zien of alles goed werkt.
+            Zodra het is goedgekeurd, ontvang je een melding en kun je het gebruiken in het zoekscherm.
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   if (state.customChannels.length > 0) {
     customHTML += `<div class="channel-section-label">MIJN KANALEN</div>`;
 
