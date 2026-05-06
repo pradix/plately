@@ -7293,6 +7293,11 @@ const ONBOARDING_SESSION_KEY = "plately-tooltips-shown-this-session"; // One-tim
 
 const ONBOARDING_STEPS = [
   {
+    selector: "#searchInput",
+    text: "Zoeken naar recepten op je favoriete kanalen. Typ minimaal 2 letters om resultaten te zien. 🔍",
+    dir: "below",
+  },
+  {
     selector: ".import-banner__input--full",
     text: "Plak hier een link van TikTok, Instagram of een receptwebsite — we importeren het recept automatisch voor je. 🍳",
     dir: "below",
