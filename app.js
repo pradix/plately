@@ -1516,10 +1516,32 @@ function parseIngredientInput(value) {
     // Normalize "gr" and "gram" → "g"
     let unit = (match[2] || "x").toLowerCase();
     if (unit === "gr" || unit === "gram" || unit === "grams") unit = "g";
+    // Clean ingredient name: remove leading/trailing punctuation and extra spaces
+    let name = match[3].trim().replace(/^[.,\s]+|[.,\s]+$/g, "").trim();
+
+    // Validate quantity: convert to number and check validity
+    let quantity = match[1];
+    const qtyNum = parseFloat(quantity.replace(",", "."));
+
+    // Validate: quantity must be positive and reasonable
+    if (isNaN(qtyNum) || qtyNum <= 0) {
+      // Invalid quantity, use default
+      quantity = "1";
+    } else if (qtyNum > 1000) {
+      // Warn about unreasonably large quantities (silently cap at 999)
+      quantity = "999";
+    } else if (qtyNum < 0.01) {
+      // Very small quantities (less than 0.01) become 1 unit
+      quantity = "1";
+    } else {
+      // Keep original quantity
+      quantity = match[1];
+    }
+
     return {
-      quantity: match[1],
+      quantity,
       unit,
-      name: match[3].trim(),
+      name: name || "Ingredient",
     };
   }
   return { quantity: "1", unit: "x", name: cleanValue || "Ingredient" };
@@ -3337,6 +3359,18 @@ function saveImportReview() {
     reviewFeedback.textContent = "Voeg minimaal één ingrediënt toe.";
     return;
   }
+
+  // Validate ingredient quantities
+  const invalidQtyIngredients = nextIngredients.filter((ing) => {
+    const qtyNum = parseFloat(ing.quantity.replace(",", "."));
+    return isNaN(qtyNum) || qtyNum <= 0;
+  });
+  if (invalidQtyIngredients.length > 0) {
+    const count = invalidQtyIngredients.length;
+    reviewFeedback.textContent = `${count} ingrediënt${count !== 1 ? "en" : ""} hebben ongeldige hoeveelheid. Zet je ingrediënten correct in (bijv. "2 el suiker").`;
+    return;
+  }
+
   if (!nextInstructions.length) {
     reviewFeedback.textContent = "Voeg minimaal één bereidingsstap toe.";
     return;
