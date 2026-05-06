@@ -5881,7 +5881,7 @@ bindEvent(searchInput, "input", (event) => {
   state.searchQuery = event.target.value.trim();
   renderRecipeGrid();
 
-  // Debounced channel search — fires after 300 ms of no typing (faster feedback)
+  // Debounced channel search — fires after 500 ms of no typing (better results, fewer API calls)
   clearTimeout(channelSearchTimeout);
   const query = event.target.value.trim();
   if (query.length < 2) {
@@ -5897,7 +5897,7 @@ bindEvent(searchInput, "input", (event) => {
     state.followedChannelIds.push("ch-ah");
   }
 
-  channelSearchTimeout = setTimeout(() => searchChannels(query), 300);
+  channelSearchTimeout = setTimeout(() => searchChannels(query), 500);
 });
 
 bindEvent(searchInput, "keydown", (event) => {
