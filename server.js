@@ -4716,57 +4716,9 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
 async function searchAHRecipes(query, count = 4) {
   console.log(`🔍 AH recipe search for: "${query}"`);
 
-  // Try API first, but with a timeout
-  try {
-    const token = await fetchAHAnonymousToken();
-    const url = `https://api.ah.nl/mobile-services/recipes/v2?query=${encodeURIComponent(query)}&size=${count}`;
-    console.log(`📡 Trying AH API: ${url}`);
-    const resp = await fetch(url, {
-      headers: { ...FETCH_HEADERS, authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(3000), // Reduced for faster results
-    });
-    console.log(`API response: ${resp.status}`);
-    if (resp.ok) {
-      const data = await resp.json();
-      const recipes = data.recipes || [];
-      console.log(`✅ API returned ${recipes.length} recipes`);
-      if (recipes.length > 0) {
-        const mapped = recipes.slice(0, count).map((r) => {
-          // Get highest quality image from API response
-          let imageUrl = "";
-          if (Array.isArray(r.images) && r.images.length > 0) {
-            // Find the largest image in the array
-            const largestImage = r.images.reduce((best, curr) => {
-              const currWidth = curr.width || 0;
-              const bestWidth = best.width || 0;
-              return currWidth > bestWidth ? curr : best;
-            });
-            imageUrl = largestImage.url || "";
-          } else if (r.image?.url) {
-            imageUrl = r.image.url;
-          }
-
-          // Upgrade to highest quality variant if it's an AH CDN image
-          if (imageUrl && imageUrl.includes("static.ah.nl")) {
-            imageUrl = upgradeAhImageQuality(imageUrl);
-          }
-
-          return {
-            title: sanitizeText(r.title || ""),
-            url: r.webPath ? `https://www.ah.nl${r.webPath}` : "",
-            thumbnail: imageUrl,
-            channel: "Allerhande",
-            channelId: "ch-ah",
-            description: sanitizeText((r.description || "").slice(0, 140)),
-            time: r.cookTime ? `${r.cookTime} min` : "",
-          };
-        }).filter((r) => r.title && r.url);
-        if (mapped.length > 0) return mapped;
-      }
-    }
-  } catch (err) {
-    console.log(`⚠️  API failed: ${err.message}`);
-  }
+  // Skip AH API - it requires authentication token we don't have
+  // Use Jina reader fallback directly (much more reliable)
+  console.log(`⏭️  Skipping AH API (unauthorized), using Jina reader`);
 
   // Fallback: Use Jina reader to get AH search results as markdown
   try {
