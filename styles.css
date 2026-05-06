@@ -891,8 +891,8 @@ img { display: block; max-width: 100%; }
 }
 
 .detail-screen .topbar--home .brand-logo {
-  height: 40px;
-  width: 40px;
+  height: 76px;
+  width: auto;
   object-fit: contain;
   padding: 10px;
   background: rgba(255, 255, 255, 0.95);
