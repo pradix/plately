@@ -1483,6 +1483,11 @@ img { display: block; max-width: 100%; }
   display: flex;
   flex-direction: column;
   gap: 0;
+  padding: 0;
+}
+
+/* In settings screen the cookbook detail is rendered in #cookbookList (no grid padding). */
+#cookbookList .cb-detail {
   padding: 16px 16px calc(100px + env(safe-area-inset-bottom, 0px));
 }
 
