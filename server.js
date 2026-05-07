@@ -7265,7 +7265,7 @@ const server = http.createServer(async (request, response) => {
           sendJson(response, 400, {
             ok: false,
             error: "not_recipe",
-            message: "Je probeert een blog te importeren, geen recept.",
+            message: "Geen recept gevonden om te importeren, waarschijnlijk is het een blog.",
           });
           return;
         }
@@ -7287,11 +7287,15 @@ const server = http.createServer(async (request, response) => {
         const statusCode = error.statusCode || 400;
         const rawMessage = String(error?.message || "");
 
-        if (/jsdom is not defined/i.test(rawMessage) || /JSDOM is not defined/i.test(rawMessage)) {
+        if (
+          /jsdom is not defined/i.test(rawMessage) ||
+          /JSDOM is not defined/i.test(rawMessage) ||
+          /not[_\\s-]*recei?pe/i.test(rawMessage)
+        ) {
           sendJson(response, 400, {
             ok: false,
             error: "not_recipe",
-            message: "Je probeert een blog te importeren, geen recept.",
+            message: "Geen recept gevonden om te importeren, waarschijnlijk is het een blog.",
           });
           return;
         }
