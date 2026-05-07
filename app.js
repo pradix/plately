@@ -1466,6 +1466,84 @@ function getBasketHandoffUrl(preview) {
   );
 }
 
+function splitCompoundIngredientWords(text) {
+  const source = String(text || "");
+  if (!source.trim()) return "";
+
+  const stripDiacritics = (value) =>
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  // Small, intentionally conservative dictionary. We only split when a single
+  // token exactly equals <base><suffix>.
+  const BASE_WORDS = [
+    "kipfilet",
+    "kip",
+    "rundergehakt",
+    "gehakt",
+    "varkensvlees",
+    "spekjes",
+    "parmezaan",
+    "mozzarella",
+    "cherrytomaat",
+    "tomaat",
+    "ui",
+    "knoflook",
+    "paprika",
+    "komkommer",
+    "cremefraiche",
+    "crmefraiche",
+    "slagroom",
+    "kookroom",
+    "boter",
+    "olijfolie",
+  ];
+
+  const SUFFIX_WORDS = [
+    "plakjes",
+    "reepjes",
+    "blokjes",
+    "stukjes",
+    "filets",
+    "schijfjes",
+    "ringen",
+    "snippers",
+    "groente",
+    "groenten",
+    "kaas",
+    "saus",
+    "mix",
+  ];
+
+  const baseByLengthDesc = [...BASE_WORDS].sort((a, b) => b.length - a.length);
+  const suffixByLengthDesc = [...SUFFIX_WORDS].sort((a, b) => b.length - a.length);
+
+  const splitToken = (token) => {
+    if (!token || token.length <= 8) return token;
+    if (token.includes(" ")) return token;
+    if (!/^[\p{L}]+$/u.test(token)) return token;
+
+    const normalized = stripDiacritics(token).toLowerCase();
+    for (const base of baseByLengthDesc) {
+      if (!normalized.startsWith(base)) continue;
+      const rest = normalized.slice(base.length);
+      if (!rest) continue;
+      for (const suffix of suffixByLengthDesc) {
+        if (rest !== suffix) continue;
+        return `${token.slice(0, base.length)} ${token.slice(base.length)}`;
+      }
+    }
+    return token;
+  };
+
+  return source
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(splitToken)
+    .join(" ");
+}
+
 function normalizeBasketToken(value) {
   return String(value || "")
     .toLowerCase()
@@ -1590,6 +1668,8 @@ function renderBasketPreview() {
       ? `🌱 Biologisch ${choice.title}`
       : choice.title;
 
+    const ingredientTitle = splitCompoundIngredientWords(item.ingredientTitle || "");
+
     return `
       <div class="basket-product" data-basket-item="${itemIndex}">
         <div class="basket-product__img-wrap">
@@ -1598,7 +1678,7 @@ function renderBasketPreview() {
         <div class="basket-product__info">
           <p class="basket-product__name">${escapeHtml(displayTitle)}</p>
           <p class="basket-product__meta">${escapeHtml(choice.price || "")}${choice.subtitle ? ` · ${escapeHtml(choice.subtitle)}` : ""}</p>
-          <p class="basket-product__for">voor ${escapeHtml(item.ingredientAmount || "")} ${escapeHtml(item.ingredientTitle || "")}</p>
+          <p class="basket-product__for">voor ${escapeHtml(item.ingredientAmount || "")} ${escapeHtml(ingredientTitle)}</p>
           ${altCount > 1 ? `<button class="basket-product__wissel" type="button" data-basket-wissel="${itemIndex}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
             Wissel
@@ -1728,7 +1808,7 @@ function renderAlternativesSheet(item) {
 
   if (ctxEl) {
     const amount = item?.ingredientAmount ? `${escapeHtml(item.ingredientAmount)} ` : "";
-    const title = escapeHtml(item?.ingredientTitle || "");
+    const title = escapeHtml(splitCompoundIngredientWords(item?.ingredientTitle || ""));
     ctxEl.innerHTML = `<span class="alt-sheet__context-label">Voor</span> <span class="alt-sheet__context-value">${amount}${title}</span>`;
   }
 
@@ -3889,12 +3969,13 @@ function renderGroceryGroups() {
   const multiRecipe = uniqueRecipes.length > 1;
 
   function renderGroceryItem(item) {
+    const displayTitle = escapeHtml(splitCompoundIngredientWords(item.title || ""));
     return `
       <div class="grocery-entry-wrapper">
         <button class="grocery-entry ${item.checked ? "is-checked" : ""}" type="button" data-grocery-id="${item.id}">
           <span class="grocery-check"></span>
           <span class="grocery-entry__content">
-            <p class="grocery-entry__title">${item.title}</p>
+            <p class="grocery-entry__title">${displayTitle}</p>
             ${multiRecipe && item.recipeTitle && item.recipeTitle.includes(",")
               ? `<p class="grocery-entry__overlap">Gedeeld ingrediënt</p>` : ""}
           </span>
@@ -3902,7 +3983,7 @@ function renderGroceryGroups() {
           <span class="grocery-entry__img" aria-hidden="true">
             ${item.imageUrl
               ? `<img class="grocery-entry__ah-img" src="${escapeHtml(item.imageUrl)}" alt="" loading="lazy" />`
-              : getIngredientVisualMarkup(item.title)}
+              : getIngredientVisualMarkup(splitCompoundIngredientWords(item.title || ""))}
           </span>
         </button>
         <button class="grocery-entry-action grocery-entry-action--delete" type="button" data-action="delete" data-grocery-id="${item.id}" aria-label="Verwijderen">

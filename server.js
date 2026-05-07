@@ -1259,6 +1259,82 @@ function sanitizeText(value) {
     .trim();
 }
 
+function splitCompoundIngredientWords(text) {
+  const source = String(text || "");
+  if (!source.trim()) return "";
+
+  const stripDiacritics = (value) =>
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  const BASE_WORDS = [
+    "kipfilet",
+    "kip",
+    "rundergehakt",
+    "gehakt",
+    "varkensvlees",
+    "spekjes",
+    "parmezaan",
+    "mozzarella",
+    "cherrytomaat",
+    "tomaat",
+    "ui",
+    "knoflook",
+    "paprika",
+    "komkommer",
+    "cremefraiche",
+    "crmefraiche",
+    "slagroom",
+    "kookroom",
+    "boter",
+    "olijfolie",
+  ];
+
+  const SUFFIX_WORDS = [
+    "plakjes",
+    "reepjes",
+    "blokjes",
+    "stukjes",
+    "filets",
+    "schijfjes",
+    "ringen",
+    "snippers",
+    "groente",
+    "groenten",
+    "kaas",
+    "saus",
+    "mix",
+  ];
+
+  const baseByLengthDesc = [...BASE_WORDS].sort((a, b) => b.length - a.length);
+  const suffixByLengthDesc = [...SUFFIX_WORDS].sort((a, b) => b.length - a.length);
+
+  const splitToken = (token) => {
+    if (!token || token.length <= 8) return token;
+    if (token.includes(" ")) return token;
+    if (!/^[\p{L}]+$/u.test(token)) return token;
+
+    const normalized = stripDiacritics(token).toLowerCase();
+    for (const base of baseByLengthDesc) {
+      if (!normalized.startsWith(base)) continue;
+      const rest = normalized.slice(base.length);
+      if (!rest) continue;
+      for (const suffix of suffixByLengthDesc) {
+        if (rest !== suffix) continue;
+        return `${token.slice(0, base.length)} ${token.slice(base.length)}`;
+      }
+    }
+    return token;
+  };
+
+  return source
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(splitToken)
+    .join(" ");
+}
+
 function decodeHtml(value) {
   return String(value || "")
     .replace(/&amp;/g, "&")
@@ -6424,7 +6500,7 @@ async function buildStoreBasket(body) {
   // steer search results toward matching products.
   // For other stores: keep single-match behaviour.
   const buildAHSearchQuery = (rawName, prefs) => {
-    const base = sanitizeText(rawName || "");
+    const base = splitCompoundIngredientWords(sanitizeText(rawName || ""));
     if (!base) return "";
     const tokens = [];
     if (prefs?.bio) tokens.push("biologisch");
@@ -6440,28 +6516,29 @@ async function buildStoreBasket(body) {
     searchResults = await Promise.all(
       items.map(async (item) => {
         const rawName = sanitizeText(item.title || "");
-        if (!rawName) return { ingredient: rawName, product: null, products: [] };
+        const ingredientName = splitCompoundIngredientWords(rawName);
+        if (!ingredientName) return { ingredient: ingredientName, product: null, products: [] };
 
         // Fetch a wider, label-tagged set of alternatives so the AH "Wissel"
         // sheet can group by Meest voordelig / Bio / Beter Leven / etc.
-        let products = await findAHAlternativesGrouped(rawName, preferences, 30);
+        let products = await findAHAlternativesGrouped(ingredientName, preferences, 30);
 
         // If the broad fetch returned nothing, fall back to the legacy single
         // query so the basket is never empty for that item.
         if (!products || products.length === 0) {
-          const searchQuery = buildAHSearchQuery(rawName, preferences);
-          products = await findAHProducts(searchQuery || rawName, 3);
-          if ((!products || products.length === 0) && searchQuery && searchQuery !== rawName) {
-            products = await findAHProducts(rawName, 3);
+          const searchQuery = buildAHSearchQuery(ingredientName, preferences);
+          products = await findAHProducts(searchQuery || ingredientName, 3);
+          if ((!products || products.length === 0) && searchQuery && searchQuery !== ingredientName) {
+            products = await findAHProducts(ingredientName, 3);
           }
         }
-        return { ingredient: rawName, product: products[0] ?? null, products };
+        return { ingredient: ingredientName, product: products[0] ?? null, products };
       })
     ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
   } else {
     const raw = await searchProductsForStore(
       store,
-      items.map((item) => sanitizeText(item.title || "")).filter(Boolean)
+      items.map((item) => splitCompoundIngredientWords(sanitizeText(item.title || ""))).filter(Boolean)
     ).catch(() => []);
     searchResults = raw.map((r) => ({ ...r, products: r.product ? [r.product] : [] }));
   }
@@ -6491,7 +6568,7 @@ async function buildStoreBasket(body) {
 
     return {
       id: `basket-item-${index}`,
-      ingredientTitle: sanitizeText(item.title || "Ingrediënt"),
+      ingredientTitle: splitCompoundIngredientWords(sanitizeText(item.title || "Ingrediënt")),
       ingredientAmount: sanitizeText(item.amount || "1 verpakking"),
       confidence: result.product ? "Gevonden in winkel" : getMatchConfidenceLabel(item.title || ""),
       choices: choices.slice(0, choicesCap),
