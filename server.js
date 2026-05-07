@@ -5087,6 +5087,41 @@ const RECIPE_URL_RE = /\/(recept|recepten|recipe|recipes|gerecht|gerechten|bakke
 // Title keywords that strongly suggest a non-recipe post (opinion / list / guide).
 const BLOG_TITLE_RE = /\b(tips?|review|gids|uitleg|interview|podcast|blog|nieuws|aankondiging|aanbieding|webshop|kookboek|artikel|wat\s+is|waarom|zo\s+doe\s+je|10\s+x\b|\d+\s+keer\b)\b/i;
 
+// ── In-memory caches ──────────────────────────────────────────────────────────
+// Simple per-process cache to keep channel search snappy for repeated queries.
+// This resets on deploy/restart (fine for our use-case).
+const CHANNEL_SEARCH_CACHE_TTL_MS = 60_000;
+const CHANNEL_SEARCH_CACHE_MAX_ENTRIES = 250;
+const channelSearchCache = new Map(); // key -> { at:number, results:any[] }
+
+function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam }) {
+  const q = String(query || "").trim().toLowerCase();
+  const channels = Array.isArray(allowedChannels) && allowedChannels.length
+    ? [...allowedChannels].map((s) => String(s || "").trim()).filter(Boolean).sort().join(",")
+    : "*";
+  const custom = String(customChannelsParam || "").trim();
+  return `${q}||${channels}||${custom}`;
+}
+
+function getCachedChannelSearch(key) {
+  const entry = channelSearchCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.at > CHANNEL_SEARCH_CACHE_TTL_MS) {
+    channelSearchCache.delete(key);
+    return null;
+  }
+  return entry.results || [];
+}
+
+function setCachedChannelSearch(key, results) {
+  channelSearchCache.set(key, { at: Date.now(), results: Array.isArray(results) ? results : [] });
+  if (channelSearchCache.size <= CHANNEL_SEARCH_CACHE_MAX_ENTRIES) return;
+  // Prune oldest entries (very small + cheap)
+  const entries = [...channelSearchCache.entries()].sort((a, b) => a[1].at - b[1].at);
+  const toRemove = Math.max(0, entries.length - CHANNEL_SEARCH_CACHE_MAX_ENTRIES);
+  for (let i = 0; i < toRemove; i++) channelSearchCache.delete(entries[i][0]);
+}
+
 /**
  * Returns true when a WP post URL looks like a recipe (not a blog/tip/news article).
  * - If the URL matches a known-recipe pattern → keep
@@ -6440,10 +6475,17 @@ const server = http.createServer(async (request, response) => {
       const allowedChannels = channelsParam
         ? channelsParam.split(",").map((s) => s.trim()).filter(Boolean)
         : null;
-      const results = await searchChannelRecipes(query, allowedChannels);
-
       // Handle custom channels
       const customChannelsParam = requestUrl.searchParams.get("customChannels") || "";
+
+      const cacheKey = getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam });
+      const cached = getCachedChannelSearch(cacheKey);
+      if (cached) {
+        sendJson(response, 200, { ok: true, results: cached });
+        return;
+      }
+
+      const results = await searchChannelRecipes(query, allowedChannels);
       if (customChannelsParam) {
         const customChannelEntries = customChannelsParam.split(",")
           .map((entry) => {
@@ -6471,6 +6513,7 @@ const server = http.createServer(async (request, response) => {
         }
       }
 
+      setCachedChannelSearch(cacheKey, results);
       sendJson(response, 200, { ok: true, results });
       return;
     }
