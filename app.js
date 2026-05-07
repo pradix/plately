@@ -1459,6 +1459,26 @@ function openBasketModal(preview) {
   }
 }
 
+function scrollToTopSoon() {
+  const apply = () => {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+    // iOS/Safari fallback paths
+    try { document.documentElement.scrollTop = 0; } catch {}
+    try { document.body.scrollTop = 0; } catch {}
+  };
+
+  apply();
+  requestAnimationFrame(() => {
+    apply();
+    requestAnimationFrame(apply);
+  });
+  setTimeout(apply, 60);
+}
+
 function goHome() {
   closeModal();
   closeBasketModal();
@@ -1475,6 +1495,7 @@ function switchView(view) {
     return;
   }
 
+  const prevView = state.view;
   state.view = view;
   homeScreen.classList.toggle("screen--active", view === "home");
   detailScreen.classList.toggle("screen--active", view === "detail");
@@ -1503,7 +1524,12 @@ function switchView(view) {
     state.openCookbookId = null;
   }
 
-  window.scrollTo({ top: 0, behavior: "auto" });
+  if (view !== prevView) {
+    scrollToTopSoon();
+  } else {
+    // Still force top when re-entering same screen via deep-link flows.
+    scrollToTopSoon();
+  }
 
   // When entering grocery screen, kick off a photo fetch for items that don't have one yet
   if (view === "grocery") {
@@ -5507,7 +5533,7 @@ async function bootstrapSession() {
 
     // Scroll to top for non-detail views
     if (state.view !== "detail") {
-      window.scrollTo({ top: 0, behavior: "auto" });
+      scrollToTopSoon();
     }
 
     // Show auth modal to all unauthenticated users
@@ -5567,7 +5593,7 @@ async function submitAuth(mode, email, password) {
   } else {
     closeAuthModal();
     showToast("Je bent ingelogd.");
-    window.scrollTo({ top: 0, behavior: "auto" });
+    scrollToTopSoon();
   }
 }
 
@@ -6173,7 +6199,7 @@ function openProfileSubPanel(id) {
   const panel = document.getElementById(id);
   if (!panel) return;
   // Scroll main window to top to prevent jump effect when panel opens
-  window.scrollTo({ top: 0, behavior: "auto" });
+  scrollToTopSoon();
   panel.classList.add("profile-subpanel--active");
   panel.setAttribute("aria-hidden", "false");
   // Scroll panel to top to avoid showing content from previous state
@@ -6196,7 +6222,7 @@ function closeProfileSubPanel(id) {
   panel.classList.remove("profile-subpanel--active");
   panel.setAttribute("aria-hidden", "true");
   // Keep main window at top when closing panel
-  window.scrollTo({ top: 0, behavior: "auto" });
+  scrollToTopSoon();
 }
 
 // Helper: resize an image File/Blob to a compact JPEG data URL
@@ -8287,6 +8313,13 @@ document.querySelectorAll(".brand-logo").forEach((logo) => {
 
 refreshBackendStatus();
 registerServiceWorker();
+
+// Prevent browser history navigation from restoring scroll position.
+try {
+  if ("scrollRestoration" in history) {
+    history.scrollRestoration = "manual";
+  }
+} catch { /* ignore */ }
 
 // Bootstrap session - this will render the app AFTER checking authentication
 bootstrapSession();
