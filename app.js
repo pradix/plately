@@ -1474,6 +1474,14 @@ function switchView(view) {
     renderCookbookList();
   }
 
+  // When entering settings, refresh custom channel statuses (admin approvals)
+  if (view === "settings" && state.auth.authenticated) {
+    const hasPending = state.customChannels.some((ch) => (ch.status || "approved") === "pending");
+    if (hasPending) {
+      refreshChannelStatusesFromServer();
+    }
+  }
+
   // Persist view so refresh restores the same tab
   try {
     if (["home", "detail", "grocery", "settings", "mealplan", "cookbooks", "import", "review"].includes(view)) {
@@ -1897,6 +1905,10 @@ function getImportedRecipes() {
   return state.recipes.filter((recipe) => !SEED_RECIPE_IDS.has(recipe.id) && !recipe.isSeed);
 }
 
+function getSavedImportedRecipes() {
+  return getImportedRecipes().filter((recipe) => isRecipeSaved(recipe.id));
+}
+
 // ── Channel recipe search ─────────────────────────────────────────────────────
 
 let channelSearchTimeout = null;
@@ -2051,11 +2063,6 @@ async function searchChannels(query) {
     return;
   }
 
-  // Ensure Allerhande is always included
-  if (!state.followedChannelIds.includes("ch-ah")) {
-    state.followedChannelIds.push("ch-ah");
-  }
-
   if (channelSearchSection) {
     channelSearchSection.classList.remove("hidden");
     if (channelSearchResults) channelSearchResults.innerHTML = `<p class="ch-result__loading"><span class="plately-hourglass"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M6 2h12v6c0 2-2 3-6 3s-6-1-6-3V2z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><path d="M6 22h12v-6c0-2-2-3-6-3s-6 1-6 3v6z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><rect x="11" y="9" width="2" height="6" fill="#f6b69d"/></svg></span>Zoeken…</p>`;
@@ -2167,8 +2174,8 @@ function renderRecentImports() {
   const grid = document.getElementById("recentImportsGrid");
   if (!heading || !grid) return;
 
-  // Only show user-imported recipes (not seed content), newest first
-  const imported = getImportedRecipes().slice(0, 4);
+  // Only show recipes the user actually saved (newest first)
+  const imported = getSavedImportedRecipes().slice(0, 4);
 
   heading.classList.remove("hidden");
 
@@ -2544,9 +2551,9 @@ function renderRecipeGrid() {
 
   let recipes;
   if (!isSearching && !state.activeCookbookFilter) {
-    // Show user-imported recipes first, then fill with seed recipes
-    // For new users (no imported recipes), show nothing (empty state will be shown)
-    const imported = getImportedRecipes();
+    // Show saved user imports first, then fill with seed recipes
+    // For new users (no saved imports), show nothing (empty state will be shown)
+    const imported = getSavedImportedRecipes();
     const seeds = COOKBOOK_SHOWCASE_IDS.map((id) => getRecipeById(id)).filter(Boolean);
     recipes = imported.length ? [...imported, ...seeds] : [];
   } else {
@@ -2582,7 +2589,7 @@ function renderRecipeGrid() {
   }
 
   if (!recipes.length) {
-    const isNewUser = getImportedRecipes().length === 0 && !isSearching && !state.activeCookbookFilter;
+    const isNewUser = getSavedImportedRecipes().length === 0 && !isSearching && !state.activeCookbookFilter;
 
     if (isNewUser && state.auth.authenticated) {
       // New authenticated user - show import prompt
@@ -4567,8 +4574,10 @@ function normalizeImportedRecipe(recipe) {
 }
 
 function getImportedRecipesForPersistence() {
+  const savedIds = new Set(state.cookbooks.flatMap((cookbook) => cookbook.recipeIds));
   return state.recipes
     .filter((recipe) => !SEED_RECIPE_IDS.has(recipe.id) && !recipe.isSeed)
+    .filter((recipe) => savedIds.has(recipe.id))
     .map((recipe) => ({ ...recipe, isSeed: false }));
 }
 
@@ -4690,11 +4699,6 @@ function applyPersistedAppState(user) {
     );
   }
 
-  // Always ensure Allerhande is in followed channels (primary Dutch recipe source)
-  if (!state.followedChannelIds.includes("ch-ah")) {
-    state.followedChannelIds.push("ch-ah");
-  }
-
   // Restore the view the user was on
   if (typeof user.currentView === "string" && ["home", "detail", "cookbook", "grocery", "profile", "import"].includes(user.currentView)) {
     state.view = user.currentView;
@@ -4711,7 +4715,7 @@ function persistGroceryItemsLocally() {
 function renderRecipeSlider() {
   const slider = document.getElementById("recipeSlider");
   if (!slider) return;
-  const imported = getImportedRecipes();
+  const imported = getSavedImportedRecipes();
   // If user has imports use those, otherwise fall back to showcase seeds
   const seeds = COOKBOOK_SHOWCASE_IDS.map((id) => getRecipeById(id)).filter(Boolean);
   const allRecipes = imported.length ? imported : seeds;
@@ -4945,6 +4949,30 @@ function clearUserAuthedMark() {
 }
 function hasUserEverAuthed() {
   try { return localStorage.getItem(HAS_AUTHED_KEY) === "1"; } catch { return false; }
+}
+
+async function refreshChannelStatusesFromServer() {
+  // Pull latest channel statuses (e.g. after admin approval) without wiping local UI state.
+  try {
+    const payload = await fetchJson(`${state.apiBase}/api/session`);
+    const user = payload?.user;
+    if (!user || typeof user !== "object") return;
+    if (Array.isArray(user.customChannels)) {
+      state.customChannels = user.customChannels
+        .filter((ch) => ch && typeof ch.id === "string" && typeof ch.name === "string" && typeof ch.url === "string")
+        .map((ch) => ({ ...ch }));
+    }
+    if (Array.isArray(user.followedChannelIds) && user.followedChannelIds.length) {
+      state.followedChannelIds = user.followedChannelIds.filter((id) =>
+        SEED_CHANNELS.some((ch) => ch.id === id) || state.customChannels.some((ch) => ch.id === id)
+      );
+    }
+    renderChannelSettings();
+    renderChannelRow();
+    renderProfileSummary();
+  } catch {
+    // ignore
+  }
 }
 
 async function bootstrapSession() {
@@ -6033,11 +6061,6 @@ bindEvent(searchInput, "input", (event) => {
 
   // Reset filter when starting a new search so results aren't hidden by old filter
   state.channelSearchFilter = null;
-
-  // Ensure followedChannelIds includes Allerhande at minimum
-  if (!state.followedChannelIds.includes("ch-ah")) {
-    state.followedChannelIds.push("ch-ah");
-  }
 
   channelSearchTimeout = setTimeout(() => searchChannels(query), 900);
 });

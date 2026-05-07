@@ -5642,7 +5642,6 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
 async function searchChannelRecipes(query, allowedChannels = null) {
   const q = encodeURIComponent(query);
   // null = all channels; array = only those channel IDs
-  // BUT: Always include Allerhande (ch-ah) since it's a primary recipe source
   const allow = allowedChannels && allowedChannels.length ? new Set(allowedChannels) : null;
 
   async function scrapeOrRest(baseUrl, channelName, channelId, searchUrl, parser, count) {
@@ -5668,17 +5667,17 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   }
 
   function maybeSearch(channelId, fn) {
-    // Allerhande (ch-ah) is always searched since it's a primary recipe source
-    if (channelId === "ch-ah") return fn();
     if (allow && !allow.has(channelId)) return Promise.resolve([]);
     return fn();
   }
 
-  // Run ALL searches in PARALLEL (not sequential) for speed
-  // Each search has its own timeout via fetchWithProfile, so slow channels don't block fast ones
-  const allSearches = Promise.allSettled([
+  // Run ALL searches in PARALLEL (not sequential).
+  // Important: return results FAST — do not wait for slow channels/timeouts before responding.
+  // We'll collect results as they arrive and return after a short global deadline.
+  const collected = [];
+  const searches = [
     // FAST: Reliable, quick-responding channels
-    maybeSearch("ch-ah", () => searchAHRecipes(query, 4)), // AH: primary source
+    maybeSearch("ch-ah", () => searchAHRecipes(query, 4)),
     maybeSearch("ch-les", () => scrapeOrRest("https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les",
       `https://www.lekkerensimpel.com/?s=${q}&maaltijd=all&gerecht=all`,
       parseLekkerSimpel, 4)),
@@ -5701,16 +5700,29 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     maybeSearch("ch-mj", () => scrapeOrRest("https://miljuschka.nl", "Miljuschka", "ch-mj",
       `https://miljuschka.nl/?s=${q}`,
       parseWPStandard, 4)),
-  ]);
+  ];
 
-  // Wait for all searches (with individual timeouts via fetchWithProfile)
-  const results = await allSearches;
+  const instrumented = searches.map((p) =>
+    Promise.resolve(p)
+      .then((items) => {
+        if (Array.isArray(items) && items.length) collected.push(items);
+        return items;
+      })
+      .catch(() => [])
+  );
+
+  const waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const GLOBAL_DEADLINE_MS = 1400;
+  await Promise.race([Promise.allSettled(instrumented), waitMs(GLOBAL_DEADLINE_MS)]);
+
+  // If nothing has arrived yet, wait a tiny bit longer (helps on cold starts)
+  if (collected.length === 0) {
+    await Promise.race([Promise.allSettled(instrumented), waitMs(700)]);
+  }
 
   // Interleave results from all channels for balanced variety
   const all = [];
-  const channelResults = results
-    .filter((s) => s.status === "fulfilled" && Array.isArray(s.value) && s.value.length > 0)
-    .map((s) => s.value);
+  const channelResults = collected;
 
   if (channelResults.length > 0) {
     const maxLen = Math.max(...channelResults.map((r) => r.length));
