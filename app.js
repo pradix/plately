@@ -3131,7 +3131,10 @@ function renderGroceryGroups() {
       }).join("");
   }
 
-  // Add smart pantry suggestions
+  groceryGroups.innerHTML = html;
+
+  // Pantry suggestions should only show for the relevant recipe group(s),
+  // and should match the rest of the grocery list look & feel.
   const pantryItems = [
     { title: "Olie", icon: "🫒" },
     { title: "Olijfolie", icon: "🫒" },
@@ -3143,48 +3146,80 @@ function renderGroceryGroups() {
     { title: "Bouillonblokje", icon: "🧊" },
   ];
 
-  groceryGroups.innerHTML = html;
-
-  // Render pantry suggestions (only those not already present)
   const existingKeys = new Set(state.groceryItems.map((i) => normalizeIngredientKey(i.title)));
-  const suggestions = pantryItems.filter((p) => !existingKeys.has(normalizeIngredientKey(p.title)));
-  const containerId = "groceryPantrySuggestions";
-  let container = document.getElementById(containerId);
-  if (!container) {
-    container = document.createElement("section");
-    container.id = containerId;
-    container.className = "grocery-group";
-    groceryGroups.appendChild(container);
-  }
-  if (suggestions.length) {
-    container.innerHTML = `
+  const recipeHasPantryItem = (recipe, pantryTitle) => {
+    if (!recipe?.ingredients?.length) return false;
+    const key = normalizeIngredientKey(pantryTitle);
+    return recipe.ingredients.some((ing) => normalizeIngredientKey(ing?.name || "").includes(key));
+  };
+
+  const renderPantryEntry = (s, meta) => `
+    <div class="grocery-entry-wrapper">
+      <button class="grocery-entry" type="button"
+        data-pantry-add="${escapeHtml(s.title)}"
+        data-pantry-recipe-id="${escapeHtml(meta.recipeId || "")}"
+        aria-label="Toevoegen: ${escapeHtml(s.title)}">
+        <span class="grocery-check" aria-hidden="true">${escapeHtml(s.icon)}</span>
+        <span class="grocery-entry__content">
+          <p class="grocery-entry__title">${escapeHtml(s.title)}</p>
+        </span>
+        <span class="grocery-entry__amount"></span>
+        <span class="grocery-entry__img" aria-hidden="true">${getIngredientVisualMarkup(s.title)}</span>
+      </button>
+      <button class="grocery-entry-action grocery-entry-action--add" type="button"
+        data-pantry-add="${escapeHtml(s.title)}"
+        data-pantry-recipe-id="${escapeHtml(meta.recipeId || "")}"
+        aria-label="Toevoegen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+  `;
+
+  const appendPantrySection = ({ recipeId, recipeTitle }) => {
+    if (!recipeId || !recipeTitle) return;
+    const recipe = getRecipeById(recipeId);
+    if (!recipe) return;
+    const suggestions = pantryItems
+      .filter((p) => recipeHasPantryItem(recipe, p.title))
+      .filter((p) => !existingKeys.has(normalizeIngredientKey(p.title)));
+    if (!suggestions.length) return;
+
+    const section = document.createElement("section");
+    section.className = "grocery-group grocery-group--smart";
+    section.innerHTML = `
       <div class="grocery-group__header grocery-group__header--shared">
-        <h2>Basis (optioneel)</h2>
+        <h2>In huis (optioneel) — ${escapeHtml(recipeTitle)}</h2>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;padding:10px 0">
-        ${suggestions
-          .map(
-            (s) => `
-              <button type="button" data-pantry-add="${escapeHtml(s.title)}" style="display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid #eee;border-radius:999px;background:#fff">
-                <span aria-hidden="true">${escapeHtml(s.icon)}</span>
-                <span>${escapeHtml(s.title)}</span>
-              </button>
-            `
-          )
-          .join("")}
-      </div>
+      ${suggestions.map((s) => renderPantryEntry(s, { recipeId, recipeTitle })).join("")}
     `;
-    container.querySelectorAll("[data-pantry-add]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const title = btn.getAttribute("data-pantry-add") || "";
-        if (!title) return;
-        addGroceryItemByTitle(title);
-        renderGroceryGroups();
+    groceryGroups.appendChild(section);
+  };
+
+  if (multiRecipe) {
+    for (const recipeTitle of uniqueRecipes) {
+      const recipeId = state.groceryItems.find((i) => (i.recipeTitle || "Overig") === recipeTitle)?.recipeId || "";
+      if (recipeId) appendPantrySection({ recipeId, recipeTitle });
+    }
+  } else {
+    const onlyRecipeId = state.groceryItems.find((i) => i.recipeId)?.recipeId || "";
+    const onlyRecipeTitle = state.groceryItems.find((i) => i.recipeTitle)?.recipeTitle || "";
+    if (onlyRecipeId && onlyRecipeTitle) appendPantrySection({ recipeId: onlyRecipeId, recipeTitle: onlyRecipeTitle });
+  }
+
+  groceryGroups.querySelectorAll("[data-pantry-add]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const title = btn.getAttribute("data-pantry-add") || "";
+      const recipeId = btn.getAttribute("data-pantry-recipe-id") || "";
+      if (!title) return;
+      const recipe = recipeId ? getRecipeById(recipeId) : null;
+      addGroceryItemByTitle(title, "1 stuk", "", {
+        recipeId: recipe?.id || recipeId || "",
+        recipeTitle: recipe?.title || "",
+        recipeSourceUrl: recipe?.sourceUrl || "",
+        recipePlatform: recipe?.platform || "website",
       });
     });
-  } else {
-    container.innerHTML = "";
-  }
+  });
 
   // Trigger background photo fetch for items without photos (debounced, safe to call always)
   debouncedFetchGroceryPhotos();

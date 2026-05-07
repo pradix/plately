@@ -1661,6 +1661,14 @@ img { display: block; max-width: 100%; }
   .cb-detail__grid { gap: 18px; }
 }
 
+@media (min-width: 980px) {
+  .cb-detail__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1240px) {
+  .cb-detail__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
 .cb-detail__remove {
   position: absolute;
   top: 8px;
