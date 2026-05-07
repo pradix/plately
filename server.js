@@ -6054,9 +6054,12 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   const hasChannel = (lists, channelId) =>
     lists.some((list) => Array.isArray(list) && list.some((item) => item?.channelId === channelId));
 
-  // If user only searches AH, give it a bit more time so it doesn't get cut off by the global deadline.
-  const isAhOnly = Boolean(allow && allow.size === 1 && allow.has("ch-ah"));
-  const GLOBAL_DEADLINE_MS = isAhOnly ? 2600 : 1400;
+  // When the client passes exactly one allowed channel, we must wait for that source
+  // (often AH via Jina reader — multi-second) instead of racing short deadlines meant
+  // for multi-channel variety. Otherwise Promise.race timeouts return [] before the
+  // only requested channel finishes.
+  const singleChannelMode = Boolean(allow && allow.size === 1);
+  const GLOBAL_DEADLINE_MS = singleChannelMode ? 15_000 : 1400;
   await Promise.race([Promise.allSettled(instrumented), waitMs(GLOBAL_DEADLINE_MS)]);
 
   const countDistinctChannels = (lists) => {
@@ -6070,20 +6073,21 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   };
 
   // If nothing has arrived yet, wait a tiny bit longer (helps on cold starts)
-  if (collected.length === 0) {
+  if (collected.length === 0 && !singleChannelMode) {
     await Promise.race([Promise.allSettled(instrumented), waitMs(700)]);
   }
 
   // If AH is enabled but hasn't arrived yet, wait a short extra window.
   // This fixes cases where AH is slightly slower than other sources.
   const ahEnabled = !allow || allow.has("ch-ah");
-  if (ahEnabled && !hasChannel(collected, "ch-ah")) {
+  if (!singleChannelMode && ahEnabled && !hasChannel(collected, "ch-ah")) {
     await Promise.race([Promise.allSettled(instrumented), waitMs(1200)]);
   }
 
   // If we only have results from a single channel, wait a bit longer to improve variety.
-  // (We still cap waiting so search stays snappy.)
-  if (!isAhOnly) {
+  // (We still cap waiting so search stays snappy.) Skip when only one channel was
+  // requested — distinct-channel variety does not apply.
+  if (!singleChannelMode) {
     const MIN_DISTINCT_CHANNELS = 3;
     const distinct = countDistinctChannels(collected);
     if (collected.length > 0 && distinct < MIN_DISTINCT_CHANNELS) {
