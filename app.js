@@ -474,6 +474,8 @@ const state = {
   channelSearchFilter: null,
   channelSearchAllResults: [],
   openCookbookId: null,
+  cookbookSelectMode: false,
+  cookbookSelectedRecipeIds: [],
 };
 
 const SEED_RECIPE_IDS = new Set(initialRecipes.map((recipe) => recipe.id));
@@ -4024,23 +4026,40 @@ function renderCookbookDetail(cookbookId) {
     return;
   }
   setCookbooksScreenMode("detail", cookbook.name);
+  const selecting = Boolean(state.cookbookSelectMode && state.openCookbookId === cookbookId);
+  const selectedIds = new Set(state.cookbookSelectedRecipeIds || []);
   const recipes = cookbook.recipeIds.map((id) => getRecipeById(id)).filter(Boolean);
   const _cbScreenGrid = document.getElementById("cookbooksScreenGrid");
   const _detailHtml = `
-    <div class="cb-detail">
+    <div class="cb-detail ${selecting ? "cb-detail--selecting" : ""}">
       <div class="cb-detail__header">
         <h2 class="cb-detail__name">${escapeHtml(cookbook.name)}</h2>
+        <div class="cb-detail__actions">
+          <button class="cb-detail__action-btn" type="button" data-cb-select-mode="true">
+            ${selecting ? "Klaar" : "Selecteer"}
+          </button>
+          <button class="cb-detail__action-btn cb-detail__action-btn--danger" type="button"
+            data-cb-delete-selected="true"
+            ${selecting && selectedIds.size ? "" : "disabled"}>
+            Verwijder (${selecting ? selectedIds.size : 0})
+          </button>
+        </div>
       </div>
       ${recipes.length ? `
         <div class="cb-detail__grid">
           ${recipes.map((recipe) => `
-            <div class="cb-detail__item">
+            <div class="cb-detail__item ${selecting && selectedIds.has(recipe.id) ? "is-selected" : ""}">
               <button class="cb-detail__card" type="button" data-open-recipe-id="${escapeHtml(recipe.id)}">
                 <img class="cb-detail__img" src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.title)}" loading="lazy" />
                 <div class="cb-detail__card-body">
                   <span class="cb-detail__card-title">${escapeHtml(recipe.title)}</span>
                   <span class="cb-detail__card-time">${escapeHtml(recipe.time)}</span>
                 </div>
+              </button>
+              <button class="cb-detail__select" type="button"
+                data-cb-select-recipe="${escapeHtml(recipe.id)}"
+                aria-label="Selecteer ${escapeHtml(recipe.title)}">
+                ${selecting && selectedIds.has(recipe.id) ? "✓" : ""}
               </button>
               <button class="cb-detail__remove" type="button"
                 data-remove-from-cookbook="${escapeHtml(recipe.id)}"
@@ -4075,6 +4094,10 @@ function renderCookbookList() {
     renderProfileSummary();
     return;
   }
+
+  // Reset selection state when leaving detail view
+  state.cookbookSelectMode = false;
+  state.cookbookSelectedRecipeIds = [];
 
   setCookbooksScreenMode("list");
   const cookbooksScreenGrid = document.getElementById("cookbooksScreenGrid");
@@ -6778,6 +6801,43 @@ function handleCookbookGridClick(event) {
   const target = event.target;
   if (!(target instanceof Element)) return;
 
+  const selectModeBtn = target.closest("[data-cb-select-mode]");
+  if (selectModeBtn instanceof HTMLElement && state.openCookbookId) {
+    state.cookbookSelectMode = !state.cookbookSelectMode;
+    if (!state.cookbookSelectMode) {
+      state.cookbookSelectedRecipeIds = [];
+    }
+    renderCookbookDetail(state.openCookbookId);
+    return;
+  }
+
+  const bulkDeleteBtn = target.closest("[data-cb-delete-selected]");
+  if (bulkDeleteBtn instanceof HTMLElement && state.openCookbookId) {
+    const selected = Array.isArray(state.cookbookSelectedRecipeIds) ? state.cookbookSelectedRecipeIds.filter(Boolean) : [];
+    if (!selected.length) return;
+    const cb = state.cookbooks.find((c) => c.id === state.openCookbookId);
+    if (!cb) return;
+    cb.recipeIds = cb.recipeIds.filter((id) => !selected.includes(id));
+    state.cookbookSelectedRecipeIds = [];
+    state.cookbookSelectMode = false;
+    renderCookbookDetail(state.openCookbookId);
+    schedulePersistAppState();
+    showToast(`${selected.length} recept(en) verwijderd uit kookboek.`);
+    return;
+  }
+
+  const selectRecipeBtn = target.closest("[data-cb-select-recipe]");
+  if (selectRecipeBtn instanceof HTMLElement && state.openCookbookId) {
+    const recipeId = selectRecipeBtn.getAttribute("data-cb-select-recipe") || "";
+    if (!recipeId) return;
+    const set = new Set(state.cookbookSelectedRecipeIds || []);
+    if (set.has(recipeId)) set.delete(recipeId);
+    else set.add(recipeId);
+    state.cookbookSelectedRecipeIds = [...set];
+    renderCookbookDetail(state.openCookbookId);
+    return;
+  }
+
   const createCard = target.closest("[data-create-cookbook]");
   if (createCard instanceof HTMLElement) { openCreateCookbookPrompt(); return; }
 
@@ -6810,6 +6870,16 @@ function handleCookbookGridClick(event) {
 
   const openRecipeBtn = target.closest("[data-open-recipe-id]");
   if (openRecipeBtn instanceof HTMLElement) {
+    if (state.cookbookSelectMode && state.openCookbookId) {
+      const recipeId = openRecipeBtn.dataset.openRecipeId || "";
+      if (!recipeId) return;
+      const set = new Set(state.cookbookSelectedRecipeIds || []);
+      if (set.has(recipeId)) set.delete(recipeId);
+      else set.add(recipeId);
+      state.cookbookSelectedRecipeIds = [...set];
+      renderCookbookDetail(state.openCookbookId);
+      return;
+    }
     state.selectedRecipeId = openRecipeBtn.dataset.openRecipeId;
     switchView("detail");
     renderDetailRecipe(true);
