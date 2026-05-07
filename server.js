@@ -2497,6 +2497,12 @@ function parseIngredientLine(line) {
     };
   }
 
+  // Fix glued number+unit: "1kg kip" -> "1 kg kip"
+  const cleanWithUnitSpacing = clean.replace(
+    new RegExp(`(${QUANTITY_PATTERN})\\s*(${UNIT_PATTERN})(?=\\s|$)`, "i"),
+    "$1 $2"
+  );
+
   const normalizedSimpleName = clean
     .toLowerCase()
     .replace(/^(verse|versee|vers|fijngesneden|gesneden|geraspte|geraspt|gehakte|gehakt)\s+/i, "")
@@ -2526,7 +2532,7 @@ function parseIngredientLine(line) {
     };
   }
 
-  const match = clean.match(
+  const match = cleanWithUnitSpacing.match(
     new RegExp(
       `^(${QUANTITY_PATTERN})(?:\\s*(?:flinke|kleine|grote|halve|half|volle|verse|middelgrote|middelgroot|klein|groot)\\s+)?(?:\\s*(${UNIT_PATTERN})(?=\\s|$))?\\s+(.+)$`,
       "i"
@@ -2657,12 +2663,32 @@ function expandInstructionSteps(rawSteps) {
     // Split arrow chains and hard separators first
     const arrowSplit = clean.split(/\s*(?:→|->|⇒)\s*/g).filter(Boolean);
     for (const chunk of arrowSplit) {
+      // If we have a long, punctuation-poor "caption style" instruction blob, insert breaks.
+      // Example: "Tomaten halveren Chilipepers snijden Olie in een pan Kip toevoegen ..."
+      let normalizedChunk = chunk;
+      if (normalizedChunk.length > 80) {
+        normalizedChunk = normalizedChunk
+          // Break on "Object Verb" patterns (capitalized noun + infinitive verb)
+          .replace(
+            /(?<!^)\s+(?=(?:[A-ZÀ-Ý][\p{L}]+)\s+(?:halveren|snijden|toevoegen|bakken|mengen|afdekken|serveren|koken|laten)\b)/gu,
+            "\n"
+          )
+          // Break before imperative/verb starts when glued in one line
+          .replace(
+            /(?<!^)\s+(?=(?:halveer|snijd|verhit|voeg|meng|bak|kook|laat|serveer|afdek|dek|roer|giet|breng|haal|verwijder|pel|marineer|kruid|klop|stamp|prak|pureer)\b)/gi,
+            "\n"
+          );
+      }
+
       // If the chunk contains multiple actions separated by commas, split when next part starts with a cooking verb.
-      const commaParts = chunk.split(/\s*,\s*(?=(?:mix|add|bake|cook|toast|top|serve|blend|heat|roast|whisk|slice|spread|bak|voeg|snij|snijd|halveer|serveer|kook|maak|meng|verhit|roer|leg|dek|bestrooi|giet|laat|verwarm|doe|gooi|strooi|breng|schenk|haal|verwijder|pel|marineer|kruid|klop|stamp|prak|pureer|grill|stir|fry|airfry|season|drizzle|combine)\b)/i);
-      for (const part of commaParts) {
-        // Also split sentence-like punctuation
-        const sentenceParts = sanitizeText(part).split(STEP_SENTENCE_SPLIT_RE).filter(Boolean);
-        for (const s of sentenceParts) expanded.push(sanitizeText(s));
+      const preParts = normalizedChunk.split(/\n+/).map((s) => sanitizeText(s)).filter(Boolean);
+      for (const pre of preParts) {
+        const commaParts = pre.split(/\s*,\s*(?=(?:mix|add|bake|cook|toast|top|serve|blend|heat|roast|whisk|slice|spread|bak|voeg|snij|snijd|halveer|serveer|kook|maak|meng|verhit|roer|leg|dek|bestrooi|giet|laat|verwarm|doe|gooi|strooi|breng|schenk|haal|verwijder|pel|marineer|kruid|klop|stamp|prak|pureer|grill|stir|fry|airfry|season|drizzle|combine)\b)/i);
+        for (const part of commaParts) {
+          // Also split sentence-like punctuation
+          const sentenceParts = sanitizeText(part).split(STEP_SENTENCE_SPLIT_RE).filter(Boolean);
+          for (const s of sentenceParts) expanded.push(sanitizeText(s));
+        }
       }
     }
   }
