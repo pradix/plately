@@ -4336,7 +4336,18 @@ function addRecipeToGrocery(recipe) {
   let added = 0;
   let merged = 0;
 
+  const shouldSkipGroceryIngredient = (name) => {
+    const key = normalizeIngredientKey(String(name || ""));
+    if (!key) return true;
+    // Skip items that are not useful to buy.
+    if (key === "water" || key === "kraanwater") return true;
+    return false;
+  };
+
   recipe.ingredients.forEach((ingredient) => {
+    if (shouldSkipGroceryIngredient(ingredient.name)) {
+      return;
+    }
     const normalizedTitle = normalizeIngredientKey(ingredient.name);
     const nextAmount = formatIngredientAmount(ingredient, state.currentServings / parseBaseServings(recipe.servings));
     const existingItem = state.groceryItems.find(
