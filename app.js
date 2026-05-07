@@ -3130,13 +3130,57 @@ function renderGroceryGroups() {
   // Add smart pantry suggestions
   const pantryItems = [
     { title: "Olie", icon: "🫒" },
-    { title: "Peper", icon: "🫑" },
-    { title: "Zout", icon: "🧂" },
-    { title: "Knoflook", icon: "🧄" },
-    { title: "Ui", icon: "🧅" },
+    { title: "Olijfolie", icon: "🫒" },
+    { title: "Boter", icon: "🧈" },
+    { title: "Bloem", icon: "🌾" },
+    { title: "Suiker", icon: "🍬" },
+    { title: "Azijn", icon: "🍶" },
+    { title: "Sojasaus", icon: "🍶" },
+    { title: "Bouillonblokje", icon: "🧊" },
   ];
 
   groceryGroups.innerHTML = html;
+
+  // Render pantry suggestions (only those not already present)
+  const existingKeys = new Set(state.groceryItems.map((i) => normalizeIngredientKey(i.title)));
+  const suggestions = pantryItems.filter((p) => !existingKeys.has(normalizeIngredientKey(p.title)));
+  const containerId = "groceryPantrySuggestions";
+  let container = document.getElementById(containerId);
+  if (!container) {
+    container = document.createElement("section");
+    container.id = containerId;
+    container.className = "grocery-group";
+    groceryGroups.appendChild(container);
+  }
+  if (suggestions.length) {
+    container.innerHTML = `
+      <div class="grocery-group__header grocery-group__header--shared">
+        <h2>Basis (optioneel)</h2>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;padding:10px 0">
+        ${suggestions
+          .map(
+            (s) => `
+              <button type="button" data-pantry-add="${escapeHtml(s.title)}" style="display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid #eee;border-radius:999px;background:#fff">
+                <span aria-hidden="true">${escapeHtml(s.icon)}</span>
+                <span>${escapeHtml(s.title)}</span>
+              </button>
+            `
+          )
+          .join("")}
+      </div>
+    `;
+    container.querySelectorAll("[data-pantry-add]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const title = btn.getAttribute("data-pantry-add") || "";
+        if (!title) return;
+        addGroceryItemByTitle(title);
+        renderGroceryGroups();
+      });
+    });
+  } else {
+    container.innerHTML = "";
+  }
 
   // Trigger background photo fetch for items without photos (debounced, safe to call always)
   debouncedFetchGroceryPhotos();
@@ -4374,6 +4418,22 @@ function addRecipeToGrocery(recipe) {
   let added = 0;
   let merged = 0;
 
+  const PANTRY_SKIP_KEYS = new Set([
+    "olie",
+    "olijfolie",
+    "zonnebloemolie",
+    "boter",
+    "roomboter",
+    "bloem",
+    "suiker",
+    "azijn",
+    "sojasaus",
+    "ketjap",
+    "bouillon",
+    "bouillonblokje",
+    "bouillonblokjes",
+  ]);
+
   const shouldSkipGroceryIngredient = (name) => {
     const key = normalizeIngredientKey(String(name || ""));
     if (!key) return true;
@@ -4385,6 +4445,10 @@ function addRecipeToGrocery(recipe) {
     if (key === "zout peper" || key === "peper zout") return true;
     if (/^(zout|peper)\b/.test(key) && key.length <= 14) return true;
     if (/\bnaar smaak\b/.test(String(name || "").toLowerCase()) && /^(zout|peper)\b/.test(key)) return true;
+    // Kitchen tools / non-food items that sometimes leak into ingredient lines.
+    if (/\b(?:airfryer|air\s*fryer|oven|koekenpan|hapjespan|bakplaat)\b/i.test(String(name || ""))) return true;
+    // Pantry basics: skip from auto-add, but show as suggestions instead.
+    if (PANTRY_SKIP_KEYS.has(key)) return true;
     return false;
   };
 
