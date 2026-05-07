@@ -5778,9 +5778,27 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   const GLOBAL_DEADLINE_MS = 1400;
   await Promise.race([Promise.allSettled(instrumented), waitMs(GLOBAL_DEADLINE_MS)]);
 
+  const countDistinctChannels = (lists) => {
+    const ids = new Set();
+    for (const list of lists) {
+      for (const item of Array.isArray(list) ? list : []) {
+        if (item && item.channelId) ids.add(item.channelId);
+      }
+    }
+    return ids.size;
+  };
+
   // If nothing has arrived yet, wait a tiny bit longer (helps on cold starts)
   if (collected.length === 0) {
     await Promise.race([Promise.allSettled(instrumented), waitMs(700)]);
+  }
+
+  // If we only have results from a single channel, wait a bit longer to improve variety.
+  // (We still cap waiting so search stays snappy.)
+  const MIN_DISTINCT_CHANNELS = 3;
+  const distinct = countDistinctChannels(collected);
+  if (collected.length > 0 && distinct < MIN_DISTINCT_CHANNELS) {
+    await Promise.race([Promise.allSettled(instrumented), waitMs(1100)]);
   }
 
   // Interleave results from all channels for balanced variety
