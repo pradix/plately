@@ -2291,6 +2291,7 @@ function normalizeIngredientList(items) {
     items
       .map((item) => normalizeIngredientObject(item))
       .filter((item) => item?.name)
+      .filter((item) => !/^(eet\s+smakelijk|bon\s+app(e|é)tit|buon\s+app(e|é)tit)\b/i.test(String(item.name || "")))
   );
 }
 
@@ -2495,6 +2496,11 @@ function parseIngredientLine(line) {
       unit: "",
       name: "",
     };
+  }
+
+  // Filter common non-ingredient noise that can leak into ingredient lists
+  if (/^(eet\s+smakelijk|enjoy|bon\s+app(e|é)tit|buon\s+app(e|é)tit|serveer\s+maar|succes)\b/i.test(clean)) {
+    return { quantity: "", unit: "", name: "" };
   }
 
   // Fix glued number+unit: "1kg kip" -> "1 kg kip"
