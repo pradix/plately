@@ -536,7 +536,7 @@ const CUSTOM_CHANNEL_COLORS = [
 
 const SUPERMARKETS = [
   { id: "ah",        name: "Albert Heijn", color: "#0071c2", url: "https://www.ah.nl",        supported: true  },
-  { id: "jumbo",     name: "Jumbo",        color: "#fdc500", url: "https://www.jumbo.com",    supported: false },
+  { id: "jumbo",     name: "Jumbo",        color: "#fdc500", url: "https://www.jumbo.com",    supported: true },
   { id: "picnic",    name: "Picnic",       color: "#e60000", url: "https://picnic.app",       supported: false },
   { id: "vomar",     name: "Vomar",        color: "#e30613", url: "https://www.vomar.nl",     supported: false },
   { id: "dirk",      name: "Dirk",         color: "#e30613", url: "https://www.dirk.nl",      supported: false },
@@ -1406,7 +1406,7 @@ function getStoreConfig(storeSlug = "albert-heijn") {
       continueLabel: "Open Jumbo",
       directLabel: "Open Jumbo mandje",
       helperCopy: "We tonen je beste productmatches en sturen je daarna door naar Jumbo.",
-      defaultUrl: "https://www.jumbo.com/mandje/",
+      defaultUrl: "https://www.jumbo.com/mandje",
     };
   }
 
@@ -1431,7 +1431,7 @@ function buildStoreSearchUrl(storeSlug, items) {
   );
 
   if ((storeSlug || "albert-heijn") === "jumbo") {
-    return `https://www.jumbo.com/zoeken/?searchTerms=${query}`;
+    return `https://www.jumbo.com/producten/?searchType=keyword&searchTerms=${query}`;
   }
 
   return `https://www.ah.nl/zoeken?query=${query}`;
@@ -1612,6 +1612,7 @@ function renderBasketPreview() {
   const totalEl = document.getElementById("basketSheetTotal");
   const ctaBtn = document.getElementById("basketSheetCta");
   if (!preview || !listEl) return;
+  const isAh = preview.store === "albert-heijn";
 
   if (nameEl) nameEl.textContent = preview.recipeTitle || "Boodschappenlijst";
 
@@ -1622,8 +1623,14 @@ function renderBasketPreview() {
     servLabel.textContent = `${state.basketServings} ${noun}`;
   }
 
-  // Update bio chip active state (only filter shown in basket sheet)
-  document.getElementById("basketFilterBio")?.classList.toggle("is-active", state.basketFilter.bio);
+  // Bio chip only makes sense for AH. Hide it for Jumbo.
+  const filterRow = document.getElementById("basketFilterRow");
+  if (filterRow) filterRow.classList.toggle("hidden", !isAh);
+  if (isAh) {
+    document.getElementById("basketFilterBio")?.classList.toggle("is-active", state.basketFilter.bio);
+  } else {
+    state.basketFilter.bio = false;
+  }
 
   let totalCents = 0;
   const servScale = state.basketBaseServings > 0
@@ -1663,7 +1670,7 @@ function renderBasketPreview() {
 
     const altCount = (item.choices || []).length;
 
-    const bioActive = state.basketFilter.bio;
+    const bioActive = isAh && state.basketFilter.bio;
     const displayTitle = bioActive
       ? `🌱 Biologisch ${choice.title}`
       : choice.title;
@@ -1798,6 +1805,10 @@ function formatAltBadgeLabel(key) {
 }
 
 function renderAltBadges(choice, item, { showCheapest = false, forceKeys = [] } = {}) {
+  // Jumbo: keep the alternatives sheet minimal (no label chips/badges).
+  const store = state.basketPreview?.store || "";
+  if (store && store !== "albert-heijn") return "";
+
   const keys = getAlternativeLabelKeys(choice, item);
   for (const fk of forceKeys) {
     const k = normalizeAltLabelToken(fk);
@@ -1832,6 +1843,8 @@ function renderAlternativesSheet(item) {
   const ctxEl = document.getElementById("altOverlayContext");
   const chipsEl = document.getElementById("altOverlayChips");
   if (!listEl) return;
+  const store = state.basketPreview?.store || "";
+  const isAh = store === "albert-heijn";
 
   const rawChoices = Array.isArray(item?.choices) ? item.choices.slice() : [];
   const choices = (() => {
@@ -1852,18 +1865,23 @@ function renderAlternativesSheet(item) {
   })();
 
   if (chipsEl) {
-    const active = state.altSheetFilter ?? null;
-    chipsEl.innerHTML = ALT_FILTER_CHIPS.map((chip) => {
-      const isActive = chip.id === active || (chip.id === null && active === null);
-      return `
-        <button
-          type="button"
-          class="alt-filter-chip${isActive ? " is-active" : ""}${chip.subtle ? " alt-filter-chip--subtle" : ""}"
-          data-alt-filter="${chip.id ?? ""}"
-          aria-pressed="${isActive ? "true" : "false"}"
-        >${escapeHtml(chip.label)}</button>
-      `;
-    }).join("");
+    chipsEl.classList.toggle("hidden", !isAh);
+    if (!isAh) {
+      chipsEl.innerHTML = "";
+    } else {
+      const active = state.altSheetFilter ?? null;
+      chipsEl.innerHTML = ALT_FILTER_CHIPS.map((chip) => {
+        const isActive = chip.id === active || (chip.id === null && active === null);
+        return `
+          <button
+            type="button"
+            class="alt-filter-chip${isActive ? " is-active" : ""}${chip.subtle ? " alt-filter-chip--subtle" : ""}"
+            data-alt-filter="${chip.id ?? ""}"
+            aria-pressed="${isActive ? "true" : "false"}"
+          >${escapeHtml(chip.label)}</button>
+        `;
+      }).join("");
+    }
   }
 
   if (ctxEl) {
@@ -1885,7 +1903,7 @@ function renderAlternativesSheet(item) {
     priceNum: parseFloat(String(choice.price || "0").replace("€", "").replace(",", ".")) || 9999,
   }));
 
-  const activeFilter = state.altSheetFilter ?? null;
+  const activeFilter = isAh ? (state.altSheetFilter ?? null) : null;
   if (activeFilter) {
     const matches = (entry) => {
       const flags = extractBasketLabelsFromChoice(entry.choice, item);
@@ -1951,14 +1969,20 @@ function renderAlternativesSheet(item) {
   // Group while preserving "show only once": once an idx is placed, skip it.
   const placed = new Set();
   const sections = new Map();
-  for (const sec of ALT_SECTIONS) sections.set(sec.id, []);
+  const sectionsOrder = isAh
+    ? ALT_SECTIONS
+    : [
+        { id: "cheapest", title: "Meest voordelig" },
+        { id: "more", title: "Meer alternatieven" },
+      ];
+  for (const sec of sectionsOrder) sections.set(sec.id, []);
 
   if (cheapestKey >= 0) {
     sections.get("cheapest").push(annotated[cheapestKey]);
     placed.add(cheapestKey);
   }
 
-  for (const sec of ALT_SECTIONS) {
+  for (const sec of sectionsOrder) {
     if (sec.id === "cheapest" || sec.id === "more") continue;
     for (const entry of annotated) {
       if (placed.has(entry.idx)) continue;
@@ -2005,7 +2029,7 @@ function renderAlternativesSheet(item) {
   };
 
   const selectedIdx = item.selectedChoiceIndex || 0;
-  const html = ALT_SECTIONS
+  const html = sectionsOrder
     .map((sec) => {
       const entries = sections.get(sec.id) || [];
       if (!entries.length) return "";
@@ -7216,7 +7240,7 @@ bindEvent(clearGroceryToolbarButton, "click", () => {
   showToast("Boodschappenlijst leeggemaakt.");
 });
 bindEvent(closeImportSecondaryButton, "click", () => closeModal());
-bindEvent(orderAHButton, "click", () => openStoreBasket("albert-heijn"));
+bindEvent(orderAHButton, "click", () => openStoreBasket(state.profile.favoriteSupermarket === "jumbo" ? "jumbo" : "albert-heijn"));
 bindEvent(wakeLockButton, "click", toggleWakeLock);
 bindEvent(cookModeButton, "click", toggleCookMode);
 bindEvent(cookModePrevButton, "click", () => {
