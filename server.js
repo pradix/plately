@@ -2248,9 +2248,14 @@ function cleanupIngredientName(name) {
 }
 
 function compactSocialDescription(description, title) {
+  const raw = sanitizeText(String(description || ""));
+  // If the "description" accidentally contains embedded ingredient/instruction sections,
+  // cut it off at the first heading.
+  const cutAtHeading = raw.split(/\b(?:ingredients?|ingrediënten|ingredienten|instructions?|method|steps?|bereiding|bereidingswijze|werkwijze)\b\s*:?\s*/i)[0];
   const clean = sanitizeText(
-    String(description || "")
+    cutAtHeading
       .replace(new RegExp(`^${escapeRegex(String(title || ""))}[!.,:\\s-]*`, "i"), "")
+      .replace(/^\s*&\s*/i, "") // "& ..." is a common TikTok caption artifact
       .replace(/\bvoor\s+\d+\s+personen?.*$/i, "")
       .replace(/\b(?:recept|recipe)\b[:\s-]*/i, "")
   );
