@@ -5788,6 +5788,10 @@ function normalizeUiErrorMessage(message) {
     return "Importeren mislukt.";
   }
 
+  if (text === "not_recipe" || /jsdom is not defined/i.test(text) || /JSDOM is not defined/i.test(text)) {
+    return "Je probeert een blog te importeren, geen recept.";
+  }
+
   if (/Meta oEmbed Read|oEmbed Read/i.test(text)) {
     return "Instagram-import wacht nog op Meta-goedkeuring voor deze app. Gebruik voorlopig een publieke post of een website-link.";
   }
@@ -5826,7 +5830,13 @@ async function fetchJson(url, options = {}) {
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(normalizeUiErrorMessage(payload?.error || "Importeren mislukt."));
+    const backendCode = payload?.error;
+    const backendMessage = payload?.message || payload?.error || "Importeren mislukt.";
+    const error = new Error(normalizeUiErrorMessage(backendMessage));
+    if (typeof backendCode === "string" && /^[a-z0-9_]+$/i.test(backendCode)) {
+      error.code = backendCode;
+    }
+    throw error;
   }
 
   return payload;
@@ -6283,7 +6293,11 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
 
     onDone(importedRecipe);
   } catch (error) {
-    setFeedback(error.message);
+    const message = normalizeUiErrorMessage(error?.message || "");
+    setFeedback(message);
+    if (error?.code === "not_recipe" || /Je probeert een blog te importeren/i.test(message)) {
+      showToast(message);
+    }
   } finally {
     setLoading(false);
   }

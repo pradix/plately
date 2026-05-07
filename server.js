@@ -5394,6 +5394,54 @@ const RECIPE_URL_RE = /\/(recept|recepten|recipe|recipes|gerecht|gerechten|bakke
 // Title keywords that strongly suggest a non-recipe post (opinion / list / guide).
 const BLOG_TITLE_RE = /\b(tips?|review|gids|uitleg|interview|podcast|blog|nieuws|aankondiging|aanbieding|webshop|kookboek|artikel|wat\s+is|waarom|zo\s+doe\s+je|10\s+x\b|\d+\s+keer\b)\b/i;
 
+function isLikelyBlogPage(title, url, description = "") {
+  const t = sanitizeText(String(title || "")).trim();
+  const u = String(url || "").trim();
+  const d = sanitizeText(String(description || "")).trim();
+
+  // If URL is explicitly recipe-like, keep it (safer than dropping valid recipes).
+  if (u && RECIPE_URL_RE.test(u)) return false;
+
+  // Strong negative indicators.
+  if ((u && BLOG_POST_URL_RE.test(u)) || (t && BLOG_TITLE_RE.test(t))) return true;
+
+  const combined = `${t} ${d}`.trim();
+  if (!combined) return false;
+
+  // Listicle heuristics: "10x beste ...", "5 keer tips ...", "top 10 ...".
+  // Avoid removing real recipes like "10-minuten pasta" (no x/keer + listicle words combo).
+  const hasListicleCount = /\b\d+\s*(?:x|keer)\b/i.test(combined) || /\btop\s*\d+\b/i.test(combined);
+  const hasListicleWords = /\b(beste|lekkerste|tips?|idee[eë]n|inspiratie|lijst|top)\b/i.test(combined);
+  if (hasListicleCount && hasListicleWords) return true;
+
+  // Spam: long runs.
+  if (/(.)\1{5,}/i.test(t)) return true;
+
+  // Spam: low character diversity.
+  if (t.length >= 14) {
+    const stripped = t.toLowerCase().replace(/\s+/g, "");
+    const unique = new Set(stripped.split("")).size;
+    const diversity = unique / Math.max(1, stripped.length);
+    if (diversity > 0 && diversity < 0.32) return true;
+  }
+
+  // Spam: repeated tokens.
+  const tokens = t
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 3 && !/^\d+$/.test(w));
+  if (tokens.length >= 5) {
+    const counts = new Map();
+    for (const tok of tokens) counts.set(tok, (counts.get(tok) || 0) + 1);
+    const maxCount = Math.max(...counts.values());
+    if (maxCount / tokens.length >= 0.6) return true;
+  }
+
+  return false;
+}
+
 // ── In-memory caches ──────────────────────────────────────────────────────────
 // Simple per-process cache to keep channel search snappy for repeated queries.
 // This resets on deploy/restart (fine for our use-case).
@@ -5543,6 +5591,7 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
           .filter((r) => urlLooksLikeRecipe(r.url))
           // Filter out posts whose title looks like a tip/review/guide
           .filter((r) => titleLooksLikeRecipe(r.title))
+          .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
           // Filter out results whose title doesn't share half the query words
           .filter((r) => titleMatchesQuery(r.title, query))
           // Sort by relevance — best title-match first
@@ -6033,6 +6082,7 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
         .filter((r) => r.title && r.url)
         .filter((r) => urlLooksLikeRecipe(r.url))
         .filter((r) => titleLooksLikeRecipe(r.title))
+        .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
         .filter((r) => titleMatchesQuery(r.title, query || ""))
         .sort((a, b) => titleQueryScore(b.title, query || "") - titleQueryScore(a.title, query || ""))
         .slice(0, count);
@@ -6060,6 +6110,7 @@ async function searchChannelRecipes(query, allowedChannels = null) {
           .filter((r) => r.title && r.url)
           .filter((r) => urlLooksLikeRecipe(r.url))
           .filter((r) => titleLooksLikeRecipe(r.title))
+          .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
           .filter((r) => titleMatchesQuery(r.title, query))
           .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
           .slice(0, count);
@@ -6938,6 +6989,26 @@ const server = http.createServer(async (request, response) => {
         const urlMatch = rawInput.match(/https?:\/\/[^\s]+/);
         const cleanUrl = urlMatch ? urlMatch[0] : rawInput;
         const recipe = await importRecipe(cleanUrl, body.note || "", body.imageHint || "");
+
+        const isInvalidRecipe = (candidate) => {
+          if (!candidate || typeof candidate !== "object") return true;
+          const title = sanitizeText(candidate.title || "");
+          const ingredients = Array.isArray(candidate.ingredients) ? candidate.ingredients.filter(Boolean) : [];
+          const instructions = Array.isArray(candidate.instructions) ? candidate.instructions.filter(Boolean) : [];
+          if (!title) return true;
+          if (ingredients.length < 2 && instructions.length < 1) return true;
+          return false;
+        };
+
+        if (isInvalidRecipe(recipe)) {
+          sendJson(response, 400, {
+            ok: false,
+            error: "not_recipe",
+            message: "Je probeert een blog te importeren, geen recept.",
+          });
+          return;
+        }
+
         // Analytics: record import event (best-effort)
         const authUser = await getAuthenticatedUser(request).catch(() => null);
         const sourceHost = (() => {
@@ -6951,9 +7022,20 @@ const server = http.createServer(async (request, response) => {
         });
         sendJson(response, 200, { ok: true, recipe });
       } catch (error) {
-        console.error("❌ Import error:", error.message);
+        console.error("❌ Import error:", error);
         const statusCode = error.statusCode || 400;
-        const errorMessage = error.message || "Import mislukt. Controleer de link en probeer opnieuw.";
+        const rawMessage = String(error?.message || "");
+
+        if (/jsdom is not defined/i.test(rawMessage) || /JSDOM is not defined/i.test(rawMessage)) {
+          sendJson(response, 400, {
+            ok: false,
+            error: "not_recipe",
+            message: "Je probeert een blog te importeren, geen recept.",
+          });
+          return;
+        }
+
+        const errorMessage = rawMessage || "Import mislukt. Controleer de link en probeer opnieuw.";
         sendJson(response, statusCode, { ok: false, error: errorMessage });
       }
       return;
