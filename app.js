@@ -4388,11 +4388,28 @@ function addRecipeToGrocery(recipe) {
     return false;
   };
 
+  const isOptionalGroceryIngredient = (name) => {
+    const raw = String(name || "").toLowerCase();
+    return /\boptioneel\b/.test(raw) || /\(optioneel\)/i.test(name) || /\bnaar smaak\b/.test(raw);
+  };
+
+  const buildOptionalTitle = (name) => {
+    const raw = String(name || "").trim();
+    const base = raw
+      .replace(/\(\s*optioneel\s*\)/gi, "")
+      .replace(/\boptioneel\b/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!base) return raw;
+    return `${base} (optioneel)`;
+  };
+
   recipe.ingredients.forEach((ingredient) => {
     if (shouldSkipGroceryIngredient(ingredient.name)) {
       return;
     }
-    const normalizedTitle = normalizeIngredientKey(ingredient.name);
+    const isOptional = isOptionalGroceryIngredient(ingredient.name);
+    const normalizedTitle = `${normalizeIngredientKey(ingredient.name)}${isOptional ? " optioneel" : ""}`.trim();
     const nextAmount = formatIngredientAmount(ingredient, state.currentServings / parseBaseServings(recipe.servings));
     const existingItem = state.groceryItems.find(
       (item) =>
@@ -4414,7 +4431,7 @@ function addRecipeToGrocery(recipe) {
 
     state.groceryItems.push({
       id: `${recipe.id}-${ingredient.name}-${Date.now()}-${added}`,
-      title: ingredient.name,
+      title: isOptional ? buildOptionalTitle(ingredient.name) : ingredient.name,
       amount: nextAmount,
       recipeId: recipe.id,
       recipeTitle: recipe.title,
