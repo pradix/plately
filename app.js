@@ -8167,8 +8167,7 @@ bindEvent(importForm, "submit", async (event) => {
       state.selectedPlatform = "tiktok";
       syncPlatformUI();
       closeModal();
-      openImportReview(importedRecipe.id);
-      showToast(`${importedRecipe.title} klaar om na te lopen.`);
+      showToast(`${importedRecipe.title} geïmporteerd als concept.`);
     }
   );
 });
@@ -8207,8 +8206,7 @@ bindEvent(homeImportForm, "submit", async (event) => {
       const captionToggle = document.getElementById("homeImportCaptionToggle");
       if (captionToggle) captionToggle.textContent = "+ Voeg beschrijving toe";
       homeImportFeedback.textContent = "Voeg direct een recept toe vanuit social media of een receptenwebsite.";
-      openImportReview(importedRecipe.id);
-      showToast(`${importedRecipe.title} klaar om na te lopen.`);
+      showToast(`${importedRecipe.title} geïmporteerd als concept.`);
     }
   );
 });
@@ -8246,8 +8244,7 @@ bindEvent(importScreenForm, "submit", async (event) => {
       const captionToggle = document.getElementById("importScreenCaptionToggle");
       if (captionToggle) captionToggle.textContent = "+ Voeg beschrijving toe";
       importScreenFeedback.textContent = "Kopieer de link uit de app of website en plak hem hierboven.";
-      openImportReview(importedRecipe.id);
-      showToast(`${importedRecipe.title} klaar om na te lopen.`);
+      showToast(`${importedRecipe.title} geïmporteerd als concept.`);
     }
   );
 });
