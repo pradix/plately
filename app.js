@@ -1497,7 +1497,8 @@ function switchView(view) {
   }
 
   // Reset cookbook detail view when leaving settings
-  if (view !== "settings" && state.openCookbookId) {
+  // (but preserve when navigating into cookbooks to open a specific cookbook)
+  if (view !== "settings" && view !== "cookbooks" && state.openCookbookId) {
     state.openCookbookId = null;
   }
 

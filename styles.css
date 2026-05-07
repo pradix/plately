@@ -50,7 +50,8 @@ img { display: block; max-width: 100%; }
 .page { min-height: 100vh; overflow-x: hidden; }
 
 .app-shell {
-  width: min(100%, 430px);
+  width: 100%;
+  max-width: 960px;
   margin: 0 auto;
   min-height: 100vh;
   padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px));
@@ -59,8 +60,8 @@ img { display: block; max-width: 100%; }
 }
 
 @media (min-width: 720px) {
-  .app-shell { width: min(100%, 960px); }
-  .bottom-nav { width: min(100vw, 960px); }
+  .app-shell { max-width: 960px; }
+  .bottom-nav { max-width: 960px; }
 }
 
 #homeScreen {
@@ -5985,7 +5986,8 @@ body {
 }
 
 .app-shell {
-  width: min(100%, 430px);
+  width: 100%;
+  max-width: 960px;
   min-height: 100vh;
   display: block;
   padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px));
@@ -7026,7 +7028,8 @@ body {
   left: 50%;
   transform: translateX(-50%);
   bottom: 0;
-  width: min(100vw, 430px);
+  width: 100vw;
+  max-width: 960px;
   margin: 0;
   padding: 10px 6px calc(14px + env(safe-area-inset-bottom, 0px));
   border-radius: 0;
