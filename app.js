@@ -605,6 +605,8 @@ const featuredTime = document.getElementById("featuredTime");
 const featuredServings = document.getElementById("featuredServings");
 const homeStats = document.getElementById("homeStats");
 const recentImportList = document.getElementById("recentImportList");
+const homeConceptsHeading = document.getElementById("homeConceptsHeading");
+const homeConceptsGrid = document.getElementById("homeConceptsGrid");
 const homeImportForm = document.getElementById("homeImportForm");
 const homeImportUrl = document.getElementById("homeImportUrl");
 const homeImportSubmit = document.getElementById("homeImportSubmit");
@@ -1576,7 +1578,6 @@ const HOME_QUICK_CHIP_POOL = [
 // ── Focus-state helpers (recent searches, recent viewed recipes, intent chips) ─
 
 const HOME_INTENT_CHIPS = [
-  { label: "≤ 20 min", q: "20 min" },
   { label: "Budget", q: "budget" },
   { label: "Vega", q: "vega" },
   { label: "Airfryer", q: "airfryer" },
@@ -2645,6 +2646,51 @@ function renderRecentImports() {
   // + card → open import modal
   document.getElementById("recentAddButton")?.addEventListener("click", () => {
     document.getElementById("openImportButton")?.click();
+  });
+}
+
+function renderHomeConcepts() {
+  if (!homeConceptsHeading || !homeConceptsGrid) {
+    return;
+  }
+
+  const previews = Object.values(state.importPreviews || {}).filter(Boolean);
+  previews.sort((a, b) => Number(b._previewCreatedAt || 0) - Number(a._previewCreatedAt || 0));
+  const items = previews.slice(0, 4);
+
+  if (!items.length) {
+    homeConceptsHeading.classList.add("hidden");
+    homeConceptsGrid.innerHTML = "";
+    return;
+  }
+
+  homeConceptsHeading.classList.remove("hidden");
+  homeConceptsGrid.innerHTML = items
+    .map((recipe) => {
+      const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
+      const host = getSourceHost(recipe.sourceUrl || "") || getPlatformLabel(recipe.platform || "website");
+      return `
+        <button class="recent-card" type="button" data-concept-id="${escapeHtml(recipe.id)}">
+          <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title || "Concept")}" loading="lazy" />
+          ${faviconUrl ? `<span class="recent-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" /></span>` : ""}
+          <div class="recent-card__body">
+            <p class="recent-card__title">${escapeHtml(recipe.title || "Concept")}</p>
+            <p class="recent-card__meta">${escapeHtml(host)}</p>
+          </div>
+        </button>
+      `;
+    })
+    .join("");
+
+  homeConceptsGrid.querySelectorAll("[data-concept-id]").forEach((card) => {
+    card.addEventListener("click", () => {
+      const id = card.getAttribute("data-concept-id") || "";
+      if (!id || !getRecipeById(id)) return;
+      state.selectedRecipeId = id;
+      renderDetailRecipe(true);
+      switchView("detail");
+      openRecipeEditPanel(id);
+    });
   });
 }
 
