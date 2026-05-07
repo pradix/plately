@@ -704,6 +704,7 @@ const reviewMealTagInput = document.getElementById("reviewMealTagInput");
 const reviewIngredientsInput = document.getElementById("reviewIngredientsInput");
 const reviewInstructionsInput = document.getElementById("reviewInstructionsInput");
 const reviewFeedback = document.getElementById("reviewFeedback");
+const importDraftsButton = document.getElementById("importDraftsButton");
 const skipReviewButton = document.getElementById("skipReviewButton");
 const servingsDown = document.getElementById("servingsDown");
 const servingsUp = document.getElementById("servingsUp");
@@ -3286,11 +3287,36 @@ function getImportPreviewList() {
   return entries;
 }
 
+function updateImportDraftsButton() {
+  if (!importDraftsButton) return;
+  const count = Object.keys(state.importPreviews || {}).length;
+  if (count <= 0) {
+    importDraftsButton.style.display = "none";
+    return;
+  }
+  importDraftsButton.style.display = "";
+  importDraftsButton.textContent = `Concepten (${count})`;
+}
+
+function openDraftsFromImport() {
+  const previews = getImportPreviewList();
+  if (!previews.length) {
+    showToast("Geen concepten gevonden.");
+    return;
+  }
+  // Open the most recent draft in review, then scroll to the drafts section.
+  openImportReview(previews[0].id);
+  setTimeout(() => {
+    document.getElementById("reviewDrafts")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 60);
+}
+
 function renderImportDrafts() {
   if (!reviewDrafts) return;
   const previews = getImportPreviewList();
   if (!previews.length) {
     reviewDrafts.innerHTML = "";
+    updateImportDraftsButton();
     return;
   }
 
@@ -3319,6 +3345,7 @@ function renderImportDrafts() {
         .join("")}
     </div>
   `;
+  updateImportDraftsButton();
 }
 
 function serializeIngredientsForReview(recipe) {
@@ -7025,6 +7052,10 @@ bindEvent(reviewDrafts, "click", (event) => {
     renderImportDrafts();
     showToast("Concept verwijderd.");
   }
+});
+
+bindEvent(importDraftsButton, "click", () => {
+  openDraftsFromImport();
 });
 
 bindEvent(document.getElementById("mealTagChips"), "click", (event) => {
