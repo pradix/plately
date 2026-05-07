@@ -316,6 +316,29 @@ img { display: block; max-width: 100%; }
   max-width: none;
 }
 
+.import-banner__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.beta-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(141, 164, 133, 0.16);
+  color: #4a6b4c;
+  border: 1px solid rgba(141, 164, 133, 0.35);
+}
+
 .section-copy, .section-subcopy, .detail-description, .helper-text {
   margin: 10px 0 0;
   line-height: 1.5;
