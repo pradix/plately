@@ -394,10 +394,6 @@
               <div class="stat-value" id="overviewActiveUsers7d">-</div>
               <div class="stat-label">Actieve gebruikers (7d)</div>
             </div>
-            <div class="stat-card">
-              <div class="stat-value" id="overviewAvgPerActive7d">-</div>
-              <div class="stat-label">Gemiddeld per actief (7d)</div>
-            </div>
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
@@ -707,10 +703,6 @@
         );
 
         setText("overviewActiveUsers7d", formatNumber(active7d.users ?? 0));
-        setText(
-          "overviewAvgPerActive7d",
-          `${formatFloat(active7d.avgRecipesPerActiveUser ?? 0)} recepten · ${formatFloat(active7d.avgCookbooksPerActiveUser ?? 0)} kookboeken`
-        );
 
         const top = overview.top || {};
         renderTopUsersTable("topUsersByRecipes", (top.usersByRecipes || []).map((r) => ({
