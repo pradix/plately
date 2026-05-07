@@ -4379,6 +4379,12 @@ function addRecipeToGrocery(recipe) {
     if (!key) return true;
     // Skip items that are not useful to buy.
     if (key === "water" || key === "kraanwater") return true;
+    // Common pantry/seasoning items that users typically don't want in the grocery list.
+    // Keep this conservative to avoid hiding real ingredients.
+    if (key === "zout" || key === "peper") return true;
+    if (key === "zout peper" || key === "peper zout") return true;
+    if (/^(zout|peper)\b/.test(key) && key.length <= 14) return true;
+    if (/\bnaar smaak\b/.test(String(name || "").toLowerCase()) && /^(zout|peper)\b/.test(key)) return true;
     return false;
   };
 
