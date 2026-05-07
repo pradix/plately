@@ -3938,11 +3938,11 @@ img { display: block; max-width: 100%; }
 .cookbook-collection__cover {
   position: relative;
   width: 100%;
-  aspect-ratio: 1 / 1.08;
-  border-radius: 28px;
+  aspect-ratio: 1 / 1;
+  border-radius: 26px;
   overflow: hidden;
-  background: rgba(255,255,255,0.8);
-  box-shadow: 0 12px 28px rgba(76,85,69,0.07);
+  background: rgba(255,255,255,0.9);
+  box-shadow: 0 12px 26px rgba(76,85,69,0.06);
 }
 
 .cookbook-collection__cover--grid {
@@ -3985,23 +3985,28 @@ img { display: block; max-width: 100%; }
   border-radius: 999px;
   padding: 8px 12px;
   background: rgba(255,255,255,0.92);
-  color: #a5c3a9;
+  color: var(--muted);
   font-weight: 800;
   font-size: 0.86rem;
-  box-shadow: 0 8px 18px rgba(70,74,66,0.08);
+  box-shadow: 0 6px 14px rgba(70,74,66,0.08);
 }
 
 .cookbook-collection__head {
-  padding: 10px 4px 0;
+  padding: 11px 12px 13px;
 }
 
 .cookbook-collection__head h3 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.7rem;
-  line-height: 1;
-  letter-spacing: -0.04em;
+  font-size: 1.2rem;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
   color: #1a1a1a !important;
+  min-height: 2.45rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .cookbook-collection__meta {
@@ -4010,6 +4015,48 @@ img { display: block; max-width: 100%; }
   font-size: 0.88rem;
   line-height: 1.35;
 }
+
+/* Cookbook detail recipes should match recipe cards */
+.cb-detail__grid {
+  padding-inline: 16px;
+}
+#cookbookList .cb-detail__grid {
+  padding-inline: 0;
+}
+
+.cb-detail__item {
+  background: rgba(255,255,255,0.9);
+  border-radius: 26px;
+  overflow: hidden;
+  box-shadow: 0 12px 26px rgba(76,85,69,0.06);
+}
+
+.cb-detail__img {
+  aspect-ratio: 1 / 1;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.cb-detail__card-body {
+  padding: 11px 12px 13px;
+}
+
+.cb-detail__card-title {
+  font-size: 1.2rem;
+  line-height: 1.02;
+  margin-bottom: 6px;
+  min-height: 2.45rem;
+  letter-spacing: -0.02em;
+}
+
+.cb-detail__remove,
+.cb-detail__select {
+  top: 10px;
+  width: 28px;
+  height: 28px;
+}
+.cb-detail__remove { right: 10px; left: auto; border-radius: 999px; box-shadow: 0 6px 14px rgba(70,74,66,0.08); }
+.cb-detail__select { left: 10px; right: auto; }
 
 .cookbook-collection.is-active .cookbook-collection__cover {
   box-shadow: 0 14px 34px rgba(129, 159, 131, 0.18);
