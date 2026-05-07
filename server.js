@@ -4432,6 +4432,38 @@ async function importWebsite(sourceUrl) {
         ? parseTextRecipeDocument(document.body, document.finalUrl || sourceUrl)
         : parseWebsiteRecipe(document.body, document.finalUrl || sourceUrl);
 
+    const html = document.kind === "html" ? document.body : "";
+    const ahH1Title = html
+      ? normalizeRecipeTitle(
+          sanitizeText(stripTags((html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || "")))
+        )
+      : "";
+    const ahMetaTitle = html ? normalizeRecipeTitle(parseMetaTag(html, "og:title") || parseTitleTag(html)) : "";
+    const ahTitle = ahH1Title || ahMetaTitle || primaryRecipe.title;
+
+    const ahMetaDescription = html
+      ? sanitizeText(
+          stripTags(
+            parseMetaTag(html, "og:description") || parseMetaTag(html, "description", "name") || ""
+          )
+        )
+      : "";
+    // Attempt to pull a short "intro" paragraph from the page body when present.
+    const ahIntroFromHtml = (() => {
+      if (!html) return "";
+      const match =
+        html.match(/data-testhook=["']recipe-introduction["'][^>]*>\s*<p[^>]*>([\s\S]*?)<\/p>/i) ||
+        html.match(/class=["'][^"']*(?:recipe[-_ ]intro|introduction)[^"']*["'][^>]*>\s*([\s\S]*?)<\/p>/i);
+      return match ? sanitizeText(stripTags(match[1])) : "";
+    })();
+
+    const pickAhDescription = (candidates) => {
+      const cleaned = candidates.map((s) => sanitizeText(s)).filter(Boolean);
+      // Prefer the most "recipe-like" and non-boilerplate candidate.
+      cleaned.sort((a, b) => scoreRecipeText(b) - scoreRecipeText(a));
+      return cleaned[0] || "";
+    };
+
     // Extract image specifically from the HTML (before we process it further)
     const imageUrl = extractAhRecipeImage(document.body);
 
@@ -4440,14 +4472,21 @@ async function importWebsite(sourceUrl) {
       const readerIngredients = parseMarkdownIngredientSection(readerDocument.body);
       const readerInstructions = parseMarkdownInstructionSection(readerDocument.body);
       const readerServings = parseMarkdownServings(readerDocument.body);
+      const ahReaderDescription = readerRecipe.description || "";
+      const ahDescription = pickAhDescription([
+        ahIntroFromHtml,
+        ahMetaDescription,
+        ahReaderDescription,
+        primaryRecipe.description,
+      ]);
       return {
         ...primaryRecipe,
         image: imageUrl || primaryRecipe.image,
         ingredients: readerIngredients.length ? readerIngredients : readerRecipe.ingredients.length ? readerRecipe.ingredients : primaryRecipe.ingredients,
         instructions:
           readerInstructions.length ? readerInstructions : readerRecipe.instructions.length ? readerRecipe.instructions : primaryRecipe.instructions,
-        title: primaryRecipe.title,
-        description: primaryRecipe.description,
+        title: ahTitle || primaryRecipe.title,
+        description: ahDescription || primaryRecipe.description,
         servings: readerServings || readerRecipe.servings || primaryRecipe.servings,
         needsReview:
           !(readerIngredients.length || readerRecipe.ingredients.length) ||
@@ -4460,6 +4499,8 @@ async function importWebsite(sourceUrl) {
     return {
       ...primaryRecipe,
       image: imageUrl || primaryRecipe.image,
+      title: ahTitle || primaryRecipe.title,
+      description: pickAhDescription([ahIntroFromHtml, ahMetaDescription, primaryRecipe.description]) || primaryRecipe.description,
     };
   }
 
