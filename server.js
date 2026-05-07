@@ -1740,13 +1740,72 @@ function normalizeFractions(value) {
   });
 }
 
+function stripSocialUiArtifacts(text) {
+  const raw = String(text || "");
+  if (!raw) return "";
+
+  const scrapedPrefixPattern = /^\s*(?:[-•]\s*)?[\p{L}\p{N}._-]+\s+on\s+[A-Za-z]+\s+\d{1,2},\s+\d{4}\s*:\s*/iu;
+
+  const lines = raw
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    // Keep some structure (Claude likes paragraphs), but normalize repeated blank lines.
+    .map((line) => String(line).replace(/\s+/g, " ").trimEnd());
+
+  const kept = [];
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i].trim();
+    if (!line) {
+      // Preserve paragraph separation but avoid long blank runs.
+      if (kept.length && kept[kept.length - 1] !== "") kept.push("");
+      continue;
+    }
+
+    // If social UI lines were removed above, a scraped prefix might become the new first line.
+    // Strip it here as well so the remaining caption starts cleanly.
+    line = line.replace(scrapedPrefixPattern, "").replace(/^["“”]+|["“”]+$/g, "").trim();
+    if (!line) {
+      continue;
+    }
+
+    // If we hit a "Likes" section heading (often from reader/markdown),
+    // drop it and everything below.
+    if (/^(?:#+\s*)?likes\b/i.test(line)) {
+      break;
+    }
+
+    // Cut trailing social blocks (Instagram UI / scraped metadata).
+    const looksLikeUiLine =
+      /^(see translation|meer weergeven|more|follow|volgen|original audio|originele audio|add yours|repost|bericht|posts?)\b/i.test(line) ||
+      /•\s*(follow|volgen)\b/i.test(line) ||
+      /^(liked by|leuk gevonden door)\b/i.test(line) ||
+      /^\s*[\d.,]+\s*(likes|comments|reacties|weergaven|views)\b/i.test(line) ||
+      /\b(?:likes|comments|reacties|weergaven|views)\b.*\b(?:and|en)\b.*\b(?:others|anderen)\b/i.test(line);
+
+    if (looksLikeUiLine) {
+      // These blocks are typically at the end; once they start, everything below is noise.
+      // If it appears mid-text, we still drop the line but keep scanning.
+      const nearEnd = i >= Math.max(0, lines.length - 6);
+      if (nearEnd) break;
+      continue;
+    }
+
+    kept.push(line);
+  }
+
+  return kept
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function stripSocialNoise(text) {
   let out = normalizeFractions(String(text || ""));
 
   // Remove common web-scrape prefixes like:
   // 'username on April 26, 2026: "caption..."'
   out = out
-    .replace(/^[\p{L}\p{N}._-]+\s+on\s+[A-Za-z]+\s+\d{1,2},\s+\d{4}\s*:\s*/iu, "")
+    .replace(/^\s*(?:[-•]\s*)?[\p{L}\p{N}._-]+\s+on\s+[A-Za-z]+\s+\d{1,2},\s+\d{4}\s*:\s*/iu, "")
     .replace(/^["“”]+|["“”]+$/g, "");
 
   // If caption contains multiple quantity tokens in a row, it's often an ingredient run.
@@ -1761,6 +1820,10 @@ function stripSocialNoise(text) {
       "\n"
     );
   }
+
+  // Remove Instagram/Facebook "social UI" artifacts that sometimes get scraped into
+  // og:description/twitter:description or reader fallbacks (likes/views/comments/etc).
+  out = stripSocialUiArtifacts(out);
 
   return out
     .replace(/https?:\/\/\S+/gi, " ")
@@ -8470,6 +8533,13 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Plately draait op http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`Plately draait op http://localhost:${PORT}`);
+  });
+}
+
+module.exports = {
+  stripSocialNoise,
+  stripSocialUiArtifacts,
+};
