@@ -1007,7 +1007,14 @@ function openAuthModal(mode = "login") {
   if (authFeedback) authFeedback.textContent = "";
 
   authForm.reset();
-  setTimeout(() => authEmail?.focus(), 100);
+  // UX: In register mode, focus the name field first so users don't type their name into the email input.
+  setTimeout(() => {
+    if (isRegister) {
+      document.getElementById("authName")?.focus();
+      return;
+    }
+    authEmail?.focus();
+  }, 100);
 }
 
 function closeAuthModal() {
@@ -5238,6 +5245,11 @@ async function submitAuth(mode, email, password) {
     if (payload.auth.token) storeAuthToken(payload.auth.token);
   }
   applyPersistedAppState(payload.user);
+  // Keep the account email visible under Profile → Mijn account.
+  // (Server user.email is the canonical login email; profile.email is optional UI metadata.)
+  if (!state.profile.email && state.auth.email) {
+    state.profile.email = state.auth.email;
+  }
   if (state.auth.authenticated) markUserAsAuthed();
   renderAll();
 
