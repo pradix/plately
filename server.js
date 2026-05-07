@@ -4875,6 +4875,24 @@ async function recordEvent(type, userId, meta = {}) {
   }
 }
 
+function normalizeSearchQuery(raw) {
+  const text = String(raw || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  if (!text || text.length < 2) return "";
+
+  // Avoid obvious spam / PII-ish patterns (URLs, emails, long tokens).
+  if (/(https?:\/\/|www\.)/i.test(text)) return "";
+  if (/\S+@\S+\.\S+/.test(text)) return "";
+  if (/[a-f0-9]{24,}/i.test(text)) return "";
+
+  const capped = text.length > 60 ? text.slice(0, 60).trim() : text;
+  if (capped.length < 2) return "";
+  return capped;
+}
+
 /* ── Store product search (AH + Jumbo) ── */
 
 let ahTokenCache = { token: "", expiresAt: 0 };
@@ -6833,7 +6851,9 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/api/channel-search" && request.method === "GET") {
-      const query = sanitizeText(requestUrl.searchParams.get("q") || "");
+      const queryRaw = sanitizeText(requestUrl.searchParams.get("q") || "");
+      const query = queryRaw;
+      const normalizedForAnalytics = normalizeSearchQuery(queryRaw);
       if (!query || query.length < 2) {
         sendJson(response, 200, { ok: true, results: [] });
         return;
@@ -6844,6 +6864,12 @@ const server = http.createServer(async (request, response) => {
         : null;
       // Handle custom channels
       const customChannelsParam = requestUrl.searchParams.get("customChannels") || "";
+
+      // Analytics: record channel search (best-effort, avoids PII beyond user id)
+      if (normalizedForAnalytics) {
+        const authUser = await getAuthenticatedUser(request).catch(() => null);
+        await recordEvent("channel_search", authUser?.id || null, { query: normalizedForAnalytics });
+      }
 
       const cacheKey = getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam });
       const cached = getCachedChannelSearch(cacheKey);
@@ -7332,6 +7358,65 @@ const server = http.createServer(async (request, response) => {
         });
       } catch (error) {
         console.error("❌ Error in /api/admin/overview:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/search-terms" && request.method === "GET") {
+      console.log("🔎 /api/admin/search-terms called");
+      try {
+        const limitRaw = Number.parseInt(String(requestUrl.searchParams.get("limit") || ""), 10);
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 50) : 20;
+
+        if (!isPostgresEnabled()) {
+          return sendJson(response, 200, { ok: true, searchTerms: { last7d: [], allTime: [] } });
+        }
+
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+
+        const last7dRes = await pool.query(
+          `
+          SELECT
+            COALESCE(meta->>'query','') AS query,
+            COUNT(*)::int AS count,
+            MAX(created_at) AS last_seen_at
+          FROM plately_events
+          WHERE type = 'channel_search'
+            AND created_at >= NOW() - INTERVAL '7 days'
+          GROUP BY 1
+          HAVING COALESCE(meta->>'query','') <> ''
+          ORDER BY 2 DESC, 3 DESC
+          LIMIT $1
+          `,
+          [limit]
+        );
+
+        const allTimeRes = await pool.query(
+          `
+          SELECT
+            COALESCE(meta->>'query','') AS query,
+            COUNT(*)::int AS count,
+            MAX(created_at) AS last_seen_at
+          FROM plately_events
+          WHERE type = 'channel_search'
+          GROUP BY 1
+          HAVING COALESCE(meta->>'query','') <> ''
+          ORDER BY 2 DESC, 3 DESC
+          LIMIT $1
+          `,
+          [limit]
+        );
+
+        return sendJson(response, 200, {
+          ok: true,
+          searchTerms: {
+            last7d: last7dRes.rows.map((r) => ({ query: r.query, count: r.count || 0, lastSeenAt: r.last_seen_at })),
+            allTime: allTimeRes.rows.map((r) => ({ query: r.query, count: r.count || 0, lastSeenAt: r.last_seen_at })),
+          },
+        });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/search-terms:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
       }
     }

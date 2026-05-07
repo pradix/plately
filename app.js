@@ -5627,12 +5627,69 @@ function isAdmin() {
 
 async function fetchAdminStats() {
   try {
-    const stats = await fetchJson(`${state.apiBase}/api/admin/stats`);
-    return stats || { users: [], totalUsers: 0, totalRecipes: 0 };
+    const payload = await fetchJson(`${state.apiBase}/api/admin/stats`);
+    return payload?.stats || { users: [], totalUsers: 0, totalRecipes: 0, customChannels: { total: 0, approved: 0, pending: 0, rejected: 0 } };
   } catch (err) {
     console.error("Failed to fetch admin stats:", err);
-    return { users: [], totalUsers: 0, totalRecipes: 0 };
+    return { users: [], totalUsers: 0, totalRecipes: 0, customChannels: { total: 0, approved: 0, pending: 0, rejected: 0 } };
   }
+}
+
+async function fetchAdminSearchTerms() {
+  try {
+    const payload = await fetchJson(`${state.apiBase}/api/admin/search-terms?limit=20`);
+    return payload?.searchTerms || { last7d: [], allTime: [] };
+  } catch (err) {
+    console.error("Failed to fetch admin search terms:", err);
+    return { last7d: [], allTime: [] };
+  }
+}
+
+function renderAdminSearchTerms(searchTerms) {
+  const statusEl = document.getElementById("adminSearchTermsStatus");
+  const wrapEl = document.getElementById("adminSearchTermsTableWrap");
+  if (!wrapEl) return;
+
+  const last7d = Array.isArray(searchTerms?.last7d) ? searchTerms.last7d : [];
+  const allTime = Array.isArray(searchTerms?.allTime) ? searchTerms.allTime : [];
+  const allTimeByQuery = new Map(allTime.map((it) => [String(it?.query || ""), it]));
+
+  if (!last7d.length) {
+    if (statusEl) statusEl.textContent = "Nog geen zoekwoorden (of analytics staat uit).";
+    wrapEl.innerHTML = "";
+    return;
+  }
+
+  if (statusEl) statusEl.textContent = `Top ${last7d.length} (laatste 7 dagen)`;
+
+  wrapEl.innerHTML = `
+    <div class="admin-search-terms">
+      <table class="admin-search-terms__table">
+        <thead>
+          <tr>
+            <th>Zoekwoord</th>
+            <th class="num">7d</th>
+            <th class="num">All</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${last7d.map((row) => {
+            const q = String(row?.query || "");
+            const all = allTimeByQuery.get(q);
+            const allCount = Number(all?.count || 0);
+            const count7d = Number(row?.count || 0);
+            return `
+              <tr>
+                <td class="query" title="${escapeHtml(q)}">${escapeHtml(q)}</td>
+                <td class="num">${Number.isFinite(count7d) ? count7d : 0}</td>
+                <td class="num">${Number.isFinite(allCount) ? allCount : 0}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 async function deleteAdminUser(userId) {
@@ -5661,13 +5718,17 @@ async function renderAdminScreen() {
 
   // Fetch admin stats
   const stats = await fetchAdminStats();
+  const searchTerms = await fetchAdminSearchTerms();
 
   // Update analytics cards
   const userCountEl = document.getElementById("adminUserCount");
   const recipeCountEl = document.getElementById("adminRecipeCount");
 
   if (userCountEl) userCountEl.textContent = stats.totalUsers || 0;
-  if (recipeCountEl) recipeCountEl.textContent = stats.totalRecipes || 0;
+  if (recipeCountEl) {
+    const totalRecipes = stats.users.reduce((acc, u) => acc + (Number(u?.recipes || 0) || 0), 0);
+    recipeCountEl.textContent = totalRecipes || 0;
+  }
 
   // Render user list
   const usersList = document.getElementById("adminUsersList");
@@ -5680,7 +5741,7 @@ async function renderAdminScreen() {
           <div style="flex:1">
             <div style="font-weight:500;color:#3d3d3b">${escapeHtml(user.email || "Onbekend")}</div>
             <div style="font-size:0.85rem;color:#989188;margin-top:4px">
-              ${user.recipeCount || 0} recepten • ${user.cookbookCount || 0} kookboeken
+              ${user.recipes || 0} recepten • ${user.cookbooks || 0} kookboeken
             </div>
             ${user.createdAt ? `<div style="font-size:0.8rem;color:#b9ada0;margin-top:2px">Aangemaakt: ${new Date(user.createdAt).toLocaleDateString('nl-NL')}</div>` : ''}
           </div>
@@ -5689,6 +5750,8 @@ async function renderAdminScreen() {
       `).join("");
     }
   }
+
+  renderAdminSearchTerms(searchTerms);
 }
 
 function renderAll() {
