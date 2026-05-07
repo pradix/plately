@@ -1599,7 +1599,28 @@ function normalizeFractions(value) {
 }
 
 function stripSocialNoise(text) {
-  return normalizeFractions(String(text || ""))
+  let out = normalizeFractions(String(text || ""));
+
+  // Remove common web-scrape prefixes like:
+  // 'username on April 26, 2026: "caption..."'
+  out = out
+    .replace(/^[\p{L}\p{N}._-]+\s+on\s+[A-Za-z]+\s+\d{1,2},\s+\d{4}\s*:\s*/iu, "")
+    .replace(/^["“”]+|["“”]+$/g, "");
+
+  // If caption contains multiple quantity tokens in a row, it's often an ingredient run.
+  // Turn "voor 1 tosti 1 ui 2 plakken brood ..." into newline-separated items.
+  const qtyHits = out.match(new RegExp(`${QUANTITY_PATTERN}(?:\\s*${UNIT_PATTERN})?`, "gi")) || [];
+  if (qtyHits.length >= 2) {
+    out = out.replace(
+      new RegExp(
+        `\\s+(?=${QUANTITY_PATTERN}\\s*(?:${UNIT_PATTERN})?\\s+[\\p{L}])`,
+        "giu"
+      ),
+      "\n"
+    );
+  }
+
+  return out
     .replace(/https?:\/\/\S+/gi, " ")
     .replace(/#[\p{L}\p{N}_-]+/gu, " ")
     .replace(/@[\p{L}\p{N}._-]+/gu, " ")
