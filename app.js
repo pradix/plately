@@ -4062,6 +4062,9 @@ function renderCookbookDetail(cookbookId) {
     renderCookbookList();
     return;
   }
+  // Ensure detail actions (remove/select/bulk delete) work no matter where
+  // the detail view is rendered (settings list vs cookbooks screen grid).
+  state.openCookbookId = cookbookId;
   setCookbooksScreenMode("detail", cookbook.name);
   const selecting = Boolean(state.cookbookSelectMode && state.openCookbookId === cookbookId);
   const selectedIds = new Set(state.cookbookSelectedRecipeIds || []);
@@ -7068,6 +7071,19 @@ bindEvent(cookbookList, "click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) {
     return;
+  }
+
+  // When cookbook detail is rendered inside the settings list, delegate all
+  // detail interactions to the shared grid handler (it already handles:
+  // select mode, bulk delete, single remove, open recipe, picker/back).
+  if (state.openCookbookId) {
+    const detailAction = target.closest(
+      "[data-cb-select-mode],[data-cb-delete-selected],[data-cb-select-recipe],[data-remove-from-cookbook],[data-open-recipe-id],[data-open-recipe-picker],[data-close-cookbook-detail]"
+    );
+    if (detailAction instanceof HTMLElement) {
+      handleCookbookGridClick(event);
+      return;
+    }
   }
 
   const createCard = target.closest("[data-create-cookbook]");
