@@ -2856,7 +2856,10 @@ async function fetchWithProfile(url, profileHeaders = {}, referer = "") {
 }
 
 async function fetchReaderFallback(url) {
-  const response = await fetch(`https://r.jina.ai/http://${url}`, {
+  // Jina Reader expects `https://r.jina.ai/https://example.com/...` (or http://...)
+  const target = String(url || "").trim();
+  const readerUrl = `https://r.jina.ai/${target}`;
+  const response = await fetch(readerUrl, {
     headers: {
       ...FETCH_HEADERS,
       accept: "text/plain, text/markdown;q=0.9, */*;q=0.8",
@@ -4538,6 +4541,24 @@ async function importRecipe(url, note, imageHint = "") {
       }
     } catch (error) {
       console.error("⚠️ Failed to expand AH short URL, continuing with original:", error.message);
+      /* keep original */
+    }
+  }
+
+  // Expand Facebook share short URLs (/share/<token>) by following redirects
+  if (/(^|\.)facebook\.com$/i.test(parsedUrl.hostname) && /^\/share\/[^/]+\/?$/i.test(parsedUrl.pathname)) {
+    try {
+      const expandRes = await fetch(parsedUrl.toString(), {
+        method: "GET",
+        redirect: "follow",
+        signal: AbortSignal.timeout(8000),
+        headers: FETCH_HEADERS,
+      });
+      if (expandRes.url && expandRes.url !== parsedUrl.toString()) {
+        parsedUrl = new URL(expandRes.url);
+      }
+    } catch (error) {
+      console.error("⚠️ Failed to expand Facebook share URL, continuing with original:", error.message);
       /* keep original */
     }
   }
