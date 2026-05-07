@@ -7884,6 +7884,27 @@ bindEvent(document.getElementById("basketSheetList"), "click", (e) => {
   }
 });
 
+// iOS-safe capture handler: ensure "Wissel" always works even if
+// event delegation is disrupted by overlays/scroll containers.
+document.addEventListener(
+  "click",
+  (e) => {
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+    const btn = target.closest("[data-basket-wissel]");
+    if (!btn) return;
+    if (!state.basketPreview) return;
+    const overlay = document.getElementById("basketOverlay");
+    if (overlay && (overlay.hidden || overlay.classList.contains("hidden"))) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const idx = parseInt(btn.dataset.basketWissel, 10);
+    if (!Number.isInteger(idx)) return;
+    openAlternativesSheet(idx);
+  },
+  true
+);
+
 // ── Alternatives sheet bindings ──────────────────────────────────────────────
 bindEvent(document.getElementById("altOverlayBack"), "click", closeAlternativesSheet);
 bindEvent(document.getElementById("altOverlay"), "click", (e) => {
