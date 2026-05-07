@@ -2782,7 +2782,14 @@ function isSafeForReaderFallback(parsedUrl) {
   if (parsedUrl.username || parsedUrl.password) return false;
   // Social platforms sometimes require query params to be present (e.g. Instagram igsh).
   const host = parsedUrl.hostname.toLowerCase();
-  if (host.endsWith("instagram.com") || host.endsWith("tiktok.com") || host === "vm.tiktok.com") {
+  if (
+    host.endsWith("instagram.com") ||
+    host.endsWith("tiktok.com") ||
+    host === "vm.tiktok.com" ||
+    host.endsWith("facebook.com") ||
+    host.endsWith("fb.com") ||
+    host.endsWith("fb.watch")
+  ) {
     return true;
   }
   return !parsedUrl.search && !parsedUrl.hash;
@@ -2793,15 +2800,38 @@ function looksLikeBlockedSocialHtml(url, html) {
   const h = String(html || "").toLowerCase();
   if (!h || h.length < 200) return true;
 
+  const hasRecipeSignals =
+    h.includes("recept") ||
+    h.includes("ingredients") ||
+    h.includes("bereiding") ||
+    h.includes("recipe") ||
+    h.includes("ingrediënten");
+
   if (u.includes("instagram.com")) {
     if (h.includes("instagram") && (h.includes("log in") || h.includes("aanmelden"))) {
-      if (!h.includes("recept") && !h.includes("ingredients") && !h.includes("bereiding")) return true;
+      if (!hasRecipeSignals) return true;
     }
   }
 
   if (u.includes("tiktok.com")) {
     if (h.includes("tiktok") && (h.includes("make your day") || h.includes("verify") || h.includes("captcha") || h.includes("log in"))) {
-      if (!h.includes("ingredients") && !h.includes("bereiding") && !h.includes("recipe")) return true;
+      if (!hasRecipeSignals) return true;
+    }
+  }
+
+  if (u.includes("facebook.com") || u.includes("fb.watch") || u.includes("fb.com")) {
+    // Typical FB response for bots: login wall, cookie/consent page, "You must log in"
+    if (
+      h.includes("facebook") &&
+      (h.includes("log in") ||
+        h.includes("aanmelden") ||
+        h.includes("you must log in") ||
+        h.includes("cookies") ||
+        h.includes("cookie") ||
+        h.includes("consent") ||
+        h.includes("accept all"))
+    ) {
+      if (!hasRecipeSignals) return true;
     }
   }
 
@@ -4115,9 +4145,21 @@ async function importInstagram(sourceUrl, note) {
 }
 
 async function importFacebook(sourceUrl, note) {
-  const document = await fetchWebsiteDocument(sourceUrl).catch(() => null);
-  const html = document?.kind === "html" ? document.body : "";
-  const textFallback = document?.kind === "text" ? document.body : "";
+  let document;
+  try {
+    document = await fetchWebsiteDocument(sourceUrl);
+  } catch (error) {
+    throw new HttpError(
+      error?.statusCode || 502,
+      "Facebook import kon niet geladen worden. 🤔 Probeer:\n" +
+        "- Zorg dat de post public is\n" +
+        "- Kopieer de link uit je browser (niet uit de app)\n" +
+        "- Probeer opnieuw"
+    );
+  }
+
+  const html = document.kind === "html" ? document.body : "";
+  const textFallback = document.kind === "text" ? document.body : "";
 
   const ogTitle = html ? parseMetaTag(html, "og:title") : "";
   const ogDescription = html ? parseMetaTag(html, "og:description") : "";
