@@ -1961,6 +1961,64 @@ function mergeInstructionLines(lines) {
   return [...new Set(merged)].map((step) => sanitizeText(step)).filter(Boolean);
 }
 
+function postProcessExtractedSections({ ingredients, instructions }) {
+  const safeIngredients = Array.isArray(ingredients) ? ingredients.map((s) => sanitizeText(String(s || ""))).filter(Boolean) : [];
+  const safeInstructions = Array.isArray(instructions) ? instructions.map((s) => sanitizeText(String(s || ""))).filter(Boolean) : [];
+
+  const finalIngredients = [];
+  const finalInstructions = [];
+
+  // Move instruction-like lines out of ingredients (common failure mode for social captions)
+  for (const line of safeIngredients) {
+    if (isLikelyInstructionLine(line)) {
+      finalInstructions.push(line);
+    } else {
+      finalIngredients.push(line);
+    }
+  }
+
+  // Move ingredient-like lines out of instructions (rare but happens: "2 eieren" as a step)
+  for (const line of safeInstructions) {
+    if (isLikelyIngredientLine(line) && !isLikelyInstructionLine(line)) {
+      finalIngredients.push(line);
+    } else {
+      finalInstructions.push(line);
+    }
+  }
+
+  return {
+    ingredients: [...new Set(finalIngredients)].slice(0, 24),
+    instructions: mergeInstructionLines(finalInstructions).slice(0, 14),
+  };
+}
+
+function buildClaudeSocialInput({ titleHint, caption, pageText, note }) {
+  const cap = sanitizeText(String(caption || ""));
+  const txt = sanitizeText(String(pageText || ""));
+  const ttl = sanitizeText(String(titleHint || ""));
+  const n = sanitizeText(String(note || ""));
+
+  const structured = cap ? extractStructuredSections(cap) : { ingredients: [], instructions: [], intro: [] };
+  const structuredSummary = [
+    structured.title ? `TITLE_HINT: ${structured.title}` : "",
+    structured.ingredients?.length ? `INGREDIENT_LINES:\n- ${structured.ingredients.slice(0, 24).join("\n- ")}` : "",
+    structured.instructions?.length ? `INSTRUCTION_LINES:\n- ${structured.instructions.slice(0, 14).join("\n- ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  // Keep it short and information-dense for the model.
+  const parts = [
+    ttl ? `TITLE_HINT: ${ttl}` : "",
+    cap ? `CAPTION:\n${cap}` : "",
+    txt ? `PAGE_TEXT:\n${txt.slice(0, 2200)}` : "",
+    structuredSummary ? `STRUCTURED_HINTS:\n${structuredSummary}` : "",
+    n ? `NOTE:\n${n}` : "",
+  ].filter(Boolean);
+
+  return parts.join("\n\n").slice(0, 5000);
+}
+
 function extractStructuredSections(text) {
   const lines = splitCaptionLines(normalizeInlineRecipeSections(text));
   const sections = {
@@ -3730,13 +3788,25 @@ async function importTikTok(sourceUrl, note) {
   const bestCaption = pickBestCaptionCandidate(captionCandidates) || sanitizeText(ogDescription || oembed.title);
 
   // Try Claude extraction first — gives much better title + step-by-step bereiding
-  const claudeResult = await extractWithClaude(bestCaption, note || "");
+  const titleHint = pickBestTitleCandidate([ogTitle, oembed.title, textDerivedTitle, ...htmlSignals.titles]);
+  const claudeInput = buildClaudeSocialInput({
+    titleHint,
+    caption: bestCaption,
+    pageText: textFallback || "",
+    note: note || "",
+  });
+  const claudeResult = await extractWithClaude(claudeInput, "");
   if (claudeResult) {
     const parsedIngredients = Array.isArray(claudeResult.ingredients)
       ? claudeResult.ingredients.map((ingredient) =>
           typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient
         )
       : [];
+
+    const post = postProcessExtractedSections({
+      ingredients: claudeResult.ingredients || [],
+      instructions: claudeResult.instructions || [],
+    });
 
     return {
       platform: "tiktok",
@@ -3747,7 +3817,7 @@ async function importTikTok(sourceUrl, note) {
       image,
       author,
       ingredients: normalizeIngredientList(parsedIngredients),
-      instructions: Array.isArray(claudeResult.instructions) ? finalizeInstructionSteps(claudeResult.instructions) : [],
+      instructions: finalizeInstructionSteps(post.instructions),
       time: sanitizeText(claudeResult.time || "30 min"),
       servings: sanitizeText(String(claudeResult.servings || "2")),
       needsReview: parsedIngredients.length === 0,
@@ -3804,13 +3874,25 @@ async function importInstagram(sourceUrl, note) {
   const captionForClaude = bestCaption || sanitizeText(ogDescription || textDerivedCaption || oembed?.title || "");
 
   if (captionForClaude && captionForClaude.length >= 10) {
-    const claudeResult = await extractWithClaude(captionForClaude, note || "");
+    const titleHint = pickBestTitleCandidate([ogTitle, oembed?.title, textDerivedTitle, ...htmlSignals.titles]);
+    const claudeInput = buildClaudeSocialInput({
+      titleHint,
+      caption: captionForClaude,
+      pageText: textFallback || "",
+      note: note || "",
+    });
+    const claudeResult = await extractWithClaude(claudeInput, "");
     if (claudeResult) {
       const parsedIngredients = Array.isArray(claudeResult.ingredients)
         ? claudeResult.ingredients.map((ingredient) =>
             typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient
           )
         : [];
+
+      const post = postProcessExtractedSections({
+        ingredients: claudeResult.ingredients || [],
+        instructions: claudeResult.instructions || [],
+      });
 
       return {
         platform: "instagram",
@@ -3821,7 +3903,7 @@ async function importInstagram(sourceUrl, note) {
         image,
         author,
         ingredients: normalizeIngredientList(parsedIngredients),
-        instructions: Array.isArray(claudeResult.instructions) ? finalizeInstructionSteps(claudeResult.instructions) : [],
+        instructions: finalizeInstructionSteps(post.instructions),
         time: sanitizeText(claudeResult.time || "30 min"),
         servings: sanitizeText(String(claudeResult.servings || "2")),
         needsReview: parsedIngredients.length === 0,
