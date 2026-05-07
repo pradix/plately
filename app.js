@@ -692,6 +692,7 @@ const reviewForm = document.getElementById("reviewForm");
 const reviewSummary = document.getElementById("reviewSummary");
 const reviewInsights = document.getElementById("reviewInsights");
 const reviewSuggestions = document.getElementById("reviewSuggestions");
+const reviewDrafts = document.getElementById("reviewDrafts");
 const reviewTitleInput = document.getElementById("reviewTitleInput");
 const reviewDescriptionInput = document.getElementById("reviewDescriptionInput");
 const reviewTimeInput = document.getElementById("reviewTimeInput");
@@ -3259,6 +3260,48 @@ function openImportReview(recipeId) {
   switchView("review");
 }
 
+function getImportPreviewList() {
+  const entries = Object.values(state.importPreviews || {}).filter(Boolean);
+  // Sort newest first (fallback to id ordering if no timestamp)
+  entries.sort((a, b) => (Number(b._previewCreatedAt || 0) - Number(a._previewCreatedAt || 0)));
+  return entries;
+}
+
+function renderImportDrafts() {
+  if (!reviewDrafts) return;
+  const previews = getImportPreviewList();
+  if (!previews.length) {
+    reviewDrafts.innerHTML = "";
+    return;
+  }
+
+  const max = 5;
+  const items = previews.slice(0, max);
+  reviewDrafts.innerHTML = `
+    <h3 class="review-drafts__title">CONCEPTEN</h3>
+    <div class="review-drafts__list">
+      ${items
+        .map((r) => {
+          const host = getSourceHost(r.sourceUrl || "") || getPlatformLabel(r.platform || "website");
+          return `
+            <div class="review-draft" data-review-draft-id="${escapeHtml(r.id)}">
+              <img class="review-draft__img" src="${escapeHtml(r.image || "assets/hero-burger.svg")}" alt="" loading="lazy" />
+              <div class="review-draft__copy">
+                <p class="review-draft__title-line">${escapeHtml(r.title || "Concept")}</p>
+                <p class="review-draft__meta">${escapeHtml(host)}</p>
+                <div class="review-draft__actions">
+                  <button class="review-draft__btn" type="button" data-review-draft-open="${escapeHtml(r.id)}">Open</button>
+                  <button class="review-draft__btn review-draft__btn--danger" type="button" data-review-draft-delete="${escapeHtml(r.id)}">Verwijder</button>
+                </div>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
 function serializeIngredientsForReview(recipe) {
   return recipe.ingredients
     .map((ingredient) => `${formatIngredientAmount(ingredient)} ${ingredient.name}`.trim())
@@ -3291,6 +3334,7 @@ function renderImportReview() {
   reviewIngredientsInput.value = serializeIngredientsForReview(recipe);
   reviewInstructionsInput.value = (recipe.instructions || []).join("\n");
   renderReviewAnalysis();
+  renderImportDrafts();
   reviewFeedback.textContent = "Pas de import aan en sla hem daarna op.";
 }
 
@@ -5345,6 +5389,7 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
     const importedRecipe = normalizeImportedRecipe(data.recipe);
 
     // Keep as preview until user actually saves it to a cookbook
+    importedRecipe._previewCreatedAt = Date.now();
     state.importPreviews[importedRecipe.id] = importedRecipe;
     state.selectedRecipeId = importedRecipe.id;
     state.reviewRecipeId = importedRecipe.id;
@@ -6134,6 +6179,7 @@ bindEvent(channelSearchResults, "click", async (event) => {
     if (!resp.ok || !data.recipe) throw new Error(data.error || "Importeren mislukt");
     const recipe = normalizeImportedRecipe({ ...data.recipe, needsReview: true });
     // Keep as preview until user actually saves it to a cookbook
+    recipe._previewCreatedAt = Date.now();
     state.importPreviews[recipe.id] = recipe;
     state.selectedRecipeId = recipe.id;
     // Open review screen so user can confirm details before saving
@@ -6932,6 +6978,30 @@ bindEvent(reviewForm, "submit", (event) => {
   saveImportReview();
 });
 
+bindEvent(reviewDrafts, "click", (event) => {
+  const openBtn = event.target.closest("[data-review-draft-open]");
+  if (openBtn instanceof HTMLElement) {
+    const id = openBtn.dataset.reviewDraftOpen;
+    if (!id) return;
+    openImportReview(id);
+    return;
+  }
+  const delBtn = event.target.closest("[data-review-draft-delete]");
+  if (delBtn instanceof HTMLElement) {
+    const id = delBtn.dataset.reviewDraftDelete;
+    if (!id) return;
+    delete state.importPreviews[id];
+    if (state.reviewRecipeId === id) {
+      state.reviewRecipeId = "";
+      state.selectedRecipeId = "";
+      switchView("import");
+      return;
+    }
+    renderImportDrafts();
+    showToast("Concept verwijderd.");
+  }
+});
+
 bindEvent(document.getElementById("mealTagChips"), "click", (event) => {
   const chip = event.target.closest(".meal-chip");
   if (!chip) return;
@@ -7437,6 +7507,7 @@ bindEvent(document.getElementById("importChannelSearchResults"), "click", async 
     if (!resp.ok || !data.recipe) throw new Error(data.error || "Importeren mislukt");
     const recipe = normalizeImportedRecipe({ ...data.recipe, needsReview: true });
     // Keep as preview until user actually saves it to a cookbook
+    recipe._previewCreatedAt = Date.now();
     state.importPreviews[recipe.id] = recipe;
     state.selectedRecipeId = recipe.id;
     // Clear search and go to review
