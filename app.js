@@ -476,6 +476,8 @@ const state = {
   openCookbookId: null,
   cookbookSelectMode: false,
   cookbookSelectedRecipeIds: [],
+  cookbooksSelectMode: false,
+  cookbooksSelectedIds: [],
 };
 
 const SEED_RECIPE_IDS = new Set(initialRecipes.map((recipe) => recipe.id));
@@ -4101,7 +4103,21 @@ function renderCookbookList() {
 
   setCookbooksScreenMode("list");
   const cookbooksScreenGrid = document.getElementById("cookbooksScreenGrid");
+  const selecting = Boolean(state.cookbooksSelectMode);
+  const selectedIds = new Set(state.cookbooksSelectedIds || []);
+  const canBulkDelete = selecting && selectedIds.size > 0 && state.cookbooks.length - selectedIds.size >= 1;
   const html = [
+    `
+      <div class="cookbook-bulkbar ${selecting ? "" : "hidden"}">
+        <div class="cookbook-bulkbar__meta">Geselecteerd: <strong>${selecting ? selectedIds.size : 0}</strong></div>
+        <div class="cookbook-bulkbar__actions">
+          <button type="button" class="cookbook-bulkbar__btn" data-cb-list-select-mode="true">${selecting ? "Klaar" : "Selecteer"}</button>
+          <button type="button" class="cookbook-bulkbar__btn cookbook-bulkbar__btn--danger" data-cb-list-delete-selected="true" ${canBulkDelete ? "" : "disabled"}>
+            Verwijder (${selecting ? selectedIds.size : 0})
+          </button>
+        </div>
+      </div>
+    `,
     `
       <button class="cookbook-collection cookbook-collection--add" type="button" data-create-cookbook="true">
         <div class="cookbook-collection__cover cookbook-collection__cover--empty">
@@ -4142,7 +4158,7 @@ function renderCookbookList() {
           `;
 
       return `
-        <div class="cookbook-collection-wrap">
+        <div class="cookbook-collection-wrap ${selecting && selectedIds.has(cookbook.id) ? "is-selected" : ""}">
         <button
           class="cookbook-collection ${cookbook.id === state.selectedCookbookId ? "is-active" : ""}"
           type="button"
@@ -4157,6 +4173,9 @@ function renderCookbookList() {
             </p>
           </div>
         </button>
+        <button class="cookbook-collection__select" type="button" data-cb-select-cookbook="${cookbook.id}" aria-label="Selecteer ${escapeHtml(cookbook.name)}">
+          ${selecting && selectedIds.has(cookbook.id) ? "✓" : ""}
+        </button>
         <button class="cookbook-options-btn" type="button" data-cookbook-options-id="${cookbook.id}" aria-label="Opties voor ${escapeHtml(cookbook.name)}">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="19" r="1.5" fill="currentColor"/></svg>
         </button>
@@ -4165,7 +4184,11 @@ function renderCookbookList() {
     }),
   ].join("");
   cookbookList.innerHTML = html;
-  if (cookbooksScreenGrid) cookbooksScreenGrid.innerHTML = html;
+  cookbookList.classList.toggle("cookbooks-grid--selecting", selecting);
+  if (cookbooksScreenGrid) {
+    cookbooksScreenGrid.innerHTML = html;
+    cookbooksScreenGrid.classList.toggle("cookbooks-grid--selecting", selecting);
+  }
   renderProfileSummary();
 }
 
@@ -6801,6 +6824,61 @@ function handleCookbookGridClick(event) {
   const target = event.target;
   if (!(target instanceof Element)) return;
 
+  const listSelectModeBtn = target.closest("[data-cb-list-select-mode]");
+  if (listSelectModeBtn instanceof HTMLElement && !state.openCookbookId) {
+    state.cookbooksSelectMode = !state.cookbooksSelectMode;
+    if (!state.cookbooksSelectMode) state.cookbooksSelectedIds = [];
+    renderCookbookList();
+    return;
+  }
+
+  const listBulkDeleteBtn = target.closest("[data-cb-list-delete-selected]");
+  if (listBulkDeleteBtn instanceof HTMLElement && !state.openCookbookId) {
+    const selected = Array.isArray(state.cookbooksSelectedIds) ? state.cookbooksSelectedIds.filter(Boolean) : [];
+    if (!selected.length) return;
+    if (state.cookbooks.length - selected.length < 1) return;
+    const selectedNames = selected
+      .map((id) => getCookbookById(id))
+      .filter(Boolean)
+      .map((cb) => cb.name)
+      .slice(0, 5);
+    openConfirmDialog({
+      title: "Kookboeken verwijderen?",
+      message: `Je staat op het punt ${selected.length} kookboek(en) te verwijderen. Dit kan niet ongedaan gemaakt worden.`,
+      confirmLabel: "Verwijderen",
+      cancelLabel: "Annuleren",
+      onConfirm: () => {
+        const selectedSet = new Set(selected);
+        state.cookbooks = state.cookbooks.filter((c) => !selectedSet.has(c.id));
+        if (selectedSet.has(state.selectedCookbookId)) {
+          state.selectedCookbookId = state.cookbooks[0]?.id || null;
+        }
+        if (state.openCookbookId && selectedSet.has(state.openCookbookId)) {
+          state.openCookbookId = null;
+        }
+        state.cookbooksSelectedIds = [];
+        state.cookbooksSelectMode = false;
+        renderCookbookList();
+        schedulePersistAppState();
+        showToast(`${selected.length} kookboek(en) verwijderd.`);
+      },
+    });
+    return;
+  }
+
+  const selectCookbookBtn = target.closest("[data-cb-select-cookbook]");
+  if (selectCookbookBtn instanceof HTMLElement && !state.openCookbookId) {
+    if (!state.cookbooksSelectMode) state.cookbooksSelectMode = true;
+    const cookbookId = selectCookbookBtn.getAttribute("data-cb-select-cookbook") || "";
+    if (!cookbookId) return;
+    const set = new Set(state.cookbooksSelectedIds || []);
+    if (set.has(cookbookId)) set.delete(cookbookId);
+    else set.add(cookbookId);
+    state.cookbooksSelectedIds = [...set];
+    renderCookbookList();
+    return;
+  }
+
   const selectModeBtn = target.closest("[data-cb-select-mode]");
   if (selectModeBtn instanceof HTMLElement && state.openCookbookId) {
     state.cookbookSelectMode = !state.cookbookSelectMode;
@@ -6888,6 +6966,18 @@ function handleCookbookGridClick(event) {
 
   const cookbookCard = target.closest("[data-cookbook-id]");
   if (!(cookbookCard instanceof HTMLElement)) return;
+
+  if (!state.openCookbookId && state.cookbooksSelectMode) {
+    const cookbookId = cookbookCard.dataset.cookbookId || "";
+    if (!cookbookId) return;
+    const set = new Set(state.cookbooksSelectedIds || []);
+    if (set.has(cookbookId)) set.delete(cookbookId);
+    else set.add(cookbookId);
+    state.cookbooksSelectedIds = [...set];
+    renderCookbookList();
+    return;
+  }
+
   state.openCookbookId = cookbookCard.dataset.cookbookId;
   renderCookbookList();
 }
@@ -6896,6 +6986,20 @@ const cookbooksScreenGrid = document.getElementById("cookbooksScreenGrid");
 bindEvent(cookbooksScreenGrid, "click", handleCookbookGridClick);
 
 bindEvent(cookbookList, "click", (event) => {
+  // Keep list grid behavior in sync with the cookbooks screen grid
+  if (!state.openCookbookId) {
+    const targetMaybe = event.target;
+    if (targetMaybe instanceof Element) {
+      const listSelectModeBtn = targetMaybe.closest("[data-cb-list-select-mode]");
+      const listBulkDeleteBtn = targetMaybe.closest("[data-cb-list-delete-selected]");
+      const selectCookbookBtn = targetMaybe.closest("[data-cb-select-cookbook]");
+      if (listSelectModeBtn || listBulkDeleteBtn || selectCookbookBtn) {
+        handleCookbookGridClick(event);
+        return;
+      }
+    }
+  }
+
   const target = event.target;
   if (!(target instanceof Element)) {
     return;
@@ -6961,6 +7065,11 @@ bindEvent(cookbookList, "click", (event) => {
   // Open cookbook detail
   const cookbookCard = target.closest("[data-cookbook-id]");
   if (!(cookbookCard instanceof HTMLElement)) {
+    return;
+  }
+
+  if (!state.openCookbookId && state.cookbooksSelectMode) {
+    handleCookbookGridClick(event);
     return;
   }
 
