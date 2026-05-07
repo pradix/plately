@@ -1579,29 +1579,36 @@
       </div>
     </div>
 
-    <div class="modal hidden" id="cookbookSaveModal" aria-hidden="true">
-      <div class="modal-backdrop" data-close-cookbook-save="true"></div>
-      <section class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="cookbookSaveTitle">
-        <div class="modal-handle"></div>
-        <div class="modal-header">
-          <div>
+    <div class="modal modal--fullscreen hidden" id="cookbookSaveModal" aria-hidden="true">
+      <section class="modal-sheet modal-sheet--fullscreen cookbook-save-screen" role="dialog" aria-modal="true" aria-labelledby="cookbookSaveTitle">
+        <header class="cookbook-save-topbar">
+          <button class="icon-button cookbook-save-topbar__btn" type="button" data-close-cookbook-save="true" aria-label="Terug">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15.5 19.5L8 12l7.5-7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div class="cookbook-save-topbar__copy">
             <p class="section-kicker">KOOKBOEK KIEZEN</p>
             <h2 id="cookbookSaveTitle">Waar wil je dit recept bewaren?</h2>
           </div>
-          <button class="icon-button" type="button" data-close-cookbook-save="true" aria-label="Sluiten">
+          <button class="icon-button cookbook-save-topbar__btn" type="button" data-close-cookbook-save="true" aria-label="Sluiten">
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M6.7 5.3L12 10.58l5.3-5.29l1.4 1.41L13.42 12l5.29 5.3l-1.41 1.4L12 13.42l-5.3 5.29l-1.4-1.41L10.58 12l-5.29-5.3l1.41-1.4Z"
-              />
+              <path d="M6.7 5.3L12 10.58l5.3-5.29l1.4 1.41L13.42 12l5.29 5.3l-1.41 1.4L12 13.42l-5.3 5.29l-1.4-1.41L10.58 12l-5.29-5.3l1.41-1.4Z"/>
             </svg>
           </button>
-        </div>
+        </header>
 
-        <div class="cookbook-save-sheet">
+        <div class="cookbook-save-content">
           <p class="cookbook-save-copy" id="cookbookSaveRecipeTitle">Kies een kookboek voor dit recept.</p>
-          <div class="cookbook-save-list" id="cookbookSaveList"></div>
+          <div class="cookbook-save-list" id="cookbookSaveList" role="listbox" aria-label="Kookboeken"></div>
           <button class="cookbook-save-create" id="cookbookSaveCreateButton" type="button">Nieuw kookboek maken</button>
         </div>
+
+        <footer class="cookbook-save-footer">
+          <button class="primary-button cookbook-save-confirm" id="cookbookSaveConfirmButton" type="button" disabled>
+            Bewaar recept
+          </button>
+        </footer>
       </section>
     </div>
 

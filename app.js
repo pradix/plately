@@ -487,6 +487,7 @@ const state = {
   cookbooks: [],
   selectedCookbookId: "",
   pendingCookbookSaveRecipeId: "",
+  pendingCookbookSaveCookbookId: "",
   mealPlan: {
     maandag: null,
     dinsdag: null,
@@ -763,6 +764,7 @@ const cookbookSaveModal = document.getElementById("cookbookSaveModal");
 const cookbookSaveList = document.getElementById("cookbookSaveList");
 const cookbookSaveRecipeTitle = document.getElementById("cookbookSaveRecipeTitle");
 const cookbookSaveCreateButton = document.getElementById("cookbookSaveCreateButton");
+const cookbookSaveConfirmButton = document.getElementById("cookbookSaveConfirmButton");
 const cookbookNameModal = document.getElementById("cookbookNameModal");
 const cookbookNameInput = document.getElementById("cookbookNameInput");
 const cookbookOptionsSheet = document.getElementById("cookbookOptionsSheet");
@@ -1192,6 +1194,7 @@ function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
       const recipeCount = cookbook.recipeIds.length;
       const containsRecipe = cookbook.recipeIds.includes(recipeId);
       const isDefaultCookbook = cookbook.id === state.selectedCookbookId;
+      const isSelected = cookbook.id === state.pendingCookbookSaveCookbookId;
       const meta = containsRecipe
         ? "Staat hier al in"
         : isDefaultCookbook
@@ -1200,10 +1203,12 @@ function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
 
       return `
         <button
-          class="cookbook-save-option ${isDefaultCookbook ? "is-default" : ""}"
+          class="cookbook-save-option ${isDefaultCookbook ? "is-default" : ""} ${isSelected ? "is-selected" : ""}"
           type="button"
           data-save-cookbook-id="${cookbook.id}"
           data-save-recipe-id="${escapeHtml(recipeId)}"
+          role="option"
+          aria-selected="${isSelected ? "true" : "false"}"
         >
           ${getCookbookCoverMarkup(cookbook)}
           <span class="cookbook-save-option__copy">
@@ -1219,6 +1224,57 @@ function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
     .join("");
 }
 
+function syncCookbookSaveConfirmButton() {
+  if (!cookbookSaveConfirmButton) return;
+  const hasChoice = Boolean(state.pendingCookbookSaveCookbookId);
+  cookbookSaveConfirmButton.disabled = !hasChoice;
+  cookbookSaveConfirmButton.setAttribute("aria-disabled", hasChoice ? "false" : "true");
+}
+
+let cookbookSaveLastActiveElement = null;
+let cookbookSaveFocusTrapHandler = null;
+
+function enableCookbookSaveFocusTrap() {
+  if (!cookbookSaveModal) return;
+  cookbookSaveLastActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const focusables = cookbookSaveModal.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  );
+  const first = focusables[0] instanceof HTMLElement ? focusables[0] : null;
+  const last = focusables[focusables.length - 1] instanceof HTMLElement ? focusables[focusables.length - 1] : null;
+
+  cookbookSaveFocusTrapHandler = (event) => {
+    if (event.key !== "Tab" || cookbookSaveModal.classList.contains("hidden")) return;
+    if (!first || !last) return;
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return;
+    if (event.shiftKey) {
+      if (active === first || !cookbookSaveModal.contains(active)) {
+        event.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  };
+
+  document.addEventListener("keydown", cookbookSaveFocusTrapHandler);
+  first?.focus();
+}
+
+function disableCookbookSaveFocusTrap() {
+  if (cookbookSaveFocusTrapHandler) {
+    document.removeEventListener("keydown", cookbookSaveFocusTrapHandler);
+  }
+  cookbookSaveFocusTrapHandler = null;
+  const restore = cookbookSaveLastActiveElement;
+  cookbookSaveLastActiveElement = null;
+  restore?.focus?.();
+}
+
 function openCookbookSaveModal(recipeId) {
   const recipe = getRecipeById(recipeId);
   if (!recipe || !cookbookSaveModal) {
@@ -1226,12 +1282,15 @@ function openCookbookSaveModal(recipeId) {
   }
 
   state.pendingCookbookSaveRecipeId = recipe.id;
+  state.pendingCookbookSaveCookbookId = state.selectedCookbookId || state.cookbooks?.[0]?.id || "";
   if (cookbookSaveRecipeTitle) {
     cookbookSaveRecipeTitle.textContent = `${recipe.title} opslaan in welk kookboek?`;
   }
   renderCookbookSaveList(recipe.id);
+  syncCookbookSaveConfirmButton();
   cookbookSaveModal.classList.remove("hidden");
   cookbookSaveModal.setAttribute("aria-hidden", "false");
+  enableCookbookSaveFocusTrap();
 }
 
 function closeCookbookSaveModal() {
@@ -1242,6 +1301,9 @@ function closeCookbookSaveModal() {
   cookbookSaveModal.classList.add("hidden");
   cookbookSaveModal.setAttribute("aria-hidden", "true");
   state.pendingCookbookSaveRecipeId = "";
+  state.pendingCookbookSaveCookbookId = "";
+  syncCookbookSaveConfirmButton();
+  disableCookbookSaveFocusTrap();
 }
 
 function inferPlatformFromUrl(rawUrl) {
@@ -7720,6 +7782,14 @@ bindEvent(cookbookSaveList, "click", (event) => {
     return;
   }
 
+  // First tap selects, second tap (on same selection) saves.
+  if (state.pendingCookbookSaveCookbookId !== cookbookId) {
+    state.pendingCookbookSaveCookbookId = cookbookId;
+    renderCookbookSaveList(recipeId);
+    syncCookbookSaveConfirmButton();
+    return;
+  }
+
   state.selectedRecipeId = recipeId;
   saveRecipeToCookbook(recipeId, cookbookId);
   closeCookbookSaveModal();
@@ -7729,6 +7799,18 @@ bindEvent(cookbookSaveList, "click", (event) => {
 
 bindEvent(cookbookSaveCreateButton, "click", () => {
   openCookbookNameModal("create");
+});
+
+bindEvent(cookbookSaveConfirmButton, "click", () => {
+  const cookbookId = state.pendingCookbookSaveCookbookId;
+  const selectedRecipe = getSelectedRecipe();
+  const recipeId = state.pendingCookbookSaveRecipeId || selectedRecipe?.id;
+  if (!recipeId || !cookbookId) return;
+  state.selectedRecipeId = recipeId;
+  saveRecipeToCookbook(recipeId, cookbookId);
+  closeCookbookSaveModal();
+  renderDetailRecipe(true);
+  switchView("detail");
 });
 
 // Cookbook name modal confirm/cancel

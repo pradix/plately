@@ -4936,6 +4936,18 @@ img { display: block; max-width: 100%; }
   flex-direction: column;
 }
 
+.modal--fullscreen .modal-backdrop { display: none; }
+
+.modal-sheet--fullscreen {
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  max-height: 100vh;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
 .modal-handle {
   width: 54px; height: 5px;
   border-radius: 999px;
@@ -4963,6 +4975,71 @@ img { display: block; max-width: 100%; }
   gap: 14px;
   /* cap the sheet so the create-button stays visible above the nav bar */
   max-height: min(52vh, 440px);
+}
+
+.cookbook-save-screen {
+  height: 100%;
+  background: #f8f7f2;
+}
+
+.cookbook-save-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+  background: #f8f7f2;
+  border-bottom: 1px solid rgba(36, 60, 43, 0.08);
+}
+
+.cookbook-save-topbar__btn {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+}
+
+.cookbook-save-topbar__copy {
+  min-width: 0;
+}
+
+.cookbook-save-topbar .section-kicker {
+  margin: 0 0 2px;
+}
+
+.cookbook-save-topbar h2 {
+  margin: 0;
+  font-size: clamp(1.28rem, 5.2vw, 1.7rem);
+  line-height: 1.05;
+}
+
+.cookbook-save-content {
+  padding: 14px 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+  flex: 1 1 auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cookbook-save-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(248, 247, 242, 0.98) 70%, rgba(248, 247, 242, 0.7));
+  border-top: 1px solid rgba(36, 60, 43, 0.08);
+}
+
+.cookbook-save-confirm {
+  width: 100%;
+  padding: 15px 16px;
+  border-radius: 18px;
+  font-weight: 800;
 }
 
 .cookbook-save-copy {
@@ -5002,6 +5079,11 @@ img { display: block; max-width: 100%; }
   background: rgba(255,255,255,0.92);
   text-align: left;
   box-shadow: 0 8px 20px rgba(76,85,69,0.05);
+}
+
+.cookbook-save-option.is-selected {
+  border-color: rgba(120, 147, 111, 0.45);
+  box-shadow: 0 12px 28px rgba(76,85,69,0.09);
 }
 
 .cookbook-save-option__cover {
