@@ -4073,7 +4073,6 @@ function renderCookbookDetail(cookbookId) {
         <div class="cb-detail__title">
           <div class="cb-detail__title-row">
             <h2 class="cb-detail__name">${escapeHtml(cookbook.name)}</h2>
-            <span class="cb-detail__count">${recipes.length} recept${recipes.length === 1 ? "" : "en"}</span>
           </div>
           <div class="cb-detail__actions">
             <button class="cb-detail__action-btn" type="button" data-cb-select-mode="true">
