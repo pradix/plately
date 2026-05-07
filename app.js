@@ -4061,8 +4061,10 @@ function setCookbooksScreenMode(mode, cookbookName) {
   // mode: "list" | "detail"
   const listHeader = document.getElementById("cookbooksTopbarList");
   const detailHeader = document.getElementById("cookbooksTopbarDetail");
+  const grid = document.getElementById("cookbooksScreenGrid");
   if (listHeader) listHeader.style.display = mode === "detail" ? "none" : "";
   if (detailHeader) detailHeader.style.display = mode === "detail" ? "" : "none";
+  if (grid) grid.classList.toggle("cookbook-grid--detail", mode === "detail");
   if (mode === "detail" && cookbookName) {
     const titleEl = document.getElementById("cookbooksDetailTitle");
     if (titleEl) titleEl.textContent = cookbookName;

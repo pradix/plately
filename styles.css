@@ -3913,6 +3913,10 @@ img { display: block; max-width: 100%; }
   gap: 16px;
 }
 
+.cookbook-grid--detail {
+  display: block;
+}
+
 .cookbook-collection-wrap {
   position: relative;
 }
