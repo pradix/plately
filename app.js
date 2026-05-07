@@ -904,6 +904,19 @@ function showConfirm({ title, subtitle, confirmLabel = "Bevestigen", destructive
   sheet.classList.remove("hidden");
   document.getElementById("confirmSheetBackdrop")?.classList.remove("hidden");
 }
+
+// Backwards-compatible wrapper used by newer features.
+function openConfirmDialog({ title, message, confirmLabel = "Bevestigen", cancelLabel = "Annuleren", onConfirm }) {
+  void cancelLabel; // cancel handled by sheet cancel button
+  const destructive = String(confirmLabel || "").toLowerCase().includes("verwijder");
+  showConfirm({
+    title,
+    subtitle: message,
+    confirmLabel,
+    destructive,
+    onConfirm,
+  });
+}
 function closeConfirmSheet() {
   const sheet = document.getElementById("confirmSheet");
   sheet?.classList.add("hidden");
