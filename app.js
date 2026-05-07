@@ -612,9 +612,12 @@ const homeImportFeedback = document.getElementById("homeImportFeedback");
 const recipeUrlInput = document.getElementById("recipeUrl");
 const recipeNoteInput = document.getElementById("recipeNote");
 const searchInput = document.getElementById("searchInput");
-const homeSearchChips = [...document.querySelectorAll("[data-home-search-chip]")];
+const homeSearchChipsWrap = document.querySelector(".home-search-chips");
 const channelSearchSection = document.getElementById("channelSearchSection");
 const channelSearchResults = document.getElementById("channelSearchResults");
+const homeImportBanner = document.getElementById("homeImportBanner");
+const homeImportToggle = document.getElementById("homeImportToggle");
+const homeImportBody = document.getElementById("homeImportBody");
 const closeImportSecondaryButton = document.getElementById("closeImportSecondaryButton");
 const openFeaturedRecipeButton = document.getElementById("openFeaturedRecipeButton");
 const platformButtons = [...document.querySelectorAll(".platform-button[data-platform-choice]")];
@@ -1486,6 +1489,122 @@ function goHome() {
   switchView("home");
 }
 
+function isChannelSearchEmpty() {
+  const inputVal = (searchInput?.value || "").trim();
+  const stateVal = (state.channelSearchQuery || "").trim();
+  return inputVal.length === 0 && stateVal.length === 0;
+}
+
+function ensureChannelSearchClosed() {
+  if (channelSearchSection) channelSearchSection.classList.add("hidden");
+  if (channelSearchResults) channelSearchResults.innerHTML = "";
+  state.channelSearchQuery = "";
+  state.channelSearchFilter = null;
+}
+
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function rand() {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pickUniqueRandom(items, count, rng = Math.random) {
+  const n = Math.min(Math.max(0, count), items.length);
+  const arr = items.slice();
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.slice(0, n);
+}
+
+const HOME_QUICK_CHIP_POOL = [
+  "Pasta",
+  "Kip",
+  "Avocado",
+  "Snelle lunch",
+  "Gezond",
+  "Vegetarisch",
+  "Vegan",
+  "Salade",
+  "Soep",
+  "Curry",
+  "Rijst",
+  "Noedels",
+  "Wrap",
+  "Taco",
+  "Bowl",
+  "Ovenschotel",
+  "Airfryer",
+  "30 minuten",
+  "Budget",
+  "Mealprep",
+  "Ontbijt",
+  "Pannenkoeken",
+  "Smoothie",
+  "Eieren",
+  "Vis",
+  "Garnalen",
+  "Tofu",
+  "Kikkererwten",
+  "Linzen",
+  "Zoete aardappel",
+  "Broccoli",
+  "Bloemkool",
+  "Spinazie",
+  "Courgette",
+  "Aubergine",
+  "Tomaat",
+  "Paprika",
+  "Pesto",
+  "Parmezaan",
+  "Feta",
+  "Burrata",
+  "Sushi bowl",
+  "Poké bowl",
+  "Nasi",
+  "Bami",
+  "Saté",
+  "Stoof",
+  "BBQ",
+  "Dessert",
+  "Chocolate chip",
+  "Gezinsproof",
+];
+
+function renderHomeQuickChips() {
+  if (!homeSearchChipsWrap) return;
+  const chipCount = Math.random() < 0.55 ? 4 : 5;
+
+  let sessionSeed = 0;
+  try {
+    const existing = sessionStorage.getItem("plately-home-chip-seed");
+    if (existing) {
+      sessionSeed = Number(existing) >>> 0;
+    } else {
+      sessionSeed = (Math.random() * 2 ** 32) >>> 0;
+      sessionStorage.setItem("plately-home-chip-seed", String(sessionSeed));
+    }
+  } catch {
+    sessionSeed = (Math.random() * 2 ** 32) >>> 0;
+  }
+
+  const reloadSalt = (Date.now() ^ ((Math.random() * 2 ** 32) >>> 0)) >>> 0;
+  const rng = mulberry32((sessionSeed ^ reloadSalt) >>> 0);
+  const picks = pickUniqueRandom(HOME_QUICK_CHIP_POOL, chipCount, rng);
+
+  homeSearchChipsWrap.innerHTML = picks
+    .map(
+      (label) =>
+        `<button type="button" class="home-search-chip" data-home-search-chip="${escapeHtml(label)}">${escapeHtml(label)}</button>`
+    )
+    .join("");
+}
+
 function switchView(view) {
   // Enforce authentication for all protected views
   // Only enforce after session check is complete (state.session.ready)
@@ -1563,6 +1682,17 @@ function switchView(view) {
       sessionStorage.removeItem("plately-selected-recipe");
     }
   } catch { /* ignore */ }
+
+  // Home-specific: keep channel search panel consistent on returning home
+  if (view === "home") {
+    // Chips: pick a new set each time home is entered
+    renderHomeQuickChips();
+
+    // If there is no query, force channel panel closed
+    if (isChannelSearchEmpty()) {
+      ensureChannelSearchClosed();
+    }
+  }
 }
 
 function parseBaseServings(value) {
@@ -6544,23 +6674,16 @@ bindEvent(searchInput, "keydown", (event) => {
   }
 });
 
-homeSearchChips.forEach((chip) => {
-  bindEvent(chip, "click", () => {
-    if (!searchInput) return;
-    searchInput.value = chip.dataset.homeSearchChip || chip.textContent.trim();
-    searchInput.focus();
-    searchInput.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+// Home quick chips (generated on load + when re-entering home)
+renderHomeQuickChips();
+bindEvent(homeSearchChipsWrap, "click", (event) => {
+  const chip = event.target.closest("[data-home-search-chip]");
+  if (!(chip instanceof HTMLElement)) return;
+  if (!searchInput) return;
+  searchInput.value = chip.dataset.homeSearchChip || chip.textContent.trim();
+  searchInput.focus();
+  searchInput.dispatchEvent(new Event("input", { bubbles: true }));
 });
-
-// Shuffle quick-search chips on each load (home only)
-try {
-  const chipsWrap = document.querySelector(".home-search-chips");
-  if (chipsWrap && homeSearchChips.length > 1) {
-    const shuffled = [...homeSearchChips].sort(() => Math.random() - 0.5);
-    shuffled.forEach((chip) => chipsWrap.appendChild(chip));
-  }
-} catch {}
 
 // Close channel search panel
 bindEvent(document.getElementById("channelSearchClose"), "click", () => {
@@ -6569,6 +6692,7 @@ bindEvent(document.getElementById("channelSearchClose"), "click", () => {
   renderQuickRecipeGrid();
   renderRecipeGrid();
   renderChannelSearchResults([]);
+  if (channelSearchSection) channelSearchSection.classList.add("hidden");
 });
 
 bindEvent(document.getElementById("channelSearchSection"), "click", (event) => {
@@ -7760,6 +7884,40 @@ bindEvent(importForm, "submit", async (event) => {
       showToast(`${importedRecipe.title} klaar om na te lopen.`);
     }
   );
+});
+
+function setHomeImportExpanded(expanded) {
+  if (!homeImportBanner) return;
+  homeImportBanner.classList.toggle("import-banner--collapsed", !expanded);
+  homeImportBanner.classList.toggle("import-banner--expanded", expanded);
+  if (homeImportToggle) homeImportToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+  if (homeImportBody) {
+    homeImportBody.hidden = !expanded;
+    if (!expanded) homeImportBody.classList.add("hidden");
+    else homeImportBody.classList.remove("hidden");
+  }
+}
+
+// Home import banner: collapsed by default (search is primary)
+try {
+  if (homeImportBanner && homeImportBody) {
+    setHomeImportExpanded(false);
+  }
+} catch {}
+
+bindEvent(homeImportToggle, "click", () => {
+  const isExpanded = homeImportToggle?.getAttribute("aria-expanded") === "true";
+  setHomeImportExpanded(!isExpanded);
+  if (!isExpanded) {
+    setTimeout(() => homeImportUrl?.focus(), 0);
+  }
+});
+
+bindEvent(homeImportUrl, "focus", () => {
+  // If user taps into URL field, expand immediately.
+  if (homeImportToggle?.getAttribute("aria-expanded") !== "true") {
+    setHomeImportExpanded(true);
+  }
 });
 
 bindEvent(homeImportForm, "submit", async (event) => {
