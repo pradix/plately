@@ -4070,20 +4070,19 @@ function renderCookbookDetail(cookbookId) {
   const _detailHtml = `
     <div class="cb-detail ${selecting ? "cb-detail--selecting" : ""}">
       <div class="cb-detail__header">
-        <div class="cb-detail__title">
-          <div class="cb-detail__title-row">
-            <h2 class="cb-detail__name">${escapeHtml(cookbook.name)}</h2>
-          </div>
-          <div class="cb-detail__actions">
-            <button class="cb-detail__action-btn" type="button" data-cb-select-mode="true">
-              ${selecting ? "Klaar" : "Selecteer"}
-            </button>
-            <button class="cb-detail__action-btn cb-detail__action-btn--danger" type="button"
-              data-cb-delete-selected="true"
-              ${selecting && selectedIds.size ? "" : "disabled"}>
-              Verwijder (${selecting ? selectedIds.size : 0})
-            </button>
-          </div>
+        <div class="cb-detail__title-row">
+          <h2 class="cb-detail__name">${escapeHtml(cookbook.name)}</h2>
+          <span class="cb-detail__count">${recipes.length} recept${recipes.length === 1 ? "" : "en"}</span>
+        </div>
+        <div class="cb-detail__actions">
+          <button class="cb-detail__action-btn" type="button" data-cb-select-mode="true">
+            ${selecting ? "Klaar" : "Selecteer"}
+          </button>
+          <button class="cb-detail__action-btn cb-detail__action-btn--danger" type="button"
+            data-cb-delete-selected="true"
+            ${selecting && selectedIds.size ? "" : "disabled"}>
+            Verwijder (${selecting ? selectedIds.size : 0})
+          </button>
         </div>
       </div>
       ${recipes.length ? `
@@ -6858,6 +6857,25 @@ bindEvent(document.getElementById("goToChangelogBtn"), "click", () => {
   openProfileSubPanel("profileSubChangelog");
 });
 
+function confirmRemoveRecipeFromOpenCookbook(recipeId) {
+  if (!recipeId || !state.openCookbookId) return;
+  const cb = state.cookbooks.find((c) => c.id === state.openCookbookId);
+  const recipe = getRecipeById(recipeId);
+  if (!cb) return;
+  openConfirmDialog({
+    title: "Recept verwijderen?",
+    message: `Wil je "${recipe?.title || "dit recept"}" uit "${cb.name}" verwijderen?`,
+    confirmLabel: "Verwijderen",
+    cancelLabel: "Annuleren",
+    onConfirm: () => {
+      cb.recipeIds = cb.recipeIds.filter((id) => id !== recipeId);
+      renderCookbookDetail(state.openCookbookId);
+      schedulePersistAppState();
+      showToast("Recept verwijderd uit kookboek.");
+    },
+  });
+}
+
 // Shared handler for cookbook grid interactions (works for both settings and cookbooks screen)
 function handleCookbookGridClick(event) {
   const target = event.target;
@@ -6952,6 +6970,13 @@ function handleCookbookGridClick(event) {
     return;
   }
 
+  const removeFromCookbookBtn = target.closest("[data-remove-from-cookbook]");
+  if (removeFromCookbookBtn instanceof HTMLElement && state.openCookbookId) {
+    const recipeId = removeFromCookbookBtn.getAttribute("data-remove-from-cookbook") || "";
+    confirmRemoveRecipeFromOpenCookbook(recipeId);
+    return;
+  }
+
   const selectRecipeBtn = target.closest("[data-cb-select-recipe]");
   if (selectRecipeBtn instanceof HTMLElement && state.openCookbookId) {
     const recipeId = selectRecipeBtn.getAttribute("data-cb-select-recipe") || "";
@@ -6985,27 +7010,6 @@ function handleCookbookGridClick(event) {
 
   const backBtn = target.closest("[data-close-cookbook-detail]");
   if (backBtn instanceof HTMLElement) { state.openCookbookId = null; renderCookbookList(); return; }
-
-  const removeBtn = target.closest("[data-remove-from-cookbook]");
-  if (removeBtn instanceof HTMLElement) {
-    const recipeId = removeBtn.dataset.removeFromCookbook;
-    const cb = state.cookbooks.find((c) => c.id === state.openCookbookId);
-    const recipe = recipeId ? getRecipeById(recipeId) : null;
-    if (!cb || !recipeId) return;
-    openConfirmDialog({
-      title: "Recept verwijderen?",
-      message: `Wil je "${recipe?.title || "dit recept"}" uit "${cb.name}" verwijderen?`,
-      confirmLabel: "Verwijderen",
-      cancelLabel: "Annuleren",
-      onConfirm: () => {
-        cb.recipeIds = cb.recipeIds.filter((id) => id !== recipeId);
-        renderCookbookDetail(state.openCookbookId);
-        schedulePersistAppState();
-        showToast("Recept verwijderd uit kookboek.");
-      },
-    });
-    return;
-  }
 
   const openRecipeBtn = target.closest("[data-open-recipe-id]");
   if (openRecipeBtn instanceof HTMLElement) {
@@ -7102,15 +7106,9 @@ bindEvent(cookbookList, "click", (event) => {
 
   // Remove recipe from cookbook (detail view)
   const removeBtn = target.closest("[data-remove-from-cookbook]");
-  if (removeBtn instanceof HTMLElement) {
-    const recipeId = removeBtn.dataset.removeFromCookbook;
-    const cb = state.cookbooks.find((c) => c.id === state.openCookbookId);
-    if (cb) {
-      cb.recipeIds = cb.recipeIds.filter((id) => id !== recipeId);
-      renderCookbookDetail(state.openCookbookId);
-      schedulePersistAppState();
-      showToast("Recept verwijderd uit kookboek.");
-    }
+  if (removeBtn instanceof HTMLElement && state.openCookbookId) {
+    const recipeId = removeBtn.getAttribute("data-remove-from-cookbook") || "";
+    confirmRemoveRecipeFromOpenCookbook(recipeId);
     return;
   }
 

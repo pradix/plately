@@ -1503,13 +1503,6 @@ img { display: block; max-width: 100%; }
   margin-bottom: 18px;
 }
 
-.cb-detail__title {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-}
-
 .cb-detail__title-row {
   display: flex;
   align-items: baseline;
@@ -1519,9 +1512,11 @@ img { display: block; max-width: 100%; }
 
 .cb-detail__actions {
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   gap: 10px;
   align-items: center;
-  flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
 .cb-detail__action-btn {
@@ -1533,6 +1528,9 @@ img { display: block; max-width: 100%; }
   font-weight: 700;
   font-size: 13px;
   cursor: pointer;
+  flex: 0 1 auto;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .cb-detail__action-btn:disabled {
@@ -1560,7 +1558,8 @@ img { display: block; max-width: 100%; }
 .cb-detail__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
+  align-items: stretch;
 }
 
 .cb-detail__item {
@@ -1587,7 +1586,7 @@ img { display: block; max-width: 100%; }
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 2;
+  z-index: 3;
 }
 
 .cb-detail--selecting .cb-detail__select {
@@ -1651,22 +1650,8 @@ img { display: block; max-width: 100%; }
   font-weight: 500;
 }
 
-@media (max-width: 420px) {
-  .cb-detail__grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (min-width: 760px) {
   .cb-detail__grid { gap: 18px; }
-}
-
-@media (min-width: 980px) {
-  .cb-detail__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
-@media (min-width: 1240px) {
-  .cb-detail__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 .cb-detail__remove {
@@ -1685,9 +1670,10 @@ img { display: block; max-width: 100%; }
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  z-index: 2;
+  z-index: 5;
+  pointer-events: auto;
 }
-.cb-detail__remove svg { width: 14px; height: 14px; }
+.cb-detail__remove svg { width: 14px; height: 14px; pointer-events: none; }
 .cb-detail__remove:hover { background: #fde8e8; color: #e05555; }
 
 .cb-detail__empty-state {
