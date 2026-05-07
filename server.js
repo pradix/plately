@@ -7020,6 +7020,206 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/admin/overview" && request.method === "GET") {
+      console.log("🧾 /api/admin/overview called");
+      try {
+        const nowIso = new Date().toISOString();
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+
+          const totalsRes = await pool.query(
+            `
+            SELECT
+              COUNT(*)::int AS total_users,
+              COALESCE(SUM(COALESCE(jsonb_array_length(app_state->'importedRecipes'), 0)), 0)::int AS total_recipes,
+              COALESCE(SUM(COALESCE(jsonb_array_length(app_state->'cookbooks'), 0)), 0)::int AS total_cookbooks,
+              COALESCE(SUM(COALESCE(jsonb_array_length(app_state->'customChannels'), 0)), 0)::int AS total_custom_channels
+            FROM plately_users
+            `
+          );
+
+          const activeRes = await pool.query(
+            `
+            SELECT
+              COUNT(*)::int AS active_users_7d,
+              COALESCE(SUM(COALESCE(jsonb_array_length(app_state->'importedRecipes'), 0)), 0)::int AS active_recipes_7d,
+              COALESCE(SUM(COALESCE(jsonb_array_length(app_state->'cookbooks'), 0)), 0)::int AS active_cookbooks_7d
+            FROM plately_users
+            WHERE updated_at >= NOW() - INTERVAL '7 days'
+            `
+          );
+
+          const customBreakdownRes = await pool.query(
+            `
+            SELECT
+              COALESCE(SUM(CASE WHEN COALESCE(ch->>'status','approved') = 'approved' THEN 1 ELSE 0 END), 0)::int AS approved,
+              COALESCE(SUM(CASE WHEN COALESCE(ch->>'status','approved') = 'pending' THEN 1 ELSE 0 END), 0)::int AS pending,
+              COALESCE(SUM(CASE WHEN COALESCE(ch->>'status','approved') = 'rejected' THEN 1 ELSE 0 END), 0)::int AS rejected,
+              COALESCE(COUNT(*), 0)::int AS total
+            FROM plately_users u
+            CROSS JOIN LATERAL jsonb_array_elements(COALESCE(u.app_state->'customChannels','[]'::jsonb)) ch
+            `
+          );
+
+          const topUsersByRecipesRes = await pool.query(
+            `
+            SELECT
+              id,
+              email,
+              COALESCE(jsonb_array_length(app_state->'importedRecipes'), 0)::int AS recipes
+            FROM plately_users
+            ORDER BY recipes DESC, updated_at DESC
+            LIMIT 10
+            `
+          );
+
+          const topUsersByCookbooksRes = await pool.query(
+            `
+            SELECT
+              id,
+              email,
+              COALESCE(jsonb_array_length(app_state->'cookbooks'), 0)::int AS cookbooks
+            FROM plately_users
+            ORDER BY cookbooks DESC, updated_at DESC
+            LIMIT 10
+            `
+          );
+
+          const topChannelsByImportsRes = await pool.query(
+            `
+            SELECT
+              COALESCE(meta->>'channelId','') AS channel_id,
+              COUNT(*)::int AS count
+            FROM plately_events
+            WHERE type = 'import'
+              AND created_at >= NOW() - INTERVAL '30 days'
+              AND COALESCE(meta->>'channelId','') <> ''
+            GROUP BY 1
+            ORDER BY 2 DESC
+            LIMIT 10
+            `
+          );
+
+          const totals = totalsRes.rows[0] || {};
+          const active = activeRes.rows[0] || {};
+          const channels = customBreakdownRes.rows[0] || { total: 0, approved: 0, pending: 0, rejected: 0 };
+
+          const activeUsers7d = active.active_users_7d || 0;
+          const avgRecipesPerActiveUser7d = activeUsers7d ? (active.active_recipes_7d || 0) / activeUsers7d : 0;
+          const avgCookbooksPerActiveUser7d = activeUsers7d ? (active.active_cookbooks_7d || 0) / activeUsers7d : 0;
+
+          return sendJson(response, 200, {
+            ok: true,
+            overview: {
+              generatedAt: nowIso,
+              totals: {
+                users: totals.total_users || 0,
+                recipes: totals.total_recipes || 0,
+                cookbooks: totals.total_cookbooks || 0,
+                customChannels: channels,
+              },
+              active7d: {
+                users: activeUsers7d,
+                avgRecipesPerActiveUser: avgRecipesPerActiveUser7d,
+                avgCookbooksPerActiveUser: avgCookbooksPerActiveUser7d,
+              },
+              top: {
+                usersByRecipes: topUsersByRecipesRes.rows.map((r) => ({
+                  id: r.id,
+                  email: r.email,
+                  recipes: r.recipes || 0,
+                })),
+                usersByCookbooks: topUsersByCookbooksRes.rows.map((r) => ({
+                  id: r.id,
+                  email: r.email,
+                  cookbooks: r.cookbooks || 0,
+                })),
+                channelsByImports30d: topChannelsByImportsRes.rows.map((r) => ({
+                  channelId: r.channel_id,
+                  count: r.count || 0,
+                })),
+              },
+            },
+          });
+        }
+
+        // JSON-file mode (dev/local without Postgres)
+        const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+        const parsed = JSON.parse(rawFile);
+        const users = Object.values(parsed.users || {});
+
+        const totals = users.reduce(
+          (acc, u) => {
+            acc.users += 1;
+            acc.recipes += (u.importedRecipes || []).length;
+            acc.cookbooks += (u.cookbooks || []).length;
+            const list = Array.isArray(u.customChannels) ? u.customChannels : [];
+            for (const ch of list) {
+              const status = (ch?.status || "approved");
+              acc.customChannels.total += 1;
+              if (status === "pending") acc.customChannels.pending += 1;
+              else if (status === "rejected") acc.customChannels.rejected += 1;
+              else acc.customChannels.approved += 1;
+            }
+            return acc;
+          },
+          { users: 0, recipes: 0, cookbooks: 0, customChannels: { total: 0, approved: 0, pending: 0, rejected: 0 } }
+        );
+
+        const activeUsers = users.filter((u) => {
+          const updated = new Date(u.updatedAt || "").getTime();
+          return Number.isFinite(updated) && (Date.now() - updated) < 604800000;
+        });
+
+        const activeTotals = activeUsers.reduce(
+          (acc, u) => {
+            acc.recipes += (u.importedRecipes || []).length;
+            acc.cookbooks += (u.cookbooks || []).length;
+            return acc;
+          },
+          { recipes: 0, cookbooks: 0 }
+        );
+
+        const topUsersByRecipes = users
+          .map((u) => ({ id: u.id, email: u.email || "Guest", recipes: (u.importedRecipes || []).length, updatedAt: u.updatedAt || "" }))
+          .sort((a, b) => (b.recipes - a.recipes) || String(b.updatedAt).localeCompare(String(a.updatedAt)))
+          .slice(0, 10);
+
+        const topUsersByCookbooks = users
+          .map((u) => ({ id: u.id, email: u.email || "Guest", cookbooks: (u.cookbooks || []).length, updatedAt: u.updatedAt || "" }))
+          .sort((a, b) => (b.cookbooks - a.cookbooks) || String(b.updatedAt).localeCompare(String(a.updatedAt)))
+          .slice(0, 10);
+
+        // No reliable events table in JSON mode; expose an empty list
+        const activeUsers7d = activeUsers.length;
+        const avgRecipesPerActiveUser7d = activeUsers7d ? activeTotals.recipes / activeUsers7d : 0;
+        const avgCookbooksPerActiveUser7d = activeUsers7d ? activeTotals.cookbooks / activeUsers7d : 0;
+
+        return sendJson(response, 200, {
+          ok: true,
+          overview: {
+            generatedAt: nowIso,
+            totals,
+            active7d: {
+              users: activeUsers7d,
+              avgRecipesPerActiveUser: avgRecipesPerActiveUser7d,
+              avgCookbooksPerActiveUser: avgCookbooksPerActiveUser7d,
+            },
+            top: {
+              usersByRecipes: topUsersByRecipes,
+              usersByCookbooks: topUsersByCookbooks,
+              channelsByImports30d: [],
+            },
+          },
+        });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/overview:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/analytics" && request.method === "GET") {
       console.log("📈 /api/admin/analytics called");
       try {

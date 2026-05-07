@@ -286,6 +286,11 @@
       border: 1px solid #fcc;
     }
 
+    .muted {
+      color: #666;
+      font-size: 13px;
+    }
+
     @media (max-width: 768px) {
       .header-actions {
         flex-direction: column;
@@ -314,6 +319,7 @@
         <p class="subtitle">Gebruikers & Activiteit Statistieken</p>
       </div>
       <div class="header-actions">
+        <button class="btn" id="refreshBtn" onclick="refreshAll()" style="background:#eee">🔄 Refresh</button>
         <button class="btn btn-primary" id="exportBtn" onclick="exportToCSV()">📥 Export CSV</button>
       </div>
     </header>
@@ -353,6 +359,62 @@
         <div class="stat-card">
           <div class="stat-value" id="pendingCustomChannels">-</div>
           <div class="stat-label">In behandeling</div>
+        </div>
+      </div>
+
+      <div class="section" id="overviewSection">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <h2 style="margin:0">🧾 Overzicht</h2>
+          <div class="muted" id="overviewMeta">—</div>
+        </div>
+
+        <div id="overviewError" class="error" style="display:none;margin-top:12px"></div>
+        <div id="overviewLoading" class="loading" style="display:none;padding:18px 0">⏳ Overzicht laden...</div>
+
+        <div id="overviewContent" style="display:none;margin-top:14px">
+          <div class="stats-grid" style="margin-bottom:16px">
+            <div class="stat-card">
+              <div class="stat-value" id="overviewTotalRecipes">-</div>
+              <div class="stat-label">Recepten (totaal)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="overviewTotalCookbooks">-</div>
+              <div class="stat-label">Kookboeken (totaal)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="overviewTotalChannels">-</div>
+              <div class="stat-label">Custom kanalen (totaal)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="overviewChannelsBreakdown">-</div>
+              <div class="stat-label">Approved / Pending / Rejected</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="overviewActiveUsers7d">-</div>
+              <div class="stat-label">Actieve gebruikers (7d)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="overviewAvgPerActive7d">-</div>
+              <div class="stat-label">Gemiddeld per actief (7d)</div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+            <div>
+              <h3 style="font-size:14px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Top 10 users — recepten</h3>
+              <div id="topUsersByRecipes"></div>
+            </div>
+            <div>
+              <h3 style="font-size:14px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Top 10 users — kookboeken</h3>
+              <div id="topUsersByCookbooks"></div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px">
+            <h3 style="font-size:14px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Top 10 kanalen — imports (30d)</h3>
+            <div id="topChannelsByImports30d"></div>
+            <p class="muted" id="topChannelsNote" style="margin-top:8px"></p>
+          </div>
         </div>
       </div>
 
@@ -436,6 +498,23 @@
     let sortOrder = 'desc';
     let selectedUserIds = new Set();
 
+    function setText(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    }
+
+    function formatNumber(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return String(value ?? "-");
+      return new Intl.NumberFormat('nl-NL').format(n);
+    }
+
+    function formatFloat(value, digits = 2) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return "-";
+      return n.toFixed(digits).replace(".", ",");
+    }
+
     function updateSelectionUi() {
       const count = selectedUserIds.size;
       const countEl = document.getElementById("selectedUsersCount");
@@ -497,6 +576,10 @@
 
     async function loadStats() {
       try {
+        document.getElementById("error").style.display = "none";
+        document.getElementById("content").style.display = "none";
+        document.getElementById("loading").style.display = "block";
+
         const response = await fetch("/api/admin/stats");
         const data = await response.json();
 
@@ -527,6 +610,7 @@
         renderUsers();
         loadPendingChannels();
         loadAnalytics();
+        loadOverview(); // independent block (own loading/error)
 
         document.getElementById("loading").style.display = "none";
         document.getElementById("content").style.display = "block";
@@ -535,6 +619,150 @@
         document.getElementById("error").style.display = "block";
         document.getElementById("error").textContent = "❌ " + error.message;
       }
+    }
+
+    async function loadOverview() {
+      const loadingEl = document.getElementById("overviewLoading");
+      const errorEl = document.getElementById("overviewError");
+      const contentEl = document.getElementById("overviewContent");
+      const metaEl = document.getElementById("overviewMeta");
+      if (!loadingEl || !errorEl || !contentEl) return;
+
+      errorEl.style.display = "none";
+      contentEl.style.display = "none";
+      loadingEl.style.display = "block";
+      if (metaEl) metaEl.textContent = "⏳ Laden...";
+
+      try {
+        const response = await fetch("/api/admin/overview");
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "Failed to load overview");
+        }
+
+        const overview = data.overview || {};
+        const totals = overview.totals || {};
+        const active7d = overview.active7d || {};
+        const channels = totals.customChannels || { total: 0, approved: 0, pending: 0, rejected: 0 };
+
+        setText("overviewTotalRecipes", formatNumber(totals.recipes ?? 0));
+        setText("overviewTotalCookbooks", formatNumber(totals.cookbooks ?? 0));
+        setText("overviewTotalChannels", formatNumber(channels.total ?? totals.customChannels?.total ?? 0));
+        setText(
+          "overviewChannelsBreakdown",
+          `${formatNumber(channels.approved ?? 0)} / ${formatNumber(channels.pending ?? 0)} / ${formatNumber(channels.rejected ?? 0)}`
+        );
+
+        setText("overviewActiveUsers7d", formatNumber(active7d.users ?? 0));
+        setText(
+          "overviewAvgPerActive7d",
+          `${formatFloat(active7d.avgRecipesPerActiveUser ?? 0)} recepten · ${formatFloat(active7d.avgCookbooksPerActiveUser ?? 0)} kookboeken`
+        );
+
+        const top = overview.top || {};
+        renderTopUsersTable("topUsersByRecipes", (top.usersByRecipes || []).map((r) => ({
+          label: r.email || r.id,
+          value: r.recipes ?? 0,
+          valueLabel: "recepten",
+        })));
+        renderTopUsersTable("topUsersByCookbooks", (top.usersByCookbooks || []).map((r) => ({
+          label: r.email || r.id,
+          value: r.cookbooks ?? 0,
+          valueLabel: "kookboeken",
+        })));
+
+        renderTopChannelsTable("topChannelsByImports30d", top.channelsByImports30d || []);
+
+        const hasChannels = Array.isArray(top.channelsByImports30d) && top.channelsByImports30d.length > 0;
+        const noteEl = document.getElementById("topChannelsNote");
+        if (noteEl) {
+          noteEl.textContent = hasChannels
+            ? "Gebaseerd op import-events in PostgreSQL (laatste 30 dagen)."
+            : "Geen kanaaldata beschikbaar (bijv. JSON-mode of nog geen imports).";
+        }
+
+        if (metaEl) {
+          const ts = overview.generatedAt ? new Date(overview.generatedAt) : null;
+          metaEl.textContent = ts && Number.isFinite(ts.getTime())
+            ? `Laatst bijgewerkt: ${formatDate(ts)}`
+            : "Overzicht bijgewerkt";
+        }
+
+        loadingEl.style.display = "none";
+        contentEl.style.display = "block";
+      } catch (error) {
+        loadingEl.style.display = "none";
+        errorEl.style.display = "block";
+        errorEl.textContent = "❌ " + error.message;
+        if (metaEl) metaEl.textContent = "Kon niet laden";
+      }
+    }
+
+    function renderTopUsersTable(containerId, rows) {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      if (!rows.length) {
+        el.innerHTML = `<p class="muted">Nog geen data</p>`;
+        return;
+      }
+
+      const html = `
+        <table class="users-table" style="margin-top:0">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>User</th>
+              <th style="text-align:right">Aantal</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((r, idx) => `
+              <tr>
+                <td class="timestamp">${idx + 1}</td>
+                <td>${escapeHtml(r.label || "")}</td>
+                <td style="text-align:right"><strong>${formatNumber(r.value || 0)}</strong> <span class="muted">${escapeHtml(r.valueLabel || "")}</span></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+      el.innerHTML = html;
+    }
+
+    function renderTopChannelsTable(containerId, rows) {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      const list = Array.isArray(rows) ? rows : [];
+      if (!list.length) {
+        el.innerHTML = `<p class="muted">Nog geen data</p>`;
+        return;
+      }
+
+      const html = `
+        <table class="users-table" style="margin-top:0">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Kanaal ID</th>
+              <th style="text-align:right">Imports</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.map((r, idx) => `
+              <tr>
+                <td class="timestamp">${idx + 1}</td>
+                <td style="font-family:monospace;font-size:12px;color:#666">${escapeHtml(r.channelId || "")}</td>
+                <td style="text-align:right"><strong>${formatNumber(r.count || 0)}</strong></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+      el.innerHTML = html;
+    }
+
+    async function refreshAll() {
+      await loadStats();
     }
 
     async function loadAnalytics() {
@@ -933,7 +1161,7 @@
       return String(text).replace(/[&<>"']/g, m => map[m]);
     }
 
-    loadStats();
+    refreshAll();
   </script>
 </body>
 </html>
