@@ -417,6 +417,9 @@ const state = {
   selectedPlatform: "tiktok",
   view: "home",
   recipes: [],
+  // Imported-but-not-yet-saved recipes live here as previews/drafts.
+  // They are NOT shown on home and are NOT persisted.
+  importPreviews: {},
   selectedRecipeId: "",
   featuredRecipeId: "",
   reviewRecipeId: "",
@@ -718,7 +721,7 @@ const cookbookNameInput = document.getElementById("cookbookNameInput");
 const cookbookOptionsSheet = document.getElementById("cookbookOptionsSheet");
 
 function getSelectedRecipe() {
-  return state.recipes.find((recipe) => recipe.id === state.selectedRecipeId) || state.recipes[0];
+  return getRecipeById(state.selectedRecipeId) || state.recipes[0] || null;
 }
 
 function getFeaturedRecipe() {
@@ -756,7 +759,12 @@ function getHomeFeaturedRecipe() {
 }
 
 function getRecipeById(recipeId) {
-  return state.recipes.find((recipe) => recipe.id === recipeId) || null;
+  const id = String(recipeId || "").trim();
+  if (!id) return null;
+  const real = state.recipes.find((recipe) => recipe.id === id) || null;
+  if (real) return real;
+  const preview = state.importPreviews ? state.importPreviews[id] : null;
+  return preview || null;
 }
 
 function getCookbookById(cookbookId) {
@@ -4020,6 +4028,14 @@ function renderMealPlanGrid() {
 }
 
 function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId) {
+  // If the recipe is still a preview (not yet in the real collection),
+  // promote it to a real recipe now that the user is saving it.
+  const id = String(recipeId || "").trim();
+  if (id && !state.recipes.some((r) => r.id === id) && state.importPreviews && state.importPreviews[id]) {
+    state.recipes = [state.importPreviews[id], ...state.recipes];
+    delete state.importPreviews[id];
+  }
+
   const cookbook = getCookbookById(cookbookId);
   if (!cookbook) {
     return;
@@ -5328,16 +5344,15 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
     const data = await handleImport(url, note);
     const importedRecipe = normalizeImportedRecipe(data.recipe);
 
-    state.recipes = [importedRecipe, ...state.recipes];
+    // Keep as preview until user actually saves it to a cookbook
+    state.importPreviews[importedRecipe.id] = importedRecipe;
     state.selectedRecipeId = importedRecipe.id;
-    state.featuredRecipeId = importedRecipe.id;
+    state.reviewRecipeId = importedRecipe.id;
     state.currentServings = parseBaseServings(importedRecipe.servings);
 
-    renderHomeStats();
-    renderRecentImports();
-    renderRecipeGrid();
-    renderDetailRecipe(true);
-    schedulePersistAppState();
+    // Go to review so user can confirm before saving
+    renderImportReview();
+    switchView("review");
 
     onDone(importedRecipe);
   } catch (error) {
@@ -6118,10 +6133,9 @@ bindEvent(channelSearchResults, "click", async (event) => {
     const data = await resp.json();
     if (!resp.ok || !data.recipe) throw new Error(data.error || "Importeren mislukt");
     const recipe = normalizeImportedRecipe({ ...data.recipe, needsReview: true });
-    state.recipes = [recipe, ...state.recipes];
-    renderRecipeGrid();
-    renderRecentImports();
-
+    // Keep as preview until user actually saves it to a cookbook
+    state.importPreviews[recipe.id] = recipe;
+    state.selectedRecipeId = recipe.id;
     // Open review screen so user can confirm details before saving
     openImportReview(recipe.id);
     // Clear search
@@ -7422,10 +7436,9 @@ bindEvent(document.getElementById("importChannelSearchResults"), "click", async 
     const data = await resp.json();
     if (!resp.ok || !data.recipe) throw new Error(data.error || "Importeren mislukt");
     const recipe = normalizeImportedRecipe({ ...data.recipe, needsReview: true });
-    state.recipes = [recipe, ...state.recipes];
-    renderRecipeGrid();
-    renderRecentImports();
-    renderHomeCookbooks();
+    // Keep as preview until user actually saves it to a cookbook
+    state.importPreviews[recipe.id] = recipe;
+    state.selectedRecipeId = recipe.id;
     // Clear search and go to review
     if (importSearchInput) importSearchInput.value = "";
     const section = document.getElementById("importChannelSearchSection");
