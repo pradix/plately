@@ -4075,7 +4075,6 @@ function renderCookbookDetail(cookbookId) {
       <div class="cb-detail__header">
         <div class="cb-detail__title-row">
           <h2 class="cb-detail__name">${escapeHtml(cookbook.name)}</h2>
-          <span class="cb-detail__count">${recipes.length} recept${recipes.length === 1 ? "" : "en"}</span>
         </div>
         <div class="cb-detail__actions">
           <button class="cb-detail__action-btn" type="button" data-cb-select-mode="true">
@@ -4129,6 +4128,17 @@ function renderCookbookDetail(cookbookId) {
   `;
   cookbookList.innerHTML = _detailHtml;
   if (_cbScreenGrid) _cbScreenGrid.innerHTML = _detailHtml;
+
+  // Defensive: ensure clicks inside detail view are handled even if outer
+  // container bindings differ across screens/devices.
+  const roots = [cookbookList, _cbScreenGrid].filter(Boolean);
+  roots.forEach((root) => {
+    const detail = root.querySelector?.(".cb-detail");
+    if (!(detail instanceof HTMLElement)) return;
+    if (detail.dataset.cbWired === "true") return;
+    detail.dataset.cbWired = "true";
+    detail.addEventListener("click", handleCookbookGridClick);
+  });
 }
 
 function renderCookbookList() {

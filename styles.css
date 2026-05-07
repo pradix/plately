@@ -1561,6 +1561,7 @@ img { display: block; max-width: 100%; }
   gap: 14px;
   align-items: stretch;
   padding-inline: 16px;
+  grid-auto-rows: 1fr;
 }
 
 .cb-detail__item {
@@ -1608,13 +1609,15 @@ img { display: block; max-width: 100%; }
 }
 
 .cb-detail__card {
-  display: block;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
   text-align: left;
+  height: 100%;
 }
 .cb-detail__card:active { transform: scale(0.98); }
 
@@ -1633,6 +1636,7 @@ img { display: block; max-width: 100%; }
   gap: 6px;
   min-width: 0;
   padding: 16px 18px 18px;
+  flex: 1;
 }
 .cb-detail__card-title {
   font-size: 1.15rem;
