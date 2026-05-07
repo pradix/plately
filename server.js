@@ -6692,6 +6692,134 @@ async function searchAHRecipes(query, count = 4) {
   return [];
 }
 
+async function searchJumboRecipes(query, count = 4) {
+  const channelName = "Jumbo";
+  const channelId = "ch-jumbo";
+  const q = encodeURIComponent(query || "");
+  const searchUrl = `https://www.jumbo.com/recepten/zoeken?searchTerms=${q}`;
+
+  async function fetchJumboPage(url, timeoutMs = 12000) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          ...FETCH_HEADERS,
+          accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "accept-language": "nl-NL,nl;q=0.9,en;q=0.8",
+          referer: "https://www.jumbo.com/recepten/",
+          "cache-control": "no-cache",
+          pragma: "no-cache",
+        },
+        redirect: "follow",
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) return "";
+      return await response.text();
+    } catch {
+      return "";
+    }
+  }
+
+  function absUrl(href) {
+    const raw = sanitizeText(href || "");
+    if (!raw) return "";
+    try {
+      return new URL(raw, "https://www.jumbo.com").toString();
+    } catch {
+      return "";
+    }
+  }
+
+  function extractMetaContent(html, attr, value) {
+    try {
+      const escaped = String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const tag = html.match(new RegExp(`<meta[^>]+${attr}=["']${escaped}["'][^>]*>`, "i"))?.[0] || "";
+      return tag.match(/content=["']([^"']+)["']/i)?.[1] || "";
+    } catch {
+      return "";
+    }
+  }
+
+  async function fetchRecipeDetails(url) {
+    const recipeHtml = await fetchJumboPage(url, 12000);
+    if (!recipeHtml || recipeHtml.length < 200) return null;
+
+    const rawTitle =
+      extractMetaContent(recipeHtml, "property", "og:title") ||
+      extractMetaContent(recipeHtml, "name", "og:title") ||
+      recipeHtml.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] ||
+      "";
+    const title = sanitizeText(decodeHtmlEntities(stripHtmlTags(rawTitle)));
+    if (!title) return null;
+
+    const rawImg =
+      extractMetaContent(recipeHtml, "property", "og:image") ||
+      extractMetaContent(recipeHtml, "name", "og:image") ||
+      extractMetaContent(recipeHtml, "name", "twitter:image") ||
+      "";
+    const thumbnail = absUrl(rawImg);
+
+    const rawDesc =
+      extractMetaContent(recipeHtml, "property", "og:description") ||
+      extractMetaContent(recipeHtml, "name", "og:description") ||
+      extractMetaContent(recipeHtml, "name", "description") ||
+      "";
+    const description = sanitizeText(decodeHtmlEntities(stripHtmlTags(rawDesc))).slice(0, 160);
+
+    // Try JSON-LD to get time if present
+    let time = "";
+    const ldBlocks = [...recipeHtml.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+    for (const m of ldBlocks) {
+      const payload = safelyParseJson((m[1] || "").trim());
+      const items = Array.isArray(payload) ? payload : [payload];
+      for (const item of items) {
+        const type = item?.["@type"];
+        const isRecipe = (Array.isArray(type) ? type : [type]).filter(Boolean).some((t) => String(t).toLowerCase() === "recipe");
+        if (!isRecipe) continue;
+        time = parseDurationToMinutes(item?.totalTime || item?.cookTime || item?.prepTime) || "";
+        break;
+      }
+      if (time) break;
+    }
+
+    return { title, url, thumbnail, channel: channelName, channelId, description, time };
+  }
+
+  try {
+    const html = await fetchJumboPage(searchUrl, 15000);
+    if (!html || html.length < 500) return [];
+
+    const urlCandidates = [];
+    const seen = new Set();
+    const urlRe = /\/recepten\/[a-z0-9][a-z0-9\-_%]*-\d+(?:-\d+)?/gi;
+    for (const m of html.matchAll(urlRe)) {
+      const url = absUrl(m[0]);
+      if (!url || seen.has(url)) continue;
+      if (/\/recepten\/(?:zoeken|search)(?:\/|$)/i.test(url)) continue;
+      seen.add(url);
+      urlCandidates.push(url);
+      if (urlCandidates.length >= Math.max(10, count * 4)) break;
+    }
+
+    const settled = await Promise.allSettled(urlCandidates.slice(0, Math.max(6, count * 2)).map(fetchRecipeDetails));
+    const raw = settled
+      .filter((r) => r.status === "fulfilled" && r.value)
+      .map((r) => r.value);
+
+    const filtered = raw
+      .filter((r) => r && r.title && r.url)
+      .filter((r) => urlLooksLikeRecipe(r.url))
+      .filter((r) => titleLooksLikeRecipe(r.title))
+      .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
+      .filter((r) => titleMatchesQuery(r.title, query || ""))
+      .sort((a, b) => titleQueryScore(b.title, query || "") - titleQueryScore(a.title, query || ""))
+      .slice(0, count);
+
+    return filtered;
+  } catch {
+    return [];
+  }
+}
+
 async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, parser, count, query) {
   try {
     const html = await fetchHtml(searchUrl);
@@ -6753,6 +6881,7 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   const searches = [
     // FAST: Reliable, quick-responding channels
     maybeSearch("ch-ah", () => searchAHRecipes(query, 4)),
+    maybeSearch("ch-jumbo", () => searchJumboRecipes(query, 4)),
     maybeSearch("ch-les", () => scrapeOrRest("https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les",
       `https://www.lekkerensimpel.com/?s=${q}&maaltijd=all&gerecht=all`,
       parseLekkerSimpel, 4)),

@@ -527,6 +527,7 @@ const SEED_CHANNELS = [
   { id: "ch-clf", initials: "CLF", name: "Chicks Love Food",     color: "#e04458", url: "https://www.chickslovefood.com" },
   { id: "ch-les", initials: "LS",  name: "Lekker & Simpel",      color: "#4d9e5a", url: "https://www.lekkerensimpel.com" },
   { id: "ch-lb",  initials: "LB",  name: "Laura's Bakery",       color: "#e879a0", url: "https://www.laurasbakery.nl" },
+  { id: "ch-jumbo", initials: "JU", name: "Jumbo",               color: "#fdc500", url: "https://www.jumbo.com/recepten/" },
 ];
 
 const CUSTOM_CHANNEL_COLORS = [
