@@ -3857,7 +3857,14 @@ function buildSocialRecipe({ platform, sourceUrl, rawTitle, rawCaption, image, a
     time: estimateTime(cleanCaption),
     servings: "2",
     needsReview: ingredients.length === 0 || instructions.length === 0,
-    sourceLabel: `Imported from ${platform === "tiktok" ? "TikTok" : "Instagram"}`,
+    sourceLabel:
+      platform === "tiktok"
+        ? "Imported from TikTok"
+        : platform === "instagram"
+          ? "Imported from Instagram"
+          : platform === "facebook"
+            ? "Imported from Facebook"
+            : `Imported from ${platform}`,
   };
 }
 
@@ -4169,6 +4176,29 @@ async function importFacebook(sourceUrl, note) {
   const twitterDesc = html ? parseMetaTag(html, "twitter:description", "name") : "";
   const ogImage = html ? parseMetaTag(html, "og:image") : "";
 
+  const cleanTextFallback = textFallback ? stripSocialNoise(textFallback).slice(0, 8000) : "";
+  const textDerivedTitle = cleanTextFallback
+    ? extractDishPhrase(cleanTextFallback) || extractRecipeTitleFromCaption(cleanTextFallback)
+    : "";
+
+  // Build a smaller, recipe-like snippet (<= 2400 chars) so it passes caption scoring
+  // and can be used by buildSocialRecipe even when Claude is disabled.
+  const textDerivedCaption = (() => {
+    if (!cleanTextFallback) return "";
+    let snippet = cleanTextFallback;
+    // Prefer a window around ingredients/instructions headings when present
+    const idx = snippet.search(/\b(ingrediënten|ingredients|bereiding|instructions?|method|stappen|steps)\b/i);
+    if (idx >= 0) {
+      snippet = snippet.slice(Math.max(0, idx - 350), idx + 2200);
+    } else {
+      // Otherwise take the first chunk (often contains the post text)
+      snippet = snippet.slice(0, 2400);
+    }
+    // Normalize to line-based chunk to help downstream parsers
+    snippet = snippet.split(/\n+/).slice(0, 90).join("\n");
+    return snippet.slice(0, 2400).trim();
+  })();
+
   // Facebook often puts the full post text in og:description or twitter:description
   const bestCaption = [ogDescription, twitterDesc, textFallback]
     .filter((s) => s && isUsefulCaptionCandidate(s))
@@ -4208,12 +4238,12 @@ async function importFacebook(sourceUrl, note) {
   return buildSocialRecipe({
     platform: "facebook",
     sourceUrl,
-    rawTitle: ogTitle || "",
-    rawCaption: bestCaption || ogTitle || "",
+    rawTitle: ogTitle || textDerivedTitle || "",
+    rawCaption: bestCaption || textDerivedCaption || ogTitle || textDerivedTitle || "",
     image: ogImage || "",
     author: "",
-    titleCandidates: [ogTitle],
-    captionCandidates: [bestCaption, twitterDesc],
+    titleCandidates: [ogTitle, textDerivedTitle],
+    captionCandidates: [bestCaption, twitterDesc, textDerivedCaption],
   });
 }
 
