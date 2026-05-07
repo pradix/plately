@@ -1354,10 +1354,49 @@ function getBasketEmoji(name) {
   return "🛒";
 }
 
+function normalizeChoiceLabelText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function detectChoiceLabelsFromText(value) {
+  const text = normalizeChoiceLabelText(value);
+  if (!text) return [];
+  const out = new Set();
+
+  if (/\bbeter leven\b/.test(text) && /(\b1\b|\b1\s*ster\b|\b1\s*\*\b)/.test(text)) out.add("beter leven 1 ster");
+  if (/\bvegetari\w*\b|\bvega\b/.test(text)) out.add("vegetarisch");
+  if (/\bvegan\b/.test(text)) out.add("vegan");
+  if (/\bplantaardig\b|\bplant based\b|\bplantbased\b/.test(text)) out.add("plantaardig");
+
+  // Inherit hierarchy for better UX downstream.
+  if (out.has("vegan")) {
+    out.add("vegetarisch");
+    out.add("plantaardig");
+  }
+
+  return [...out];
+}
+
 function createStoreChoice(store, choice) {
+  const inferred = detectChoiceLabelsFromText(
+    [choice.title, choice.subtitle, choice.badge, choice.searchTerm].filter(Boolean).join(" ")
+  );
+  const combinedLabels = [
+    ...(Array.isArray(choice.labels) ? choice.labels : []),
+    ...inferred,
+  ]
+    .map((l) => sanitizeText(l))
+    .filter(Boolean);
+  const labels = [...new Set(combinedLabels)];
+
   const normalizedChoice = {
     ...choice,
     url: choice.url || buildStoreChoiceUrl(store, choice),
+    labels,
   };
   return {
     id: `${store}-${normalizedChoice.searchTerm.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-")}`,
@@ -1370,6 +1409,7 @@ function createStoreChoice(store, choice) {
     url: normalizedChoice.url,
     productId: normalizedChoice.productId || "",
     imageUrl: normalizedChoice.imageUrl || "",
+    labels: normalizedChoice.labels || [],
   };
 }
 
@@ -1568,6 +1608,7 @@ function buildMatchedChoiceFromProduct(store, item, product, badge = "Gevonden")
     searchTerm: ingredientTitle,
     productId,
     imageUrl: sanitizeText(product.imageUrl || ""),
+    labels: Array.isArray(product.labels) ? product.labels : [],
   };
 
   choice.url = buildStoreChoiceUrl(store, choice);
@@ -4926,12 +4967,46 @@ function parseAHProduct(product) {
   // Prefer the 200×200 rendition for thumbnails — index 2 in the standard AH image array
   const images = product.images || [];
   const imageUrl = images.find((i) => i.width === 200)?.url || images[0]?.url || "";
+  const labels = [];
+
+  // Best-effort extraction of metadata from AH product payload (field names vary).
+  const collect = (val) => {
+    if (!val) return;
+    if (Array.isArray(val)) {
+      val.forEach(collect);
+      return;
+    }
+    if (typeof val === "string") {
+      labels.push(val);
+      return;
+    }
+    if (typeof val === "object") {
+      const candidate =
+        val.name ||
+        val.label ||
+        val.title ||
+        val.description ||
+        val.value ||
+        "";
+      if (candidate) labels.push(String(candidate));
+    }
+  };
+
+  collect(product.dietaryInformation);
+  collect(product.characteristics);
+  collect(product.qualityMarks);
+  collect(product.sustainability);
+  collect(product.labels);
+
+  const canonical = detectChoiceLabelsFromText(labels.join(" "));
+
   return {
     id: numericId,
     name: sanitizeText(product.title),
     price: priceEuros ? `€${Number(priceEuros).toFixed(2).replace(".", ",")}` : "",
     url: numericId ? `https://www.ah.nl/producten/product/wi${numericId}` : "",
     imageUrl,
+    labels: [...new Set([...labels.map((l) => sanitizeText(l)).filter(Boolean), ...canonical])],
   };
 }
 

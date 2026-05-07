@@ -483,7 +483,8 @@ const state = {
   basketPreview: null,
   basketServings: 2, // current persons
   basketBaseServings: 2, // base when basket was opened
-  basketFilter: { bio: false },
+  basketFilter: { bio: false, beterLeven1: false, vegetarisch: false, vegan: false, plantaardig: false },
+  basketSearchQuery: "",
   cookbooks: [],
   selectedCookbookId: "",
   pendingCookbookSaveRecipeId: "",
@@ -1456,6 +1457,84 @@ function getBasketHandoffUrl(preview) {
   );
 }
 
+function normalizeBasketToken(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractBasketLabelsFromChoice(choice, item) {
+  const raw = [
+    choice?.title,
+    choice?.subtitle,
+    Array.isArray(choice?.labels) ? choice.labels.join(" ") : "",
+    choice?.badge,
+    choice?.searchTerm,
+    item?.ingredientTitle,
+    item?.ingredientAmount,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const text = normalizeBasketToken(raw);
+  const flags = {
+    beterLeven1: false,
+    vegetarisch: false,
+    vegan: false,
+    plantaardig: false,
+  };
+
+  // Best-effort heuristics (conservative). Prefer explicit label strings if present.
+  if (/\bbeter leven\b/.test(text) && /(\b1\b|\b1\s*ster\b|\b1\s*\*\b)/.test(text)) flags.beterLeven1 = true;
+  if (/\bvegetari\w*\b|\bvega\b/.test(text)) flags.vegetarisch = true;
+  if (/\bvegan\b/.test(text)) flags.vegan = true;
+  if (/\bplantaardig\b|\bplant based\b|\bplantbased\b/.test(text)) flags.plantaardig = true;
+
+  // Extra conservative hints for common plant-based staples (does not imply vegan).
+  if (/\b(tofu|tempeh|seitan|kikkererwten|kikkererwt|linzen|soja|sojabonen)\b/.test(text)) {
+    flags.plantaardig = true;
+    flags.vegetarisch = true;
+  }
+
+  // Inherit hierarchy: vegan ⊂ vegetarian, vegan ⊂ plant-based (practical UX)
+  if (flags.vegan) {
+    flags.vegetarisch = true;
+    flags.plantaardig = true;
+  }
+
+  return flags;
+}
+
+function choiceMatchesBasketFilters(choice, filter, item) {
+  const labels = extractBasketLabelsFromChoice(choice, item);
+  if (filter?.beterLeven1 && !labels.beterLeven1) return false;
+  if (filter?.vegetarisch && !labels.vegetarisch) return false;
+  if (filter?.vegan && !labels.vegan) return false;
+  if (filter?.plantaardig && !labels.plantaardig) return false;
+  return true;
+}
+
+function choiceMatchesBasketSearch(choice, item, q) {
+  const query = normalizeBasketToken(q);
+  if (!query) return true;
+  const haystack = normalizeBasketToken(
+    [
+      choice?.title,
+      choice?.subtitle,
+      choice?.badge,
+      Array.isArray(choice?.labels) ? choice.labels.join(" ") : "",
+      choice?.searchTerm,
+      item?.ingredientTitle,
+      item?.ingredientAmount,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+  return haystack.includes(query);
+}
+
 function renderBasketPreview() {
   const preview = state.basketPreview;
   const nameEl = document.getElementById("basketRecipeName");
@@ -1475,14 +1554,36 @@ function renderBasketPreview() {
 
   // Update filter chip active state
   document.getElementById("basketFilterBio")?.classList.toggle("is-active", state.basketFilter.bio);
+  document.getElementById("basketFilterBeterLeven1")?.classList.toggle("is-active", state.basketFilter.beterLeven1);
+  document.getElementById("basketFilterVegetarisch")?.classList.toggle("is-active", state.basketFilter.vegetarisch);
+  document.getElementById("basketFilterVegan")?.classList.toggle("is-active", state.basketFilter.vegan);
+  document.getElementById("basketFilterPlantaardig")?.classList.toggle("is-active", state.basketFilter.plantaardig);
 
   let totalCents = 0;
   const servScale = state.basketBaseServings > 0
     ? state.basketServings / state.basketBaseServings
     : 1;
 
-  listEl.innerHTML = preview.items.map((item, itemIndex) => {
-    const choice = item.choices?.[item.selectedChoiceIndex || 0];
+  const q = state.basketSearchQuery || "";
+  const activeFilter = state.basketFilter || {};
+
+  const rendered = preview.items.map((item, itemIndex) => {
+    const choices = Array.isArray(item.choices) ? item.choices : [];
+    if (!choices.length) return "";
+
+    // When filters/search are active: pick the first matching alternative choice.
+    const hasDietFilter =
+      Boolean(activeFilter.beterLeven1 || activeFilter.vegetarisch || activeFilter.vegan || activeFilter.plantaardig);
+    const hasSearch = normalizeBasketToken(q).length > 0;
+
+    let pickedIndex = item.selectedChoiceIndex || 0;
+    if (hasDietFilter || hasSearch) {
+      const matchIdx = choices.findIndex((c) => choiceMatchesBasketFilters(c, activeFilter, item) && choiceMatchesBasketSearch(c, item, q));
+      if (matchIdx === -1) return ""; // hide item if nothing matches
+      pickedIndex = matchIdx;
+    }
+
+    const choice = choices[pickedIndex];
     if (!choice) return "";
 
     const priceNum = parseFloat((choice.price || "0").replace("€", "").replace(",", ".")) || 0;
@@ -1527,6 +1628,8 @@ function renderBasketPreview() {
     `;
   }).join("");
 
+  listEl.innerHTML = rendered || `<p style="text-align:center;padding:26px 18px;color:#888;font-size:0.95rem">Geen producten gevonden voor deze filters/zoekopdracht.</p>`;
+
   // Calculate total
   const totalEur = (totalCents / 100).toFixed(2).replace(".", ",");
   if (totalEl) totalEl.textContent = `€ ${totalEur}`;
@@ -1547,7 +1650,10 @@ function openBasketModal(preview) {
   const base = recipe ? parseBaseServings(recipe.servings) : 2;
   state.basketBaseServings = base;
   state.basketServings = base;
-  state.basketFilter = { bio: false };
+  state.basketFilter = { bio: false, beterLeven1: false, vegetarisch: false, vegan: false, plantaardig: false };
+  state.basketSearchQuery = "";
+  const searchEl = document.getElementById("basketSearchInput");
+  if (searchEl instanceof HTMLInputElement) searchEl.value = "";
   renderBasketPreview();
   const overlay = document.getElementById("basketOverlay");
   if (overlay) {
@@ -7288,8 +7394,33 @@ bindEvent(document.getElementById("basketFilterRow"), "click", (e) => {
   const chip = e.target.closest("[data-filter]");
   if (!chip) return;
   const f = chip.dataset.filter;
-  if (f === "bio") state.basketFilter.bio = !state.basketFilter.bio;
-  refetchBasketWithBio();
+  if (f === "bio") {
+    state.basketFilter.bio = !state.basketFilter.bio;
+    refetchBasketWithBio();
+    return;
+  }
+  if (f === "beterLeven1") state.basketFilter.beterLeven1 = !state.basketFilter.beterLeven1;
+  if (f === "vegetarisch") state.basketFilter.vegetarisch = !state.basketFilter.vegetarisch;
+  if (f === "vegan") state.basketFilter.vegan = !state.basketFilter.vegan;
+  if (f === "plantaardig") state.basketFilter.plantaardig = !state.basketFilter.plantaardig;
+  renderBasketPreview();
+});
+
+// Basket search input
+bindEvent(document.getElementById("basketSearchInput"), "input", (e) => {
+  const target = e.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  const value = target.value || "";
+  state.basketSearchQuery = value;
+
+  // "Ideally also toggle the filters": only auto-enable (never auto-disable).
+  const q = normalizeBasketToken(value);
+  if (/\bbeter leven\b/.test(q) && /(\b1\b|\b1\s*ster\b|\b1\s*\*\b)/.test(q)) state.basketFilter.beterLeven1 = true;
+  if (/\bvegetari\w*\b|\bvega\b/.test(q)) state.basketFilter.vegetarisch = true;
+  if (/\bvegan\b/.test(q)) state.basketFilter.vegan = true;
+  if (/\bplantaardig\b|\bplant based\b|\bplantbased\b/.test(q)) state.basketFilter.plantaardig = true;
+
+  renderBasketPreview();
 });
 
 // Basket overlay close
