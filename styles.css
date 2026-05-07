@@ -309,8 +309,9 @@ img { display: block; max-width: 100%; }
 .import-banner__icon svg {
   width: 34px;
   height: 34px;
-  stroke: #fff;
+  stroke: currentColor;
   stroke-width: 2.2;
+  fill: none;
 }
 
 .import-banner h1 {
@@ -6584,6 +6585,7 @@ body {
   height: 72px;
   border-radius: 999px;
   background: #f7f2ea;
+  color: #78936f;
 }
 
 .import-banner__icon--soft {
