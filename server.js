@@ -4415,34 +4415,82 @@ async function importWebsite(sourceUrl) {
   const isLekkerSimpel = /lekkerensimpel\.com$/i.test(parsedUrl.hostname);
 
   if (isLekkerSimpel) {
-    // Use dedicated Lekker & Simpel parser for better extraction
-    const document = await fetchWebsiteDocument(sourceUrl);
-
-    if (document.kind === "html") {
-      const parsed = parseLekkerSimpel(document.body, "https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les", 1);
-      if (parsed && parsed.length > 0) {
-        const recipeData = parsed[0];
-        // Fetch the full recipe page to get complete ingredients/instructions
-        const fullPageHtml = document.body;
-        const recipe = parseWebsiteRecipe(fullPageHtml, document.finalUrl || sourceUrl);
-
-        return {
-          ...recipe,
-          title: recipeData.title || recipe.title,
-          thumbnail: recipeData.thumbnail || recipe.image,
-          // Keep parsed ingredients if available
-          ingredients: recipe.ingredients.length >= 2 ? recipe.ingredients : [],
-          instructions: recipe.instructions.length >= 1 ? recipe.instructions : [],
-        };
+    const slugToTitle = (url) => {
+      try {
+        const u = new URL(url);
+        const segment = String(u.pathname || "")
+          .replace(/\/+$/, "")
+          .split("/")
+          .pop();
+        const slug = String(segment || "").trim();
+        if (!slug || slug.length < 3) return "";
+        if (!/[a-z]/i.test(slug)) return "";
+        return slug
+          .split("-")
+          .filter((w) => w && !/^\d+$/.test(w))
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(" ")
+          .trim();
+      } catch {
+        return "";
       }
+    };
+
+    const titleRoughlyMatchesSlug = (title, url) => {
+      const candidate = normalizeRecipeTitle(sanitizeText(title || ""));
+      const slugTitle = normalizeRecipeTitle(slugToTitle(url) || "");
+      if (!candidate || !slugTitle) return true;
+
+      const words = (text) =>
+        new Set(
+          String(text)
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/gi, " ")
+            .split(/\s+/)
+            .map((w) => w.trim())
+            .filter((w) => w.length >= 4 && !/^\d+$/.test(w))
+        );
+
+      const slugWords = words(slugTitle);
+      const titleWords = words(candidate);
+      if (slugWords.size < 2 || titleWords.size < 2) return true;
+
+      let overlap = 0;
+      for (const w of slugWords) {
+        if (titleWords.has(w)) overlap += 1;
+      }
+
+      return overlap >= 2 || overlap / Math.max(1, slugWords.size) >= 0.6;
+    };
+
+    const document = await fetchWebsiteDocument(sourceUrl);
+    const finalUrl = document.finalUrl || sourceUrl;
+
+    const primaryRecipe =
+      document.kind === "text"
+        ? parseTextRecipeDocument(document.body, finalUrl)
+        : parseWebsiteRecipe(document.body, finalUrl);
+
+    if (document.kind !== "html") {
+      return primaryRecipe;
     }
 
-    // Fallback to generic parsing
-    const primaryRecipe = document.kind === "text"
-      ? parseTextRecipeDocument(document.body, document.finalUrl || sourceUrl)
-      : parseWebsiteRecipe(document.body, document.finalUrl || sourceUrl);
+    const html = document.body;
+    const cleanHtml = removeAdContainers(html);
+    const jsonLdRecipe = findRecipeJsonLd(cleanHtml);
+    const jsonLdTitle = normalizeRecipeTitle(sanitizeText(jsonLdRecipe?.name || ""));
+    const h1Title = normalizeRecipeTitle(
+      sanitizeText(stripTags((html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || "")))
+    );
+    const ogTitle = normalizeRecipeTitle(parseMetaTag(html, "og:title") || "");
 
-    return primaryRecipe;
+    const picked = jsonLdTitle || h1Title || ogTitle || primaryRecipe.title || "";
+    const safeTitle = titleRoughlyMatchesSlug(picked, finalUrl) ? picked : slugToTitle(finalUrl) || picked;
+
+    return {
+      ...primaryRecipe,
+      title: safeTitle || primaryRecipe.title,
+    };
   }
 
   if (isAllerhande) {

@@ -5626,6 +5626,7 @@ async function renderAdminScreen() {
 function renderAll() {
   renderHomeStats();
   renderRecentImports();
+  renderHomeConcepts();
   renderChannelRow();
   renderHomeCookbooks();
   renderChannelSettings();
@@ -6144,12 +6145,10 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
     importedRecipe._previewCreatedAt = Date.now();
     state.importPreviews[importedRecipe.id] = importedRecipe;
     state.selectedRecipeId = importedRecipe.id;
-    state.reviewRecipeId = importedRecipe.id;
     state.currentServings = parseBaseServings(importedRecipe.servings);
 
-    // Go to review so user can confirm before saving
-    renderImportReview();
-    switchView("review");
+    renderDetailRecipe(true);
+    switchView("detail");
 
     onDone(importedRecipe);
   } catch (error) {
@@ -7011,8 +7010,10 @@ bindEvent(channelSearchResults, "click", async (event) => {
     recipe._previewCreatedAt = Date.now();
     state.importPreviews[recipe.id] = recipe;
     state.selectedRecipeId = recipe.id;
-    // Open review screen so user can confirm details before saving
-    openImportReview(recipe.id);
+    renderDetailRecipe(true);
+    switchView("detail");
+    openRecipeEditPanel(recipe.id);
+    showToast(`${recipe.title} geïmporteerd als concept.`);
     // Clear search and force-close the channel-search panel so it isn't
     // left visible when the user navigates back to home after the import.
     if (searchInput) searchInput.value = "";
