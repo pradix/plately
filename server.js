@@ -1367,6 +1367,7 @@ function detectChoiceLabelsFromText(value) {
   if (!text) return [];
   const out = new Set();
 
+  if (/\b(biologisch|biologische|bio)\b/.test(text)) out.add("biologisch");
   if (/\bbeter leven\b/.test(text) && /(\b1\b|\b1\s*ster\b|\b1\s*\*\b)/.test(text)) out.add("beter leven 1 ster");
   if (/\bvegetari\w*\b|\bvega\b/.test(text)) out.add("vegetarisch");
   if (/\bvegan\b/.test(text)) out.add("vegan");
@@ -5017,13 +5018,14 @@ async function findAHProduct(ingredient) {
 }
 
 // Returns up to `count` product matches from AH for a single ingredient
-async function findAHProducts(ingredient, count = 3) {
-  const searchTerm = normalizeIngredientForSearch(ingredient) || ingredient;
+async function findAHProducts(ingredient, count = 12, queryOverride = null) {
+  const baseTerm = normalizeIngredientForSearch(ingredient) || ingredient;
+  const searchTerm = queryOverride || baseTerm;
   try {
     const token = await fetchAHAnonymousToken();
     const searchUrl =
       `https://api.ah.nl/mobile-services/product/search/v2` +
-      `?query=${encodeURIComponent(searchTerm)}&size=${count * 2}&sortOn=RELEVANCE`;
+      `?query=${encodeURIComponent(searchTerm)}&size=${Math.max(count * 2, 12)}&sortOn=RELEVANCE`;
 
     const response = await fetch(searchUrl, {
       headers: {
@@ -5037,9 +5039,12 @@ async function findAHProducts(ingredient, count = 3) {
     if (!response.ok) return [];
 
     const data = await response.json();
+    // Use the original ingredient term for the relevance filter so label-specific
+    // queries like "biologisch tomaat" still match plain "tomaat" results.
+    const matchTerm = baseTerm;
     const products = (data.products || [])
       .filter((p) => !NON_FOOD_INGREDIENT_PATTERN.test(sanitizeText(p.title)))
-      .filter((p) => ingredientMatchesProduct(searchTerm, sanitizeText(p.title)))
+      .filter((p) => ingredientMatchesProduct(matchTerm, sanitizeText(p.title)))
       .sort((a, b) => {
         const pa = a.currentPrice ?? a.priceBeforeBonus ?? 9999;
         const pb = b.currentPrice ?? b.priceBeforeBonus ?? 9999;
@@ -5051,6 +5056,68 @@ async function findAHProducts(ingredient, count = 3) {
   } catch {
     return [];
   }
+}
+
+// Searches the AH catalog for a single ingredient using multiple label-specific
+// query variants in parallel so the basket alternatives screen can group by
+// dietary preference. Returns a deduplicated, price-sorted list of up to
+// `maxCount` products. Each product carries its inferred labels.
+async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 12) {
+  const base = sanitizeText(ingredient || "");
+  if (!base) return [];
+
+  // Build all the search variants we want to issue. The first entry is always
+  // the plain-base search so we never end up with an empty result.
+  const variants = [{ tag: null, query: base }];
+  // If the user already toggled bio in the basket, prefer biologisch as base.
+  if (prefs?.bio) variants[0] = { tag: "biologisch", query: `biologisch ${base}` };
+
+  // Always pull label-specific alternatives so we can categorize them.
+  variants.push(
+    { tag: "biologisch", query: `biologisch ${base}` },
+    { tag: "beter leven 1 ster", query: `beter leven 1 ster ${base}` },
+    { tag: "vegetarisch", query: `vegetarisch ${base}` },
+    { tag: "vegan", query: `vegan ${base}` },
+    { tag: "plantaardig", query: `plantaardig ${base}` }
+  );
+
+  const buckets = await Promise.all(
+    variants.map(async (v) => {
+      const products = await findAHProducts(base, 6, v.query);
+      return { tag: v.tag, products };
+    })
+  );
+
+  // Merge by product id while collecting all the label tags that yielded the same product.
+  const byId = new Map();
+  for (const bucket of buckets) {
+    for (const product of bucket.products) {
+      const key = product.id || `${product.name}|${product.imageUrl}`;
+      if (!byId.has(key)) {
+        byId.set(key, {
+          ...product,
+          labels: Array.isArray(product.labels) ? [...product.labels] : [],
+        });
+      }
+      const entry = byId.get(key);
+      if (bucket.tag) entry.labels.push(bucket.tag);
+    }
+  }
+
+  // Always keep at least the base bucket as a safety net (already merged above).
+  const merged = [...byId.values()].map((p) => ({
+    ...p,
+    labels: [...new Set(p.labels.map((l) => sanitizeText(l)).filter(Boolean))],
+  }));
+
+  // Sort by ascending price so "Meest voordelig" naturally surfaces.
+  merged.sort((a, b) => {
+    const pa = parseFloat(String(a.price || "").replace("€", "").replace(",", ".")) || 9999;
+    const pb = parseFloat(String(b.price || "").replace("€", "").replace(",", ".")) || 9999;
+    return pa - pb;
+  });
+
+  return merged.slice(0, maxCount);
 }
 
 async function findJumboProduct(ingredient) {
@@ -6368,12 +6435,19 @@ async function buildStoreBasket(body) {
       items.map(async (item) => {
         const rawName = sanitizeText(item.title || "");
         if (!rawName) return { ingredient: rawName, product: null, products: [] };
-        const searchQuery = buildAHSearchQuery(rawName, preferences);
-        let products = await findAHProducts(searchQuery || rawName, 3);
-        // If preferences yield no results, fall back to the plain ingredient query
-        // so the basket never ends up empty for that item.
-        if ((!products || products.length === 0) && searchQuery && searchQuery !== rawName) {
-          products = await findAHProducts(rawName, 3);
+
+        // Fetch a wider, label-tagged set of alternatives so the AH "Wissel"
+        // sheet can group by Meest voordelig / Bio / Beter Leven / etc.
+        let products = await findAHAlternativesGrouped(rawName, preferences, 12);
+
+        // If the broad fetch returned nothing, fall back to the legacy single
+        // query so the basket is never empty for that item.
+        if (!products || products.length === 0) {
+          const searchQuery = buildAHSearchQuery(rawName, preferences);
+          products = await findAHProducts(searchQuery || rawName, 3);
+          if ((!products || products.length === 0) && searchQuery && searchQuery !== rawName) {
+            products = await findAHProducts(rawName, 3);
+          }
         }
         return { ingredient: rawName, product: products[0] ?? null, products };
       })
@@ -6405,12 +6479,16 @@ async function buildStoreBasket(body) {
         : fallbackChoices;
     }
 
+    // AH gets up to 12 grouped alternatives so the Wissel sheet has enough
+    // variety to populate Meest voordelig / Biologisch / Beter Leven / etc.
+    const choicesCap = store === "albert-heijn" ? 12 : 3;
+
     return {
       id: `basket-item-${index}`,
       ingredientTitle: sanitizeText(item.title || "Ingrediënt"),
       ingredientAmount: sanitizeText(item.amount || "1 verpakking"),
       confidence: result.product ? "Gevonden in winkel" : getMatchConfidenceLabel(item.title || ""),
-      choices: choices.slice(0, 3),
+      choices: choices.slice(0, choicesCap),
       selectedChoiceIndex: 0,
     };
   });

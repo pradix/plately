@@ -1149,22 +1149,10 @@
           </div>
         </div>
 
-        <!-- Diet filter chips -->
+        <!-- Bio toggle (only filter shown in basket; per-item Wissel handles diet variants) -->
         <div class="basket-filter-row" id="basketFilterRow">
           <button class="basket-filter-chip" id="basketFilterBio" type="button" data-filter="bio">
             🌱 Maak biologisch
-          </button>
-          <button class="basket-filter-chip" id="basketFilterBeterLeven1" type="button" data-filter="beterLeven1">
-            🐔 Beter Leven 1 ster
-          </button>
-          <button class="basket-filter-chip" id="basketFilterVegetarisch" type="button" data-filter="vegetarisch">
-            🥕 Vegetarisch
-          </button>
-          <button class="basket-filter-chip" id="basketFilterVegan" type="button" data-filter="vegan">
-            🌿 Vegan
-          </button>
-          <button class="basket-filter-chip" id="basketFilterPlantaardig" type="button" data-filter="plantaardig">
-            🌱 Plantaardig
           </button>
         </div>
 
@@ -1186,6 +1174,21 @@
             Zet op je lijst
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Alternatives picker (AH-style "Kies een alternatief") -->
+    <div class="alt-overlay hidden" id="altOverlay" role="dialog" aria-modal="true" aria-labelledby="altOverlayTitle" hidden>
+      <div class="alt-sheet">
+        <div class="alt-sheet__header">
+          <button class="alt-sheet__back" id="altOverlayBack" type="button" aria-label="Terug">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <span class="alt-sheet__title" id="altOverlayTitle">Kies een alternatief</span>
+          <span class="alt-sheet__header-spacer"></span>
+        </div>
+        <div class="alt-sheet__context" id="altOverlayContext"></div>
+        <div class="alt-sheet__list" id="altOverlayList"></div>
       </div>
     </div>
 

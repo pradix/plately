@@ -1441,7 +1441,14 @@ function closeBasketModal() {
     overlay.classList.add("hidden");
     overlay.hidden = true;
   }
+  // Also dismiss the per-item alternatives sheet if it happens to be open.
+  const altOverlay = document.getElementById("altOverlay");
+  if (altOverlay && !altOverlay.hidden) {
+    altOverlay.classList.add("hidden");
+    altOverlay.hidden = true;
+  }
   state.basketPreview = null;
+  state.altSheetItemIndex = null;
 }
 
 function getBasketHandoffUrl(preview) {
@@ -1479,6 +1486,7 @@ function extractBasketLabelsFromChoice(choice, item) {
 
   const text = normalizeBasketToken(raw);
   const flags = {
+    bio: false,
     beterLeven1: false,
     vegetarisch: false,
     vegan: false,
@@ -1486,6 +1494,7 @@ function extractBasketLabelsFromChoice(choice, item) {
   };
 
   // Best-effort heuristics (conservative). Prefer explicit label strings if present.
+  if (/\b(biologisch|biologische|bio)\b/.test(text)) flags.bio = true;
   if (/\bbeter leven\b/.test(text) && /(\b1\b|\b1\s*ster\b|\b1\s*\*\b)/.test(text)) flags.beterLeven1 = true;
   if (/\bvegetari\w*\b|\bvega\b/.test(text)) flags.vegetarisch = true;
   if (/\bvegan\b/.test(text)) flags.vegan = true;
@@ -1532,12 +1541,8 @@ function renderBasketPreview() {
     servLabel.textContent = `${state.basketServings} ${noun}`;
   }
 
-  // Update filter chip active state
+  // Update bio chip active state (only filter shown in basket sheet)
   document.getElementById("basketFilterBio")?.classList.toggle("is-active", state.basketFilter.bio);
-  document.getElementById("basketFilterBeterLeven1")?.classList.toggle("is-active", state.basketFilter.beterLeven1);
-  document.getElementById("basketFilterVegetarisch")?.classList.toggle("is-active", state.basketFilter.vegetarisch);
-  document.getElementById("basketFilterVegan")?.classList.toggle("is-active", state.basketFilter.vegan);
-  document.getElementById("basketFilterPlantaardig")?.classList.toggle("is-active", state.basketFilter.plantaardig);
 
   let totalCents = 0;
   const servScale = state.basketBaseServings > 0
@@ -1561,6 +1566,8 @@ function renderBasketPreview() {
       // If no match found, keep the first/selected choice instead of hiding the item.
       if (matchIdx !== -1) pickedIndex = matchIdx;
     }
+    // Clamp in case the choice list shrank after a refetch.
+    if (pickedIndex < 0 || pickedIndex >= choices.length) pickedIndex = 0;
 
     const choice = choices[pickedIndex];
     if (!choice) return "";
@@ -1584,14 +1591,15 @@ function renderBasketPreview() {
       <div class="basket-product" data-basket-item="${itemIndex}">
         <div class="basket-product__img-wrap">
           ${img}
-          ${altCount > 1 ? `<button class="basket-product__swap" type="button" aria-label="Wissel product" data-basket-swap="${itemIndex}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
-          </button>` : ""}
         </div>
         <div class="basket-product__info">
           <p class="basket-product__name">${escapeHtml(displayTitle)}</p>
           <p class="basket-product__meta">${escapeHtml(choice.price || "")}${choice.subtitle ? ` · ${escapeHtml(choice.subtitle)}` : ""}</p>
           <p class="basket-product__for">voor ${escapeHtml(item.ingredientAmount || "")} ${escapeHtml(item.ingredientTitle || "")}</p>
+          ${altCount > 1 ? `<button class="basket-product__wissel" type="button" data-basket-wissel="${itemIndex}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+            Wissel
+          </button>` : ""}
         </div>
         <div class="basket-product__right">
           <button class="basket-product__delete" type="button" aria-label="Verwijder" data-basket-delete="${itemIndex}">
@@ -1607,7 +1615,7 @@ function renderBasketPreview() {
     `;
   }).join("");
 
-  listEl.innerHTML = rendered || `<p style="text-align:center;padding:26px 18px;color:#888;font-size:0.95rem">Geen producten gevonden voor deze filters/zoekopdracht.</p>`;
+  listEl.innerHTML = rendered || `<p style="text-align:center;padding:26px 18px;color:#888;font-size:0.95rem">Geen producten gevonden.</p>`;
 
   // Calculate total
   const totalEur = (totalCents / 100).toFixed(2).replace(".", ",");
@@ -1636,6 +1644,159 @@ function openBasketModal(preview) {
     overlay.hidden = false;
     overlay.classList.remove("hidden");
   }
+}
+
+// ── Alternatives sheet ("Kies een alternatief") ─────────────────────────────
+//
+// Opens a full-screen sheet over the basket overlay listing alternative
+// products for one basket item, grouped by Meest voordelig / Biologisch /
+// Beter Leven 1 ster / Vegetarisch / Vegan / Plantaardig / Meer alternatieven.
+// Each product appears once, in the highest-priority section it qualifies for.
+// Tapping "Kies" updates the basket item's selectedChoiceIndex and returns
+// to the basket sheet.
+
+const ALT_SECTIONS = [
+  { id: "cheapest", title: "Meest voordelig" },
+  { id: "biologisch", title: "Biologisch" },
+  { id: "beterLeven1", title: "Beter Leven 1 ster" },
+  { id: "vegetarisch", title: "Vegetarisch" },
+  { id: "vegan", title: "Vegan" },
+  { id: "plantaardig", title: "Plantaardig" },
+  { id: "more", title: "Meer alternatieven" },
+];
+
+function classifyAlternative(choice, item) {
+  const flags = extractBasketLabelsFromChoice(choice, item);
+  if (flags.bio) return "biologisch";
+  if (flags.beterLeven1) return "beterLeven1";
+  if (flags.vegan) return "vegan";
+  if (flags.vegetarisch) return "vegetarisch";
+  if (flags.plantaardig) return "plantaardig";
+  return "more";
+}
+
+function renderAlternativesSheet(item) {
+  const listEl = document.getElementById("altOverlayList");
+  const ctxEl = document.getElementById("altOverlayContext");
+  if (!listEl) return;
+
+  const choices = Array.isArray(item?.choices) ? item.choices.slice() : [];
+  if (ctxEl) {
+    const amount = item?.ingredientAmount ? `${escapeHtml(item.ingredientAmount)} ` : "";
+    const title = escapeHtml(item?.ingredientTitle || "");
+    ctxEl.innerHTML = `<span class="alt-sheet__context-label">Voor</span> <span class="alt-sheet__context-value">${amount}${title}</span>`;
+  }
+
+  if (!choices.length) {
+    listEl.innerHTML = `<p class="alt-sheet__empty">Geen alternatieven gevonden.</p>`;
+    return;
+  }
+
+  // Build a parallel list with original index + classification + price.
+  const annotated = choices.map((choice, idx) => ({
+    choice,
+    idx,
+    section: classifyAlternative(choice, item),
+    priceNum: parseFloat(String(choice.price || "0").replace("€", "").replace(",", ".")) || 9999,
+  }));
+
+  // Cheapest option floats to the top-only "Meest voordelig" section so it
+  // is always discoverable, even when it also fits a label section.
+  const cheapest = [...annotated].sort((a, b) => a.priceNum - b.priceNum)[0];
+  const cheapestKey = cheapest ? cheapest.idx : -1;
+
+  // Group while preserving "show only once": once an idx is placed, skip it.
+  const placed = new Set();
+  const sections = new Map();
+  for (const sec of ALT_SECTIONS) sections.set(sec.id, []);
+
+  if (cheapestKey >= 0) {
+    sections.get("cheapest").push(annotated[cheapestKey]);
+    placed.add(cheapestKey);
+  }
+
+  for (const sec of ALT_SECTIONS) {
+    if (sec.id === "cheapest" || sec.id === "more") continue;
+    for (const entry of annotated) {
+      if (placed.has(entry.idx)) continue;
+      if (entry.section === sec.id) {
+        sections.get(sec.id).push(entry);
+        placed.add(entry.idx);
+      }
+    }
+  }
+  // Anything left over → "Meer alternatieven", sorted by price ascending.
+  for (const entry of annotated) {
+    if (!placed.has(entry.idx)) {
+      sections.get("more").push(entry);
+      placed.add(entry.idx);
+    }
+  }
+
+  const cardHtml = (entry, isSelected) => {
+    const c = entry.choice;
+    const img = c.imageUrl
+      ? `<img class="alt-card__img" src="${escapeHtml(c.imageUrl)}" alt="" loading="lazy" />`
+      : `<span class="alt-card__img alt-card__img--placeholder">${escapeHtml(c.emoji || "🛒")}</span>`;
+    const meta = [c.price, c.subtitle].filter(Boolean).map(escapeHtml).join(" · ");
+    const cta = isSelected
+      ? `<span class="alt-card__chosen">Gekozen</span>`
+      : `<button class="alt-card__choose" type="button" data-alt-choose="${entry.idx}">Kies</button>`;
+    return `
+      <div class="alt-card${isSelected ? " is-selected" : ""}">
+        ${img}
+        <div class="alt-card__info">
+          <p class="alt-card__title">${escapeHtml(c.title || "")}</p>
+          <p class="alt-card__meta">${meta}</p>
+        </div>
+        ${cta}
+      </div>
+    `;
+  };
+
+  const selectedIdx = item.selectedChoiceIndex || 0;
+  const html = ALT_SECTIONS
+    .map((sec) => {
+      const entries = sections.get(sec.id) || [];
+      if (!entries.length) return "";
+      // Sort label sections by price ascending so the cheapest variant is shown first.
+      entries.sort((a, b) => a.priceNum - b.priceNum);
+      const cards = entries.map((e) => cardHtml(e, e.idx === selectedIdx)).join("");
+      return `
+        <section class="alt-section">
+          <h3 class="alt-section__title">${escapeHtml(sec.title)}</h3>
+          <div class="alt-section__list">${cards}</div>
+        </section>
+      `;
+    })
+    .join("");
+
+  listEl.innerHTML = html || `<p class="alt-sheet__empty">Geen alternatieven gevonden.</p>`;
+}
+
+function openAlternativesSheet(itemIndex) {
+  const preview = state.basketPreview;
+  if (!preview) return;
+  const item = preview.items[itemIndex];
+  if (!item) return;
+  state.altSheetItemIndex = itemIndex;
+
+  const overlay = document.getElementById("altOverlay");
+  if (!overlay) return;
+  renderAlternativesSheet(item);
+  overlay.hidden = false;
+  overlay.classList.remove("hidden");
+
+  const listEl = document.getElementById("altOverlayList");
+  if (listEl) listEl.scrollTop = 0;
+}
+
+function closeAlternativesSheet() {
+  const overlay = document.getElementById("altOverlay");
+  if (!overlay) return;
+  overlay.classList.add("hidden");
+  overlay.hidden = true;
+  state.altSheetItemIndex = null;
 }
 
 function scrollToTopSoon() {
@@ -7407,16 +7568,12 @@ bindEvent(document.getElementById("basketServingsPlus"), "click", () => {
   renderBasketPreview();
 });
 
-// Diet filter chips
+// Bio toggle (only filter chip in basket sheet; per-item Wissel handles diet variants)
 bindEvent(document.getElementById("basketFilterRow"), "click", (e) => {
   const chip = e.target.closest("[data-filter]");
   if (!chip) return;
   const f = chip.dataset.filter;
   if (f === "bio") state.basketFilter.bio = !state.basketFilter.bio;
-  if (f === "beterLeven1") state.basketFilter.beterLeven1 = !state.basketFilter.beterLeven1;
-  if (f === "vegetarisch") state.basketFilter.vegetarisch = !state.basketFilter.vegetarisch;
-  if (f === "vegan") state.basketFilter.vegan = !state.basketFilter.vegan;
-  if (f === "plantaardig") state.basketFilter.plantaardig = !state.basketFilter.plantaardig;
   scheduleRefetchBasketWithPreferences();
 });
 
@@ -7431,7 +7588,7 @@ bindEvent(document.getElementById("basketSheetList"), "click", (e) => {
   const target = e.target;
   if (!(target instanceof Element) || !state.basketPreview) return;
 
-  const btn = target.closest("[data-basket-delete],[data-basket-qty-minus],[data-basket-qty-plus],[data-basket-swap]");
+  const btn = target.closest("[data-basket-delete],[data-basket-qty-minus],[data-basket-qty-plus],[data-basket-wissel]");
   if (!btn) return;
 
   // Delete item
@@ -7469,15 +7626,30 @@ bindEvent(document.getElementById("basketSheetList"), "click", (e) => {
     return;
   }
 
-  // Swap (cycle to next alternative choice)
-  if (btn.dataset.basketSwap !== undefined) {
-    const idx = parseInt(btn.dataset.basketSwap, 10);
-    const item = state.basketPreview.items[idx];
-    if (item && item.choices?.length > 1) {
-      item.selectedChoiceIndex = ((item.selectedChoiceIndex || 0) + 1) % item.choices.length;
-      renderBasketPreview();
-    }
+  // Wissel: open the "Kies een alternatief" full-screen sheet for this item
+  if (btn.dataset.basketWissel !== undefined) {
+    const idx = parseInt(btn.dataset.basketWissel, 10);
+    openAlternativesSheet(idx);
   }
+});
+
+// ── Alternatives sheet bindings ──────────────────────────────────────────────
+bindEvent(document.getElementById("altOverlayBack"), "click", closeAlternativesSheet);
+bindEvent(document.getElementById("altOverlay"), "click", (e) => {
+  if (e.target === document.getElementById("altOverlay")) closeAlternativesSheet();
+});
+bindEvent(document.getElementById("altOverlayList"), "click", (e) => {
+  const target = e.target;
+  if (!(target instanceof Element)) return;
+  const btn = target.closest("[data-alt-choose]");
+  if (!btn) return;
+  const choiceIdx = parseInt(btn.dataset.altChoose, 10);
+  const itemIdx = state.altSheetItemIndex;
+  const item = state.basketPreview?.items?.[itemIdx];
+  if (!item || !Number.isInteger(choiceIdx)) return;
+  item.selectedChoiceIndex = choiceIdx;
+  closeAlternativesSheet();
+  renderBasketPreview();
 });
 
 // ── Recipe picker (add recipe to open cookbook) ───────────────────────────────
