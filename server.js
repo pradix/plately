@@ -2721,7 +2721,33 @@ async function fetchJson(url, options = {}) {
 }
 
 function isSafeForReaderFallback(parsedUrl) {
-  return !parsedUrl.username && !parsedUrl.password && !parsedUrl.search && !parsedUrl.hash;
+  if (parsedUrl.username || parsedUrl.password) return false;
+  // Social platforms sometimes require query params to be present (e.g. Instagram igsh).
+  const host = parsedUrl.hostname.toLowerCase();
+  if (host.endsWith("instagram.com") || host.endsWith("tiktok.com") || host === "vm.tiktok.com") {
+    return true;
+  }
+  return !parsedUrl.search && !parsedUrl.hash;
+}
+
+function looksLikeBlockedSocialHtml(url, html) {
+  const u = String(url || "").toLowerCase();
+  const h = String(html || "").toLowerCase();
+  if (!h || h.length < 200) return true;
+
+  if (u.includes("instagram.com")) {
+    if (h.includes("instagram") && (h.includes("log in") || h.includes("aanmelden"))) {
+      if (!h.includes("recept") && !h.includes("ingredients") && !h.includes("bereiding")) return true;
+    }
+  }
+
+  if (u.includes("tiktok.com")) {
+    if (h.includes("tiktok") && (h.includes("make your day") || h.includes("verify") || h.includes("captcha") || h.includes("log in"))) {
+      if (!h.includes("ingredients") && !h.includes("bereiding") && !h.includes("recipe")) return true;
+    }
+  }
+
+  return false;
 }
 
 async function fetchWithProfile(url, profileHeaders = {}, referer = "") {
@@ -2781,11 +2807,17 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
         lastStatus = response.status;
 
         if (response.ok) {
-          return {
-            kind: "html",
-            body: await response.text(),
-            finalUrl: response.url || url,
-          };
+          const body = await response.text();
+          // Social platforms can return 200 OK with a login wall; treat it as blocked.
+          if (looksLikeBlockedSocialHtml(url, body)) {
+            lastStatus = 403;
+          } else {
+            return {
+              kind: "html",
+              body,
+              finalUrl: response.url || url,
+            };
+          }
         }
 
         // Retry on 5xx errors (server errors are temporary)
