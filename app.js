@@ -1993,7 +1993,11 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
   if (!channelSearchSection || !channelSearchResults) return;
 
   state.channelSearchAllResults = results ?? state.channelSearchAllResults;
-  state.channelSearchFilter = filter;
+  // If the current filter doesn't exist in these results, reset to "Alles"
+  // to avoid the UI showing "no results" while there actually are results.
+  const presentChannelIds = [...new Set((state.channelSearchAllResults || []).map((r) => r.channelId).filter(Boolean))];
+  const effectiveFilter = filter && presentChannelIds.includes(filter) ? filter : "";
+  state.channelSearchFilter = effectiveFilter || null;
 
   const all = state.channelSearchAllResults;
 
@@ -2020,12 +2024,12 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
     return;
   }
 
-  const filtered = filter ? all.filter((r) => r.channelId === filter) : all;
+  const filtered = effectiveFilter ? all.filter((r) => r.channelId === effectiveFilter) : all;
 
   console.log("📊 Filtered results:", {
-    filterApplied: !!filter,
+    filterApplied: !!effectiveFilter,
     filteredCount: filtered.length,
-    filterChannelId: filter,
+    filterChannelId: effectiveFilter,
     resultChannelIds: all.map(r => r.channelId)
   });
 
@@ -2033,8 +2037,42 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
   renderChannelFilterChips(all);
 
   if (!filtered.length) {
-    console.warn("⚠️  No filtered results! Filter:", filter, "All results channel IDs:", all.map(r => r.channelId));
-    channelSearchResults.innerHTML = `<p class="ch-result__loading" style="grid-column:1/-1;text-align:center;padding:2rem">Geen resultaten voor dit kanaal.</p>`;
+    // Safety net: if a filter produced zero results, show all results instead.
+    console.warn("⚠️  No filtered results! Falling back to all. Filter:", effectiveFilter);
+    state.channelSearchFilter = null;
+    renderChannelFilterChips(all);
+    channelSearchResults.innerHTML = `<div class="ch-result-grid">${all.map((r) => {
+      const allCh = getAllChannels();
+      const channel = allCh.find((ch) => ch.id === r.channelId);
+      const channelColor = channel?.color || "#8da485";
+      const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
+      const thumbHtml = getChannelThumbnailMarkup(r, channel, channelColor);
+      return `
+      <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}" data-ch-card-thumb="${escapeHtml(thumbUrl || "")}">
+        <div class="ch-card__visual">
+          ${thumbHtml}
+          <span class="ch-card__badge" style="background:${escapeHtml(channelColor)}">${escapeHtml(r.channel)}</span>
+        </div>
+        <div class="ch-card__body">
+          <p class="ch-card__title">${escapeHtml(r.title)}</p>
+          ${r.description ? `<p class="ch-card__desc">${escapeHtml(r.description)}</p>` : ""}
+          ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
+        </div>
+        <div class="ch-card__actions">
+          <a class="ch-card__view" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer" aria-label="Bekijk ${escapeHtml(r.title)} op ${escapeHtml(r.channel)}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z" fill="currentColor"/></svg>
+            Bekijk
+          </a>
+          <button class="ch-card__import" type="button"
+            data-channel-import-url="${escapeHtml(r.url)}"
+            data-channel-import-thumb="${escapeHtml(thumbUrl || "")}"
+            aria-label="Importeer ${escapeHtml(r.title)}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            Importeer
+          </button>
+        </div>
+      </div>`;
+    }).join("")}</div>`;
     return;
   }
 
