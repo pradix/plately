@@ -4439,6 +4439,18 @@ async function importWebsite(sourceUrl) {
         )
       : "";
     const ahMetaTitle = html ? normalizeRecipeTitle(parseMetaTag(html, "og:title") || parseTitleTag(html)) : "";
+    const extractIntroFromReaderMarkdown = (markdown) => {
+      const text = String(markdown || "");
+      if (!text) return "";
+      const lines = text.split(/\n+/).map((l) => sanitizeText(l)).filter(Boolean);
+      // Skip heading lines and pick the first meaningful paragraph before ingredient/instruction headings.
+      for (const line of lines) {
+        if (/^#{1,6}\s/i.test(line)) continue;
+        if (INGREDIENT_HEADING_PATTERN.test(line) || INSTRUCTION_HEADING_PATTERN.test(line)) break;
+        if (line.length >= 30) return line;
+      }
+      return "";
+    };
     const ahTitle = ahH1Title || ahMetaTitle || primaryRecipe.title;
 
     const ahMetaDescription = html
@@ -4473,9 +4485,13 @@ async function importWebsite(sourceUrl) {
       const readerInstructions = parseMarkdownInstructionSection(readerDocument.body);
       const readerServings = parseMarkdownServings(readerDocument.body);
       const ahReaderDescription = readerRecipe.description || "";
+      const ahReaderTitle = normalizeRecipeTitle(readerRecipe.title || "");
+      const ahReaderIntro = extractIntroFromReaderMarkdown(readerDocument.body);
+      const mergedAhTitle = ahH1Title || ahMetaTitle || ahReaderTitle || primaryRecipe.title;
       const ahDescription = pickAhDescription([
         ahIntroFromHtml,
         ahMetaDescription,
+        ahReaderIntro,
         ahReaderDescription,
         primaryRecipe.description,
       ]);
@@ -4485,7 +4501,7 @@ async function importWebsite(sourceUrl) {
         ingredients: readerIngredients.length ? readerIngredients : readerRecipe.ingredients.length ? readerRecipe.ingredients : primaryRecipe.ingredients,
         instructions:
           readerInstructions.length ? readerInstructions : readerRecipe.instructions.length ? readerRecipe.instructions : primaryRecipe.instructions,
-        title: ahTitle || primaryRecipe.title,
+        title: mergedAhTitle || primaryRecipe.title,
         description: ahDescription || primaryRecipe.description,
         servings: readerServings || readerRecipe.servings || primaryRecipe.servings,
         needsReview:
