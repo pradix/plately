@@ -59,8 +59,8 @@ img { display: block; max-width: 100%; }
 }
 
 @media (min-width: 720px) {
-  .app-shell { width: min(100%, 720px); }
-  .bottom-nav { width: min(100vw, 720px); }
+  .app-shell { width: min(100%, 960px); }
+  .bottom-nav { width: min(100vw, 960px); }
 }
 
 #homeScreen {

@@ -4153,6 +4153,21 @@ function renderCookbookDetail(cookbookId) {
     if (detail.dataset.cbWired === "true") return;
     detail.dataset.cbWired = "true";
     detail.addEventListener("click", handleCookbookGridClick);
+
+    // Even more defensive: bind direct handlers on key buttons, because some
+    // mobile WebViews can be finicky with delegated click targets.
+    const selectBtn = detail.querySelector('[data-cb-select-mode="true"]');
+    if (selectBtn instanceof HTMLElement) {
+      selectBtn.addEventListener("click", (event) => handleCookbookGridClick(event), { capture: true });
+    }
+    const bulkBtn = detail.querySelector('[data-cb-delete-selected="true"]');
+    if (bulkBtn instanceof HTMLElement) {
+      bulkBtn.addEventListener("click", (event) => handleCookbookGridClick(event), { capture: true });
+    }
+    detail.querySelectorAll("[data-remove-from-cookbook],[data-cb-select-recipe],[data-open-recipe-id]").forEach((el) => {
+      if (!(el instanceof HTMLElement)) return;
+      el.addEventListener("click", (event) => handleCookbookGridClick(event), { capture: true });
+    });
   });
 }
 
