@@ -2033,12 +2033,36 @@ function openAlternativesSheet(itemIndex) {
 
   const overlay = document.getElementById("altOverlay");
   if (!overlay) return;
-  renderAlternativesSheet(item);
+  // Be defensive: a render exception would otherwise abort before making the
+  // overlay visible (appears as "Wissel does nothing" in production).
+  let rendered = false;
+  try {
+    renderAlternativesSheet(item);
+    rendered = true;
+  } catch (err) {
+    console.error("[alt-sheet] render failed", err);
+  }
+
   overlay.hidden = false;
   overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+  // Some mobile browsers can keep fixed overlays "click-through" after toggles;
+  // explicitly ensure the overlay can receive pointer events.
+  overlay.style.pointerEvents = "auto";
+
+  if (!rendered) {
+    const listEl = document.getElementById("altOverlayList");
+    if (listEl) listEl.innerHTML = `<p class="alt-sheet__empty">Kon alternatieven niet laden. Probeer opnieuw.</p>`;
+  }
 
   const listEl = document.getElementById("altOverlayList");
   if (listEl) listEl.scrollTop = 0;
+  // Move focus inside the dialog for accessibility and to avoid iOS losing the
+  // click transition.
+  requestAnimationFrame(() => {
+    const backBtn = document.getElementById("altOverlayBack");
+    if (backBtn instanceof HTMLElement) backBtn.focus();
+  });
 }
 
 function closeAlternativesSheet() {
@@ -2046,6 +2070,7 @@ function closeAlternativesSheet() {
   if (!overlay) return;
   overlay.classList.add("hidden");
   overlay.hidden = true;
+  overlay.setAttribute("aria-hidden", "true");
   state.altSheetItemIndex = null;
 }
 
