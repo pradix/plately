@@ -9304,42 +9304,39 @@ body {
   position: fixed;
   inset: 0;
   z-index: 9600; /* above basket overlay (9500) */
-  background: #f5f3ef;
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
-  flex-direction: column;
-  animation: alt-slide-in 0.22s cubic-bezier(.4,0,.2,1) both;
+  align-items: flex-end;
+  justify-content: center;
+  animation: alt-slide-up 0.28s cubic-bezier(.4,0,.2,1) both;
 }
 
 .alt-overlay.hidden { display: none; }
 
-@keyframes alt-slide-in {
-  from { transform: translateX(8%); opacity: 0; }
-  to   { transform: translateX(0);  opacity: 1; }
+@keyframes alt-slide-up {
+  from { transform: translateY(100%); opacity: 0.6; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
 
 .alt-sheet {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
+  background: #f5f3ef;
+  border-radius: 24px 24px 0 0;
   width: 100%;
   max-width: 480px;
-  margin: 0 auto;
-  background: #f5f3ef;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 -8px 40px rgba(0,0,0,0.18);
 }
 
 .alt-sheet__header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
   align-items: center;
-  justify-content: space-between;
-  padding: 14px 12px 10px;
+  padding: 14px 16px 10px;
   border-bottom: 1px solid rgba(0,0,0,0.07);
-  background: #f5f3ef;
   flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding-top: calc(14px + env(safe-area-inset-top, 0px));
 }
 
 .alt-sheet__back {
@@ -9347,23 +9344,23 @@ body {
   border: none;
   cursor: pointer;
   padding: 0;
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  color: #2a2825;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7a746e;
 }
 .alt-sheet__back svg { width: 22px; height: 22px; display: block; }
 
 .alt-sheet__title {
-  font-size: 1.05rem;
-  font-weight: 800;
+  font-size: 1rem;
+  font-weight: 700;
   color: #2a2825;
   text-align: center;
-  flex: 1;
 }
 
-.alt-sheet__header-spacer { width: 36px; }
+.alt-sheet__header-spacer { width: 32px; height: 32px; }
 
 .alt-sheet__context {
   padding: 12px 16px 10px;
@@ -9512,6 +9509,54 @@ body {
   font-size: 0.8rem;
   color: #7a746e;
   margin: 0;
+}
+
+.alt-card__badges {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.alt-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: rgba(255,255,255,0.88);
+  color: rgba(42, 40, 37, 0.82);
+}
+
+.alt-badge--bio {
+  border-color: rgba(107, 158, 114, 0.35);
+  background: #e8f4e9;
+  color: #2d4a2e;
+}
+
+.alt-badge--beterLeven1 {
+  border-color: rgba(0, 174, 239, 0.28);
+  background: rgba(0, 174, 239, 0.10);
+  color: rgba(0, 96, 132, 0.92);
+}
+
+.alt-badge--vegan,
+.alt-badge--vegetarisch,
+.alt-badge--plantaardig {
+  border-color: rgba(120, 147, 111, 0.24);
+  background: rgba(120, 147, 111, 0.10);
+  color: rgba(45, 74, 46, 0.92);
+}
+
+.alt-badge--cheapest {
+  border-color: rgba(0,0,0,0.10);
+  background: rgba(0,0,0,0.05);
+  color: rgba(0,0,0,0.62);
 }
 
 .alt-card__choose {

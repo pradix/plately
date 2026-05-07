@@ -1757,6 +1757,62 @@ const ALT_FILTER_CHIPS = [
   { id: "more", label: "Meer alternatieven" },
 ];
 
+const ALT_BADGE_PRIORITY = ["bio", "beterLeven1", "vegan", "vegetarisch", "plantaardig"];
+
+function normalizeAltLabelToken(token) {
+  const t = String(token || "").toLowerCase().trim();
+  if (!t) return null;
+  if (t === "bio" || t === "biologisch" || t === "biologische") return "bio";
+  if (t === "beterleven1" || t === "beter leven 1" || t === "beter leven 1 ster" || t === "beter leven") return "beterLeven1";
+  if (t === "vegan") return "vegan";
+  if (t === "vegetarisch" || t === "vegetarische" || t === "vega") return "vegetarisch";
+  if (t === "plantaardig" || t === "plant based" || t === "plantbased") return "plantaardig";
+  return null;
+}
+
+function getAlternativeLabelKeys(choice, item) {
+  // Prefer server-provided `choice.labels` (also used by grouped alternative searches).
+  const tokens = Array.isArray(choice?.labels) && choice.labels.length
+    ? choice.labels
+    : (() => {
+        const flags = extractBasketLabelsFromChoice(choice, item);
+        return Object.entries(flags).filter(([, v]) => Boolean(v)).map(([k]) => k);
+      })();
+
+  const set = new Set();
+  for (const tok of tokens) {
+    const key = normalizeAltLabelToken(tok);
+    if (key) set.add(key);
+  }
+  return set;
+}
+
+function formatAltBadgeLabel(key) {
+  if (key === "bio") return "Bio";
+  if (key === "beterLeven1") return "Beter Leven 1 ster";
+  if (key === "vegan") return "Vegan";
+  if (key === "vegetarisch") return "Vegetarisch";
+  if (key === "plantaardig") return "Plantaardig";
+  if (key === "cheapest") return "Meest voordelig";
+  return "";
+}
+
+function renderAltBadges(choice, item, { showCheapest = false } = {}) {
+  const keys = getAlternativeLabelKeys(choice, item);
+  const primary = ALT_BADGE_PRIORITY.filter((k) => keys.has(k)).slice(0, 2);
+  const badges = [
+    ...primary.map((k) => ({ key: k, label: formatAltBadgeLabel(k) })),
+    ...(showCheapest ? [{ key: "cheapest", label: formatAltBadgeLabel("cheapest") }] : []),
+  ].filter((b) => b.label);
+
+  if (!badges.length) return "";
+  return `
+    <div class="alt-card__badges" aria-label="Product labels">
+      ${badges.map((b) => `<span class="alt-badge alt-badge--${escapeHtml(b.key)}">${escapeHtml(b.label)}</span>`).join("")}
+    </div>
+  `;
+}
+
 function classifyAlternative(choice, item) {
   const flags = extractBasketLabelsFromChoice(choice, item);
   if (flags.bio) return "biologisch";
@@ -1853,6 +1909,7 @@ function renderAlternativesSheet(item) {
           ? `<img class="alt-card__img" src="${escapeHtml(c.imageUrl)}" alt="" loading="lazy" />`
           : `<span class="alt-card__img alt-card__img--placeholder">${escapeHtml(c.emoji || "🛒")}</span>`;
         const meta = [c.price, c.subtitle].filter(Boolean).map(escapeHtml).join(" · ");
+        const badges = renderAltBadges(c, item);
         const cta = e.idx === selectedIdx
           ? `<span class="alt-card__chosen">Gekozen</span>`
           : `<button class="alt-card__choose" type="button" data-alt-choose="${e.idx}">Kies</button>`;
@@ -1862,6 +1919,7 @@ function renderAlternativesSheet(item) {
             <div class="alt-card__info">
               <p class="alt-card__title">${escapeHtml(c.title || "")}</p>
               <p class="alt-card__meta">${meta}</p>
+              ${badges}
             </div>
             ${cta}
           </div>
@@ -1917,6 +1975,8 @@ function renderAlternativesSheet(item) {
       ? `<img class="alt-card__img" src="${escapeHtml(c.imageUrl)}" alt="" loading="lazy" />`
       : `<span class="alt-card__img alt-card__img--placeholder">${escapeHtml(c.emoji || "🛒")}</span>`;
     const meta = [c.price, c.subtitle].filter(Boolean).map(escapeHtml).join(" · ");
+    const isCheapest = entry.idx === cheapestKey;
+    const badges = renderAltBadges(c, item, { showCheapest: isCheapest });
     const cta = isSelected
       ? `<span class="alt-card__chosen">Gekozen</span>`
       : `<button class="alt-card__choose" type="button" data-alt-choose="${entry.idx}">Kies</button>`;
@@ -1926,6 +1986,7 @@ function renderAlternativesSheet(item) {
         <div class="alt-card__info">
           <p class="alt-card__title">${escapeHtml(c.title || "")}</p>
           <p class="alt-card__meta">${meta}</p>
+          ${badges}
         </div>
         ${cta}
       </div>
