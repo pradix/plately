@@ -526,6 +526,8 @@ async function loadTranslations() {
     translations = { nl: {}, en: {} };
     translationsReady = true;
   }
+  // Apply once translations are ready (prevents showing raw keys).
+  applyTranslations();
 }
 
 function t(key, fallback = '') {
@@ -5207,8 +5209,8 @@ function renderAll() {
   renderAvatars();
   updateAuthUI();
   closeBasketModal();
-  // Apply translations for current language
-  applyTranslations();
+  // Apply translations for current language (once loaded)
+  if (translationsReady) applyTranslations();
   // Render admin screen (async, non-blocking)
   if (isAdmin()) {
     renderAdminScreen();
