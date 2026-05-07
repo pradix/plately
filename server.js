@@ -1607,6 +1607,9 @@ function stripSocialNoise(text) {
     .replace(/\b(link in bio|follow for more|save this|part \d+|original sound|audio by)\b/gi, " ")
     .replace(/[•●▪◦]/g, "\n- ")
     .replace(/\s-\s(?=[A-Za-zÀ-ÿ0-9])/g, "\n- ")
+    // Fix "glued" ingredient lists often seen on Instagram captions:
+    // "Recept voor 1 tosti1 ui2 plakken brood..." -> force newlines before numbers when stuck to words.
+    .replace(/([\p{L}])(\d)(?=\s*(?:[\p{L}]|\b(?:g|gr|kg|mg|ml|dl|cl|l|el|tl|x|stuks?|stuk|plakken|plak|teen|snuf|handje)\b))/gu, "$1\n$2")
     .replace(/\b(ingredients?|ingrediënten|ingredienten|what you need|dit heb je nodig)\s*[:\-]/gi, "\n$1:\n")
     .replace(/\b(instructions?|method|steps?|bereiding|bereidingswijze|werkwijze)\s*[:\-]/gi, "\n$1:\n")
     .replace(/(\d+)\s*[\)\.:-]\s+(?=[\p{L}])/gu, "\n$1. ")
@@ -4306,6 +4309,24 @@ async function importRecipe(url, note, imageHint = "") {
     parsedUrl = new URL(url);
   } catch {
     throw new HttpError(400, "Voer een geldige URL in.");
+  }
+
+  // Expand TikTok short URLs (vm.tiktok.com) by following redirects
+  if (parsedUrl.hostname === "vm.tiktok.com") {
+    try {
+      const expandRes = await fetch(parsedUrl.toString(), {
+        method: "GET",
+        redirect: "follow",
+        signal: AbortSignal.timeout(8000),
+        headers: FETCH_HEADERS,
+      });
+      if (expandRes.url && expandRes.url !== parsedUrl.toString()) {
+        parsedUrl = new URL(expandRes.url);
+      }
+    } catch (error) {
+      console.error("⚠️ Failed to expand TikTok short URL, continuing with original:", error.message);
+      /* keep original */
+    }
   }
 
   // Expand AH short URLs (ah.nl/r/XXXXXX) by following the redirect
