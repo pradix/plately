@@ -1605,6 +1605,7 @@ function stripSocialNoise(text) {
     .replace(/@[\p{L}\p{N}._-]+/gu, " ")
     .replace(/(?:^|\s)(fyp|fy|viral|reels?|recipeoftheday|foodtok|foodie|easyrecipe)(?:\s|$)/gi, " ")
     .replace(/\b(link in bio|follow for more|save this|part \d+|original sound|audio by)\b/gi, " ")
+    .replace(/\b(controleer\s+bron|check\s+source|source\s*:\s*)\b/gi, " ")
     .replace(/[•●▪◦]/g, "\n- ")
     .replace(/\s-\s(?=[A-Za-zÀ-ÿ0-9])/g, "\n- ")
     // Fix "glued" ingredient lists often seen on Instagram captions:
@@ -2615,14 +2616,38 @@ function isLikelyOptionalInstructionStep(step) {
   );
 }
 
+function expandInstructionSteps(rawSteps) {
+  const source = Array.isArray(rawSteps) ? rawSteps : [];
+  const expanded = [];
+  for (const step of source) {
+    const clean = sanitizeText(String(step || ""));
+    if (!clean) continue;
+
+    // Split arrow chains and hard separators first
+    const arrowSplit = clean.split(/\s*(?:→|->|⇒)\s*/g).filter(Boolean);
+    for (const chunk of arrowSplit) {
+      // If the chunk contains multiple actions separated by commas, split when next part starts with a cooking verb.
+      const commaParts = chunk.split(/\s*,\s*(?=(?:mix|add|bake|cook|toast|top|serve|blend|heat|roast|whisk|slice|spread|bak|voeg|snij|snijd|halveer|serveer|kook|maak|meng|verhit|roer|leg|dek|bestrooi|giet|laat|verwarm|doe|gooi|strooi|breng|schenk|haal|verwijder|pel|marineer|kruid|klop|stamp|prak|pureer|grill|stir|fry|airfry|season|drizzle|combine)\b)/i);
+      for (const part of commaParts) {
+        // Also split sentence-like punctuation
+        const sentenceParts = sanitizeText(part).split(STEP_SENTENCE_SPLIT_RE).filter(Boolean);
+        for (const s of sentenceParts) expanded.push(sanitizeText(s));
+      }
+    }
+  }
+  return expanded.filter(Boolean);
+}
+
 function finalizeInstructionSteps(steps) {
-  const unique = [...new Set(steps.map((step) => sanitizeInstructionStep(step)).filter(Boolean))];
+  const expanded = expandInstructionSteps(steps);
+  const unique = [...new Set(expanded.map((step) => sanitizeInstructionStep(step)).filter(Boolean))];
   const normalized = unique
     .map((step) =>
       sanitizeText(
         step
           .replace(/\b(?:tip|tips?|extra tip|sandra'?s tip)\s*:\s*.*$/i, "")
           .replace(/\bEet smakelijk!?$/i, "")
+          .replace(/\bbuon appetito\b!?$/i, "")
       )
     )
     .filter(Boolean);
@@ -3800,30 +3825,30 @@ async function importTikTok(sourceUrl, note) {
   });
   const claudeResult = await extractWithClaude(claudeInput, "");
   if (claudeResult) {
-    const parsedIngredients = Array.isArray(claudeResult.ingredients)
-      ? claudeResult.ingredients.map((ingredient) =>
-          typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient
-        )
-      : [];
-
     const post = postProcessExtractedSections({
       ingredients: claudeResult.ingredients || [],
       instructions: claudeResult.instructions || [],
     });
 
+    const parsedIngredients = normalizeIngredientList(
+      (post.ingredients || []).map((ingredient) =>
+        typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient
+      )
+    );
+
     return {
       platform: "tiktok",
       sourceUrl,
-      title: normalizeSocialRecipeTitle(claudeResult.title) || "Geïmporteerd recept",
-      description: compactSocialDescription(claudeResult.description || "", claudeResult.title || ""),
+      title: normalizeSocialRecipeTitle(claudeResult.title) || normalizeSocialRecipeTitle(titleHint) || "Geïmporteerd recept",
+      description: compactSocialDescription(claudeResult.description || "", claudeResult.title || "") || extractDescription(bestCaption, claudeResult.title || titleHint),
       caption: stripSocialNoise(bestCaption),
       image,
       author,
-      ingredients: normalizeIngredientList(parsedIngredients),
+      ingredients: parsedIngredients,
       instructions: finalizeInstructionSteps(post.instructions),
       time: sanitizeText(claudeResult.time || "30 min"),
       servings: sanitizeText(String(claudeResult.servings || "2")),
-      needsReview: parsedIngredients.length === 0,
+      needsReview: parsedIngredients.length < 3 || finalizeInstructionSteps(post.instructions).length < 3,
       sourceLabel: "Imported from TikTok",
     };
   }
@@ -3886,30 +3911,30 @@ async function importInstagram(sourceUrl, note) {
     });
     const claudeResult = await extractWithClaude(claudeInput, "");
     if (claudeResult) {
-      const parsedIngredients = Array.isArray(claudeResult.ingredients)
-        ? claudeResult.ingredients.map((ingredient) =>
-            typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient
-          )
-        : [];
-
       const post = postProcessExtractedSections({
         ingredients: claudeResult.ingredients || [],
         instructions: claudeResult.instructions || [],
       });
 
+      const parsedIngredients = normalizeIngredientList(
+        (post.ingredients || []).map((ingredient) =>
+          typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient
+        )
+      );
+
       return {
         platform: "instagram",
         sourceUrl,
-        title: normalizeSocialRecipeTitle(claudeResult.title) || "Geïmporteerd recept",
-        description: compactSocialDescription(claudeResult.description || "", claudeResult.title || ""),
+        title: normalizeSocialRecipeTitle(claudeResult.title) || normalizeSocialRecipeTitle(titleHint) || "Geïmporteerd recept",
+        description: compactSocialDescription(claudeResult.description || "", claudeResult.title || "") || extractDescription(captionForClaude, claudeResult.title || titleHint),
         caption: stripSocialNoise(captionForClaude),
         image,
         author,
-        ingredients: normalizeIngredientList(parsedIngredients),
+        ingredients: parsedIngredients,
         instructions: finalizeInstructionSteps(post.instructions),
         time: sanitizeText(claudeResult.time || "30 min"),
         servings: sanitizeText(String(claudeResult.servings || "2")),
-        needsReview: parsedIngredients.length === 0,
+        needsReview: parsedIngredients.length < 3 || finalizeInstructionSteps(post.instructions).length < 3,
         sourceLabel: "Imported from Instagram",
       };
     }
