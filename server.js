@@ -5046,15 +5046,100 @@ function parseAHProduct(product) {
   const imageUrl = images.find((i) => i.width === 200)?.url || images[0]?.url || "";
   const labels = [];
 
-  // Best-effort extraction of metadata from AH product payload (field names vary).
-  const collect = (val) => {
-    if (!val) return;
-    if (Array.isArray(val)) {
-      val.forEach(collect);
+  const pushLabel = (val) => {
+    if (val === null || val === undefined) return;
+    if (typeof val === "string") {
+      const clean = sanitizeText(val);
+      if (clean) labels.push(clean);
       return;
     }
-    if (typeof val === "string") {
-      labels.push(val);
+    if (typeof val === "number" && Number.isFinite(val)) {
+      labels.push(String(val));
+    }
+  };
+
+  const getBetterLifeStars = (root) => {
+    const visited = new Set();
+    let stars = null;
+
+    const walk = (node, depth, inBetterLifeContext) => {
+      if (!node || depth > 5) return;
+      if (typeof node !== "object") return;
+      if (visited.has(node)) return;
+      visited.add(node);
+
+      if (Array.isArray(node)) {
+        for (const item of node) walk(item, depth + 1, inBetterLifeContext);
+        return;
+      }
+
+      for (const [rawKey, value] of Object.entries(node)) {
+        const key = String(rawKey || "").toLowerCase();
+        const nextContext =
+          inBetterLifeContext ||
+          /\b(beter|better)\b/.test(key) ||
+          /\b(beter\s*leven|better\s*life)\b/.test(key) ||
+          /\b(keurmerk|quality\s*mark|qualitymark|sustainab|label)\b/.test(key);
+
+        if (typeof value === "string") {
+          const text = normalizeChoiceLabelText(value);
+          if (/\bbeter leven\b/.test(text) || /\bbetter life\b/.test(text)) {
+            // e.g. "Beter Leven 1 ster"
+            const m = text.match(/\b([123])\b/);
+            if (m) stars = Number(m[1]);
+          }
+          if (nextContext && stars == null) {
+            const m = text.match(/\b([123])\b/);
+            if (m) stars = Number(m[1]);
+          }
+        } else if (typeof value === "number" && Number.isFinite(value)) {
+          if (nextContext && [1, 2, 3].includes(value)) stars = value;
+        } else if (typeof value === "boolean") {
+          // ignore
+        } else if (value && typeof value === "object") {
+          // Common patterns: {stars: 1}, {star: 1}, {rating: 1}
+          if (nextContext && stars == null) {
+            const candidates = [
+              value.stars,
+              value.star,
+              value.rating,
+              value.score,
+              value.value,
+              value.level,
+            ];
+            for (const c of candidates) {
+              if (typeof c === "number" && [1, 2, 3].includes(c)) {
+                stars = c;
+                break;
+              }
+              if (typeof c === "string") {
+                const m = normalizeChoiceLabelText(c).match(/\b([123])\b/);
+                if (m) {
+                  stars = Number(m[1]);
+                  break;
+                }
+              }
+            }
+          }
+          walk(value, depth + 1, nextContext);
+        }
+      }
+    };
+
+    walk(root, 0, false);
+    return stars;
+  };
+
+  // Best-effort extraction of metadata from AH product payload (field names vary).
+  const collect = (val, depth = 0) => {
+    if (!val) return;
+    if (depth > 4) return;
+    if (Array.isArray(val)) {
+      val.forEach((v) => collect(v, depth + 1));
+      return;
+    }
+    if (typeof val === "string" || typeof val === "number") {
+      pushLabel(val);
       return;
     }
     if (typeof val === "object") {
@@ -5064,8 +5149,15 @@ function parseAHProduct(product) {
         val.title ||
         val.description ||
         val.value ||
+        val.text ||
         "";
-      if (candidate) labels.push(String(candidate));
+      if (candidate) pushLabel(candidate);
+
+      // Some AH fields embed nested label-ish objects; walk a bit deeper.
+      for (const v of Object.values(val)) {
+        if (typeof v === "string" || typeof v === "number") pushLabel(v);
+        else if (v && typeof v === "object") collect(v, depth + 1);
+      }
     }
   };
 
@@ -5076,6 +5168,8 @@ function parseAHProduct(product) {
   collect(product.labels);
 
   const canonical = detectChoiceLabelsFromText(labels.join(" "));
+  const betterLifeStars = getBetterLifeStars(product);
+  if (betterLifeStars === 1) canonical.push("beter leven 1 ster");
 
   return {
     id: numericId,
@@ -5158,6 +5252,9 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) 
   variants.push(
     { tag: "biologisch", query: `biologisch ${base}`, count: LABEL_COUNT },
     { tag: "beter leven 1 ster", query: `beter leven 1 ster ${base}`, count: LABEL_COUNT },
+    // Broader query to ensure we still retrieve Beter Leven items even when "1 ster"
+    // isn't matched in AH's search index. Star-level is then inferred from metadata.
+    { tag: null, query: `beter leven ${base}`, count: Math.max(LABEL_COUNT, 10) },
     { tag: "vegetarisch", query: `vegetarisch ${base}`, count: LABEL_COUNT },
     { tag: "vegan", query: `vegan ${base}`, count: LABEL_COUNT },
     { tag: "plantaardig", query: `plantaardig ${base}`, count: LABEL_COUNT }
