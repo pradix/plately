@@ -1573,6 +1573,58 @@ const HOME_QUICK_CHIP_POOL = [
   "Gezinsproof",
 ];
 
+// ── Focus-state helpers (recent searches, recent viewed recipes, intent chips) ─
+
+const HOME_INTENT_CHIPS = [
+  { label: "≤ 20 min", q: "20 min" },
+  { label: "Budget", q: "budget" },
+  { label: "Vega", q: "vega" },
+  { label: "Airfryer", q: "airfryer" },
+  { label: "Mealprep", q: "mealprep" },
+];
+
+const RECENT_SEARCHES_KEY = "plately-recent-searches";
+const RECENT_RECIPES_KEY = "plately-recent-recipes";
+const MAX_RECENT_SEARCHES = 6;
+const MAX_RECENT_RECIPES = 24;
+
+function loadRecentSearches() {
+  try {
+    const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string" && x.trim()) : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushRecentSearch(query) {
+  const text = (query || "").trim();
+  if (!text || text.length < 2) return;
+  const lower = text.toLowerCase();
+  const next = [text, ...loadRecentSearches().filter((x) => x.toLowerCase() !== lower)].slice(0, MAX_RECENT_SEARCHES);
+  try { localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+}
+
+function loadRecentRecipeIds() {
+  try {
+    const raw = localStorage.getItem(RECENT_RECIPES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string" && x.trim()) : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushRecentRecipeId(recipeId) {
+  const rid = String(recipeId || "").trim();
+  if (!rid) return;
+  const next = [rid, ...loadRecentRecipeIds().filter((x) => x !== rid)].slice(0, MAX_RECENT_RECIPES);
+  try { localStorage.setItem(RECENT_RECIPES_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+}
+
 function renderHomeQuickChips() {
   if (!homeSearchChipsWrap) return;
   const chipCount = Math.random() < 0.55 ? 4 : 5;
@@ -1600,6 +1652,109 @@ function renderHomeQuickChips() {
         `<button type="button" class="home-search-chip" data-home-search-chip="${escapeHtml(label)}">${escapeHtml(label)}</button>`
     )
     .join("");
+}
+
+function renderHomePinnedChannels() {
+  const wrap = document.getElementById("homeSearchPins");
+  if (!wrap) return;
+  const allChannels = getAllChannels();
+  const followedApproved = allChannels.filter(
+    (ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved",
+  );
+  let pins = followedApproved.slice(0, 6);
+  if (pins.length < 4) {
+    for (const ch of SEED_CHANNELS) {
+      if (pins.length >= 6) break;
+      if (!pins.find((p) => p.id === ch.id)) pins.push(ch);
+    }
+  }
+  pins = pins.slice(0, 6);
+  if (!pins.length) { wrap.innerHTML = ""; return; }
+  wrap.innerHTML = pins
+    .map((ch) => {
+      const fav = getSourceIconUrl(ch.url);
+      const initials = ch.initials || (ch.name || "?").slice(0, 2).toUpperCase();
+      const avatarInner = fav
+        ? `<img src="${escapeHtml(fav)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><span class="home-search-pin__initials" style="display:none">${escapeHtml(initials)}</span>`
+        : `<span class="home-search-pin__initials">${escapeHtml(initials)}</span>`;
+      return `
+        <button type="button" class="home-search-pin" data-home-pin-channel="${escapeHtml(ch.id)}" aria-label="Filter op ${escapeHtml(ch.name)}">
+          <span class="home-search-pin__avatar">${avatarInner}</span>
+          <span class="home-search-pin__name">${escapeHtml(ch.name)}</span>
+        </button>`;
+    })
+    .join("");
+}
+
+function renderHomeFocusPanel() {
+  const panel = document.getElementById("homeFocusPanel");
+  if (!panel) return;
+  const intents = HOME_INTENT_CHIPS
+    .map((c) => `<button type="button" class="home-intent-chip" data-home-intent="${escapeHtml(c.q)}">${escapeHtml(c.label)}</button>`)
+    .join("");
+  const recentSearches = loadRecentSearches();
+  const recentSearchHtml = recentSearches.length
+    ? `<div class="home-focus-section">
+         <h3 class="home-focus-title">Recente zoekopdrachten</h3>
+         <div class="home-recent-searches">${recentSearches
+           .map((q) => `<button type="button" class="home-recent-search" data-home-recent-search="${escapeHtml(q)}">${escapeHtml(q)}</button>`)
+           .join("")}</div>
+       </div>`
+    : "";
+  const recentIds = loadRecentRecipeIds();
+  const recentRecipes = recentIds.map((id) => getRecipeById(id)).filter(Boolean).slice(0, 6);
+  const recentRecipesHtml = recentRecipes.length
+    ? `<div class="home-focus-section">
+         <h3 class="home-focus-title">Onlangs bekeken</h3>
+         <div class="home-recent-recipes">${recentRecipes
+           .map((r) => `
+             <button type="button" class="home-recent-recipe" data-home-recent-recipe="${escapeHtml(r.id)}" aria-label="Open ${escapeHtml(r.title || "recept")}">
+               <img class="home-recent-recipe__img" src="${escapeHtml(r.image || "assets/hero-burger.svg")}" alt="" loading="lazy" />
+               <span class="home-recent-recipe__title">${escapeHtml(r.title || "Recept")}</span>
+             </button>`)
+           .join("")}</div>
+       </div>`
+    : "";
+  panel.innerHTML = `
+    <div class="home-focus-section">
+      <h3 class="home-focus-title">Snel zoeken</h3>
+      <div class="home-intent-row">${intents}</div>
+    </div>
+    ${recentSearchHtml}
+    ${recentRecipesHtml}
+  `;
+}
+
+function showHomeFocusPanel() {
+  const panel = document.getElementById("homeFocusPanel");
+  if (!panel) return;
+  if (state.view !== "home") return;
+  if ((searchInput?.value || "").trim().length > 0) return;
+  renderHomeFocusPanel();
+  panel.classList.remove("hidden");
+  panel.classList.add("home-focus-panel--open");
+}
+
+function hideHomeFocusPanel() {
+  const panel = document.getElementById("homeFocusPanel");
+  if (!panel) return;
+  panel.classList.add("hidden");
+  panel.classList.remove("home-focus-panel--open");
+}
+
+function runHomeSearchQuery(query) {
+  if (!searchInput) return;
+  const q = (query || "").trim();
+  searchInput.value = q;
+  state.channelSearchQuery = q;
+  state.channelSearchFilter = null;
+  hideHomeFocusPanel();
+  if (q.length >= 2) {
+    clearTimeout(channelSearchTimeout);
+    searchChannels(q);
+  } else {
+    ensureChannelSearchClosed();
+  }
 }
 
 function switchView(view) {
@@ -1680,15 +1835,29 @@ function switchView(view) {
     }
   } catch { /* ignore */ }
 
+  // Track recently viewed recipes for the home focus-state panel
+  if (view === "detail" && state.selectedRecipeId) {
+    pushRecentRecipeId(state.selectedRecipeId);
+  }
+
   // Home-specific: keep channel search panel consistent on returning home
   if (view === "home") {
     // Chips: pick a new set each time home is entered
     renderHomeQuickChips();
+    renderHomePinnedChannels();
+    hideHomeFocusPanel();
 
-    // If there is no query, force channel panel closed
-    if (isChannelSearchEmpty()) {
+    // Defensive: when input is empty, ALWAYS force the channel-search panel
+    // closed regardless of any lingering state. Mobile flows can leave
+    // state.channelSearchQuery populated after an import; we don't want
+    // the panel to remain visible when the user has no active query.
+    const inputEmpty = (searchInput?.value || "").trim().length === 0;
+    if (inputEmpty || isChannelSearchEmpty()) {
       ensureChannelSearchClosed();
     }
+  } else {
+    // Hide focus panel any time we leave home
+    hideHomeFocusPanel();
   }
 }
 
@@ -2310,6 +2479,7 @@ async function searchChannels(query) {
     return;
   }
   state.channelSearchQuery = query.trim();
+  pushRecentSearch(state.channelSearchQuery);
 
   if (channelSearchSection) {
     channelSearchSection.classList.remove("hidden");
@@ -2563,6 +2733,9 @@ function renderCategoryGrid() {
 }
 
 function renderChannelRow() {
+  // Whenever the channel row re-renders, the user's followed set may have changed,
+  // so re-paint the pinned-channel quick filters under the home search bar too.
+  renderHomePinnedChannels();
   const row = document.getElementById("channelRow");
   if (!row) return;
   // Only show followed channels that are approved (not pending)
@@ -6644,11 +6817,16 @@ bindEvent(searchInput, "input", (event) => {
   clearTimeout(channelSearchTimeout);
   const query = event.target.value.trim();
   state.channelSearchQuery = query;
-  if (query.length < 2) {
-    // Show empty channel results when query is too short
-    if (query.length === 0) {
-      renderChannelSearchResults([]);
+  if (query.length === 0) {
+    ensureChannelSearchClosed();
+    if (state.view === "home" && document.activeElement === searchInput) {
+      showHomeFocusPanel();
     }
+    return;
+  }
+  // Once typing starts, hide the focus panel so it doesn't cover results
+  hideHomeFocusPanel();
+  if (query.length < 2) {
     return;
   }
 
@@ -6662,17 +6840,36 @@ bindEvent(searchInput, "keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
     clearTimeout(channelSearchTimeout);
+    hideHomeFocusPanel();
     searchChannels(searchInput?.value || "");
   }
   if (event.key === "Escape") {
     searchInput.value = "";
-    state.channelSearchQuery = "";
-    renderChannelSearchResults([]);
+    ensureChannelSearchClosed();
+    hideHomeFocusPanel();
   }
+});
+
+bindEvent(searchInput, "focus", () => {
+  if (state.view === "home" && (searchInput?.value || "").trim().length === 0) {
+    showHomeFocusPanel();
+  }
+});
+
+bindEvent(searchInput, "blur", () => {
+  // Delay so taps inside the focus panel still register before it hides
+  setTimeout(() => {
+    const panel = document.getElementById("homeFocusPanel");
+    if (!panel) return;
+    if (panel.contains(document.activeElement)) return;
+    if (document.activeElement === searchInput) return;
+    hideHomeFocusPanel();
+  }, 180);
 });
 
 // Home quick chips (generated on load + when re-entering home)
 renderHomeQuickChips();
+renderHomePinnedChannels();
 bindEvent(homeSearchChipsWrap, "click", (event) => {
   const chip = event.target.closest("[data-home-search-chip]");
   if (!(chip instanceof HTMLElement)) return;
@@ -6682,14 +6879,58 @@ bindEvent(homeSearchChipsWrap, "click", (event) => {
   searchInput.dispatchEvent(new Event("input", { bubbles: true }));
 });
 
+// Pinned-channel buttons → set channel filter and surface results
+bindEvent(document.getElementById("homeSearchPins"), "click", (event) => {
+  const btn = event.target.closest("[data-home-pin-channel]");
+  if (!(btn instanceof HTMLElement)) return;
+  const id = btn.dataset.homePinChannel;
+  if (!id || !searchInput) return;
+  const channel = getAllChannels().find((c) => c.id === id);
+  if (!channel) return;
+  // Set filter first so channel-search results are scoped to this channel.
+  state.channelSearchFilter = id;
+  // Pre-fill with the channel name so the API returns its top recipes.
+  searchInput.value = channel.name;
+  state.channelSearchQuery = channel.name;
+  hideHomeFocusPanel();
+  clearTimeout(channelSearchTimeout);
+  searchChannels(channel.name);
+});
+
+// Focus-state panel: intent chips, recent searches, and recent recipes
+bindEvent(document.getElementById("homeFocusPanel"), "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const intent = target.closest("[data-home-intent]");
+  if (intent instanceof HTMLElement) {
+    runHomeSearchQuery(intent.dataset.homeIntent || "");
+    return;
+  }
+  const recent = target.closest("[data-home-recent-search]");
+  if (recent instanceof HTMLElement) {
+    runHomeSearchQuery(recent.dataset.homeRecentSearch || "");
+    return;
+  }
+  const recipeBtn = target.closest("[data-home-recent-recipe]");
+  if (recipeBtn instanceof HTMLElement) {
+    const id = recipeBtn.dataset.homeRecentRecipe;
+    if (id && getRecipeById(id)) {
+      state.selectedRecipeId = id;
+      hideHomeFocusPanel();
+      if (searchInput) searchInput.blur();
+      renderDetailRecipe(true);
+      switchView("detail");
+    }
+  }
+});
+
 // Close channel search panel
 bindEvent(document.getElementById("channelSearchClose"), "click", () => {
   if (searchInput) searchInput.value = "";
-  state.channelSearchQuery = "";
+  ensureChannelSearchClosed();
   renderQuickRecipeGrid();
   renderRecipeGrid();
-  renderChannelSearchResults([]);
-  if (channelSearchSection) channelSearchSection.classList.add("hidden");
+  hideHomeFocusPanel();
 });
 
 bindEvent(document.getElementById("channelSearchSection"), "click", (event) => {
@@ -6726,10 +6967,12 @@ bindEvent(channelSearchResults, "click", async (event) => {
     state.selectedRecipeId = recipe.id;
     // Open review screen so user can confirm details before saving
     openImportReview(recipe.id);
-    // Clear search
+    // Clear search and force-close the channel-search panel so it isn't
+    // left visible when the user navigates back to home after the import.
     if (searchInput) searchInput.value = "";
     state.searchQuery = "";
-    renderChannelSearchResults([]);
+    ensureChannelSearchClosed();
+    hideHomeFocusPanel();
   } catch (err) {
     showToast(err.message || "Importeren mislukt");
     btn.disabled = false;
