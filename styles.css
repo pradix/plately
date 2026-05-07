@@ -5925,7 +5925,6 @@ img { display: block; max-width: 100%; }
 }
 
 @media (min-width: 900px) {
-  .app-shell { width: min(100%, 480px); }
   .detail-hero img { height: 300px; }
 }
 
