@@ -2450,18 +2450,16 @@ function renderChannelSettings() {
   if (state.customChannels.length > 0) {
     customHTML += `<div class="channel-section-label">MIJN KANALEN</div>`;
 
-    // Show non-rejected channels: approved first (sorted A-Z), then pending (sorted A-Z)
+    // Show custom channels: approved first, then pending, then rejected (sorted A-Z within each)
     const customRows = state.customChannels
-      .filter((ch) => {
-        // Hide rejected channels from the user's list
-        return (ch.status || "approved") !== "rejected";
-      })
       .sort((a, b) => {
-        // Approved channels first, then pending
+        // Approved channels first, then pending, then rejected
         const aStatus = a.status || "approved";
         const bStatus = b.status || "approved";
-        if (aStatus === "approved" && bStatus !== "approved") return -1;
-        if (aStatus !== "approved" && bStatus === "approved") return 1;
+        const rank = (s) => (s === "approved" ? 0 : s === "pending" ? 1 : s === "rejected" ? 2 : 3);
+        const aRank = rank(aStatus);
+        const bRank = rank(bStatus);
+        if (aRank !== bRank) return aRank - bRank;
         // Within same status, sort alphabetically (A-Z)
         return a.name.localeCompare(b.name);
       })
@@ -2480,9 +2478,13 @@ function renderChannelSettings() {
       const isPending = status === "pending";
       const isRejected = status === "rejected";
       const toggleDisabled = (isPending || isRejected) ? "disabled" : "";
+      const rowDisabledClass = (isPending || isRejected) ? "channel-toggle-row--disabled" : "";
+      const toggleHtml = isRejected
+        ? `<span class="toggle-switch disabled" role="switch" aria-checked="${followed}" aria-disabled="true" tabindex="-1"></span>`
+        : `<span class="toggle-switch ${followed ? "toggle-switch--on" : ""} ${toggleDisabled}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${ch.id}" ${toggleDisabled}></span>`;
 
       return `
-        <div class="channel-toggle-row channel-toggle-row--custom ${isPending ? "channel-toggle-row--disabled" : ""}" data-channel-id="${ch.id}">
+        <div class="channel-toggle-row channel-toggle-row--custom ${rowDisabledClass}" data-channel-id="${ch.id}">
           <span class="channel-toggle-avatar">
             ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
           </span>
@@ -2490,7 +2492,7 @@ function renderChannelSettings() {
             <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
             <span class="channel-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
           </div>
-          <span class="toggle-switch ${followed ? "toggle-switch--on" : ""} ${toggleDisabled}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${ch.id}" ${toggleDisabled}></span>
+          ${toggleHtml}
           <button class="channel-delete-btn" type="button" aria-label="Verwijder ${escapeHtml(ch.name)}" data-delete-channel="${ch.id}">×</button>
         </div>`;
     }).join("");
@@ -6791,6 +6793,10 @@ bindEvent(document.getElementById("channelSettingsList"), "click", (event) => {
   const customChannel = state.customChannels.find((c) => c.id === id);
   if (customChannel && (customChannel.status || "approved") === "pending") {
     showToast("Dit kanaal is nog in behandeling. Je kunt het gebruiken zodra het is goedgekeurd.");
+    return;
+  }
+  if (customChannel && (customChannel.status || "approved") === "rejected") {
+    showToast("Dit kanaal is afgekeurd en kan niet worden ingeschakeld.");
     return;
   }
 
