@@ -4439,15 +4439,46 @@ async function importWebsite(sourceUrl) {
         )
       : "";
     const ahMetaTitle = html ? normalizeRecipeTitle(parseMetaTag(html, "og:title") || parseTitleTag(html)) : "";
-    const extractIntroFromReaderMarkdown = (markdown) => {
+    const extractIntroFromReaderMarkdown = (markdown, titleHint = "") => {
       const text = String(markdown || "");
       if (!text) return "";
-      const lines = text.split(/\n+/).map((l) => sanitizeText(l)).filter(Boolean);
-      // Skip heading lines and pick the first meaningful paragraph before ingredient/instruction headings.
-      for (const line of lines) {
-        if (/^#{1,6}\s/i.test(line)) continue;
-        if (INGREDIENT_HEADING_PATTERN.test(line) || INSTRUCTION_HEADING_PATTERN.test(line)) break;
-        if (line.length >= 30) return line;
+      const rawLines = text.split(/\n+/).map((l) => sanitizeText(l)).filter(Boolean);
+      if (!rawLines.length) return "";
+
+      // Jina reader markdown contains lots of boilerplate and sometimes multiple H1s.
+      // Prefer the H1 that matches the actual recipe title (when we have a hint).
+      const hint = normalizeRecipeTitle(titleHint || "").toLowerCase();
+      const h1Candidates = rawLines
+        .map((line, idx) => ({ line, idx }))
+        .filter(({ line }) => /^#\s+\S/.test(line));
+
+      const pickedH1 =
+        (hint
+          ? h1Candidates.find(({ line }) => normalizeRecipeTitle(line.replace(/^#\s+/, "")).toLowerCase() === hint) ||
+            h1Candidates.find(({ line }) => normalizeRecipeTitle(line.replace(/^#\s+/, "")).toLowerCase().includes(hint))
+          : null) ||
+        h1Candidates.reverse().find(({ line }) => !/recept\s*-|allerhande|\|\s*albert heijn/i.test(line)) ||
+        h1Candidates[0];
+
+      const h1Index = pickedH1 ? pickedH1.idx : -1;
+      const startIndex = h1Index >= 0 ? h1Index + 1 : 0;
+      const scan = rawLines.slice(startIndex, startIndex + 40);
+
+      for (const line of scan) {
+        if (!line) continue;
+        const plain = sanitizeText(String(line).replace(/\[([^\]]+)\]\([^)]+\)/g, "$1"));
+        if (!plain) continue;
+        if (/^#{1,6}\s/i.test(plain)) continue;
+        if (INGREDIENT_HEADING_PATTERN.test(plain) || INSTRUCTION_HEADING_PATTERN.test(plain)) break;
+        // Skip nutrition / time / rating snippets and CTA-like lines.
+        if (/^\d+\s*kcal\b/i.test(plain)) continue;
+        if (/^\d+\s*min\b/i.test(plain) || /^\d+\s*min\.\s*bereiden\b/i.test(plain)) continue;
+        if (/^\d+(?:[.,]\d+)?\/5\b/.test(plain)) continue;
+        if (/^\(\d+\)$/.test(plain)) continue;
+        if (/^kies producten\b/i.test(plain)) continue;
+        if (/^ga naar\b/i.test(plain) || /ga naar hoofdinhoud/i.test(plain)) continue;
+        if (/^toegankelijkheid\b/i.test(plain)) continue;
+        if (plain.length >= 30) return plain;
       }
       return "";
     };
@@ -4470,7 +4501,14 @@ async function importWebsite(sourceUrl) {
     })();
 
     const pickAhDescription = (candidates) => {
-      const cleaned = candidates.map((s) => sanitizeText(s)).filter(Boolean);
+      const cleaned = candidates
+        .map((s) => sanitizeText(s))
+        .filter(Boolean)
+        // Drop Allerhande boilerplate lines that often outrank the real intro.
+        .filter((s) => !/^zelf\b.+\bmaken\?/i.test(s))
+        .filter((s) => !/met dit recept van allerhande/i.test(s))
+        .filter((s) => !/bekijk ingrediënten/i.test(s))
+        .filter((s) => !/bereidingswijze!?\s*$/i.test(s));
       // Prefer the most "recipe-like" and non-boilerplate candidate.
       cleaned.sort((a, b) => scoreRecipeText(b) - scoreRecipeText(a));
       return cleaned[0] || "";
@@ -4486,8 +4524,14 @@ async function importWebsite(sourceUrl) {
       const readerServings = parseMarkdownServings(readerDocument.body);
       const ahReaderDescription = readerRecipe.description || "";
       const ahReaderTitle = normalizeRecipeTitle(readerRecipe.title || "");
-      const ahReaderIntro = extractIntroFromReaderMarkdown(readerDocument.body);
+      const ahReaderIntro = extractIntroFromReaderMarkdown(readerDocument.body, ahH1Title || ahMetaTitle || primaryRecipe.title);
       const mergedAhTitle = ahH1Title || ahMetaTitle || ahReaderTitle || primaryRecipe.title;
+      const normalizedAhTitle = normalizeRecipeTitle(mergedAhTitle || "");
+      // Allerhande titles sometimes include trailing "en avocado" style add-ons.
+      const finalAhTitle = normalizedAhTitle
+        .replace(/\s+en\s+avocado$/i, "")
+        .replace(/\s+en$/i, "")
+        .trim();
       const ahDescription = pickAhDescription([
         ahIntroFromHtml,
         ahMetaDescription,
@@ -4501,7 +4545,7 @@ async function importWebsite(sourceUrl) {
         ingredients: readerIngredients.length ? readerIngredients : readerRecipe.ingredients.length ? readerRecipe.ingredients : primaryRecipe.ingredients,
         instructions:
           readerInstructions.length ? readerInstructions : readerRecipe.instructions.length ? readerRecipe.instructions : primaryRecipe.instructions,
-        title: mergedAhTitle || primaryRecipe.title,
+        title: finalAhTitle || mergedAhTitle || primaryRecipe.title,
         description: ahDescription || primaryRecipe.description,
         servings: readerServings || readerRecipe.servings || primaryRecipe.servings,
         needsReview:
