@@ -9304,7 +9304,8 @@ body {
   position: fixed;
   inset: 0;
   z-index: 9600; /* above basket overlay (9500) */
-  background: rgba(0, 0, 0, 0.45);
+  /* Fully block the basket sheet behind it */
+  background: rgba(245, 243, 239, 0.98);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -9323,7 +9324,9 @@ body {
   border-radius: 24px 24px 0 0;
   width: 100%;
   max-width: 480px;
+  /* Keep the sheet height stable like the basket sheet */
   max-height: 92vh;
+  height: 92vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
