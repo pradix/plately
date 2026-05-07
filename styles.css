@@ -357,6 +357,16 @@ img { display: block; max-width: 100%; }
   gap: 10px;
 }
 
+.recipe-grid-more {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 0;
+}
+
+.recipe-grid-more__btn {
+  min-width: 220px;
+}
+
 .import-banner__input--full {
   width: 100%;
   border: 1.5px solid rgba(34,32,29,0.12);

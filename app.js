@@ -462,6 +462,7 @@ const state = {
   },
   searchQuery: "",
   activeCookbookFilter: null,
+  homeRecipesExpanded: false,
   followedChannelIds: ["ch-ah"], // Start with only Allerhande (primary Dutch recipe source)
   customChannels: [],
   channelSearchFilter: null,
@@ -2561,8 +2562,12 @@ function renderRecipeGrid() {
     recipes = [...recipes].reverse();
   }
 
-  // Cap at 20 when not actively searching/filtering
-  if (!isSearching && !state.activeCookbookFilter) recipes = recipes.slice(0, 20);
+  const totalRecipeCount = recipes.length;
+
+  // Home screen can get very long with lots of imports; keep it snappy by default.
+  const HOME_CAP = 12;
+  const shouldCapHome = state.view === "home" && !isSearching && !state.homeRecipesExpanded;
+  if (shouldCapHome) recipes = recipes.slice(0, HOME_CAP);
 
   // Update heading to reflect search state
   const headingEl = document.getElementById("recipeGridHeading") || document.querySelector(".kookboek-heading h1, .kookboek-heading h2");
@@ -2653,6 +2658,18 @@ function renderRecipeGrid() {
     )
     .join("");
 
+  // Home "toon meer" toggle
+  if (state.view === "home" && !isSearching && totalRecipeCount > HOME_CAP) {
+    const label = state.homeRecipesExpanded
+      ? "Toon minder"
+      : `Toon alles (${totalRecipeCount})`;
+    gridHtml += `
+      <div class="recipe-grid-more" style="grid-column:1/-1">
+        <button class="secondary-button recipe-grid-more__btn" type="button" id="homeToggleRecipeGrid">${escapeHtml(label)}</button>
+      </div>
+    `;
+  }
+
   recipeGrid.innerHTML = gridHtml;
 
   // Bind the add recipe card click
@@ -2660,6 +2677,15 @@ function renderRecipeGrid() {
   if (addRecipeCardBtn) {
     bindEvent(addRecipeCardBtn, "click", () => {
       switchView("import");
+    });
+  }
+
+  const toggleBtn = document.getElementById("homeToggleRecipeGrid");
+  if (toggleBtn) {
+    bindEvent(toggleBtn, "click", () => {
+      state.homeRecipesExpanded = !state.homeRecipesExpanded;
+      renderRecipeGrid();
+      document.getElementById("recipeGridSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 }
