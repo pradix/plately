@@ -4433,6 +4433,17 @@ async function importWebsite(sourceUrl) {
         : parseWebsiteRecipe(document.body, document.finalUrl || sourceUrl);
 
     const html = document.kind === "html" ? document.body : "";
+    const ahJsonLdRecipe = html ? findRecipeJsonLd(removeAdContainers(html)) : null;
+    const ahJsonLdTitle = sanitizeText(ahJsonLdRecipe?.name || "");
+    const ahJsonLdDescription = sanitizeText(stripTags(ahJsonLdRecipe?.description || ""));
+    const ahJsonLdTime = parseDurationToMinutes(ahJsonLdRecipe?.totalTime || ahJsonLdRecipe?.cookTime || ahJsonLdRecipe?.prepTime) || "";
+    const ahJsonLdServings = sanitizeText(ahJsonLdRecipe?.recipeYield || "");
+    const ahJsonLdCalories = (() => {
+      const raw = sanitizeText(ahJsonLdRecipe?.nutrition?.calories || "");
+      const match = raw.match(/(\d+)/);
+      return match ? `${match[1]} kcal` : "";
+    })();
+
     const ahH1Title = html
       ? normalizeRecipeTitle(
           sanitizeText(stripTags((html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || "")))
@@ -4482,7 +4493,7 @@ async function importWebsite(sourceUrl) {
       }
       return "";
     };
-    const ahTitle = ahH1Title || ahMetaTitle || primaryRecipe.title;
+    const ahTitle = normalizeRecipeTitle(ahJsonLdTitle) || ahH1Title || ahMetaTitle || primaryRecipe.title;
 
     const ahMetaDescription = html
       ? sanitizeText(
@@ -4501,14 +4512,28 @@ async function importWebsite(sourceUrl) {
     })();
 
     const pickAhDescription = (candidates) => {
-      const cleaned = candidates
-        .map((s) => sanitizeText(s))
-        .filter(Boolean)
+      const normalized = candidates.map((s) => sanitizeText(s)).filter(Boolean);
+      // If JSON-LD description is present, trust it first.
+      const first = normalized[0] || "";
+      if (
+        first &&
+        first.length >= 20 &&
+        !/^wij gebruiken cookies/i.test(first) &&
+        !/^published time:/i.test(first)
+      ) {
+        return first;
+      }
+
+      const cleaned = normalized
         // Drop Allerhande boilerplate lines that often outrank the real intro.
         .filter((s) => !/^zelf\b.+\bmaken\?/i.test(s))
         .filter((s) => !/met dit recept van allerhande/i.test(s))
         .filter((s) => !/bekijk ingrediënten/i.test(s))
-        .filter((s) => !/bereidingswijze!?\s*$/i.test(s));
+        .filter((s) => !/bereidingswijze!?\s*$/i.test(s))
+        // Drop reader boilerplate
+        .filter((s) => !/^published time:/i.test(s))
+        .filter((s) => !/^title:\s/i.test(s))
+        .filter((s) => !/^url source:\s/i.test(s));
       // Prefer the most "recipe-like" and non-boilerplate candidate.
       cleaned.sort((a, b) => scoreRecipeText(b) - scoreRecipeText(a));
       return cleaned[0] || "";
@@ -4524,8 +4549,8 @@ async function importWebsite(sourceUrl) {
       const readerServings = parseMarkdownServings(readerDocument.body);
       const ahReaderDescription = readerRecipe.description || "";
       const ahReaderTitle = normalizeRecipeTitle(readerRecipe.title || "");
-      const ahReaderIntro = extractIntroFromReaderMarkdown(readerDocument.body, ahH1Title || ahMetaTitle || primaryRecipe.title);
-      const mergedAhTitle = ahH1Title || ahMetaTitle || ahReaderTitle || primaryRecipe.title;
+      const ahReaderIntro = extractIntroFromReaderMarkdown(readerDocument.body, ahTitle || ahH1Title || ahMetaTitle || primaryRecipe.title);
+      const mergedAhTitle = ahTitle || ahH1Title || ahMetaTitle || ahReaderTitle || primaryRecipe.title;
       const normalizedAhTitle = normalizeRecipeTitle(mergedAhTitle || "");
       // Allerhande titles sometimes include trailing "en avocado" style add-ons.
       const finalAhTitle = normalizedAhTitle
@@ -4533,6 +4558,7 @@ async function importWebsite(sourceUrl) {
         .replace(/\s+en$/i, "")
         .trim();
       const ahDescription = pickAhDescription([
+        ahJsonLdDescription,
         ahIntroFromHtml,
         ahMetaDescription,
         ahReaderIntro,
@@ -4547,7 +4573,9 @@ async function importWebsite(sourceUrl) {
           readerInstructions.length ? readerInstructions : readerRecipe.instructions.length ? readerRecipe.instructions : primaryRecipe.instructions,
         title: finalAhTitle || mergedAhTitle || primaryRecipe.title,
         description: ahDescription || primaryRecipe.description,
-        servings: readerServings || readerRecipe.servings || primaryRecipe.servings,
+        time: ahJsonLdTime || primaryRecipe.time,
+        servings: ahJsonLdServings || readerServings || readerRecipe.servings || primaryRecipe.servings,
+        kcal: ahJsonLdCalories || primaryRecipe.kcal,
         needsReview:
           !(readerIngredients.length || readerRecipe.ingredients.length) ||
           !(readerInstructions.length || readerRecipe.instructions.length) ||
@@ -4560,7 +4588,10 @@ async function importWebsite(sourceUrl) {
       ...primaryRecipe,
       image: imageUrl || primaryRecipe.image,
       title: ahTitle || primaryRecipe.title,
-      description: pickAhDescription([ahIntroFromHtml, ahMetaDescription, primaryRecipe.description]) || primaryRecipe.description,
+      description: pickAhDescription([ahJsonLdDescription, ahIntroFromHtml, ahMetaDescription, primaryRecipe.description]) || primaryRecipe.description,
+      time: ahJsonLdTime || primaryRecipe.time,
+      servings: ahJsonLdServings || primaryRecipe.servings,
+      kcal: ahJsonLdCalories || primaryRecipe.kcal,
     };
   }
 
