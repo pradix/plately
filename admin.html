@@ -331,6 +331,10 @@
           <div class="stat-label">Gebruikers</div>
         </div>
         <div class="stat-card">
+          <div class="stat-value" id="activeUsers">-</div>
+          <div class="stat-label">Actief (7d)</div>
+        </div>
+        <div class="stat-card">
           <div class="stat-value" id="totalRecipes">-</div>
           <div class="stat-label">Recepten</div>
         </div>
@@ -341,6 +345,14 @@
         <div class="stat-card">
           <div class="stat-value" id="totalGroceries">-</div>
           <div class="stat-label">Boodschappen</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="totalCustomChannels">-</div>
+          <div class="stat-label">Custom kanalen</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="pendingCustomChannels">-</div>
+          <div class="stat-label">In behandeling</div>
         </div>
       </div>
 
@@ -363,6 +375,7 @@
               <th class="sortable" onclick="sortTable('recipes')">Recepten</th>
               <th class="sortable" onclick="sortTable('cookbooks')">Kookboeken</th>
               <th class="sortable" onclick="sortTable('groceryItems')">Boodschappen</th>
+              <th class="sortable" onclick="sortTable('customChannelsTotal')">Kanalen</th>
               <th class="sortable" onclick="sortTable('createdAt')">Aangemaakt</th>
               <th class="sortable" onclick="sortTable('updatedAt')">Laatst Actief</th>
             </tr>
@@ -401,11 +414,18 @@
         const totalRecipes = stats.users.reduce((sum, u) => sum + u.recipes, 0);
         const totalCookbooks = stats.users.reduce((sum, u) => sum + u.cookbooks, 0);
         const totalGroceries = stats.users.reduce((sum, u) => sum + u.groceryItems, 0);
+        const activeUsers = stats.users.filter((u) => {
+          const updated = new Date(u.updatedAt).getTime();
+          return Number.isFinite(updated) && (Date.now() - updated) < 604800000;
+        }).length;
 
         document.getElementById("totalUsers").textContent = stats.totalUsers;
+        document.getElementById("activeUsers").textContent = activeUsers;
         document.getElementById("totalRecipes").textContent = totalRecipes;
         document.getElementById("totalCookbooks").textContent = totalCookbooks;
         document.getElementById("totalGroceries").textContent = totalGroceries;
+        document.getElementById("totalCustomChannels").textContent = stats.customChannels?.total ?? 0;
+        document.getElementById("pendingCustomChannels").textContent = stats.customChannels?.pending ?? 0;
 
         renderUsers();
         loadPendingChannels();
@@ -542,6 +562,10 @@
           aVal = new Date(aVal).getTime();
           bVal = new Date(bVal).getTime();
         }
+        if (sortBy === 'customChannelsTotal') {
+          aVal = a.customChannelsCounts?.total ?? 0;
+          bVal = b.customChannelsCounts?.total ?? 0;
+        }
 
         if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
         if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
@@ -556,6 +580,8 @@
         const updatedStr = formatDate(updatedDate);
         const isNew = Date.now() - createdDate.getTime() < 86400000; // < 1 day
         const isActive = Date.now() - updatedDate.getTime() < 604800000; // < 7 days
+        const customTotal = user.customChannelsCounts?.total ?? 0;
+        const customPending = user.customChannelsCounts?.pending ?? 0;
 
         return `
           <tr class="user-row" onclick="showDetail('${escapeHtml(user.id)}')">
@@ -566,6 +592,7 @@
             <td>${user.recipes}</td>
             <td>${user.cookbooks}</td>
             <td>${user.groceryItems}</td>
+            <td>${customTotal}${customPending ? ` <span class="badge" title="In behandeling">${customPending}</span>` : ""}</td>
             <td class="timestamp">${createdStr}${isNew ? ' <span class="badge new">NEW</span>' : ''}</td>
             <td class="timestamp">${updatedStr}${isActive ? ' <span class="badge active">ACTIVE</span>' : ''}</td>
           </tr>
@@ -647,6 +674,17 @@
             ${user.cookbookList.map(c => `<li>${escapeHtml(c.name)}</li>`).join('')}
           </ul>
         ` : '<p>Geen kookboeken gemaakt</p>'}
+
+        <h3>Custom kanalen (${user.customChannelsCounts?.total ?? 0})</h3>
+        ${user.customChannels && user.customChannels.length > 0 ? `
+          <ul style="margin: 10px 0; padding-left: 20px;">
+            ${user.customChannels.map(ch => {
+              const status = ch.status || "approved";
+              const label = status === "pending" ? "In behandeling" : status === "rejected" ? "Afgekeurd" : "Goedgekeurd";
+              return `<li><strong>${escapeHtml(ch.name || ch.id)}</strong> — <span class="badge">${escapeHtml(label)}</span><br/><small style="color:#999">${escapeHtml(ch.url || "")}</small></li>`;
+            }).join('')}
+          </ul>
+        ` : '<p>Geen custom kanalen</p>'}
 
         <h3>Boodschappen</h3>
         <p>${user.groceryItems} items</p>

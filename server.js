@@ -6674,6 +6674,18 @@ const server = http.createServer(async (request, response) => {
             const profile = typeof u.profile === 'object' ? u.profile : JSON.parse(u.profile || '{}');
             const importedRecipes = appState.importedRecipes || [];
             const cookbooksList = appState.cookbooks || [];
+            const customChannelsList = Array.isArray(appState.customChannels) ? appState.customChannels : [];
+            const customChannelsCounts = customChannelsList.reduce(
+              (acc, ch) => {
+                const status = (ch?.status || "approved");
+                acc.total += 1;
+                if (status === "pending") acc.pending += 1;
+                else if (status === "rejected") acc.rejected += 1;
+                else acc.approved += 1;
+                return acc;
+              },
+              { total: 0, approved: 0, pending: 0, rejected: 0 }
+            );
             return {
               id: u.id,
               email: u.email,
@@ -6687,6 +6699,14 @@ const server = http.createServer(async (request, response) => {
               profilePhoto: profile.photo || "",
               importedRecipes: importedRecipes.map(r => ({ title: r.title || "Naamloos recept" })),
               cookbookList: cookbooksList.map(c => ({ name: c.name || "Naamloos kookboek" })),
+              customChannels: customChannelsList.map((ch) => ({
+                id: ch?.id || "",
+                name: ch?.name || "",
+                url: ch?.url || "",
+                status: ch?.status || "approved",
+                createdAt: ch?.createdAt || "",
+              })),
+              customChannelsCounts,
             };
           });
           console.log(`✅ Loaded ${users.length} users from PostgreSQL`);
@@ -6698,6 +6718,18 @@ const server = http.createServer(async (request, response) => {
           users = Object.values(parsed.users || {}).map((u) => {
             const importedRecipes = u.importedRecipes || [];
             const cookbooksList = u.cookbooks || [];
+            const customChannelsList = Array.isArray(u.customChannels) ? u.customChannels : [];
+            const customChannelsCounts = customChannelsList.reduce(
+              (acc, ch) => {
+                const status = (ch?.status || "approved");
+                acc.total += 1;
+                if (status === "pending") acc.pending += 1;
+                else if (status === "rejected") acc.rejected += 1;
+                else acc.approved += 1;
+                return acc;
+              },
+              { total: 0, approved: 0, pending: 0, rejected: 0 }
+            );
             return {
               id: u.id,
               email: u.email || "Guest",
@@ -6711,16 +6743,37 @@ const server = http.createServer(async (request, response) => {
               profilePhoto: u.profile?.photo || "",
               importedRecipes: importedRecipes.map(r => ({ title: r.title || "Naamloos recept" })),
               cookbookList: cookbooksList.map(c => ({ name: c.name || "Naamloos kookboek" })),
+              customChannels: customChannelsList.map((ch) => ({
+                id: ch?.id || "",
+                name: ch?.name || "",
+                url: ch?.url || "",
+                status: ch?.status || "approved",
+                createdAt: ch?.createdAt || "",
+              })),
+              customChannelsCounts,
             };
           });
           sessions = Object.values(parsed.sessions || {});
           console.log(`✅ Loaded ${users.length} users from file`);
         }
 
+        const customChannelTotals = users.reduce(
+          (acc, u) => {
+            const c = u.customChannelsCounts || { total: 0, approved: 0, pending: 0, rejected: 0 };
+            acc.total += c.total || 0;
+            acc.approved += c.approved || 0;
+            acc.pending += c.pending || 0;
+            acc.rejected += c.rejected || 0;
+            return acc;
+          },
+          { total: 0, approved: 0, pending: 0, rejected: 0 }
+        );
+
         const stats = {
           totalUsers: users.length,
           totalSessions: sessions.length,
           users: users,
+          customChannels: customChannelTotals,
         };
 
         console.log("✅ Returning stats:", stats.totalUsers, "users");
