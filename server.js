@@ -5062,28 +5062,34 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
 // query variants in parallel so the basket alternatives screen can group by
 // dietary preference. Returns a deduplicated, price-sorted list of up to
 // `maxCount` products. Each product carries its inferred labels.
-async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 12) {
+async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) {
   const base = sanitizeText(ingredient || "");
   if (!base) return [];
 
-  // Build all the search variants we want to issue. The first entry is always
-  // the plain-base search so we never end up with an empty result.
-  const variants = [{ tag: null, query: base }];
-  // If the user already toggled bio in the basket, prefer biologisch as base.
-  if (prefs?.bio) variants[0] = { tag: "biologisch", query: `biologisch ${base}` };
+  // We want a richer pool than the on-screen cap so the frontend can:
+  // - show more products overall
+  // - filter/sort by dietary chips without returning an empty list
+  const BASE_COUNT = 12; // broad results
+  const LABEL_COUNT = 8; // per-label variants (deduped afterwards)
+
+  const variants = [];
+  // Always pull a plain-base search so we never end up with an empty result.
+  variants.push({ tag: null, query: base, count: BASE_COUNT });
+  // If the user already toggled bio in the basket, also pull a biologisch-boosted base set.
+  if (prefs?.bio) variants.push({ tag: "biologisch", query: `biologisch ${base}`, count: BASE_COUNT });
 
   // Always pull label-specific alternatives so we can categorize them.
   variants.push(
-    { tag: "biologisch", query: `biologisch ${base}` },
-    { tag: "beter leven 1 ster", query: `beter leven 1 ster ${base}` },
-    { tag: "vegetarisch", query: `vegetarisch ${base}` },
-    { tag: "vegan", query: `vegan ${base}` },
-    { tag: "plantaardig", query: `plantaardig ${base}` }
+    { tag: "biologisch", query: `biologisch ${base}`, count: LABEL_COUNT },
+    { tag: "beter leven 1 ster", query: `beter leven 1 ster ${base}`, count: LABEL_COUNT },
+    { tag: "vegetarisch", query: `vegetarisch ${base}`, count: LABEL_COUNT },
+    { tag: "vegan", query: `vegan ${base}`, count: LABEL_COUNT },
+    { tag: "plantaardig", query: `plantaardig ${base}`, count: LABEL_COUNT }
   );
 
   const buckets = await Promise.all(
     variants.map(async (v) => {
-      const products = await findAHProducts(base, 6, v.query);
+      const products = await findAHProducts(base, v.count || LABEL_COUNT, v.query);
       return { tag: v.tag, products };
     })
   );
@@ -6438,7 +6444,7 @@ async function buildStoreBasket(body) {
 
         // Fetch a wider, label-tagged set of alternatives so the AH "Wissel"
         // sheet can group by Meest voordelig / Bio / Beter Leven / etc.
-        let products = await findAHAlternativesGrouped(rawName, preferences, 12);
+        let products = await findAHAlternativesGrouped(rawName, preferences, 30);
 
         // If the broad fetch returned nothing, fall back to the legacy single
         // query so the basket is never empty for that item.
@@ -6479,9 +6485,9 @@ async function buildStoreBasket(body) {
         : fallbackChoices;
     }
 
-    // AH gets up to 12 grouped alternatives so the Wissel sheet has enough
-    // variety to populate Meest voordelig / Biologisch / Beter Leven / etc.
-    const choicesCap = store === "albert-heijn" ? 12 : 3;
+    // AH gets a larger alternatives pool so the Wissel sheet can show more
+    // products and allow chip-based filtering without starving the list.
+    const choicesCap = store === "albert-heijn" ? 30 : 3;
 
     return {
       id: `basket-item-${index}`,

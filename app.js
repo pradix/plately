@@ -484,6 +484,8 @@ const state = {
   basketServings: 2, // current persons
   basketBaseServings: 2, // base when basket was opened
   basketFilter: { bio: false, beterLeven1: false, vegetarisch: false, vegan: false, plantaardig: false },
+  altSheetItemIndex: null,
+  altSheetFilter: null, // null = grouped view, otherwise one of: beterLeven1|vegetarisch|vegan|plantaardig|more
   cookbooks: [],
   selectedCookbookId: "",
   pendingCookbookSaveRecipeId: "",
@@ -1449,6 +1451,7 @@ function closeBasketModal() {
   }
   state.basketPreview = null;
   state.altSheetItemIndex = null;
+  state.altSheetFilter = null;
 }
 
 function getBasketHandoffUrl(preview) {
@@ -1665,6 +1668,15 @@ const ALT_SECTIONS = [
   { id: "more", title: "Meer alternatieven" },
 ];
 
+const ALT_FILTER_CHIPS = [
+  { id: null, label: "Alles", subtle: true },
+  { id: "beterLeven1", label: "Beter Leven 1 ster" },
+  { id: "vegetarisch", label: "Vegetarisch" },
+  { id: "vegan", label: "Vegan" },
+  { id: "plantaardig", label: "Plantaardig" },
+  { id: "more", label: "Meer alternatieven" },
+];
+
 function classifyAlternative(choice, item) {
   const flags = extractBasketLabelsFromChoice(choice, item);
   if (flags.bio) return "biologisch";
@@ -1678,9 +1690,42 @@ function classifyAlternative(choice, item) {
 function renderAlternativesSheet(item) {
   const listEl = document.getElementById("altOverlayList");
   const ctxEl = document.getElementById("altOverlayContext");
+  const chipsEl = document.getElementById("altOverlayChips");
   if (!listEl) return;
 
-  const choices = Array.isArray(item?.choices) ? item.choices.slice() : [];
+  const rawChoices = Array.isArray(item?.choices) ? item.choices.slice() : [];
+  const choices = (() => {
+    const seen = new Set();
+    const out = [];
+    for (const c of rawChoices) {
+      if (!c) continue;
+      const key =
+        c.productId ||
+        c.id ||
+        c.url ||
+        [c.title || "", c.imageUrl || "", c.subtitle || ""].join("|");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(c);
+    }
+    return out;
+  })();
+
+  if (chipsEl) {
+    const active = state.altSheetFilter ?? null;
+    chipsEl.innerHTML = ALT_FILTER_CHIPS.map((chip) => {
+      const isActive = chip.id === active || (chip.id === null && active === null);
+      return `
+        <button
+          type="button"
+          class="alt-filter-chip${isActive ? " is-active" : ""}${chip.subtle ? " alt-filter-chip--subtle" : ""}"
+          data-alt-filter="${chip.id ?? ""}"
+          aria-pressed="${isActive ? "true" : "false"}"
+        >${escapeHtml(chip.label)}</button>
+      `;
+    }).join("");
+  }
+
   if (ctxEl) {
     const amount = item?.ingredientAmount ? `${escapeHtml(item.ingredientAmount)} ` : "";
     const title = escapeHtml(item?.ingredientTitle || "");
@@ -1699,6 +1744,59 @@ function renderAlternativesSheet(item) {
     section: classifyAlternative(choice, item),
     priceNum: parseFloat(String(choice.price || "0").replace("€", "").replace(",", ".")) || 9999,
   }));
+
+  const activeFilter = state.altSheetFilter ?? null;
+  if (activeFilter) {
+    const matches = (entry) => {
+      const flags = extractBasketLabelsFromChoice(entry.choice, item);
+      if (activeFilter === "beterLeven1") return Boolean(flags.beterLeven1);
+      if (activeFilter === "vegetarisch") return Boolean(flags.vegetarisch);
+      if (activeFilter === "vegan") return Boolean(flags.vegan);
+      if (activeFilter === "plantaardig") return Boolean(flags.plantaardig);
+      if (activeFilter === "more") {
+        const anyChipLabel = Boolean(flags.beterLeven1 || flags.vegetarisch || flags.vegan || flags.plantaardig || flags.bio);
+        return !anyChipLabel;
+      }
+      return true;
+    };
+
+    const filtered = annotated
+      .filter(matches)
+      .sort((a, b) => a.priceNum - b.priceNum);
+
+    const chipTitle = ALT_FILTER_CHIPS.find((c) => c.id === activeFilter)?.label || "Alternatieven";
+    const selectedIdx = item.selectedChoiceIndex || 0;
+    const cards = filtered
+      .map((e) => {
+        const c = e.choice;
+        const img = c.imageUrl
+          ? `<img class="alt-card__img" src="${escapeHtml(c.imageUrl)}" alt="" loading="lazy" />`
+          : `<span class="alt-card__img alt-card__img--placeholder">${escapeHtml(c.emoji || "🛒")}</span>`;
+        const meta = [c.price, c.subtitle].filter(Boolean).map(escapeHtml).join(" · ");
+        const cta = e.idx === selectedIdx
+          ? `<span class="alt-card__chosen">Gekozen</span>`
+          : `<button class="alt-card__choose" type="button" data-alt-choose="${e.idx}">Kies</button>`;
+        return `
+          <div class="alt-card${e.idx === selectedIdx ? " is-selected" : ""}">
+            ${img}
+            <div class="alt-card__info">
+              <p class="alt-card__title">${escapeHtml(c.title || "")}</p>
+              <p class="alt-card__meta">${meta}</p>
+            </div>
+            ${cta}
+          </div>
+        `;
+      })
+      .join("");
+
+    listEl.innerHTML = filtered.length
+      ? `<section class="alt-section">
+           <h3 class="alt-section__title">${escapeHtml(chipTitle)}</h3>
+           <div class="alt-section__list">${cards}</div>
+         </section>`
+      : `<p class="alt-sheet__empty">Geen alternatieven gevonden.</p>`;
+    return;
+  }
 
   // Cheapest option floats to the top-only "Meest voordelig" section so it
   // is always discoverable, even when it also fits a label section.
@@ -1780,6 +1878,7 @@ function openAlternativesSheet(itemIndex) {
   const item = preview.items[itemIndex];
   if (!item) return;
   state.altSheetItemIndex = itemIndex;
+  state.altSheetFilter = null;
 
   const overlay = document.getElementById("altOverlay");
   if (!overlay) return;
@@ -7637,6 +7736,18 @@ bindEvent(document.getElementById("basketSheetList"), "click", (e) => {
 bindEvent(document.getElementById("altOverlayBack"), "click", closeAlternativesSheet);
 bindEvent(document.getElementById("altOverlay"), "click", (e) => {
   if (e.target === document.getElementById("altOverlay")) closeAlternativesSheet();
+});
+bindEvent(document.getElementById("altOverlayChips"), "click", (e) => {
+  const target = e.target;
+  if (!(target instanceof Element)) return;
+  const btn = target.closest("[data-alt-filter]");
+  if (!btn) return;
+  const raw = String(btn.dataset.altFilter ?? "");
+  const next = raw ? raw : null;
+  state.altSheetFilter = state.altSheetFilter === next ? null : next;
+  const itemIdx = state.altSheetItemIndex;
+  const item = state.basketPreview?.items?.[itemIdx];
+  if (item) renderAlternativesSheet(item);
 });
 bindEvent(document.getElementById("altOverlayList"), "click", (e) => {
   const target = e.target;
