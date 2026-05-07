@@ -1797,8 +1797,12 @@ function formatAltBadgeLabel(key) {
   return "";
 }
 
-function renderAltBadges(choice, item, { showCheapest = false } = {}) {
+function renderAltBadges(choice, item, { showCheapest = false, forceKeys = [] } = {}) {
   const keys = getAlternativeLabelKeys(choice, item);
+  for (const fk of forceKeys) {
+    const k = normalizeAltLabelToken(fk);
+    if (k) keys.add(k);
+  }
   const primary = ALT_BADGE_PRIORITY.filter((k) => keys.has(k)).slice(0, 2);
   const badges = [
     ...primary.map((k) => ({ key: k, label: formatAltBadgeLabel(k) })),
@@ -1909,7 +1913,10 @@ function renderAlternativesSheet(item) {
           ? `<img class="alt-card__img" src="${escapeHtml(c.imageUrl)}" alt="" loading="lazy" />`
           : `<span class="alt-card__img alt-card__img--placeholder">${escapeHtml(c.emoji || "🛒")}</span>`;
         const meta = [c.price, c.subtitle].filter(Boolean).map(escapeHtml).join(" · ");
-        const badges = renderAltBadges(c, item);
+        // Force at least the active chip label as a badge when in single-filter mode,
+        // even if AH metadata did not include explicit labels.
+        const forceKeys = activeFilter ? [activeFilter] : [];
+        const badges = renderAltBadges(c, item, { forceKeys });
         const cta = e.idx === selectedIdx
           ? `<span class="alt-card__chosen">Gekozen</span>`
           : `<button class="alt-card__choose" type="button" data-alt-choose="${e.idx}">Kies</button>`;
@@ -1976,7 +1983,10 @@ function renderAlternativesSheet(item) {
       : `<span class="alt-card__img alt-card__img--placeholder">${escapeHtml(c.emoji || "🛒")}</span>`;
     const meta = [c.price, c.subtitle].filter(Boolean).map(escapeHtml).join(" · ");
     const isCheapest = entry.idx === cheapestKey;
-    const badges = renderAltBadges(c, item, { showCheapest: isCheapest });
+    // Force the section label as a badge so users can always see the kenmerk
+    // even when AH metadata is incomplete.
+    const forceKeys = [sec.id];
+    const badges = renderAltBadges(c, item, { showCheapest: isCheapest, forceKeys });
     const cta = isSelected
       ? `<span class="alt-card__chosen">Gekozen</span>`
       : `<button class="alt-card__choose" type="button" data-alt-choose="${entry.idx}">Kies</button>`;
