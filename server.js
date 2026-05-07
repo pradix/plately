@@ -4450,25 +4450,59 @@ async function importWebsite(sourceUrl) {
         )
       : "";
     const ahMetaTitle = html ? normalizeRecipeTitle(parseMetaTag(html, "og:title") || parseTitleTag(html)) : "";
+    const extractReaderRecipeTitle = (markdown) => {
+      const text = String(markdown || "");
+      if (!text) return "";
+      const rawLines = text.split(/\n+/).map((l) => sanitizeText(l)).filter(Boolean);
+      if (!rawLines.length) return "";
+
+      const ingredientHeadingIdxs = rawLines
+        .map((line, idx) => (String(line).trim().startsWith("## ") && INGREDIENT_HEADING_PATTERN.test(sanitizeText(line.replace(/^##\s+/, ""))) ? idx : -1))
+        .filter((idx) => idx >= 0);
+
+      const h1Candidates = rawLines
+        .map((line, idx) => ({ line, idx }))
+        .filter(({ line }) => /^#\s+\S/.test(line));
+
+      const scored = h1Candidates
+        .map(({ line, idx }) => {
+          const title = normalizeRecipeTitle(line.replace(/^#\s+/, ""));
+          const lower = title.toLowerCase();
+          const nextIng = ingredientHeadingIdxs.find((i) => i > idx);
+          const dist = Number.isFinite(nextIng) ? nextIng - idx : 9999;
+          // Prefer titles that are near the ingredients section and not obvious non-recipe headings.
+          const penalty =
+            /privacy|voorkeuren|cookie|voorwaarden|inloggen|menu|zoek/i.test(lower) ? 5000 : 0;
+          const boilerplate = /allerhande|\|\s*albert heijn|recept\s*-\s*/i.test(title) ? 200 : 0;
+          return { idx, title, score: dist + penalty + boilerplate };
+        })
+        .sort((a, b) => a.score - b.score);
+
+      return scored[0]?.title || "";
+    };
+
     const extractIntroFromReaderMarkdown = (markdown, titleHint = "") => {
       const text = String(markdown || "");
       if (!text) return "";
       const rawLines = text.split(/\n+/).map((l) => sanitizeText(l)).filter(Boolean);
       if (!rawLines.length) return "";
 
-      // Jina reader markdown contains lots of boilerplate and sometimes multiple H1s.
-      // Prefer the H1 that matches the actual recipe title (when we have a hint).
+      // Prefer the H1 that matches the actual recipe title (when we have a hint),
+      // otherwise pick the best candidate near the ingredients section.
       const hint = normalizeRecipeTitle(titleHint || "").toLowerCase();
       const h1Candidates = rawLines
         .map((line, idx) => ({ line, idx }))
         .filter(({ line }) => /^#\s+\S/.test(line));
 
+      const inferredTitle = extractReaderRecipeTitle(markdown);
       const pickedH1 =
         (hint
           ? h1Candidates.find(({ line }) => normalizeRecipeTitle(line.replace(/^#\s+/, "")).toLowerCase() === hint) ||
             h1Candidates.find(({ line }) => normalizeRecipeTitle(line.replace(/^#\s+/, "")).toLowerCase().includes(hint))
           : null) ||
-        h1Candidates.reverse().find(({ line }) => !/recept\s*-|allerhande|\|\s*albert heijn/i.test(line)) ||
+        (inferredTitle
+          ? h1Candidates.find(({ line }) => normalizeRecipeTitle(line.replace(/^#\s+/, "")) === inferredTitle)
+          : null) ||
         h1Candidates[0];
 
       const h1Index = pickedH1 ? pickedH1.idx : -1;
@@ -4548,7 +4582,7 @@ async function importWebsite(sourceUrl) {
       const readerInstructions = parseMarkdownInstructionSection(readerDocument.body);
       const readerServings = parseMarkdownServings(readerDocument.body);
       const ahReaderDescription = readerRecipe.description || "";
-      const ahReaderTitle = normalizeRecipeTitle(readerRecipe.title || "");
+      const ahReaderTitle = normalizeRecipeTitle(extractReaderRecipeTitle(readerDocument.body) || readerRecipe.title || "");
       const ahReaderIntro = extractIntroFromReaderMarkdown(readerDocument.body, ahTitle || ahH1Title || ahMetaTitle || primaryRecipe.title);
       const mergedAhTitle = ahTitle || ahH1Title || ahMetaTitle || ahReaderTitle || primaryRecipe.title;
       const normalizedAhTitle = normalizeRecipeTitle(mergedAhTitle || "");
