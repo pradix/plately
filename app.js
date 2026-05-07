@@ -1007,7 +1007,14 @@ function openAuthModal(mode = "login") {
   if (authFeedback) authFeedback.textContent = "";
 
   authForm.reset();
-  setTimeout(() => authEmail?.focus(), 100);
+  // UX: In register mode, focus the name field first so users don't type their name into the email input.
+  setTimeout(() => {
+    if (isRegister) {
+      document.getElementById("authName")?.focus();
+      return;
+    }
+    authEmail?.focus();
+  }, 100);
 }
 
 function closeAuthModal() {
@@ -4626,7 +4633,9 @@ function normalizeImportedTitle(value) {
     .replace(/\s+/g, " ")
     .trim();
 
-  if (!clean) {
+  // Some importers occasionally return placeholders like "-" or "—".
+  const looksLikePlaceholder = !clean || /^[\s\-–—•·_|]+$/.test(clean);
+  if (looksLikePlaceholder) {
     return "Geïmporteerd recept";
   }
 
@@ -4636,6 +4645,17 @@ function normalizeImportedTitle(value) {
 
   const words = clean.split(" ").filter(Boolean);
   return words.slice(0, 7).join(" ");
+}
+
+function normalizeImportedTime(value) {
+  const clean = String(value || "").trim();
+  if (!clean) return "30 min";
+  // Fix common glitch where extra digits get appended (e.g. "45 min45").
+  const minMatch = clean.match(/(\d+)\s*(?:min|mins|minute|minutes|minuten)\b/i);
+  if (minMatch) return `${minMatch[1]} min`;
+  const digitMatch = clean.match(/\b(\d{1,3})\b/);
+  if (digitMatch) return `${digitMatch[1]} min`;
+  return clean;
 }
 
 function parseServingsValue(value) {
@@ -4665,7 +4685,7 @@ function normalizeImportedRecipe(recipe) {
     id: recipeId,
     title: cleanTitle,
     description,
-    time: recipe.time || "30 min",
+    time: normalizeImportedTime(recipe.time),
     kcal: recipe.kcal || `${Math.max(280, parsedIngredients.length * 85)} kcal`,
     servings,
     mealTag,
@@ -5225,6 +5245,11 @@ async function submitAuth(mode, email, password) {
     if (payload.auth.token) storeAuthToken(payload.auth.token);
   }
   applyPersistedAppState(payload.user);
+  // Keep the account email visible under Profile → Mijn account.
+  // (Server user.email is the canonical login email; profile.email is optional UI metadata.)
+  if (!state.profile.email && state.auth.email) {
+    state.profile.email = state.auth.email;
+  }
   if (state.auth.authenticated) markUserAsAuthed();
   renderAll();
 
