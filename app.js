@@ -1852,10 +1852,34 @@ function renderAlternativesSheet(item) {
     return out;
   })();
 
+  // Determine which filter chips have any matching products for this item.
+  const chipAvailability = (() => {
+    const counts = { beterLeven1: 0, vegetarisch: 0, vegan: 0, plantaardig: 0, more: 0 };
+    for (const c of choices) {
+      const flags = extractBasketLabelsFromChoice(c, item);
+      if (flags.beterLeven1) counts.beterLeven1 += 1;
+      if (flags.vegetarisch) counts.vegetarisch += 1;
+      if (flags.vegan) counts.vegan += 1;
+      if (flags.plantaardig) counts.plantaardig += 1;
+      const anyLabeled = Boolean(flags.bio || flags.beterLeven1 || flags.vegetarisch || flags.vegan || flags.plantaardig);
+      if (!anyLabeled) counts.more += 1;
+    }
+    return counts;
+  })();
+
   if (chipsEl) {
     const active = state.altSheetFilter ?? null;
-    chipsEl.innerHTML = ALT_FILTER_CHIPS.map((chip) => {
-      const isActive = chip.id === active || (chip.id === null && active === null);
+    const visibleChips = ALT_FILTER_CHIPS.filter((chip) => {
+      if (chip.id === null) return true; // "Alles" always visible
+      return (chipAvailability[chip.id] || 0) > 0;
+    });
+    // If the currently active chip has no matches, fall back to grouped view.
+    if (active && (chipAvailability[active] || 0) === 0) {
+      state.altSheetFilter = null;
+    }
+    chipsEl.innerHTML = visibleChips.map((chip) => {
+      const nextActive = state.altSheetFilter ?? null;
+      const isActive = chip.id === nextActive || (chip.id === null && nextActive === null);
       return `
         <button
           type="button"
