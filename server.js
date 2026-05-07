@@ -6307,7 +6307,13 @@ async function searchChannelRecipes(query, allowedChannels = null) {
 async function buildStoreBasket(body) {
   const store = normalizeStoreSlug(body.store);
   const items = Array.isArray(body.items) ? body.items : [];
-  const bio = Boolean(body.bio); // when true, prefix "biologisch" to all AH searches
+  const preferences = {
+    bio: Boolean(body.bio), // when true, prefix "biologisch" to all AH searches
+    beterLeven1: Boolean(body.beterLeven1),
+    vegetarisch: Boolean(body.vegetarisch),
+    vegan: Boolean(body.vegan),
+    plantaardig: Boolean(body.plantaardig),
+  };
 
   if (!items.length) {
     throw new HttpError(400, "Er staan geen boodschappen klaar om te bestellen.");
@@ -6340,16 +6346,30 @@ async function buildStoreBasket(body) {
   }
 
   // For AH: fetch up to 3 real product matches per ingredient so the user can pick alternatives.
-  // When bio=true, prefix "biologisch" to each search so AH returns organic versions.
+  // Preferences are currently applied by prefixing query tokens. This is best-effort:
+  // if AH doesn't expose explicit label filters in the API response, query tokens help
+  // steer search results toward matching products.
   // For other stores: keep single-match behaviour.
+  const buildAHSearchQuery = (rawName, prefs) => {
+    const base = sanitizeText(rawName || "");
+    if (!base) return "";
+    const tokens = [];
+    if (prefs?.bio) tokens.push("biologisch");
+    if (prefs?.beterLeven1) tokens.push("beter leven 1 ster");
+    if (prefs?.vegetarisch) tokens.push("vegetarisch");
+    if (prefs?.vegan) tokens.push("vegan");
+    if (prefs?.plantaardig) tokens.push("plantaardig");
+    return tokens.length ? `${tokens.join(" ")} ${base}` : base;
+  };
+
   let searchResults;
   if (store === "albert-heijn") {
     searchResults = await Promise.all(
       items.map(async (item) => {
         const rawName = sanitizeText(item.title || "");
         if (!rawName) return { ingredient: rawName, product: null, products: [] };
-        const searchName = bio ? `biologisch ${rawName}` : rawName;
-        const products = await findAHProducts(searchName, 3);
+        const searchQuery = buildAHSearchQuery(rawName, preferences);
+        const products = await findAHProducts(searchQuery || rawName, 3);
         return { ingredient: rawName, product: products[0] ?? null, products };
       })
     ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));

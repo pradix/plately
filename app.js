@@ -5369,7 +5369,25 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
   }
 }
 
-async function refetchBasketWithBio() {
+let basketRefetchDebounceTimer = null;
+
+function scheduleRefetchBasketWithPreferences() {
+  if (basketRefetchDebounceTimer) {
+    clearTimeout(basketRefetchDebounceTimer);
+  }
+  basketRefetchDebounceTimer = setTimeout(() => {
+    basketRefetchDebounceTimer = null;
+    refetchBasketWithPreferences({
+      bio: state.basketFilter.bio,
+      beterLeven1: state.basketFilter.beterLeven1,
+      vegetarisch: state.basketFilter.vegetarisch,
+      vegan: state.basketFilter.vegan,
+      plantaardig: state.basketFilter.plantaardig,
+    });
+  }, 450);
+}
+
+async function refetchBasketWithPreferences(preferences) {
   const preview = state.basketPreview;
   if (!preview || preview.store !== "albert-heijn") {
     renderBasketPreview();
@@ -5379,8 +5397,15 @@ async function refetchBasketWithBio() {
   // Show loading indicator in the list
   const listEl = document.getElementById("basketSheetList");
   if (listEl) {
-    listEl.innerHTML =
-      '<p style="text-align:center;padding:32px 24px;color:#aaa;font-size:0.95rem">🌱 Biologische producten zoeken…</p>';
+    const prefs = preferences || {};
+    const bits = [];
+    if (prefs.bio) bits.push("biologisch");
+    if (prefs.beterLeven1) bits.push("beter leven");
+    if (prefs.vegetarisch) bits.push("vegetarisch");
+    if (prefs.vegan) bits.push("vegan");
+    if (prefs.plantaardig) bits.push("plantaardig");
+    const label = bits.length ? bits.join(", ") : "alternatieven";
+    listEl.innerHTML = `<p style="text-align:center;padding:32px 24px;color:#aaa;font-size:0.95rem">Nieuwe ${escapeHtml(label)} producten zoeken…</p>`;
   }
 
   try {
@@ -5392,7 +5417,11 @@ async function refetchBasketWithBio() {
         store: "albert-heijn",
         sourceUrl: preview.sourceUrl || getSingleRecipeContext(activeItems)?.sourceUrl || "",
         recipeTitle: preview.recipeTitle || getSingleRecipeContext(activeItems)?.recipeTitle || "Boodschappenlijst",
-        bio: state.basketFilter.bio,
+        bio: Boolean(preferences?.bio),
+        beterLeven1: Boolean(preferences?.beterLeven1),
+        vegetarisch: Boolean(preferences?.vegetarisch),
+        vegan: Boolean(preferences?.vegan),
+        plantaardig: Boolean(preferences?.plantaardig),
         items: activeItems.map((item) => ({
           title: item.title,
           amount: item.amount,
@@ -5402,9 +5431,22 @@ async function refetchBasketWithBio() {
     });
 
     if (payload?.items?.length) {
+      const prevItems = Array.isArray(state.basketPreview?.items) ? state.basketPreview.items : [];
+      const keyOf = (s) => normalizeBasketToken(s || "");
+      const prevByKey = new Map(prevItems.map((it) => [keyOf(it?.ingredientTitle), it]));
+      const mergedItems = payload.items.map((it) => {
+        const prev = prevByKey.get(keyOf(it?.ingredientTitle));
+        if (!prev) return it;
+        return {
+          ...it,
+          qty: prev.qty,
+          selectedChoiceIndex: prev.selectedChoiceIndex || 0,
+        };
+      });
+
       state.basketPreview = {
         ...state.basketPreview,
-        items: payload.items,
+        items: mergedItems,
       };
     }
   } catch {
@@ -7370,16 +7412,12 @@ bindEvent(document.getElementById("basketFilterRow"), "click", (e) => {
   const chip = e.target.closest("[data-filter]");
   if (!chip) return;
   const f = chip.dataset.filter;
-  if (f === "bio") {
-    state.basketFilter.bio = !state.basketFilter.bio;
-    refetchBasketWithBio();
-    return;
-  }
+  if (f === "bio") state.basketFilter.bio = !state.basketFilter.bio;
   if (f === "beterLeven1") state.basketFilter.beterLeven1 = !state.basketFilter.beterLeven1;
   if (f === "vegetarisch") state.basketFilter.vegetarisch = !state.basketFilter.vegetarisch;
   if (f === "vegan") state.basketFilter.vegan = !state.basketFilter.vegan;
   if (f === "plantaardig") state.basketFilter.plantaardig = !state.basketFilter.plantaardig;
-  renderBasketPreview();
+  scheduleRefetchBasketWithPreferences();
 });
 
 // Basket overlay close
