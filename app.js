@@ -3061,7 +3061,43 @@ function renderGroceryGroups() {
 
   if (!state.groceryItems.length) {
     closeBasketModal();
-    groceryGroups.innerHTML = '<p class="grocery-empty">Je boodschappenlijst is nog leeg. Voeg eerst een recept toe.</p>';
+    const candidateRecipes = (getSavedImportedRecipes()?.length ? getSavedImportedRecipes() : state.recipes) || [];
+    const recentRecipes = [...candidateRecipes].slice(-6).reverse();
+    const recipeCardsHtml = recentRecipes
+      .map((recipe) => {
+        const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
+        const faviconHtml = faviconUrl
+          ? `<span class="recent-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" /></span>`
+          : "";
+        return `
+          <button class="recent-card" type="button" data-grocery-add-recipe-id="${escapeHtml(recipe.id)}" aria-label="Zet ${escapeHtml(recipe.title || "recept")} op boodschappenlijst">
+            <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title || "")}" loading="lazy" />
+            ${faviconHtml}
+            <div class="recent-card__body">
+              <p class="recent-card__title">${escapeHtml(recipe.title || "Recept")}</p>
+              <p class="recent-card__meta">${escapeHtml(recipe.time || "")}</p>
+            </div>
+          </button>
+        `;
+      })
+      .join("");
+
+    groceryGroups.innerHTML = `
+      <div class="grocery-empty-state">
+        <p class="grocery-empty">Je boodschappenlijst is nog leeg. Voeg eerst een recept toe.</p>
+        <p class="grocery-empty-hint">Kies een recept om te beginnen</p>
+        ${recipeCardsHtml ? `<div class="recipe-grid grocery-empty-recipes">${recipeCardsHtml}</div>` : ""}
+      </div>
+    `;
+
+    groceryGroups
+      .querySelectorAll("[data-grocery-add-recipe-id]")
+      .forEach((btn) => {
+        bindEvent(btn, "click", () => {
+          const recipe = getRecipeById(btn.dataset.groceryAddRecipeId);
+          addRecipeToGrocery(recipe);
+        });
+      });
     return;
   }
 

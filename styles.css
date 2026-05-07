@@ -2146,6 +2146,22 @@ img { display: block; max-width: 100%; }
   color: var(--muted);
 }
 
+.grocery-empty-state {
+  display: grid;
+  gap: 14px;
+}
+
+.grocery-empty-hint {
+  margin: 0;
+  padding: 0 2px;
+  color: var(--muted-strong);
+  font-weight: 650;
+}
+
+.grocery-empty-recipes {
+  padding-inline: 0;
+}
+
 .grocery-input-card {
   display: flex;
   align-items: center;
