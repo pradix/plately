@@ -4035,16 +4035,21 @@ function renderCookbookDetail(cookbookId) {
   const _detailHtml = `
     <div class="cb-detail ${selecting ? "cb-detail--selecting" : ""}">
       <div class="cb-detail__header">
-        <h2 class="cb-detail__name">${escapeHtml(cookbook.name)}</h2>
-        <div class="cb-detail__actions">
-          <button class="cb-detail__action-btn" type="button" data-cb-select-mode="true">
-            ${selecting ? "Klaar" : "Selecteer"}
-          </button>
-          <button class="cb-detail__action-btn cb-detail__action-btn--danger" type="button"
-            data-cb-delete-selected="true"
-            ${selecting && selectedIds.size ? "" : "disabled"}>
-            Verwijder (${selecting ? selectedIds.size : 0})
-          </button>
+        <div class="cb-detail__title">
+          <div class="cb-detail__title-row">
+            <h2 class="cb-detail__name">${escapeHtml(cookbook.name)}</h2>
+            <span class="cb-detail__count">${recipes.length} recept${recipes.length === 1 ? "" : "en"}</span>
+          </div>
+          <div class="cb-detail__actions">
+            <button class="cb-detail__action-btn" type="button" data-cb-select-mode="true">
+              ${selecting ? "Klaar" : "Selecteer"}
+            </button>
+            <button class="cb-detail__action-btn cb-detail__action-btn--danger" type="button"
+              data-cb-delete-selected="true"
+              ${selecting && selectedIds.size ? "" : "disabled"}>
+              Verwijder (${selecting ? selectedIds.size : 0})
+            </button>
+          </div>
         </div>
       </div>
       ${recipes.length ? `
@@ -6895,12 +6900,21 @@ function handleCookbookGridClick(event) {
     if (!selected.length) return;
     const cb = state.cookbooks.find((c) => c.id === state.openCookbookId);
     if (!cb) return;
-    cb.recipeIds = cb.recipeIds.filter((id) => !selected.includes(id));
-    state.cookbookSelectedRecipeIds = [];
-    state.cookbookSelectMode = false;
-    renderCookbookDetail(state.openCookbookId);
-    schedulePersistAppState();
-    showToast(`${selected.length} recept(en) verwijderd uit kookboek.`);
+    openConfirmDialog({
+      title: "Recepten verwijderen?",
+      message: `Je staat op het punt ${selected.length} recept(en) uit "${cb.name}" te verwijderen.`,
+      confirmLabel: "Verwijderen",
+      cancelLabel: "Annuleren",
+      onConfirm: () => {
+        const selectedSet = new Set(selected);
+        cb.recipeIds = cb.recipeIds.filter((id) => !selectedSet.has(id));
+        state.cookbookSelectedRecipeIds = [];
+        state.cookbookSelectMode = false;
+        renderCookbookDetail(state.openCookbookId);
+        schedulePersistAppState();
+        showToast(`${selected.length} recept(en) verwijderd uit kookboek.`);
+      },
+    });
     return;
   }
 
@@ -6942,7 +6956,20 @@ function handleCookbookGridClick(event) {
   if (removeBtn instanceof HTMLElement) {
     const recipeId = removeBtn.dataset.removeFromCookbook;
     const cb = state.cookbooks.find((c) => c.id === state.openCookbookId);
-    if (cb) { cb.recipeIds = cb.recipeIds.filter((id) => id !== recipeId); renderCookbookDetail(state.openCookbookId); schedulePersistAppState(); showToast("Recept verwijderd uit kookboek."); }
+    const recipe = recipeId ? getRecipeById(recipeId) : null;
+    if (!cb || !recipeId) return;
+    openConfirmDialog({
+      title: "Recept verwijderen?",
+      message: `Wil je "${recipe?.title || "dit recept"}" uit "${cb.name}" verwijderen?`,
+      confirmLabel: "Verwijderen",
+      cancelLabel: "Annuleren",
+      onConfirm: () => {
+        cb.recipeIds = cb.recipeIds.filter((id) => id !== recipeId);
+        renderCookbookDetail(state.openCookbookId);
+        schedulePersistAppState();
+        showToast("Recept verwijderd uit kookboek.");
+      },
+    });
     return;
   }
 

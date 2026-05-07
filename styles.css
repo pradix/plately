@@ -1497,16 +1497,31 @@ img { display: block; max-width: 100%; }
 
 .cb-detail__header {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.cb-detail__title {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cb-detail__title-row {
+  display: flex;
   align-items: baseline;
   gap: 10px;
-  margin-bottom: 16px;
+  min-width: 0;
 }
 
 .cb-detail__actions {
-  margin-left: auto;
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .cb-detail__action-btn {
@@ -1530,30 +1545,32 @@ img { display: block; max-width: 100%; }
   color: #b42318;
 }
 .cb-detail__name {
-  font-size: 1.3rem;
+  font-size: 1.45rem;
   font-weight: 800;
   margin: 0;
   color: #1a1a1a;
+  min-width: 0;
 }
 .cb-detail__count {
-  font-size: 0.8rem;
-  color: #999;
+  font-size: 0.9rem;
+  color: #7a7a7a;
+  font-weight: 650;
 }
 
 .cb-detail__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 .cb-detail__item {
   position: relative;
   display: block;
-  border-radius: 22px;
+  border-radius: 26px;
   overflow: hidden;
   background: #fff;
   border: 1px solid rgba(120, 147, 111, 0.08);
-  box-shadow: 0 6px 18px rgba(36, 60, 43, 0.05);
+  box-shadow: 0 10px 26px rgba(36, 60, 43, 0.07);
 }
 
 .cb-detail__select {
@@ -1603,7 +1620,7 @@ img { display: block; max-width: 100%; }
 
 .cb-detail__img {
   width: 100%;
-  aspect-ratio: 16/10;
+  aspect-ratio: 4/3;
   border-radius: 0;
   object-fit: cover;
   display: block;
@@ -1613,29 +1630,35 @@ img { display: block; max-width: 100%; }
 .cb-detail__card-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
-  padding: 14px 16px 16px;
+  padding: 16px 18px 18px;
 }
 .cb-detail__card-title {
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1.15rem;
+  font-weight: 800;
   color: #1a1a1a;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  line-height: 1.25;
+  line-height: 1.2;
   letter-spacing: -0.01em;
 }
 .cb-detail__card-time {
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   color: var(--muted);
   font-weight: 500;
 }
 
+@media (max-width: 420px) {
+  .cb-detail__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (min-width: 760px) {
-  .cb-detail__grid { gap: 16px; }
+  .cb-detail__grid { gap: 18px; }
 }
 
 .cb-detail__remove {
