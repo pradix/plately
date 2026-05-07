@@ -484,7 +484,6 @@ const state = {
   basketServings: 2, // current persons
   basketBaseServings: 2, // base when basket was opened
   basketFilter: { bio: false, beterLeven1: false, vegetarisch: false, vegan: false, plantaardig: false },
-  basketSearchQuery: "",
   cookbooks: [],
   selectedCookbookId: "",
   pendingCookbookSaveRecipeId: "",
@@ -1516,25 +1515,6 @@ function choiceMatchesBasketFilters(choice, filter, item) {
   return true;
 }
 
-function choiceMatchesBasketSearch(choice, item, q) {
-  const query = normalizeBasketToken(q);
-  if (!query) return true;
-  const haystack = normalizeBasketToken(
-    [
-      choice?.title,
-      choice?.subtitle,
-      choice?.badge,
-      Array.isArray(choice?.labels) ? choice.labels.join(" ") : "",
-      choice?.searchTerm,
-      item?.ingredientTitle,
-      item?.ingredientAmount,
-    ]
-      .filter(Boolean)
-      .join(" ")
-  );
-  return haystack.includes(query);
-}
-
 function renderBasketPreview() {
   const preview = state.basketPreview;
   const nameEl = document.getElementById("basketRecipeName");
@@ -1564,7 +1544,6 @@ function renderBasketPreview() {
     ? state.basketServings / state.basketBaseServings
     : 1;
 
-  const q = state.basketSearchQuery || "";
   const activeFilter = state.basketFilter || {};
 
   const rendered = preview.items.map((item, itemIndex) => {
@@ -1574,11 +1553,11 @@ function renderBasketPreview() {
     // When filters/search are active: pick the first matching alternative choice.
     const hasDietFilter =
       Boolean(activeFilter.beterLeven1 || activeFilter.vegetarisch || activeFilter.vegan || activeFilter.plantaardig);
-    const hasSearch = normalizeBasketToken(q).length > 0;
+    const hasSearch = false;
 
     let pickedIndex = item.selectedChoiceIndex || 0;
     if (hasDietFilter || hasSearch) {
-      const matchIdx = choices.findIndex((c) => choiceMatchesBasketFilters(c, activeFilter, item) && choiceMatchesBasketSearch(c, item, q));
+      const matchIdx = choices.findIndex((c) => choiceMatchesBasketFilters(c, activeFilter, item));
       if (matchIdx === -1) return ""; // hide item if nothing matches
       pickedIndex = matchIdx;
     }
@@ -1651,9 +1630,6 @@ function openBasketModal(preview) {
   state.basketBaseServings = base;
   state.basketServings = base;
   state.basketFilter = { bio: false, beterLeven1: false, vegetarisch: false, vegan: false, plantaardig: false };
-  state.basketSearchQuery = "";
-  const searchEl = document.getElementById("basketSearchInput");
-  if (searchEl instanceof HTMLInputElement) searchEl.value = "";
   renderBasketPreview();
   const overlay = document.getElementById("basketOverlay");
   if (overlay) {
@@ -7403,23 +7379,6 @@ bindEvent(document.getElementById("basketFilterRow"), "click", (e) => {
   if (f === "vegetarisch") state.basketFilter.vegetarisch = !state.basketFilter.vegetarisch;
   if (f === "vegan") state.basketFilter.vegan = !state.basketFilter.vegan;
   if (f === "plantaardig") state.basketFilter.plantaardig = !state.basketFilter.plantaardig;
-  renderBasketPreview();
-});
-
-// Basket search input
-bindEvent(document.getElementById("basketSearchInput"), "input", (e) => {
-  const target = e.target;
-  if (!(target instanceof HTMLInputElement)) return;
-  const value = target.value || "";
-  state.basketSearchQuery = value;
-
-  // "Ideally also toggle the filters": only auto-enable (never auto-disable).
-  const q = normalizeBasketToken(value);
-  if (/\bbeter leven\b/.test(q) && /(\b1\b|\b1\s*ster\b|\b1\s*\*\b)/.test(q)) state.basketFilter.beterLeven1 = true;
-  if (/\bvegetari\w*\b|\bvega\b/.test(q)) state.basketFilter.vegetarisch = true;
-  if (/\bvegan\b/.test(q)) state.basketFilter.vegan = true;
-  if (/\bplantaardig\b|\bplant based\b|\bplantbased\b/.test(q)) state.basketFilter.plantaardig = true;
-
   renderBasketPreview();
 });
 

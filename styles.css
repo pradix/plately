@@ -9052,29 +9052,6 @@ body {
   color: #2d4a2e;
 }
 
-/* Basket search (in sheet) */
-.basket-search {
-  padding: 0 16px 10px;
-  flex-shrink: 0;
-}
-
-.basket-search__input {
-  width: 100%;
-  border-radius: 12px;
-  border: 1.5px solid #e2e8e2;
-  background: #fff;
-  padding: 10px 12px;
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: #2a2825;
-  outline: none;
-}
-
-.basket-search__input:focus {
-  border-color: #6b9e72;
-  box-shadow: 0 0 0 3px rgba(107, 158, 114, 0.18);
-}
-
 /* Qty buttons (shared: servings + product) */
 .basket-qty-btn {
   width: 34px;
