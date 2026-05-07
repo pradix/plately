@@ -6553,6 +6553,15 @@ homeSearchChips.forEach((chip) => {
   });
 });
 
+// Shuffle quick-search chips on each load (home only)
+try {
+  const chipsWrap = document.querySelector(".home-search-chips");
+  if (chipsWrap && homeSearchChips.length > 1) {
+    const shuffled = [...homeSearchChips].sort(() => Math.random() - 0.5);
+    shuffled.forEach((chip) => chipsWrap.appendChild(chip));
+  }
+} catch {}
+
 // Close channel search panel
 bindEvent(document.getElementById("channelSearchClose"), "click", () => {
   if (searchInput) searchInput.value = "";
