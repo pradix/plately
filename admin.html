@@ -6,309 +6,363 @@
   <title>Plately Admin — Statistieken</title>
   <link rel="stylesheet" href="/styles.css">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    :root {
+      --bg: #f6f7f6;
+      --panel: #ffffff;
+      --text: #151915;
+      --muted: rgba(0,0,0,0.58);
+      --border: rgba(0,0,0,0.08);
+      --shadow: 0 1px 2px rgba(0,0,0,0.06);
+      --shadow-strong: 0 10px 30px rgba(0,0,0,0.12);
+      --green: #78936f;
+      --green-ink: rgba(120, 147, 111, 0.95);
+      --green-soft: rgba(120, 147, 111, 0.12);
+      --radius: 14px;
+      --radius-sm: 10px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
 
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f5f5f5;
-      color: #1a1a1a;
-      line-height: 1.6;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      font-size: 13px;
     }
 
     .container {
-      max-width: 1400px;
+      max-width: 1280px;
       margin: 0 auto;
-      padding: 24px;
+      padding: 18px;
     }
 
+    /* ── Header ─────────────────────────────────────────────────────────────── */
     header {
-      background: white;
-      padding: 24px;
-      border-radius: 12px;
-      margin-bottom: 24px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      background: var(--panel);
+      padding: 16px 16px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
     h1 {
-      font-size: 28px;
-      margin-bottom: 4px;
-      color: #78936f;
-    }
-
-    .header-info {
-      flex: 1;
-    }
-
-    .header-actions {
-      display: flex;
-      gap: 12px;
-    }
-
-    .btn {
-      padding: 10px 16px;
-      border-radius: 8px;
-      border: none;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 13px;
-      transition: all 0.2s;
-    }
-
-    .btn-primary {
-      background: #78936f;
-      color: white;
-    }
-
-    .btn-primary:hover {
-      background: #6a7f62;
+      font-size: 18px;
+      margin-bottom: 6px;
+      color: var(--green-ink);
+      letter-spacing: -0.01em;
     }
 
     .subtitle {
-      color: #666;
-      font-size: 14px;
+      color: var(--muted);
+      font-size: 12px;
     }
 
+    .header-info { flex: 1; min-width: 260px; }
+
+    .header-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .pill {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.035);
+      border: 1px solid rgba(0,0,0,0.06);
+      white-space: nowrap;
+    }
+
+    .header-actions {
+      display: inline-flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    /* ── Buttons ───────────────────────────────────────────────────────────── */
+    .btn {
+      padding: 9px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(0,0,0,0.10);
+      background: rgba(0,0,0,0.03);
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 12px;
+      transition: transform 0.05s, background 0.15s, border-color 0.15s;
+      color: rgba(0,0,0,0.78);
+    }
+    .btn:hover { background: rgba(0,0,0,0.05); }
+    .btn:active { transform: translateY(1px); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .btn-primary {
+      background: var(--green);
+      border-color: rgba(0,0,0,0);
+      color: #fff;
+    }
+    .btn-primary:hover { background: #6f8867; }
+
+    .btn-danger {
+      background: rgba(220, 53, 69, 0.10);
+      border-color: rgba(220, 53, 69, 0.16);
+      color: rgba(140, 23, 35, 0.95);
+    }
+    .btn-danger:hover { background: rgba(220, 53, 69, 0.14); }
+
+    .btn-success {
+      background: rgba(40, 167, 69, 0.10);
+      border-color: rgba(40, 167, 69, 0.16);
+      color: rgba(20, 110, 43, 0.95);
+    }
+    .btn-success:hover { background: rgba(40, 167, 69, 0.14); }
+
+    .btn-sm { padding: 6px 10px; font-size: 12px; }
+
+    /* ── KPIs ──────────────────────────────────────────────────────────────── */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 32px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0 16px;
     }
 
     .stat-card {
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      text-align: center;
+      background: var(--panel);
+      padding: 12px 12px 10px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      text-align: left;
+      min-width: 0;
     }
 
     .stat-value {
-      font-size: 36px;
-      font-weight: 800;
-      color: #78936f;
-      margin-bottom: 8px;
+      font-size: 22px;
+      font-weight: 850;
+      color: var(--green-ink);
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 6px;
     }
 
     .stat-label {
-      font-size: 13px;
-      color: #666;
+      font-size: 11px;
+      color: var(--muted);
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      font-weight: 600;
+      letter-spacing: 0.06em;
+      font-weight: 750;
     }
 
+    /* ── Sections ─────────────────────────────────────────────────────────── */
     .section {
-      background: white;
-      padding: 24px;
-      border-radius: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      margin-bottom: 24px;
+      background: var(--panel);
+      padding: 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
     }
 
     .section h2 {
-      font-size: 20px;
-      margin-bottom: 16px;
-      color: #1a1a1a;
+      font-size: 14px;
+      margin: 0;
+      color: rgba(0,0,0,0.84);
+      letter-spacing: -0.01em;
     }
 
-    .search-bar {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
+    .subhead {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 750;
+      margin: 0 0 8px;
     }
+
+    .divider {
+      height: 1px;
+      border: 0;
+      background: rgba(0,0,0,0.06);
+      margin: 12px 0;
+    }
+
+    .muted { color: var(--muted); font-size: 12px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+    /* ── Inputs ────────────────────────────────────────────────────────────── */
+    .search-bar { display: flex; gap: 8px; margin-bottom: 12px; }
 
     .search-bar input {
       flex: 1;
-      padding: 10px 14px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      font-size: 14px;
+      padding: 10px 12px;
+      border: 1px solid rgba(0,0,0,0.14);
+      border-radius: 10px;
+      font-size: 13px;
+      background: #fff;
     }
 
     .search-bar input:focus {
       outline: none;
-      border-color: #78936f;
-      box-shadow: 0 0 0 3px rgba(120, 147, 111, 0.1);
+      border-color: rgba(120, 147, 111, 0.55);
+      box-shadow: 0 0 0 3px rgba(120, 147, 111, 0.12);
     }
 
+    /* ── Tables (compact) ─────────────────────────────────────────────────── */
     .users-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 14px;
+      font-size: 12px;
     }
 
     .users-table th {
       text-align: left;
-      padding: 12px;
-      border-bottom: 2px solid #e5e2dc;
-      font-weight: 600;
-      font-size: 13px;
-      color: #666;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(0,0,0,0.12);
+      font-weight: 750;
+      font-size: 11px;
+      color: var(--muted);
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.06em;
       cursor: pointer;
       user-select: none;
     }
 
-    .users-table th:hover {
-      background: #f9f9f9;
-    }
-
-    .users-table th.sortable::after {
-      content: " ⇅";
-      opacity: 0.3;
-    }
-
-    .users-table th.sorted-asc::after {
-      content: " ↑";
-      opacity: 1;
-    }
-
-    .users-table th.sorted-desc::after {
-      content: " ↓";
-      opacity: 1;
-    }
+    .users-table th:hover { background: rgba(0,0,0,0.02); }
+    .users-table th.sortable::after { content: " ⇅"; opacity: 0.22; }
+    .users-table th.sorted-asc::after { content: " ↑"; opacity: 1; }
+    .users-table th.sorted-desc::after { content: " ↓"; opacity: 1; }
 
     .users-table td {
-      padding: 12px;
-      border-bottom: 1px solid #f0f0f0;
+      padding: 9px 10px;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      vertical-align: top;
     }
 
-    .users-table tbody tr:hover {
-      background: #fafafa;
-      cursor: pointer;
-    }
+    .users-table tbody tr:hover { background: rgba(0,0,0,0.02); cursor: pointer; }
+    .user-row { transition: background 0.15s; }
 
-    .user-row {
-      transition: background 0.15s;
-    }
-
-    .user-email {
-      font-weight: 500;
-      color: #78936f;
-    }
-
-    .user-id {
-      font-family: monospace;
-      font-size: 12px;
-      color: #999;
-    }
+    .user-email { font-weight: 650; color: var(--green-ink); }
+    .user-id { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 11px; color: rgba(0,0,0,0.45); }
 
     .badge {
       display: inline-block;
-      background: #f0f0f0;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 600;
-      color: #666;
+      background: rgba(0,0,0,0.06);
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 750;
+      color: rgba(0,0,0,0.62);
+      border: 1px solid rgba(0,0,0,0.08);
     }
 
-    .badge.new {
-      background: #d4edda;
-      color: #155724;
-    }
+    .badge.new { background: rgba(40, 167, 69, 0.12); border-color: rgba(40, 167, 69, 0.16); color: rgba(20, 110, 43, 0.95); }
+    .badge.active { background: rgba(13, 110, 253, 0.12); border-color: rgba(13, 110, 253, 0.14); color: rgba(7, 57, 130, 0.95); }
 
-    .badge.active {
-      background: #cfe2ff;
-      color: #084298;
-    }
+    .timestamp { font-size: 11px; color: rgba(0,0,0,0.45); }
 
-    .timestamp {
-      font-size: 12px;
-      color: #999;
-    }
-
+    /* ── Detail panel ─────────────────────────────────────────────────────── */
     .detail-panel {
       position: fixed;
       right: 0;
       top: 0;
-      width: 400px;
+      width: min(420px, 100vw);
       height: 100vh;
-      background: white;
-      box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+      background: var(--panel);
+      box-shadow: var(--shadow-strong);
       overflow-y: auto;
-      padding: 24px;
+      padding: 16px;
       transform: translateX(100%);
-      transition: transform 0.3s;
+      transition: transform 0.25s ease;
       z-index: 1000;
+      border-left: 1px solid rgba(0,0,0,0.10);
     }
 
-    .detail-panel.open {
-      transform: translateX(0);
-    }
+    .detail-panel.open { transform: translateX(0); }
 
     .detail-panel-close {
       float: right;
-      background: none;
-      border: none;
-      font-size: 24px;
+      background: transparent;
+      border: 0;
+      font-size: 22px;
       cursor: pointer;
-      color: #999;
+      color: rgba(0,0,0,0.45);
+      padding: 6px 10px;
+      border-radius: 10px;
     }
+    .detail-panel-close:hover { background: rgba(0,0,0,0.04); }
+
+    .detail-panel h2 { font-size: 14px; margin: 2px 0 10px; color: rgba(0,0,0,0.86); }
 
     .detail-panel h3 {
       clear: both;
-      margin-top: 20px;
-      margin-bottom: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      color: #666;
+      margin-top: 16px;
+      margin-bottom: 6px;
+      font-size: 11px;
+      font-weight: 750;
+      color: var(--muted);
       text-transform: uppercase;
+      letter-spacing: 0.06em;
     }
 
     .detail-panel p {
-      font-size: 14px;
-      color: #333;
-      margin-bottom: 12px;
+      font-size: 12px;
+      color: rgba(0,0,0,0.80);
+      margin-bottom: 10px;
       word-break: break-all;
     }
 
-    .loading {
-      text-align: center;
-      padding: 40px;
-      color: #999;
-    }
+    .loading { text-align: center; padding: 26px 12px; color: rgba(0,0,0,0.45); }
 
     .error {
-      background: #fee;
-      color: #c33;
-      padding: 16px;
-      border-radius: 8px;
-      margin-bottom: 16px;
-      border: 1px solid #fcc;
+      background: rgba(220, 53, 69, 0.08);
+      color: rgba(140, 23, 35, 0.95);
+      padding: 12px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(220, 53, 69, 0.14);
+      font-size: 12px;
     }
 
-    .muted {
-      color: #666;
-      font-size: 13px;
+    /* ── Layout helpers ───────────────────────────────────────────────────── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      align-items: start;
     }
 
-    @media (max-width: 768px) {
-      .header-actions {
-        flex-direction: column;
-      }
-
-      .detail-panel {
-        width: 100%;
-      }
-
-      .users-table {
-        font-size: 12px;
-      }
-
-      .users-table th,
-      .users-table td {
-        padding: 8px;
-      }
+    @media (max-width: 980px) {
+      .stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      .container { padding: 14px; }
+      .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .two-col { grid-template-columns: 1fr; }
+      .header-actions { width: 100%; justify-content: flex-start; }
     }
   </style>
 </head>
@@ -316,12 +370,16 @@
   <div class="container">
     <header>
       <div class="header-info">
-        <h1>📊 Plately Admin</h1>
-        <p class="subtitle">Gebruikers & Activiteit Statistieken</p>
+        <h1>Plately Admin</h1>
+        <p class="subtitle">Gebruikers, inventaris & activiteit</p>
+        <div class="header-meta">
+          <span class="pill" id="lastUpdatedPill">⏳ Laden…</span>
+          <span class="pill">Tip: klik op een gebruiker voor details</span>
+        </div>
       </div>
       <div class="header-actions">
-        <button class="btn" id="refreshBtn" onclick="refreshAll()" style="background:#eee">🔄 Refresh</button>
-        <button class="btn btn-primary" id="exportBtn" onclick="exportToCSV()">📥 Export CSV</button>
+        <button class="btn" id="refreshBtn" onclick="refreshAll()">Refresh</button>
+        <button class="btn btn-primary" id="exportBtn" onclick="exportToCSV()">Export CSV</button>
       </div>
     </header>
 
@@ -364,8 +422,8 @@
       </div>
 
       <div class="section" id="overviewSection">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-          <h2 style="margin:0">🧾 Overzicht</h2>
+        <div class="section-header">
+          <h2>Overzicht</h2>
           <div class="muted" id="overviewMeta">—</div>
         </div>
 
@@ -373,7 +431,7 @@
         <div id="overviewLoading" class="loading" style="display:none;padding:18px 0">⏳ Overzicht laden...</div>
 
         <div id="overviewContent" style="display:none;margin-top:14px">
-          <div class="stats-grid" style="margin-bottom:16px">
+          <div class="stats-grid" style="margin:0 0 12px">
             <div class="stat-card">
               <div class="stat-value" id="overviewTotalRecipes">-</div>
               <div class="stat-label">Recepten (totaal)</div>
@@ -396,62 +454,30 @@
             </div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+          <div class="two-col">
             <div>
-              <h3 style="font-size:14px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Top 10 users — recepten</h3>
+              <h3 class="subhead">Top 10 users — recepten</h3>
               <div id="topUsersByRecipes"></div>
             </div>
             <div>
-              <h3 style="font-size:14px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Top 10 users — kookboeken</h3>
+              <h3 class="subhead">Top 10 users — kookboeken</h3>
               <div id="topUsersByCookbooks"></div>
             </div>
           </div>
 
           <div style="margin-top:16px">
-            <h3 style="font-size:14px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Top 10 kanalen — imports (30d)</h3>
+            <h3 class="subhead">Top 10 kanalen — imports (30d)</h3>
             <div id="topChannelsByImports30d"></div>
             <p class="muted" id="topChannelsNote" style="margin-top:8px"></p>
           </div>
         </div>
       </div>
 
-      <div class="section">
-        <h2>⏳ Wachtende Kanalen</h2>
-        <div id="pendingChannelsContainer" style="min-height: 40px;">
-          <p style="color: #999; text-align: center; padding: 20px;">Laden...</p>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>📈 Imports (30 dagen)</h2>
-        <div class="stats-grid" style="margin-bottom:16px">
-          <div class="stat-card">
-            <div class="stat-value" id="imports7d">-</div>
-            <div class="stat-label">Imports (7d)</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="imports30d">-</div>
-            <div class="stat-label">Imports (30d)</div>
-          </div>
-        </div>
-        <div id="importsTrend" style="display:flex;gap:6px;align-items:flex-end;height:120px;padding:10px 0"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
-          <div>
-            <h3 style="font-size:14px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Top sources</h3>
-            <div id="importsTopSources" style="font-size:13px;color:#333"></div>
-          </div>
-          <div>
-            <h3 style="font-size:14px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Top platforms</h3>
-            <div id="importsTopPlatforms" style="font-size:13px;color:#333"></div>
-          </div>
-        </div>
-      </div>
-
       <div class="section" id="inventorySection">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-          <h2 style="margin:0">📚 Inventaris</h2>
+        <div class="section-header">
+          <h2>Inventaris</h2>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <button class="btn" id="inventoryRefreshBtn" onclick="refreshInventory()" style="background:#eee">🔄 Refresh</button>
+            <button class="btn" id="inventoryRefreshBtn" onclick="refreshInventory()">Refresh</button>
             <div class="muted" id="inventoryMeta">—</div>
           </div>
         </div>
@@ -476,8 +502,8 @@
           </select>
 
           <div class="admin-inventory__pager">
-            <button class="btn" onclick="inventoryPrev()" id="inventoryPrevBtn" style="background:#eee">← Prev</button>
-            <button class="btn" onclick="inventoryNext()" id="inventoryNextBtn" style="background:#eee">Next →</button>
+            <button class="btn" onclick="inventoryPrev()" id="inventoryPrevBtn">← Prev</button>
+            <button class="btn" onclick="inventoryNext()" id="inventoryNextBtn">Next →</button>
           </div>
         </div>
 
@@ -488,7 +514,10 @@
       </div>
 
       <div class="section">
-        <h2>🔍 Gebruikers</h2>
+        <div class="section-header">
+          <h2>Gebruikers</h2>
+          <div class="muted">Klik op een rij voor details</div>
+        </div>
         <div class="search-bar">
           <input type="text" id="searchInput" placeholder="Zoek gebruiker by email..." onkeyup="filterUsers()">
         </div>
@@ -497,7 +526,7 @@
             Geselecteerd: <strong id="selectedUsersCount">0</strong>
           </div>
           <div style="display:flex;gap:10px;align-items:center">
-            <button class="btn" onclick="clearSelection()" style="background:#eee">Selectie wissen</button>
+            <button class="btn" onclick="clearSelection()">Selectie wissen</button>
             <button class="btn btn-primary" onclick="bulkDeleteSelected()" id="bulkDeleteBtn" disabled>🗑️ Verwijder geselecteerden</button>
           </div>
         </div>
@@ -519,6 +548,44 @@
           <tbody id="usersList">
           </tbody>
         </table>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <h2>Wachtende kanalen</h2>
+          <div class="muted">Goedkeuren of afwijzen</div>
+        </div>
+        <div id="pendingChannelsContainer" style="min-height: 40px;">
+          <p class="muted" style="text-align:center;padding:14px">Laden...</p>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <h2>Imports (30 dagen)</h2>
+          <div class="muted">Trend + top sources/platforms</div>
+        </div>
+        <div class="stats-grid" style="margin:0 0 12px">
+          <div class="stat-card">
+            <div class="stat-value" id="imports7d">-</div>
+            <div class="stat-label">Imports (7d)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="imports30d">-</div>
+            <div class="stat-label">Imports (30d)</div>
+          </div>
+        </div>
+        <div id="importsTrend" style="display:flex;gap:6px;align-items:flex-end;height:120px;padding:8px 0"></div>
+        <div class="two-col" style="margin-top:12px">
+          <div>
+            <h3 class="subhead">Top sources</h3>
+            <div id="importsTopSources" style="font-size:12px;color:rgba(0,0,0,0.78)"></div>
+          </div>
+          <div>
+            <h3 class="subhead">Top platforms</h3>
+            <div id="importsTopPlatforms" style="font-size:12px;color:rgba(0,0,0,0.78)"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -660,6 +727,8 @@
         loadOverview(); // independent block (own loading/error)
         initInventoryUserFilter();
         loadInventory(); // independent block (own loading/error)
+        const lastUpdatedPill = document.getElementById("lastUpdatedPill");
+        if (lastUpdatedPill) lastUpdatedPill.textContent = `Laatst bijgewerkt: ${formatDate(new Date())}`;
 
         document.getElementById("loading").style.display = "none";
         document.getElementById("content").style.display = "block";
@@ -1020,7 +1089,7 @@
             const h = Math.max(2, Math.round(((d.count || 0) / max) * 110));
             const day = new Date(d.day);
             const label = day.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short' });
-            return `<div title="${label}: ${d.count || 0}" style="width:10px;height:${h}px;background:#78936f;border-radius:6px;opacity:${d.count ? 1 : 0.25}"></div>`;
+            return `<div title="${label}: ${d.count || 0}" style="width:10px;height:${h}px;background:rgba(120, 147, 111, 0.9);border-radius:999px;opacity:${d.count ? 1 : 0.22}"></div>`;
           }).join("");
         }
 
@@ -1057,7 +1126,7 @@
         const container = document.getElementById("pendingChannelsContainer");
 
         if (!pendingChannels || pendingChannels.length === 0) {
-          container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">Geen wachtende kanalen</p>';
+          container.innerHTML = '<p class="muted" style="text-align:center;padding:14px">Geen wachtende kanalen</p>';
           return;
         }
 
@@ -1076,12 +1145,12 @@
               ${pendingChannels.map(ch => `
                 <tr>
                   <td><strong>${escapeHtml(ch.name)}</strong></td>
-                  <td style="font-family: monospace; font-size: 12px; color: #666;"><a href="${escapeHtml(ch.url)}" target="_blank">${escapeHtml(ch.url)}</a></td>
+                  <td class="mono" style="font-size: 11px; color: rgba(0,0,0,0.58);"><a class="admin-inventory__link" href="${escapeHtml(ch.url)}" target="_blank" rel="noopener">${escapeHtml(ch.url)}</a></td>
                   <td>${escapeHtml(ch.createdByEmail || 'Onbekend')}</td>
                   <td class="timestamp">${formatDate(new Date(ch.createdAt))}</td>
                   <td style="text-align: center;">
-                    <button onclick="approveChannel('${escapeHtml(ch.id)}', '${escapeHtml(ch.name)}')" style="background: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-right: 4px;">✅ Goedkeuren</button>
-                    <button onclick="rejectChannel('${escapeHtml(ch.id)}', '${escapeHtml(ch.name)}')" style="background: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">❌ Afwijzen</button>
+                    <button class="btn btn-sm btn-success" onclick="approveChannel('${escapeHtml(ch.id)}', '${escapeHtml(ch.name)}')">Goedkeuren</button>
+                    <button class="btn btn-sm btn-danger" onclick="rejectChannel('${escapeHtml(ch.id)}', '${escapeHtml(ch.name)}')">Afwijzen</button>
                   </td>
                 </tr>
               `).join('')}
@@ -1092,7 +1161,7 @@
         container.innerHTML = html;
       } catch (error) {
         const container = document.getElementById("pendingChannelsContainer");
-        container.innerHTML = '<p style="color: #c33;">Fout bij laden: ' + escapeHtml(error.message) + '</p>';
+        container.innerHTML = '<p class="muted" style="color: rgba(140, 23, 35, 0.95);">Fout bij laden: ' + escapeHtml(error.message) + '</p>';
       }
     }
 
@@ -1326,9 +1395,7 @@
         <p>${formatDate(new Date(user.updatedAt))}</p>
 
         <h3>Acties</h3>
-        <button onclick="deleteUser('${escapeHtml(user.id)}', '${escapeHtml(user.email)}')" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px;">
-          🗑️ Gebruiker verwijderen
-        </button>
+        <button class="btn btn-danger" onclick="deleteUser('${escapeHtml(user.id)}', '${escapeHtml(user.email)}')">Gebruiker verwijderen</button>
       `;
 
       document.getElementById("detailName").textContent = escapeHtml(user.email) || "Guest User";
