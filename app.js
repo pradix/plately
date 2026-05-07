@@ -3894,7 +3894,6 @@ function renderCookbookDetail(cookbookId) {
     <div class="cb-detail">
       <div class="cb-detail__header">
         <h2 class="cb-detail__name">${escapeHtml(cookbook.name)}</h2>
-        <span class="cb-detail__count">${recipes.length} recept${recipes.length === 1 ? "" : "en"}</span>
       </div>
       ${recipes.length ? `
         <div class="cb-detail__grid">
