@@ -1922,6 +1922,20 @@ function getSavedImportedRecipes() {
 
 let channelSearchTimeout = null;
 
+function getActiveFollowedSeedChannelIds() {
+  // Only seed channels can be toggled; custom channels are passed separately via customChannels param.
+  // Pending/rejected custom channels should never block seed searching.
+  return state.followedChannelIds.filter((id) => SEED_CHANNELS.some((ch) => ch.id === id));
+}
+
+function countActiveFollowedChannels() {
+  const seedActive = getActiveFollowedSeedChannelIds().length;
+  const approvedCustomActive = state.customChannels.filter(
+    (ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved"
+  ).length;
+  return seedActive + approvedCustomActive;
+}
+
 function normalizeChannelThumbnailUrl(url) {
   const raw = String(url || "").trim().replace(/[\\'"]+$/g, "");
   if (!raw) return "";
@@ -2077,7 +2091,7 @@ async function searchChannels(query) {
     if (channelSearchResults) channelSearchResults.innerHTML = `<p class="ch-result__loading"><span class="plately-hourglass"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M6 2h12v6c0 2-2 3-6 3s-6-1-6-3V2z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><path d="M6 22h12v-6c0-2-2-3-6-3s-6 1-6 3v6z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><rect x="11" y="9" width="2" height="6" fill="#f6b69d"/></svg></span>Zoeken…</p>`;
   }
   try {
-    const channels = state.followedChannelIds.join(",");
+    const channels = getActiveFollowedSeedChannelIds().join(",");
     // Only include approved custom channels in search
     const followedCustomChannels = state.customChannels.filter((ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved");
     const customChannelsParam = followedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
@@ -2117,7 +2131,7 @@ async function searchChannelsOnImportScreen(query) {
   if (results) results.innerHTML = `<p class="ch-result__loading"><span class="plately-hourglass"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M6 2h12v6c0 2-2 3-6 3s-6-1-6-3V2z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><path d="M6 22h12v-6c0-2-2-3-6-3s-6 1-6 3v6z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><rect x="11" y="9" width="2" height="6" fill="#f6b69d"/></svg></span>Zoeken…</p>`;
   if (orRow) orRow.classList.add("hidden");
   try {
-    const channels = state.followedChannelIds.join(",");
+    const channels = getActiveFollowedSeedChannelIds().join(",");
     // Only include approved custom channels in search
     const followedCustomChannels = state.customChannels.filter((ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved");
     const customChannelsParam = followedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
@@ -6106,9 +6120,6 @@ bindEvent(servingsUp, "click", () => {
 });
 
 bindEvent(searchInput, "input", (event) => {
-  state.searchQuery = event.target.value.trim();
-  renderRecipeGrid();
-
   // Debounced channel search — fires after 900 ms of no typing (better results, fewer API calls)
   clearTimeout(channelSearchTimeout);
   const query = event.target.value.trim();
@@ -6134,8 +6145,6 @@ bindEvent(searchInput, "keydown", (event) => {
   }
   if (event.key === "Escape") {
     searchInput.value = "";
-    state.searchQuery = "";
-    renderRecipeGrid();
     renderChannelSearchResults([]);
   }
 });
@@ -6860,7 +6869,16 @@ bindEvent(document.getElementById("channelSettingsList"), "click", (event) => {
   }
 
   if (state.followedChannelIds.includes(id)) {
-    if (state.followedChannelIds.length <= 1) { showToast("Volg minstens één kanaal."); return; }
+    // Prevent ending up with zero *active* channels (pending/rejected custom channels don't count)
+    const activeCount = countActiveFollowedChannels();
+    const isSeed = SEED_CHANNELS.some((ch) => ch.id === id);
+    const isApprovedCustom =
+      Boolean(customChannel) && (customChannel.status || "approved") === "approved";
+    const removingActive = isSeed || isApprovedCustom;
+    if (removingActive && activeCount <= 1) {
+      showToast("Volg minstens één kanaal.");
+      return;
+    }
     state.followedChannelIds = state.followedChannelIds.filter((c) => c !== id);
   } else {
     state.followedChannelIds.push(id);
