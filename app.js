@@ -1687,38 +1687,6 @@ function renderHomeQuickChips() {
     .join("");
 }
 
-function renderHomePinnedChannels() {
-  const wrap = document.getElementById("homeSearchPins");
-  if (!wrap) return;
-  const allChannels = getAllChannels();
-  const followedApproved = allChannels.filter(
-    (ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved",
-  );
-  let pins = followedApproved.slice(0, 6);
-  if (pins.length < 4) {
-    for (const ch of SEED_CHANNELS) {
-      if (pins.length >= 6) break;
-      if (!pins.find((p) => p.id === ch.id)) pins.push(ch);
-    }
-  }
-  pins = pins.slice(0, 6);
-  if (!pins.length) { wrap.innerHTML = ""; return; }
-  wrap.innerHTML = pins
-    .map((ch) => {
-      const fav = getSourceIconUrl(ch.url);
-      const initials = ch.initials || (ch.name || "?").slice(0, 2).toUpperCase();
-      const avatarInner = fav
-        ? `<img src="${escapeHtml(fav)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><span class="home-search-pin__initials" style="display:none">${escapeHtml(initials)}</span>`
-        : `<span class="home-search-pin__initials">${escapeHtml(initials)}</span>`;
-      return `
-        <button type="button" class="home-search-pin" data-home-pin-channel="${escapeHtml(ch.id)}" aria-label="Filter op ${escapeHtml(ch.name)}">
-          <span class="home-search-pin__avatar">${avatarInner}</span>
-          <span class="home-search-pin__name">${escapeHtml(ch.name)}</span>
-        </button>`;
-    })
-    .join("");
-}
-
 function renderHomeFocusPanel() {
   const panel = document.getElementById("homeFocusPanel");
   if (!panel) return;
@@ -1877,7 +1845,6 @@ function switchView(view) {
   if (view === "home") {
     // Chips: pick a new set each time home is entered
     renderHomeQuickChips();
-    renderHomePinnedChannels();
     hideHomeFocusPanel();
 
     // Defensive: when input is empty, ALWAYS force the channel-search panel
@@ -2811,9 +2778,6 @@ function renderCategoryGrid() {
 }
 
 function renderChannelRow() {
-  // Whenever the channel row re-renders, the user's followed set may have changed,
-  // so re-paint the pinned-channel quick filters under the home search bar too.
-  renderHomePinnedChannels();
   const row = document.getElementById("channelRow");
   if (!row) return;
   // Only show followed channels that are approved (not pending)
@@ -6956,7 +6920,6 @@ bindEvent(searchInput, "blur", () => {
 
 // Home quick chips (generated on load + when re-entering home)
 renderHomeQuickChips();
-renderHomePinnedChannels();
 bindEvent(homeSearchChipsWrap, "click", (event) => {
   const chip = event.target.closest("[data-home-search-chip]");
   if (!(chip instanceof HTMLElement)) return;
@@ -6964,24 +6927,6 @@ bindEvent(homeSearchChipsWrap, "click", (event) => {
   searchInput.value = chip.dataset.homeSearchChip || chip.textContent.trim();
   searchInput.focus();
   searchInput.dispatchEvent(new Event("input", { bubbles: true }));
-});
-
-// Pinned-channel buttons → set channel filter and surface results
-bindEvent(document.getElementById("homeSearchPins"), "click", (event) => {
-  const btn = event.target.closest("[data-home-pin-channel]");
-  if (!(btn instanceof HTMLElement)) return;
-  const id = btn.dataset.homePinChannel;
-  if (!id || !searchInput) return;
-  const channel = getAllChannels().find((c) => c.id === id);
-  if (!channel) return;
-  // Set filter first so channel-search results are scoped to this channel.
-  state.channelSearchFilter = id;
-  // Pre-fill with the channel name so the API returns its top recipes.
-  searchInput.value = channel.name;
-  state.channelSearchQuery = channel.name;
-  hideHomeFocusPanel();
-  clearTimeout(channelSearchTimeout);
-  searchChannels(channel.name);
 });
 
 // Focus-state panel: intent chips, recent searches, and recent recipes
@@ -7052,10 +6997,8 @@ bindEvent(channelSearchResults, "click", async (event) => {
     recipe._previewCreatedAt = Date.now();
     state.importPreviews[recipe.id] = recipe;
     state.selectedRecipeId = recipe.id;
-    renderDetailRecipe(true);
-    switchView("detail");
-    openRecipeEditPanel(recipe.id);
-    showToast(`${recipe.title} geïmporteerd als concept.`);
+    openImportReview(recipe.id);
+    showToast(`${recipe.title} klaar om na te lopen.`);
     // Clear search and force-close the channel-search panel so it isn't
     // left visible when the user navigates back to home after the import.
     if (searchInput) searchInput.value = "";
@@ -8209,7 +8152,8 @@ bindEvent(importForm, "submit", async (event) => {
       state.selectedPlatform = "tiktok";
       syncPlatformUI();
       closeModal();
-      showToast(`${importedRecipe.title} geïmporteerd als concept.`);
+      openImportReview(importedRecipe.id);
+      showToast(`${importedRecipe.title} klaar om na te lopen.`);
     }
   );
 });
@@ -8248,7 +8192,8 @@ bindEvent(homeImportForm, "submit", async (event) => {
       const captionToggle = document.getElementById("homeImportCaptionToggle");
       if (captionToggle) captionToggle.textContent = "+ Voeg beschrijving toe";
       homeImportFeedback.textContent = "Voeg direct een recept toe vanuit social media of een receptenwebsite.";
-      showToast(`${importedRecipe.title} geïmporteerd als concept.`);
+      openImportReview(importedRecipe.id);
+      showToast(`${importedRecipe.title} klaar om na te lopen.`);
     }
   );
 });
@@ -8286,7 +8231,8 @@ bindEvent(importScreenForm, "submit", async (event) => {
       const captionToggle = document.getElementById("importScreenCaptionToggle");
       if (captionToggle) captionToggle.textContent = "+ Voeg beschrijving toe";
       importScreenFeedback.textContent = "Kopieer de link uit de app of website en plak hem hierboven.";
-      showToast(`${importedRecipe.title} geïmporteerd als concept.`);
+      openImportReview(importedRecipe.id);
+      showToast(`${importedRecipe.title} klaar om na te lopen.`);
     }
   );
 });
