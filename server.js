@@ -6209,6 +6209,9 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, {
         ok: true,
         app: "Plately",
+      version: {
+        commit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.GIT_SHA || "",
+      },
       env: process.env.NODE_ENV || "development",
       persistence: {
         mode: "json-file",
