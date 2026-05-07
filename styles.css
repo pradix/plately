@@ -1558,20 +1558,20 @@ img { display: block; max-width: 100%; }
 .cb-detail__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
   align-items: stretch;
-  padding-inline: 16px;
+  padding-inline: 0;
   grid-auto-rows: 1fr;
 }
 
 .cb-detail__item {
   position: relative;
   display: block;
-  border-radius: 26px;
+  border-radius: 28px;
   overflow: hidden;
   background: #fff;
   border: 1px solid rgba(120, 147, 111, 0.08);
-  box-shadow: 0 10px 26px rgba(36, 60, 43, 0.07);
+  box-shadow: 0 12px 28px rgba(36, 60, 43, 0.08);
 }
 
 .cb-detail__select {
@@ -1623,7 +1623,7 @@ img { display: block; max-width: 100%; }
 
 .cb-detail__img {
   width: 100%;
-  aspect-ratio: 4/3;
+  aspect-ratio: 1 / 1.05;
   border-radius: 0;
   object-fit: cover;
   display: block;
