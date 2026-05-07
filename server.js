@@ -1996,6 +1996,32 @@ function postProcessExtractedSections({ ingredients, instructions }) {
   };
 }
 
+function mergeSocialExtraction({ claudeIngredients = [], claudeInstructions = [], captionText = "" }) {
+  const caption = sanitizeText(String(captionText || ""));
+  const heurIngredients = caption ? extractIngredientsFromText(caption) : [];
+  const heurInstructions = caption ? extractInstructionsFromText(caption) : [];
+
+  const post = postProcessExtractedSections({
+    ingredients: Array.isArray(claudeIngredients) ? claudeIngredients : [],
+    instructions: Array.isArray(claudeInstructions) ? claudeInstructions : [],
+  });
+
+  // If Claude missed items, fill from heuristics (caption parsing is often better at quantities).
+  const mergedIngredients = [
+    ...(post.ingredients || []),
+    ...(heurIngredients || []).map((i) => i?.name ? `${i.quantity || ""} ${i.unit || ""} ${i.name}`.trim() : "").filter(Boolean),
+  ];
+  const mergedInstructions = [
+    ...(post.instructions || []),
+    ...(heurInstructions || []),
+  ];
+
+  return postProcessExtractedSections({
+    ingredients: mergedIngredients,
+    instructions: mergedInstructions,
+  });
+}
+
 function buildClaudeSocialInput({ titleHint, caption, pageText, note }) {
   const cap = sanitizeText(String(caption || ""));
   const txt = sanitizeText(String(pageText || ""));
@@ -3830,8 +3856,14 @@ async function importTikTok(sourceUrl, note) {
       instructions: claudeResult.instructions || [],
     });
 
+    const mergedPost = mergeSocialExtraction({
+      claudeIngredients: claudeResult.ingredients || [],
+      claudeInstructions: claudeResult.instructions || [],
+      captionText: stripSocialNoise(bestCaption),
+    });
+
     const parsedIngredients = normalizeIngredientList(
-      (post.ingredients || []).map((ingredient) =>
+      (mergedPost.ingredients || post.ingredients || []).map((ingredient) =>
         typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient
       )
     );
@@ -3845,10 +3877,10 @@ async function importTikTok(sourceUrl, note) {
       image,
       author,
       ingredients: parsedIngredients,
-      instructions: finalizeInstructionSteps(post.instructions),
+      instructions: finalizeInstructionSteps(mergedPost.instructions || post.instructions),
       time: sanitizeText(claudeResult.time || "30 min"),
       servings: sanitizeText(String(claudeResult.servings || "2")),
-      needsReview: parsedIngredients.length < 3 || finalizeInstructionSteps(post.instructions).length < 3,
+      needsReview: parsedIngredients.length < 3 || finalizeInstructionSteps(mergedPost.instructions || post.instructions).length < 3,
       sourceLabel: "Imported from TikTok",
     };
   }
@@ -3916,8 +3948,14 @@ async function importInstagram(sourceUrl, note) {
         instructions: claudeResult.instructions || [],
       });
 
+      const mergedPost = mergeSocialExtraction({
+        claudeIngredients: claudeResult.ingredients || [],
+        claudeInstructions: claudeResult.instructions || [],
+        captionText: stripSocialNoise(captionForClaude),
+      });
+
       const parsedIngredients = normalizeIngredientList(
-        (post.ingredients || []).map((ingredient) =>
+        (mergedPost.ingredients || post.ingredients || []).map((ingredient) =>
           typeof ingredient === "string" ? parseIngredientLine(ingredient) : ingredient
         )
       );
@@ -3931,10 +3969,10 @@ async function importInstagram(sourceUrl, note) {
         image,
         author,
         ingredients: parsedIngredients,
-        instructions: finalizeInstructionSteps(post.instructions),
+        instructions: finalizeInstructionSteps(mergedPost.instructions || post.instructions),
         time: sanitizeText(claudeResult.time || "30 min"),
         servings: sanitizeText(String(claudeResult.servings || "2")),
-        needsReview: parsedIngredients.length < 3 || finalizeInstructionSteps(post.instructions).length < 3,
+        needsReview: parsedIngredients.length < 3 || finalizeInstructionSteps(mergedPost.instructions || post.instructions).length < 3,
         sourceLabel: "Imported from Instagram",
       };
     }
