@@ -463,7 +463,10 @@ const state = {
     zaterdag: null,
     zondag: null,
   },
+  // searchQuery is used for filtering the "Mijn recepten" grid.
+  // Keep it separate from channel-search query.
   searchQuery: "",
+  channelSearchQuery: "",
   activeCookbookFilter: null,
   homeRecipesExpanded: false,
   followedChannelIds: ["ch-ah"], // Start with only Allerhande (primary Dutch recipe source)
@@ -1990,13 +1993,13 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
     receivedResults: results ? results.length : 0,
     allResults: all ? all.length : 0,
     activeFilter: filter,
-    searchQuery: state.searchQuery,
+    searchQuery: state.channelSearchQuery,
     results: all ? all.slice(0, 3) : []  // Show first 3 results for debugging
   });
 
   if (!all || all.length === 0) {
     // Only hide if we're not actively searching
-    if (!state.searchQuery || state.searchQuery.trim().length === 0) {
+    if (!state.channelSearchQuery || state.channelSearchQuery.trim().length === 0) {
       // Only hide if truly no search is active AND no previous results
       channelSearchSection.classList.add("hidden");
       channelSearchResults.innerHTML = "";
@@ -2085,6 +2088,7 @@ async function searchChannels(query) {
     renderChannelSearchResults([]);
     return;
   }
+  state.channelSearchQuery = query.trim();
 
   if (channelSearchSection) {
     channelSearchSection.classList.remove("hidden");
@@ -2127,6 +2131,7 @@ async function searchChannelsOnImportScreen(query) {
     if (orRow) orRow.classList.remove("hidden");
     return;
   }
+  state.channelSearchQuery = query.trim();
   if (section) section.classList.remove("hidden");
   if (results) results.innerHTML = `<p class="ch-result__loading"><span class="plately-hourglass"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M6 2h12v6c0 2-2 3-6 3s-6-1-6-3V2z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><path d="M6 22h12v-6c0-2-2-3-6-3s-6 1-6 3v6z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><rect x="11" y="9" width="2" height="6" fill="#f6b69d"/></svg></span>Zoeken…</p>`;
   if (orRow) orRow.classList.add("hidden");
@@ -6123,6 +6128,7 @@ bindEvent(searchInput, "input", (event) => {
   // Debounced channel search — fires after 900 ms of no typing (better results, fewer API calls)
   clearTimeout(channelSearchTimeout);
   const query = event.target.value.trim();
+  state.channelSearchQuery = query;
   if (query.length < 2) {
     // Show empty channel results when query is too short
     if (query.length === 0) {
@@ -6145,6 +6151,7 @@ bindEvent(searchInput, "keydown", (event) => {
   }
   if (event.key === "Escape") {
     searchInput.value = "";
+    state.channelSearchQuery = "";
     renderChannelSearchResults([]);
   }
 });
@@ -6152,7 +6159,7 @@ bindEvent(searchInput, "keydown", (event) => {
 // Close channel search panel
 bindEvent(document.getElementById("channelSearchClose"), "click", () => {
   if (searchInput) searchInput.value = "";
-  state.searchQuery = "";
+  state.channelSearchQuery = "";
   renderQuickRecipeGrid();
   renderRecipeGrid();
   renderChannelSearchResults([]);

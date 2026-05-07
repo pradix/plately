@@ -5840,7 +5840,12 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   );
 
   const waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  const GLOBAL_DEADLINE_MS = 1400;
+  const hasChannel = (lists, channelId) =>
+    lists.some((list) => Array.isArray(list) && list.some((item) => item?.channelId === channelId));
+
+  // If user only searches AH, give it a bit more time so it doesn't get cut off by the global deadline.
+  const isAhOnly = Boolean(allow && allow.size === 1 && allow.has("ch-ah"));
+  const GLOBAL_DEADLINE_MS = isAhOnly ? 2600 : 1400;
   await Promise.race([Promise.allSettled(instrumented), waitMs(GLOBAL_DEADLINE_MS)]);
 
   const countDistinctChannels = (lists) => {
@@ -5858,12 +5863,21 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     await Promise.race([Promise.allSettled(instrumented), waitMs(700)]);
   }
 
+  // If AH is enabled but hasn't arrived yet, wait a short extra window.
+  // This fixes cases where AH is slightly slower than other sources.
+  const ahEnabled = !allow || allow.has("ch-ah");
+  if (ahEnabled && !hasChannel(collected, "ch-ah")) {
+    await Promise.race([Promise.allSettled(instrumented), waitMs(1200)]);
+  }
+
   // If we only have results from a single channel, wait a bit longer to improve variety.
   // (We still cap waiting so search stays snappy.)
-  const MIN_DISTINCT_CHANNELS = 3;
-  const distinct = countDistinctChannels(collected);
-  if (collected.length > 0 && distinct < MIN_DISTINCT_CHANNELS) {
-    await Promise.race([Promise.allSettled(instrumented), waitMs(1100)]);
+  if (!isAhOnly) {
+    const MIN_DISTINCT_CHANNELS = 3;
+    const distinct = countDistinctChannels(collected);
+    if (collected.length > 0 && distinct < MIN_DISTINCT_CHANNELS) {
+      await Promise.race([Promise.allSettled(instrumented), waitMs(1100)]);
+    }
   }
 
   // Interleave results from all channels for balanced variety
