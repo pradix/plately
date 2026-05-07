@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Plately Admin — Statistieken</title>
+  <link rel="stylesheet" href="/styles.css">
   <style>
     * {
       margin: 0;
@@ -450,6 +451,46 @@
         </div>
       </div>
 
+      <div class="section" id="inventorySection">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <h2 style="margin:0">📚 Inventaris</h2>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn" id="inventoryRefreshBtn" onclick="refreshInventory()" style="background:#eee">🔄 Refresh</button>
+            <div class="muted" id="inventoryMeta">—</div>
+          </div>
+        </div>
+
+        <div class="admin-inventory__tabs" style="margin-top:14px">
+          <button class="admin-inventory__tab admin-inventory__tab--active" id="inventoryTabCookbooks" onclick="setInventoryType('cookbooks')" type="button">Kookboeken</button>
+          <button class="admin-inventory__tab" id="inventoryTabRecipes" onclick="setInventoryType('recipes')" type="button">Recepten</button>
+        </div>
+
+        <div class="admin-inventory__controls" style="margin-top:12px">
+          <input id="inventorySearch" type="text" placeholder="Zoek op naam/titel…" oninput="onInventorySearchChange()" />
+
+          <select id="inventoryUserFilter" onchange="onInventoryUserChange()">
+            <option value="">Alle gebruikers</option>
+          </select>
+
+          <select id="inventoryLimit" onchange="onInventoryLimitChange()">
+            <option value="15">15</option>
+            <option value="30" selected>30</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+
+          <div class="admin-inventory__pager">
+            <button class="btn" onclick="inventoryPrev()" id="inventoryPrevBtn" style="background:#eee">← Prev</button>
+            <button class="btn" onclick="inventoryNext()" id="inventoryNextBtn" style="background:#eee">Next →</button>
+          </div>
+        </div>
+
+        <div id="inventoryError" class="error" style="display:none;margin-top:12px"></div>
+        <div id="inventoryLoading" class="loading" style="display:none;padding:18px 0">⏳ Inventaris laden...</div>
+
+        <div id="inventoryGrid" class="admin-inventory__grid" style="margin-top:14px"></div>
+      </div>
+
       <div class="section">
         <h2>🔍 Gebruikers</h2>
         <div class="search-bar">
@@ -497,6 +538,16 @@
     let sortBy = 'updatedAt';
     let sortOrder = 'desc';
     let selectedUserIds = new Set();
+
+    const inventoryState = {
+      type: "cookbooks",
+      limit: 30,
+      offset: 0,
+      q: "",
+      userId: "",
+      loading: false,
+    };
+    let inventorySearchTimer = null;
 
     function setText(id, value) {
       const el = document.getElementById(id);
@@ -611,6 +662,8 @@
         loadPendingChannels();
         loadAnalytics();
         loadOverview(); // independent block (own loading/error)
+        initInventoryUserFilter();
+        loadInventory(); // independent block (own loading/error)
 
         document.getElementById("loading").style.display = "none";
         document.getElementById("content").style.display = "block";
@@ -763,6 +816,197 @@
 
     async function refreshAll() {
       await loadStats();
+    }
+
+    function initInventoryUserFilter() {
+      const select = document.getElementById("inventoryUserFilter");
+      if (!select) return;
+      const current = select.value || "";
+      const users = Array.isArray(allUsers) ? allUsers.slice() : [];
+      users.sort((a, b) => String(a.email || "").localeCompare(String(b.email || "")));
+      const options = [
+        `<option value="">Alle gebruikers</option>`,
+        ...users.map((u) => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.email || u.id)}</option>`)
+      ];
+      select.innerHTML = options.join("");
+      select.value = current;
+    }
+
+    function setInventoryType(type) {
+      inventoryState.type = (type === "recipes") ? "recipes" : "cookbooks";
+      inventoryState.offset = 0;
+
+      const tabCookbooks = document.getElementById("inventoryTabCookbooks");
+      const tabRecipes = document.getElementById("inventoryTabRecipes");
+      if (tabCookbooks && tabRecipes) {
+        tabCookbooks.classList.toggle("admin-inventory__tab--active", inventoryState.type === "cookbooks");
+        tabRecipes.classList.toggle("admin-inventory__tab--active", inventoryState.type === "recipes");
+      }
+      loadInventory();
+    }
+
+    function onInventorySearchChange() {
+      const input = document.getElementById("inventorySearch");
+      inventoryState.q = (input?.value || "").trim();
+      inventoryState.offset = 0;
+      if (inventorySearchTimer) clearTimeout(inventorySearchTimer);
+      inventorySearchTimer = setTimeout(() => loadInventory(), 250);
+    }
+
+    function onInventoryLimitChange() {
+      const sel = document.getElementById("inventoryLimit");
+      const n = Number.parseInt(sel?.value || "30", 10);
+      inventoryState.limit = Number.isFinite(n) ? n : 30;
+      inventoryState.offset = 0;
+      loadInventory();
+    }
+
+    function onInventoryUserChange() {
+      const sel = document.getElementById("inventoryUserFilter");
+      inventoryState.userId = (sel?.value || "").trim();
+      inventoryState.offset = 0;
+      loadInventory();
+    }
+
+    function inventoryPrev() {
+      inventoryState.offset = Math.max(0, inventoryState.offset - inventoryState.limit);
+      loadInventory();
+    }
+
+    function inventoryNext() {
+      inventoryState.offset = inventoryState.offset + inventoryState.limit;
+      loadInventory();
+    }
+
+    async function refreshInventory() {
+      await loadInventory(true);
+    }
+
+    function renderInventory(items) {
+      const grid = document.getElementById("inventoryGrid");
+      if (!grid) return;
+      const list = Array.isArray(items) ? items : [];
+      if (!list.length) {
+        grid.innerHTML = `<p class="muted" style="padding:6px 0">Geen resultaten</p>`;
+        return;
+      }
+
+      if (inventoryState.type === "cookbooks") {
+        grid.innerHTML = list.map((cb) => {
+          const imgs = Array.isArray(cb.cover_images) ? cb.cover_images.slice(0, 4).filter(Boolean) : [];
+          const collage = imgs.length
+            ? `<div class="admin-inventory__collage">${imgs.map((src) => `<img src="${escapeHtml(src)}" alt="" loading="lazy" />`).join("")}</div>`
+            : `<div class="admin-inventory__placeholder">📚</div>`;
+
+          const owner = cb.user_name || cb.user_email || cb.user_id || "";
+          const meta = `${formatNumber(cb.recipe_count || 0)} recepten`;
+          const subtitle = owner ? `👤 ${escapeHtml(owner)}` : "";
+          const detail = `
+            <details class="admin-inventory__details">
+              <summary>Details</summary>
+              <div class="admin-inventory__detail-grid">
+                <div><span class="muted">Cookbook ID</span><br/><code>${escapeHtml(cb.id || "")}</code></div>
+                <div><span class="muted">User ID</span><br/><code>${escapeHtml(cb.user_id || "")}</code></div>
+                <div><span class="muted">Created</span><br/>${escapeHtml(cb.created_at || "-")}</div>
+                <div><span class="muted">Updated</span><br/>${escapeHtml(cb.updated_at || "-")}</div>
+              </div>
+            </details>
+          `;
+
+          return `
+            <article class="admin-inventory__card">
+              ${collage}
+              <div class="admin-inventory__body">
+                <div class="admin-inventory__title">${escapeHtml(cb.name || "Naamloos kookboek")}</div>
+                <div class="admin-inventory__subtitle">${subtitle}</div>
+                <div class="admin-inventory__meta">${escapeHtml(meta)}</div>
+                ${detail}
+              </div>
+            </article>
+          `;
+        }).join("");
+        return;
+      }
+
+      grid.innerHTML = list.map((r) => {
+        const img = r.image ? `<img class="admin-inventory__thumb" src="${escapeHtml(r.image)}" alt="" loading="lazy" />` : `<div class="admin-inventory__thumb admin-inventory__thumb--empty">🍽️</div>`;
+        const owner = r.user_name || r.user_email || r.user_id || "";
+        const channel = r.channel ? `<span class="badge" title="kanaal/platform">${escapeHtml(r.channel)}</span>` : "";
+        const source = r.source ? `<a href="${escapeHtml(r.source)}" target="_blank" rel="noopener" class="admin-inventory__link">Bron</a>` : "";
+        const detail = `
+          <details class="admin-inventory__details">
+            <summary>Details</summary>
+            <div class="admin-inventory__detail-grid">
+              <div><span class="muted">Recipe ID</span><br/><code>${escapeHtml(r.id || "")}</code></div>
+              <div><span class="muted">User ID</span><br/><code>${escapeHtml(r.user_id || "")}</code></div>
+              <div><span class="muted">Created</span><br/>${escapeHtml(r.created_at || "-")}</div>
+              <div><span class="muted">Updated</span><br/>${escapeHtml(r.updated_at || "-")}</div>
+            </div>
+          </details>
+        `;
+
+        return `
+          <article class="admin-inventory__card admin-inventory__card--row">
+            ${img}
+            <div class="admin-inventory__body">
+              <div class="admin-inventory__title">${escapeHtml(r.title || "Naamloos recept")}</div>
+              <div class="admin-inventory__subtitle">${owner ? `👤 ${escapeHtml(owner)}` : ""}</div>
+              <div class="admin-inventory__meta">${channel} ${source}</div>
+              ${detail}
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    async function loadInventory(force = false) {
+      if (inventoryState.loading && !force) return;
+      const loadingEl = document.getElementById("inventoryLoading");
+      const errorEl = document.getElementById("inventoryError");
+      const metaEl = document.getElementById("inventoryMeta");
+      const prevBtn = document.getElementById("inventoryPrevBtn");
+      const nextBtn = document.getElementById("inventoryNextBtn");
+
+      if (errorEl) errorEl.style.display = "none";
+      if (loadingEl) loadingEl.style.display = "block";
+      if (metaEl) metaEl.textContent = "⏳ Laden...";
+      if (prevBtn) prevBtn.disabled = true;
+      if (nextBtn) nextBtn.disabled = true;
+      inventoryState.loading = true;
+
+      try {
+        const params = new URLSearchParams();
+        params.set("type", inventoryState.type);
+        params.set("limit", String(inventoryState.limit));
+        params.set("offset", String(inventoryState.offset));
+        if (inventoryState.q) params.set("q", inventoryState.q);
+        if (inventoryState.userId) params.set("user_id", inventoryState.userId);
+
+        const response = await fetch(`/api/admin/inventory?${params.toString()}`);
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "Failed to load inventory");
+        }
+        const items = Array.isArray(data.items) ? data.items : [];
+        renderInventory(items);
+
+        if (metaEl) {
+          const from = inventoryState.offset + 1;
+          const to = inventoryState.offset + items.length;
+          metaEl.textContent = items.length ? `Toon ${from}–${to} (limit ${inventoryState.limit})` : `Geen resultaten (offset ${inventoryState.offset})`;
+        }
+        if (prevBtn) prevBtn.disabled = inventoryState.offset <= 0;
+        if (nextBtn) nextBtn.disabled = items.length < inventoryState.limit;
+      } catch (error) {
+        if (errorEl) {
+          errorEl.style.display = "block";
+          errorEl.textContent = "❌ " + error.message;
+        }
+        if (metaEl) metaEl.textContent = "Kon niet laden";
+      } finally {
+        inventoryState.loading = false;
+        if (loadingEl) loadingEl.style.display = "none";
+      }
     }
 
     async function loadAnalytics() {

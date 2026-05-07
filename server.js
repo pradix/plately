@@ -7220,6 +7220,173 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/inventory" && request.method === "GET") {
+      console.log("📚 /api/admin/inventory called");
+      try {
+        const typeRaw = sanitizeText(requestUrl.searchParams.get("type") || "cookbooks");
+        const type = typeRaw === "recipes" ? "recipes" : "cookbooks";
+        const q = sanitizeText(requestUrl.searchParams.get("q") || "");
+        const userId = sanitizeText(requestUrl.searchParams.get("user_id") || "");
+        const limitRaw = Number.parseInt(String(requestUrl.searchParams.get("limit") || ""), 10);
+        const offsetRaw = Number.parseInt(String(requestUrl.searchParams.get("offset") || ""), 10);
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 30;
+        const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+
+          if (type === "cookbooks") {
+            const res = await pool.query(
+              `
+              SELECT
+                u.id AS user_id,
+                u.email AS user_email,
+                u.created_at AS user_created_at,
+                u.updated_at AS user_updated_at,
+                cb AS cookbook,
+                COALESCE(u.app_state->'importedRecipes','[]'::jsonb) AS imported_recipes
+              FROM plately_users u
+              CROSS JOIN LATERAL jsonb_array_elements(COALESCE(u.app_state->'cookbooks','[]'::jsonb)) cb
+              WHERE ($1::text = '' OR u.id = $1)
+                AND ($2::text = '' OR (cb->>'name') ILIKE ('%' || $2 || '%'))
+              ORDER BY u.updated_at DESC NULLS LAST, u.created_at DESC NULLS LAST
+              LIMIT $3 OFFSET $4
+              `,
+              [userId, q, limit, offset]
+            );
+
+            const items = res.rows.map((row) => {
+              const cookbook = row.cookbook || {};
+              const recipeIds = Array.isArray(cookbook.recipeIds) ? cookbook.recipeIds.filter(Boolean) : [];
+              const importedRecipes = Array.isArray(row.imported_recipes) ? row.imported_recipes : [];
+              const byId = new Map(importedRecipes.map((r) => [r?.id, r]));
+              const coverImages = [];
+              for (const id of recipeIds) {
+                const r = byId.get(id);
+                const img = sanitizeText(r?.image || "");
+                if (img && !coverImages.includes(img)) {
+                  coverImages.push(img);
+                }
+                if (coverImages.length >= 4) break;
+              }
+              return {
+                id: sanitizeText(cookbook.id || ""),
+                name: sanitizeText(cookbook.name || ""),
+                user_id: sanitizeText(row.user_id || ""),
+                user_name: sanitizeText(row.user_email || ""),
+                recipe_count: recipeIds.length,
+                cover_images: coverImages,
+                created_at: row.user_created_at || "",
+                updated_at: row.user_updated_at || "",
+              };
+            }).filter((it) => it.id);
+
+            return sendJson(response, 200, { ok: true, type, limit, offset, q, user_id: userId, items });
+          }
+
+          // recipes
+          const res = await pool.query(
+            `
+            SELECT
+              u.id AS user_id,
+              u.email AS user_email,
+              u.created_at AS user_created_at,
+              u.updated_at AS user_updated_at,
+              r AS recipe
+            FROM plately_users u
+            CROSS JOIN LATERAL jsonb_array_elements(COALESCE(u.app_state->'importedRecipes','[]'::jsonb)) r
+            WHERE ($1::text = '' OR u.id = $1)
+              AND ($2::text = '' OR (COALESCE(r->>'title','')) ILIKE ('%' || $2 || '%'))
+            ORDER BY u.updated_at DESC NULLS LAST, u.created_at DESC NULLS LAST
+            LIMIT $3 OFFSET $4
+            `,
+            [userId, q, limit, offset]
+          );
+
+          const items = res.rows.map((row) => {
+            const recipe = row.recipe || {};
+            return {
+              id: sanitizeText(recipe.id || ""),
+              title: sanitizeText(recipe.title || ""),
+              image: sanitizeText(recipe.image || ""),
+              user_id: sanitizeText(row.user_id || ""),
+              user_name: sanitizeText(row.user_email || ""),
+              source: sanitizeText(recipe.sourceUrl || recipe.source || ""),
+              channel: sanitizeText(recipe.channelId || recipe.platform || ""),
+              created_at: row.user_created_at || "",
+              updated_at: row.user_updated_at || "",
+            };
+          }).filter((it) => it.id);
+
+          return sendJson(response, 200, { ok: true, type, limit, offset, q, user_id: userId, items });
+        }
+
+        // JSON-file mode: best-effort (no SQL, but we still support paging/search)
+        const db = await loadDatabase();
+        const users = Object.values(db.users || {});
+        const filteredUsers = userId ? users.filter((u) => String(u.id) === userId) : users;
+
+        if (type === "cookbooks") {
+          const allCookbooks = [];
+          for (const u of filteredUsers) {
+            const cookbooks = Array.isArray(u.cookbooks) ? u.cookbooks : [];
+            const imported = Array.isArray(u.importedRecipes) ? u.importedRecipes : [];
+            const byId = new Map(imported.map((r) => [r?.id, r]));
+            for (const cb of cookbooks) {
+              const name = sanitizeText(cb?.name || "");
+              if (q && !name.toLowerCase().includes(q.toLowerCase())) continue;
+              const recipeIds = Array.isArray(cb?.recipeIds) ? cb.recipeIds.filter(Boolean) : [];
+              const coverImages = [];
+              for (const id of recipeIds) {
+                const r = byId.get(id);
+                const img = sanitizeText(r?.image || "");
+                if (img && !coverImages.includes(img)) coverImages.push(img);
+                if (coverImages.length >= 4) break;
+              }
+              allCookbooks.push({
+                id: sanitizeText(cb?.id || ""),
+                name,
+                user_id: sanitizeText(u.id || ""),
+                user_name: sanitizeText(u.email || ""),
+                recipe_count: recipeIds.length,
+                cover_images: coverImages,
+                created_at: u.createdAt || "",
+                updated_at: u.updatedAt || "",
+              });
+            }
+          }
+          const items = allCookbooks.slice(offset, offset + limit);
+          return sendJson(response, 200, { ok: true, type, limit, offset, q, user_id: userId, items });
+        }
+
+        const allRecipes = [];
+        for (const u of filteredUsers) {
+          const imported = Array.isArray(u.importedRecipes) ? u.importedRecipes : [];
+          for (const r of imported) {
+            const title = sanitizeText(r?.title || "");
+            if (q && !title.toLowerCase().includes(q.toLowerCase())) continue;
+            allRecipes.push({
+              id: sanitizeText(r?.id || ""),
+              title,
+              image: sanitizeText(r?.image || ""),
+              user_id: sanitizeText(u.id || ""),
+              user_name: sanitizeText(u.email || ""),
+              source: sanitizeText(r?.sourceUrl || r?.source || ""),
+              channel: sanitizeText(r?.channelId || r?.platform || ""),
+              created_at: u.createdAt || "",
+              updated_at: u.updatedAt || "",
+            });
+          }
+        }
+        const items = allRecipes.slice(offset, offset + limit);
+        return sendJson(response, 200, { ok: true, type, limit, offset, q, user_id: userId, items });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/inventory:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/analytics" && request.method === "GET") {
       console.log("📈 /api/admin/analytics called");
       try {
