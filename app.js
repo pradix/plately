@@ -412,6 +412,38 @@ const COOKBOOK_SHOWCASE_IDS = [
   "recipe-book-thai",
 ];
 
+const HOME_RECIPE_INITIAL = 6;
+const HOME_RECIPE_STEP = 12;
+const HOME_RECIPE_LIMIT_SESSION_KEY = "plately-home-recipe-limit";
+
+function getSessionNumber(key, fallback) {
+  try {
+    const raw = sessionStorage.getItem(key);
+    const parsed = Number.parseInt(String(raw || ""), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function setSessionNumber(key, value) {
+  try { sessionStorage.setItem(key, String(value)); } catch {}
+}
+
+function getNavigationType() {
+  try {
+    const nav = performance?.getEntriesByType?.("navigation")?.[0];
+    return nav?.type || "";
+  } catch {
+    return "";
+  }
+}
+
+// Allowed to reset on hard refresh; keep within-session navigation state.
+if (getNavigationType() === "reload") {
+  try { sessionStorage.removeItem(HOME_RECIPE_LIMIT_SESSION_KEY); } catch {}
+}
+
 const state = {
   apiBase: window.location.protocol === "file:" ? "http://localhost:3000" : "",
   selectedPlatform: "tiktok",
@@ -469,7 +501,7 @@ const state = {
   searchQuery: "",
   channelSearchQuery: "",
   activeCookbookFilter: null,
-  homeRecipesExpanded: false,
+  homeRecipeLimit: getSessionNumber(HOME_RECIPE_LIMIT_SESSION_KEY, HOME_RECIPE_INITIAL),
   followedChannelIds: ["ch-ah"], // Start with only Allerhande (primary Dutch recipe source)
   customChannels: [],
   channelSearchFilter: null,
@@ -3042,9 +3074,16 @@ function renderRecipeGrid() {
   const totalRecipeCount = recipes.length;
 
   // Home screen can get very long with lots of imports; keep it snappy by default.
-  const HOME_CAP = 12;
-  const shouldCapHome = state.view === "home" && !isSearching && !state.homeRecipesExpanded;
-  if (shouldCapHome) recipes = recipes.slice(0, HOME_CAP);
+  // Only cap when we're on home and NOT in cookbook/search mode.
+  const shouldCapHome = state.view === "home" && !isSearching && !state.activeCookbookFilter;
+  if (shouldCapHome) {
+    const currentLimit = Math.max(
+      HOME_RECIPE_INITIAL,
+      Number.isFinite(Number(state.homeRecipeLimit)) ? Number(state.homeRecipeLimit) : HOME_RECIPE_INITIAL
+    );
+    state.homeRecipeLimit = currentLimit;
+    recipes = recipes.slice(0, Math.min(currentLimit, totalRecipeCount));
+  }
 
   // Update heading to reflect search state
   const headingEl = document.getElementById("recipeGridHeading") || document.querySelector(".kookboek-heading h1, .kookboek-heading h2");
@@ -3135,14 +3174,14 @@ function renderRecipeGrid() {
     )
     .join("");
 
-  // Home "toon meer" toggle
-  if (state.view === "home" && !isSearching && totalRecipeCount > HOME_CAP) {
-    const label = state.homeRecipesExpanded
-      ? "Toon minder"
-      : `Toon alles (${totalRecipeCount})`;
+  // Home "Laad meer" progressive reveal
+  if (shouldCapHome && totalRecipeCount > recipes.length) {
+    const remaining = totalRecipeCount - recipes.length;
+    const nextStep = Math.min(HOME_RECIPE_STEP, remaining);
+    const label = nextStep > 0 ? `Laad meer (+${nextStep})` : "Laad meer";
     gridHtml += `
       <div class="recipe-grid-more" style="grid-column:1/-1">
-        <button class="secondary-button recipe-grid-more__btn" type="button" id="homeToggleRecipeGrid">${escapeHtml(label)}</button>
+        <button class="secondary-button recipe-grid-more__btn" type="button" id="homeLoadMoreRecipes">${escapeHtml(label)}</button>
       </div>
     `;
   }
@@ -3157,12 +3196,15 @@ function renderRecipeGrid() {
     });
   }
 
-  const toggleBtn = document.getElementById("homeToggleRecipeGrid");
-  if (toggleBtn) {
-    bindEvent(toggleBtn, "click", () => {
-      state.homeRecipesExpanded = !state.homeRecipesExpanded;
+  const loadMoreBtn = document.getElementById("homeLoadMoreRecipes");
+  if (loadMoreBtn) {
+    bindEvent(loadMoreBtn, "click", () => {
+      const currentLimit = Math.max(HOME_RECIPE_INITIAL, Number(state.homeRecipeLimit) || HOME_RECIPE_INITIAL);
+      const nextLimit = Math.min(totalRecipeCount, currentLimit + HOME_RECIPE_STEP);
+      state.homeRecipeLimit = nextLimit;
+      setSessionNumber(HOME_RECIPE_LIMIT_SESSION_KEY, nextLimit);
       renderRecipeGrid();
-      document.getElementById("recipeGridSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Intentionally do NOT scroll; keep the user's position stable.
     });
   }
 }
