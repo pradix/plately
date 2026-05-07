@@ -5616,7 +5616,7 @@ const BLOG_POST_URL_RE = /\/(blog|artikel|artikelen|nieuws|tips?|advies|inspirat
 // URL patterns that strongly suggest a recipe post
 const RECIPE_URL_RE = /\/(recept|recepten|recipe|recipes|gerecht|gerechten|bakken|koken|lekker|snack|ontbijt|lunch|diner|avondeten|dessert|taart|cake|soep|salade|pasta|vlees|vis|vegetarisch|vegan|borrelhap|hapje|saus|dressing)\//i;
 // Title keywords that strongly suggest a non-recipe post (opinion / list / guide).
-const BLOG_TITLE_RE = /\b(tips?|review|gids|uitleg|interview|podcast|blog|nieuws|aankondiging|aanbieding|webshop|kookboek|artikel|wat\s+is|waarom|zo\s+doe\s+je|10\s+x\b|\d+\s+keer\b)\b/i;
+const BLOG_TITLE_RE = /\b(tips?|review|gids|uitleg|interview|podcast|blog|nieuws|aankondiging|aanbieding|webshop|kookboek|artikel|weekmenu|week\s*menu|wat\s+is|waarom|zo\s+doe\s+je|10\s+x\b|\d+\s+keer\b)\b/i;
 
 function isLikelyBlogPage(title, url, description = "") {
   const t = sanitizeText(String(title || "")).trim();
