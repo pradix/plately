@@ -6369,7 +6369,12 @@ async function buildStoreBasket(body) {
         const rawName = sanitizeText(item.title || "");
         if (!rawName) return { ingredient: rawName, product: null, products: [] };
         const searchQuery = buildAHSearchQuery(rawName, preferences);
-        const products = await findAHProducts(searchQuery || rawName, 3);
+        let products = await findAHProducts(searchQuery || rawName, 3);
+        // If preferences yield no results, fall back to the plain ingredient query
+        // so the basket never ends up empty for that item.
+        if ((!products || products.length === 0) && searchQuery && searchQuery !== rawName) {
+          products = await findAHProducts(rawName, 3);
+        }
         return { ingredient: rawName, product: products[0] ?? null, products };
       })
     ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));

@@ -1558,8 +1558,8 @@ function renderBasketPreview() {
     let pickedIndex = item.selectedChoiceIndex || 0;
     if (hasDietFilter || hasSearch) {
       const matchIdx = choices.findIndex((c) => choiceMatchesBasketFilters(c, activeFilter, item));
-      if (matchIdx === -1) return ""; // hide item if nothing matches
-      pickedIndex = matchIdx;
+      // If no match found, keep the first/selected choice instead of hiding the item.
+      if (matchIdx !== -1) pickedIndex = matchIdx;
     }
 
     const choice = choices[pickedIndex];
