@@ -4527,7 +4527,12 @@ async function importWebsite(sourceUrl) {
       }
       return "";
     };
-    const ahTitle = normalizeRecipeTitle(ahJsonLdTitle) || ahH1Title || ahMetaTitle || primaryRecipe.title;
+    // Only trust primaryRecipe.title when we actually fetched HTML (otherwise it can be reader boilerplate).
+    const ahTitle =
+      normalizeRecipeTitle(ahJsonLdTitle) ||
+      ahH1Title ||
+      ahMetaTitle ||
+      (html ? primaryRecipe.title : "");
 
     const ahMetaDescription = html
       ? sanitizeText(
@@ -4583,7 +4588,8 @@ async function importWebsite(sourceUrl) {
       const readerServings = parseMarkdownServings(readerDocument.body);
       const ahReaderDescription = readerRecipe.description || "";
       const ahReaderTitle = normalizeRecipeTitle(extractReaderRecipeTitle(readerDocument.body) || readerRecipe.title || "");
-      const ahReaderIntro = extractIntroFromReaderMarkdown(readerDocument.body, ahTitle || ahH1Title || ahMetaTitle || primaryRecipe.title);
+      const titleHintForReader = ahTitle || ahH1Title || ahMetaTitle || ahReaderTitle || primaryRecipe.title;
+      const ahReaderIntro = extractIntroFromReaderMarkdown(readerDocument.body, titleHintForReader);
       const mergedAhTitle = ahTitle || ahH1Title || ahMetaTitle || ahReaderTitle || primaryRecipe.title;
       const normalizedAhTitle = normalizeRecipeTitle(mergedAhTitle || "");
       // Allerhande titles sometimes include trailing "en avocado" style add-ons.
