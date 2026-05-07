@@ -368,9 +368,21 @@
         <div class="search-bar">
           <input type="text" id="searchInput" placeholder="Zoek gebruiker by email..." onkeyup="filterUsers()">
         </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
+          <div style="color:#666;font-size:13px">
+            Geselecteerd: <strong id="selectedUsersCount">0</strong>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn" onclick="clearSelection()" style="background:#eee">Selectie wissen</button>
+            <button class="btn btn-primary" onclick="bulkDeleteSelected()" id="bulkDeleteBtn" disabled>🗑️ Verwijder geselecteerden</button>
+          </div>
+        </div>
         <table class="users-table">
           <thead>
             <tr>
+              <th style="width:36px">
+                <input type="checkbox" id="selectAllUsers" onclick="toggleSelectAll(event)" />
+              </th>
               <th class="sortable" onclick="sortTable('email')">Email</th>
               <th class="sortable" onclick="sortTable('recipes')">Recepten</th>
               <th class="sortable" onclick="sortTable('cookbooks')">Kookboeken</th>
@@ -397,6 +409,66 @@
     let allUsers = [];
     let sortBy = 'updatedAt';
     let sortOrder = 'desc';
+    let selectedUserIds = new Set();
+
+    function updateSelectionUi() {
+      const count = selectedUserIds.size;
+      const countEl = document.getElementById("selectedUsersCount");
+      if (countEl) countEl.textContent = String(count);
+      const btn = document.getElementById("bulkDeleteBtn");
+      if (btn) btn.disabled = count === 0;
+    }
+
+    function clearSelection() {
+      selectedUserIds = new Set();
+      const selectAll = document.getElementById("selectAllUsers");
+      if (selectAll) selectAll.checked = false;
+      renderUsers();
+      updateSelectionUi();
+    }
+
+    function toggleSelectAll(event) {
+      event.stopPropagation();
+      const checked = Boolean(event.target.checked);
+      if (!checked) {
+        clearSelection();
+        return;
+      }
+      // Select all currently visible (filtered) users.
+      const searchText = document.getElementById("searchInput").value.toLowerCase();
+      const filtered = allUsers.filter(u => (u.email || "").toLowerCase().includes(searchText));
+      selectedUserIds = new Set(filtered.map((u) => u.id));
+      renderUsers();
+      updateSelectionUi();
+    }
+
+    async function bulkDeleteSelected() {
+      const ids = [...selectedUserIds];
+      if (!ids.length) return;
+      if (!confirm(`Weet je zeker dat je ${ids.length} gebruiker(s) wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) {
+        return;
+      }
+      try {
+        const response = await fetch("/api/admin/delete-users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userIds: ids })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          alert("Fout bij verwijderen: " + (data.error || "Onbekende fout"));
+          return;
+        }
+        alert(`Verwijderd: ${data.deleted || 0} gebruiker(s).`);
+        selectedUserIds = new Set();
+        const selectAll = document.getElementById("selectAllUsers");
+        if (selectAll) selectAll.checked = false;
+        await loadStats();
+        updateSelectionUi();
+      } catch (error) {
+        alert("Fout: " + error.message);
+      }
+    }
 
     async function loadStats() {
       try {
@@ -585,6 +657,9 @@
 
         return `
           <tr class="user-row" onclick="showDetail('${escapeHtml(user.id)}')">
+            <td onclick="event.stopPropagation()">
+              <input type="checkbox" class="user-select" data-user-id="${escapeHtml(user.id)}" ${selectedUserIds.has(user.id) ? "checked" : ""} />
+            </td>
             <td>
               <div class="user-email">${escapeHtml(email)}</div>
               <div class="user-id">${user.id.substring(0, 16)}...</div>
@@ -598,6 +673,25 @@
           </tr>
         `;
       }).join("");
+
+      // Bind checkbox changes
+      tbody.querySelectorAll(".user-select").forEach((box) => {
+        box.addEventListener("change", (e) => {
+          const id = box.getAttribute("data-user-id");
+          if (!id) return;
+          if (box.checked) selectedUserIds.add(id);
+          else selectedUserIds.delete(id);
+          // Update select-all checkbox state
+          const searchText = document.getElementById("searchInput").value.toLowerCase();
+          const visible = allUsers.filter(u => (u.email || "").toLowerCase().includes(searchText)).map(u => u.id);
+          const allVisibleSelected = visible.length > 0 && visible.every((uid) => selectedUserIds.has(uid));
+          const selectAll = document.getElementById("selectAllUsers");
+          if (selectAll) selectAll.checked = allVisibleSelected;
+          updateSelectionUi();
+          e.stopPropagation();
+        });
+      });
+      updateSelectionUi();
     }
 
     function formatDate(date) {

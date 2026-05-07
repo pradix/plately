@@ -7019,6 +7019,58 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/delete-users" && request.method === "POST") {
+      console.log("🗑️ /api/admin/delete-users called");
+
+      try {
+        let body = "";
+        for await (const chunk of request) body += chunk.toString();
+        const payload = JSON.parse(body || "{}");
+        const userIds = Array.isArray(payload.userIds) ? payload.userIds.map((id) => sanitizeText(id)).filter(Boolean) : [];
+
+        if (!userIds.length) {
+          return sendJson(response, 400, { ok: false, error: "userIds required" });
+        }
+        if (userIds.length > 50) {
+          return sendJson(response, 400, { ok: false, error: "Too many userIds (max 50)" });
+        }
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const client = await pool.connect();
+          try {
+            await client.query("BEGIN");
+            await client.query("DELETE FROM plately_auth_sessions WHERE user_id = ANY($1)", [userIds]);
+            const res = await client.query("DELETE FROM plately_users WHERE id = ANY($1)", [userIds]);
+            await client.query("COMMIT");
+            return sendJson(response, 200, { ok: true, deleted: res.rowCount || 0 });
+          } catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+          } finally {
+            client.release();
+          }
+        }
+
+        // JSON file
+        const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+        const parsed = JSON.parse(rawFile);
+        let deleted = 0;
+        for (const userId of userIds) {
+          if (parsed.users && parsed.users[userId]) {
+            delete parsed.users[userId];
+            deleted += 1;
+          }
+        }
+        await fsp.writeFile(DATA_FILE, JSON.stringify(parsed, null, 2));
+        return sendJson(response, 200, { ok: true, deleted });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/delete-users:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/pending-channels" && request.method === "GET") {
       console.log("⏳ /api/admin/pending-channels called");
 
