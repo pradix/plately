@@ -615,9 +615,6 @@ const searchInput = document.getElementById("searchInput");
 const homeSearchChipsWrap = document.querySelector(".home-search-chips");
 const channelSearchSection = document.getElementById("channelSearchSection");
 const channelSearchResults = document.getElementById("channelSearchResults");
-const homeImportBanner = document.getElementById("homeImportBanner");
-const homeImportToggle = document.getElementById("homeImportToggle");
-const homeImportBody = document.getElementById("homeImportBody");
 const closeImportSecondaryButton = document.getElementById("closeImportSecondaryButton");
 const openFeaturedRecipeButton = document.getElementById("openFeaturedRecipeButton");
 const platformButtons = [...document.querySelectorAll(".platform-button[data-platform-choice]")];
@@ -7884,40 +7881,6 @@ bindEvent(importForm, "submit", async (event) => {
       showToast(`${importedRecipe.title} klaar om na te lopen.`);
     }
   );
-});
-
-function setHomeImportExpanded(expanded) {
-  if (!homeImportBanner) return;
-  homeImportBanner.classList.toggle("import-banner--collapsed", !expanded);
-  homeImportBanner.classList.toggle("import-banner--expanded", expanded);
-  if (homeImportToggle) homeImportToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
-  if (homeImportBody) {
-    homeImportBody.hidden = !expanded;
-    if (!expanded) homeImportBody.classList.add("hidden");
-    else homeImportBody.classList.remove("hidden");
-  }
-}
-
-// Home import banner: collapsed by default (search is primary)
-try {
-  if (homeImportBanner && homeImportBody) {
-    setHomeImportExpanded(false);
-  }
-} catch {}
-
-bindEvent(homeImportToggle, "click", () => {
-  const isExpanded = homeImportToggle?.getAttribute("aria-expanded") === "true";
-  setHomeImportExpanded(!isExpanded);
-  if (!isExpanded) {
-    setTimeout(() => homeImportUrl?.focus(), 0);
-  }
-});
-
-bindEvent(homeImportUrl, "focus", () => {
-  // If user taps into URL field, expand immediately.
-  if (homeImportToggle?.getAttribute("aria-expanded") !== "true") {
-    setHomeImportExpanded(true);
-  }
 });
 
 bindEvent(homeImportForm, "submit", async (event) => {

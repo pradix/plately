@@ -286,44 +286,6 @@ img { display: block; max-width: 100%; }
   box-shadow: 0 16px 30px rgba(124, 121, 111, 0.05);
 }
 
-.import-banner--collapsed {
-  padding: 10px 10px;
-}
-
-.import-banner__cta {
-  width: 100%;
-  border: 0;
-  background: rgba(255,255,255,0.94);
-  border-radius: 22px;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  text-align: left;
-  box-shadow: inset 0 0 0 1px rgba(34,32,29,0.05);
-}
-
-.import-banner__cta > span:first-child {
-  font-weight: 850;
-  letter-spacing: -0.02em;
-  color: #2c3c2e;
-}
-
-.import-banner__cta-sub {
-  font-size: 0.86rem;
-  font-weight: 650;
-  color: #6a7c69;
-}
-
-.import-banner__body.hidden {
-  display: none;
-}
-
-.import-banner--expanded .import-banner__cta {
-  display: none;
-}
-
 .import-banner__head {
   display: grid;
   grid-template-columns: auto 1fr;

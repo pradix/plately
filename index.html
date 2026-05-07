@@ -62,38 +62,32 @@
             <div class="channel-search-list" id="channelSearchResults"></div>
           </section>
 
-          <!-- Import banner (collapsed by default) -->
-          <section class="import-banner import-banner--collapsed" id="homeImportBanner">
-            <button type="button" class="import-banner__cta" id="homeImportToggle" aria-expanded="false">
-              <span>Importeer recept</span>
-              <span class="import-banner__cta-sub">Plak een link uit TikTok, Instagram of een website</span>
-            </button>
-            <div class="import-banner__body" id="homeImportBody" hidden>
-              <div class="import-banner__head">
-                <span class="import-banner__icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" role="presentation" focusable="false">
-                    <path d="M12 3v8"/>
-                    <path d="M8.8 8.8 12 12l3.2-3.2"/>
-                    <path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>
-                    <path d="M7 14h10"/>
-                  </svg>
-                </span>
-                <div>
-                  <h1 class="import-banner__title">
-                    <span>Sla een recept op</span>
-                    <span class="beta-badge" aria-label="Beta">Beta</span>
-                  </h1>
-                  <p class="section-copy">Plak een link vanuit TikTok, Instagram of een website.</p>
-                </div>
+          <!-- Import banner -->
+          <section class="import-banner">
+            <div class="import-banner__head">
+              <span class="import-banner__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" role="presentation" focusable="false">
+                  <path d="M12 3v8"/>
+                  <path d="M8.8 8.8 12 12l3.2-3.2"/>
+                  <path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>
+                  <path d="M7 14h10"/>
+                </svg>
+              </span>
+              <div>
+                <h1 class="import-banner__title">
+                  <span>Sla een recept op</span>
+                  <span class="beta-badge" aria-label="Beta">Beta</span>
+                </h1>
+                <p class="section-copy">Plak een link vanuit TikTok, Instagram of een website.</p>
               </div>
-              <form class="import-banner__form" id="homeImportForm">
-                <input id="homeImportUrl" type="text" inputmode="url" class="import-banner__input--full" placeholder="Plak een link..." autocomplete="off" />
-                <button class="import-caption-toggle" type="button" id="homeImportCaptionToggle">+ Voeg beschrijving toe</button>
-                <textarea class="import-caption-field hidden" id="homeImportCaption" rows="3" placeholder="Plak hier de beschrijving of caption van het recept (optioneel) — dit verbetert de import sterk bij TikTok en Instagram"></textarea>
-                <button class="import-banner__button--full" id="homeImportSubmit" type="submit">Importeer</button>
-                <p class="import-banner__feedback" id="homeImportFeedback" aria-live="polite"></p>
-              </form>
             </div>
+            <form class="import-banner__form" id="homeImportForm">
+              <input id="homeImportUrl" type="text" inputmode="url" class="import-banner__input--full" placeholder="Plak een link..." autocomplete="off" />
+              <button class="import-caption-toggle" type="button" id="homeImportCaptionToggle">+ Voeg beschrijving toe</button>
+              <textarea class="import-caption-field hidden" id="homeImportCaption" rows="3" placeholder="Plak hier de beschrijving of caption van het recept (optioneel) — dit verbetert de import sterk bij TikTok en Instagram"></textarea>
+              <button class="import-banner__button--full" id="homeImportSubmit" type="submit">Importeer</button>
+              <p class="import-banner__feedback" id="homeImportFeedback" aria-live="polite"></p>
+            </form>
           </section>
 
           <!-- Recentelijk toegevoegd -->
