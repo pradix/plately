@@ -41,12 +41,18 @@
           </header>
 
           <!-- Zoekbalk -->
-          <section class="search-card" aria-label="Zoeken">
+          <section class="search-card home-search-hero" data-home-search aria-label="Zoeken">
             <div class="search-input">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M10.5 4.75a5.75 5.75 0 1 0 0 11.5a5.75 5.75 0 0 0 0-11.5Zm0 13.5a7.75 7.75 0 1 1 5.01-13.66a7.75 7.75 0 0 1-5.01 13.66Zm10.04 1.38l-4.42-4.42l1.41-1.41l4.42 4.42l-1.41 1.41Z"/>
               </svg>
-              <input id="searchInput" type="search" placeholder="Zoek recepten of ingrediënten..." title="Zoek naar recepten in je gevolgde kanalen. Typ minimaal 2 letters om te zoeken." />
+              <input id="searchInput" type="search" placeholder="Waar heb je zin in? Zoek pasta, kip of avocado..." title="Zoek naar recepten in je gevolgde kanalen. Typ minimaal 2 letters om te zoeken." />
+            </div>
+            <div class="home-search-chips" aria-label="Populaire zoekopdrachten">
+              <button type="button" class="home-search-chip" data-home-search-chip="Pasta">Pasta</button>
+              <button type="button" class="home-search-chip" data-home-search-chip="Kip">Kip</button>
+              <button type="button" class="home-search-chip" data-home-search-chip="Avocado">Avocado</button>
+              <button type="button" class="home-search-chip" data-home-search-chip="Snelle lunch">Snelle lunch</button>
             </div>
           </section>
 

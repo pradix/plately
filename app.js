@@ -612,6 +612,7 @@ const homeImportFeedback = document.getElementById("homeImportFeedback");
 const recipeUrlInput = document.getElementById("recipeUrl");
 const recipeNoteInput = document.getElementById("recipeNote");
 const searchInput = document.getElementById("searchInput");
+const homeSearchChips = [...document.querySelectorAll("[data-home-search-chip]")];
 const channelSearchSection = document.getElementById("channelSearchSection");
 const channelSearchResults = document.getElementById("channelSearchResults");
 const closeImportSecondaryButton = document.getElementById("closeImportSecondaryButton");
@@ -6541,6 +6542,15 @@ bindEvent(searchInput, "keydown", (event) => {
     state.channelSearchQuery = "";
     renderChannelSearchResults([]);
   }
+});
+
+homeSearchChips.forEach((chip) => {
+  bindEvent(chip, "click", () => {
+    if (!searchInput) return;
+    searchInput.value = chip.dataset.homeSearchChip || chip.textContent.trim();
+    searchInput.focus();
+    searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+  });
 });
 
 // Close channel search panel
