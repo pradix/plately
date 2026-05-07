@@ -1985,7 +1985,8 @@ function renderAlternativesSheet(item) {
     const isCheapest = entry.idx === cheapestKey;
     // Force the section label as a badge so users can always see the kenmerk
     // even when AH metadata is incomplete.
-    const forceKeys = [sec.id];
+    const sectionKey = entry.section || "";
+    const forceKeys = sectionKey ? [sectionKey] : [];
     const badges = renderAltBadges(c, item, { showCheapest: isCheapest, forceKeys });
     const cta = isSelected
       ? `<span class="alt-card__chosen">Gekozen</span>`
