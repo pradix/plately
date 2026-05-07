@@ -2432,19 +2432,41 @@ function scaleQty(quantity, factor) {
 
 function formatIngredientAmount(ingredient, factor = 1) {
   const quantity = scaleQty(ingredient.quantity, factor);
-  const unit = ingredient.unit === "x" ? "" : ingredient.unit;
+  const rawUnit = ingredient.unit === "x" ? "" : ingredient.unit;
+  const unit = formatUnitForQuantity(normalizeUnit(rawUnit), quantity);
   return `${quantity}${unit ? ` ${unit}` : ""}`.trim();
+}
+
+function formatUnitForQuantity(unit, quantity) {
+  const u = String(unit || "").trim().toLowerCase();
+  if (!u) return "";
+
+  const num = Number.parseFloat(String(quantity).replace(",", "."));
+  const isOne = Number.isFinite(num) && Math.abs(num - 1) < 1e-9;
+
+  // Only pluralize Dutch "count" units that should read naturally in UI + basket search terms.
+  // Keep canonical singular form in storage; pluralize for display when qty != 1.
+  const PLURAL = new Map([
+    ["stuk", "stuks"],
+    ["plakje", "plakjes"],
+    ["reepje", "reepjes"],
+    ["blokje", "blokjes"],
+    ["schijfje", "schijfjes"],
+    ["takje", "takjes"],
+  ]);
+
+  if (isOne) return u;
+  return PLURAL.get(u) || u;
 }
 
 function parseIngredientInput(value) {
   const cleanValue = String(value || "").trim();
   const match = cleanValue.match(
-    /^(\d+(?:[.,]\d+)?)\s*(gr|gram|grams|g|kg|mg|ml|cl|dl|l|liter|el|eetlepels?|tl|theelepels?|tbsp|tsp|cup|cups|oz|lb|stuks?|stuk(?:ken)?|krop|kroppen|bosje|bosjes|zakje|zakjes|pot(?:je|jes)?|blik(?:je|jes)?|snuf(?:je|jes)?|teen|teentjes|plak(?:je|jes)?|handje|handjes|scheut(?:je)?|bakje|bakjes|pak(?:ken)?|rol(?:len)?|verpakking(?:en)?|takje|takjes|blokje|blokjes)?\s*(.+)$/i
+    /^(\d+(?:[.,]\d+)?)\s*(gr|gram|grams|g|kg|mg|ml|cl|dl|l|liter|el|eetlepels?|tl|theelepels?|tbsp|tsp|cup|cups|oz|lb|stuks?|stuk(?:ken)?|krop|kroppen|bosje|bosjes|zakje|zakjes|pot(?:je|jes)?|blik(?:je|jes)?|snuf(?:je|jes)?|teen|teentjes|plak(?:je|jes)?|handje|handjes|scheut(?:je)?|bakje|bakjes|pak(?:ken)?|rol(?:len)?|verpakking(?:en)?|takje|takjes|blokje|blokjes|reepje|reepjes|schijfje|schijfjes)?\s*(.+)$/i
   );
   if (match) {
-    // Normalize "gr" and "gram" → "g"
-    let unit = (match[2] || "x").toLowerCase();
-    if (unit === "gr" || unit === "gram" || unit === "grams") unit = "g";
+    // Normalize units to a canonical singular form (e.g. plakjes → plakje)
+    let unit = normalizeUnit((match[2] || "x").toLowerCase());
     // Clean ingredient name: remove leading/trailing punctuation and extra spaces
     let name = match[3].trim().replace(/^[.,\s]+|[.,\s]+$/g, "").trim();
 
@@ -2480,6 +2502,10 @@ function normalizeUnit(unit) {
   const value = String(unit || "").trim().toLowerCase();
   if (!value || value === "x") return "stuk";
   if (value === "stuks") return "stuk";
+  if (value === "plakjes") return "plakje";
+  if (value === "reepjes") return "reepje";
+  if (value === "blokjes") return "blokje";
+  if (value === "schijfjes") return "schijfje";
   if (value === "gr" || value === "gram" || value === "grams") return "g";
   if (value === "liter") return "l";
   if (value === "milliliter") return "ml";
@@ -2585,6 +2611,41 @@ function mergeAmountLabels(existing, incoming) {
 
   const uniqueValues = [...new Set([String(existing || "").trim(), String(incoming || "").trim()].filter(Boolean))];
   return uniqueValues.join(" + ");
+}
+
+// Optional manual sanity checks in browser console:
+//   window.__platelyIngredientSanity?.()
+if (typeof window !== "undefined") {
+  window.__platelyIngredientSanity = () => {
+    const cases = [
+      { input: "2 plakjes kaas", want: { quantity: "2", unit: "plakje", name: "kaas" }, wantAmount: "2 plakjes" },
+      { input: "1 plakje kaas", want: { quantity: "1", unit: "plakje", name: "kaas" }, wantAmount: "1 plakje" },
+      { input: "3 reepjes kipfilet", want: { quantity: "3", unit: "reepje", name: "kipfilet" }, wantAmount: "3 reepjes" },
+      { input: "2 schijfjes citroen", want: { quantity: "2", unit: "schijfje", name: "citroen" }, wantAmount: "2 schijfjes" },
+    ];
+
+    const ok = [];
+    const bad = [];
+    for (const c of cases) {
+      const parsed = parseIngredientInput(c.input);
+      const amount = formatIngredientAmount(parsed, 1);
+      const pass =
+        parsed.quantity === c.want.quantity &&
+        parsed.unit === c.want.unit &&
+        parsed.name === c.want.name &&
+        amount === c.wantAmount;
+      (pass ? ok : bad).push({ input: c.input, parsed, amount, expected: c });
+    }
+
+    if (bad.length) {
+      // eslint-disable-next-line no-console
+      console.warn("Ingredient sanity FAILED", bad);
+    } else {
+      // eslint-disable-next-line no-console
+      console.log("Ingredient sanity OK", ok.map((x) => `${x.input} → ${x.amount} ${x.parsed.name}`));
+    }
+    return { ok, bad };
+  };
 }
 
 function getIngredientEmoji(name) {
