@@ -3839,9 +3839,10 @@ function renderProfileSummary() {
   }
   // Channel count
   const channelCountEl = document.getElementById("profileChannelCount");
-  if (channelCountEl) channelCountEl.textContent = String(state.followedChannelIds.length);
+  const activeChannelsCount = countActiveFollowedChannels();
+  if (channelCountEl) channelCountEl.textContent = String(activeChannelsCount);
   const channelMetaEl = document.getElementById("profileChannelMeta");
-  if (channelMetaEl) channelMetaEl.textContent = `${state.followedChannelIds.length} gekoppeld`;
+  if (channelMetaEl) channelMetaEl.textContent = `${activeChannelsCount} actief`;
   // Favorite supermarket meta
   const supermarketMetaEl = document.getElementById("profileSupermarketMeta");
   if (supermarketMetaEl) {
