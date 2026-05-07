@@ -4626,7 +4626,9 @@ function normalizeImportedTitle(value) {
     .replace(/\s+/g, " ")
     .trim();
 
-  if (!clean) {
+  // Some importers occasionally return placeholders like "-" or "—".
+  const looksLikePlaceholder = !clean || /^[\s\-–—•·_|]+$/.test(clean);
+  if (looksLikePlaceholder) {
     return "Geïmporteerd recept";
   }
 
@@ -4636,6 +4638,17 @@ function normalizeImportedTitle(value) {
 
   const words = clean.split(" ").filter(Boolean);
   return words.slice(0, 7).join(" ");
+}
+
+function normalizeImportedTime(value) {
+  const clean = String(value || "").trim();
+  if (!clean) return "30 min";
+  // Fix common glitch where extra digits get appended (e.g. "45 min45").
+  const minMatch = clean.match(/(\d+)\s*(?:min|mins|minute|minutes|minuten)\b/i);
+  if (minMatch) return `${minMatch[1]} min`;
+  const digitMatch = clean.match(/\b(\d{1,3})\b/);
+  if (digitMatch) return `${digitMatch[1]} min`;
+  return clean;
 }
 
 function parseServingsValue(value) {
@@ -4665,7 +4678,7 @@ function normalizeImportedRecipe(recipe) {
     id: recipeId,
     title: cleanTitle,
     description,
-    time: recipe.time || "30 min",
+    time: normalizeImportedTime(recipe.time),
     kcal: recipe.kcal || `${Math.max(280, parsedIngredients.length * 85)} kcal`,
     servings,
     mealTag,
