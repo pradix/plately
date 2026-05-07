@@ -1508,7 +1508,7 @@ function buildStoreChoiceUrl(store, choice) {
   if (choice.productId) {
     return `https://www.jumbo.com/producten/${slugify(choice.title)}-${choice.productId}`;
   }
-  return `https://www.jumbo.com/producten/?searchType=keyword&searchTerms=${encodeURIComponent(choice.searchTerm)}`;
+  return `https://www.jumbo.com/zoeken/?searchTerms=${encodeURIComponent(choice.searchTerm)}`;
 }
 
 function buildGenericChoices(store, ingredientTitle, amount) {
@@ -1678,7 +1678,7 @@ function buildMatchedChoiceFromProduct(store, item, product, badge = "Gevonden")
   const productId = store === "albert-heijn" ? product.id || "" : product.sku || "";
   const choice = {
     title: sanitizeText(product.name || ingredientTitle),
-    subtitle: sanitizeText(store === "jumbo" ? product.subtitle || item.amount || "1 verpakking" : item.amount || "1 verpakking"),
+    subtitle: sanitizeText(item.amount || "1 verpakking"),
     price: sanitizeText(product.price || ""),
     badge,
     emoji: getBasketEmoji(ingredientTitle),
@@ -5353,304 +5353,6 @@ async function findJumboProduct(ingredient) {
   }
 }
 
-function parsePriceToNumber(raw) {
-  if (raw === null || raw === undefined) return NaN;
-  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-  const text = String(raw).trim();
-  if (!text) return NaN;
-  const normalized = text.replace(/[^\d,.-]/g, "").replace(",", ".");
-  const num = parseFloat(normalized);
-  return Number.isFinite(num) ? num : NaN;
-}
-
-function toEuroLabel(priceNum) {
-  const n = Number(priceNum);
-  if (!Number.isFinite(n) || n <= 0) return "";
-  return `€${n.toFixed(2).replace(".", ",")}`;
-}
-
-function normalizeJumboUrl(rawUrl) {
-  const url = sanitizeText(rawUrl || "");
-  if (!url) return "";
-  if (/^https?:\/\//i.test(url)) return url;
-  if (url.startsWith("/")) return `https://www.jumbo.com${url}`;
-  return `https://www.jumbo.com/${url.replace(/^\/+/, "")}`;
-}
-
-function extractJumboProductCandidatesFromJson(root, out = [], depth = 0) {
-  if (!root || depth > 8 || out.length > 200) return out;
-  if (Array.isArray(root)) {
-    for (const item of root) extractJumboProductCandidatesFromJson(item, out, depth + 1);
-    return out;
-  }
-  if (typeof root !== "object") return out;
-
-  const title = sanitizeText(root.title || root.name || root.productTitle || root.displayName || "");
-  const sku = sanitizeText(root.sku || root.id || root.productId || root.code || "");
-
-  const priceCandidates = [
-    root.price,
-    root.currentPrice,
-    root.salesPrice,
-    root.unitPrice,
-    root.priceAmount,
-    root?.prices?.price,
-    root?.prices?.current,
-    root?.prices?.unit,
-    root?.offers?.price,
-    root?.offers?.lowPrice,
-    root?.offers?.highPrice,
-    root?.offers?.priceSpecification?.price,
-    root?.offer?.price,
-    root?.offerPrice,
-  ];
-  let priceNum = NaN;
-  for (const c of priceCandidates) {
-    const n = parsePriceToNumber(typeof c === "object" && c ? (c.amount ?? c.value ?? c.price ?? "") : c);
-    if (Number.isFinite(n) && n > 0) {
-      priceNum = n;
-      break;
-    }
-  }
-
-  const imageCandidates = [
-    root.imageUrl,
-    root.image,
-    root.thumbnail,
-    root?.images?.[0]?.url,
-    root?.images?.[0],
-    root?.media?.[0]?.url,
-    root?.media?.[0],
-  ];
-  const imageUrl = normalizeJumboUrl(
-    imageCandidates.find((c) => typeof c === "string" && c.trim()) ||
-      (typeof imageCandidates[0] === "object" && imageCandidates[0] ? imageCandidates[0].url : "") ||
-      ""
-  );
-
-  const urlCandidates = [
-    root.url,
-    root.link,
-    root.href,
-    root.canonicalUrl,
-    root.canonical,
-    root.path,
-    root.slug ? `/producten/${root.slug}` : "",
-  ];
-  const url = normalizeJumboUrl(urlCandidates.find((c) => typeof c === "string" && c.trim()) || "");
-
-  if (title && !NON_FOOD_INGREDIENT_PATTERN.test(title)) {
-    // Only accept candidates that look like products; SKU is best-effort.
-    // Jumbo often uses IDs like "213178STK" but can vary.
-    out.push({
-      sku: sku || "",
-      name: title,
-      price: toEuroLabel(priceNum),
-      url,
-      imageUrl,
-      _priceNum: Number.isFinite(priceNum) ? priceNum : 9999,
-    });
-  }
-
-  for (const value of Object.values(root)) {
-    if (value && typeof value === "object") extractJumboProductCandidatesFromJson(value, out, depth + 1);
-  }
-  return out;
-}
-
-function extractJumboProductsFromJsonLd(html) {
-  const objects = extractJsonLdObjects(html).flatMap(flattenJsonLd);
-  const products = [];
-
-  for (const obj of objects) {
-    const type = obj?.["@type"];
-    const isProduct = type === "Product" || (Array.isArray(type) && type.includes("Product"));
-    const isItemList = type === "ItemList" || (Array.isArray(type) && type.includes("ItemList"));
-
-    if (isItemList && Array.isArray(obj.itemListElement)) {
-      for (const el of obj.itemListElement) {
-        const item = el?.item || el;
-        if (!item) continue;
-        const name = sanitizeText(item.name || item.title || "");
-        if (!name || NON_FOOD_INGREDIENT_PATTERN.test(name)) continue;
-        const url = normalizeJumboUrl(item.url || "");
-        const imageUrl = normalizeJumboUrl(Array.isArray(item.image) ? item.image[0] : item.image || "");
-        const priceNum = parsePriceToNumber(item?.offers?.price || item?.offers?.lowPrice || item?.offers?.priceSpecification?.price);
-        products.push({
-          sku: sanitizeText(item.sku || item.productID || item.productId || item.id || ""),
-          name,
-          price: toEuroLabel(priceNum),
-          url,
-          imageUrl,
-          _priceNum: Number.isFinite(priceNum) ? priceNum : 9999,
-        });
-      }
-      continue;
-    }
-
-    if (isProduct) {
-      const name = sanitizeText(obj.name || obj.title || "");
-      if (!name || NON_FOOD_INGREDIENT_PATTERN.test(name)) continue;
-      const url = normalizeJumboUrl(obj.url || "");
-      const imageUrl = normalizeJumboUrl(Array.isArray(obj.image) ? obj.image[0] : obj.image || "");
-      const priceNum = parsePriceToNumber(obj?.offers?.price || obj?.offers?.lowPrice || obj?.offers?.priceSpecification?.price);
-      products.push({
-        sku: sanitizeText(obj.sku || obj.productID || obj.productId || obj.id || ""),
-        name,
-        price: toEuroLabel(priceNum),
-        url,
-        imageUrl,
-        _priceNum: Number.isFinite(priceNum) ? priceNum : 9999,
-      });
-    }
-  }
-
-  return products;
-}
-
-// Returns up to `count` product matches from Jumbo for a single ingredient query.
-// Jumbo does not expose a stable public API; we scrape the search results page.
-async function findJumboProducts(query, count = 12) {
-  const term = normalizeIngredientForSearch(query) || sanitizeText(query || "");
-  if (!term) return [];
-
-  const searchUrl = `https://www.jumbo.com/producten/?searchType=keyword&searchTerms=${encodeURIComponent(term)}`;
-
-  try {
-    const response = await fetch(searchUrl, {
-      headers: {
-        ...FETCH_HEADERS,
-        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "sec-fetch-dest": "document",
-        "sec-fetch-mode": "navigate",
-        "sec-fetch-site": "none",
-      },
-      signal: AbortSignal.timeout(12000),
-      redirect: "follow",
-    });
-
-    if (!response.ok) return [];
-    const html = await response.text();
-
-    const candidates = [];
-
-    // 0) Parse rendered product cards (works on Jumbo's current search pages).
-    // Avoid DOM parsers here (jsdom not always available in this repo).
-    try {
-      const cardRe =
-        /<[^>]+data-testid=["']product-card-\d+["'][^>]*data-product-id=["']([^"']+)["'][^>]*>[\s\S]*?<\/article>/gi;
-      let m;
-      while ((m = cardRe.exec(html))) {
-        const block = m[0];
-        const sku = sanitizeText(m[1] || "");
-
-        const hrefMatch = block.match(/href=["'](\/producten\/[^"'?#\s<>]+)[^"']*["']/i);
-        const url = normalizeJumboUrl(hrefMatch ? hrefMatch[1] : "");
-
-        const imgMatch = block.match(/<img[^>]+src=["']([^"']+)["'][^>]*alt=["']([^"']+)["'][^>]*>/i);
-        const imageUrl = normalizeJumboUrl(imgMatch ? imgMatch[1] : "");
-        const name = sanitizeText(imgMatch ? imgMatch[2] : "");
-        if (!name || NON_FOOD_INGREDIENT_PATTERN.test(name)) continue;
-
-        const priceBlockMatch = block.match(/class=["'][^"']*\bcurrent-price\b[^"']*["'][^>]*>([\s\S]{0,220}?)<\/[^>]+>/i);
-        const rawPriceText = priceBlockMatch ? sanitizeText(stripTags(priceBlockMatch[1])) : "";
-        const priceNum = parsePriceToNumber(rawPriceText);
-
-        const unitMatch = block.match(/class=["'][^"']*\bprice-per-unit\b[^"']*["'][^>]*>([\s\S]{0,220}?)<\/[^>]+>/i);
-        const subtitle = unitMatch ? sanitizeText(stripTags(unitMatch[1])) : "";
-
-        candidates.push({
-          sku,
-          name,
-          price: toEuroLabel(priceNum),
-          url,
-          imageUrl,
-          subtitle,
-          _priceNum: Number.isFinite(priceNum) ? priceNum : 9999,
-        });
-
-        if (candidates.length >= count * 4) break;
-      }
-    } catch {
-      // ignore
-    }
-
-    // 1) JSON-LD tends to be the most stable (when present).
-    try {
-      candidates.push(...extractJumboProductsFromJsonLd(html));
-    } catch {
-      // ignore
-    }
-
-    // 2) Next.js state often includes full product payloads.
-    try {
-      const nextData = extractJsonScriptById(html, "__NEXT_DATA__");
-      if (nextData) {
-        extractJumboProductCandidatesFromJson(nextData, candidates);
-      }
-    } catch {
-      // ignore
-    }
-
-    // 3) Ultra-fallback: reuse the old single-hit regex but collect multiple titles/ids.
-    if (candidates.length === 0) {
-      const re = /"id"\s*:\s*"(\d+[A-Z]+\d*)"[\s\S]{0,240}?"title"\s*:\s*"([^"]{3,120})"/g;
-      for (const match of html.matchAll(re)) {
-        const sku = sanitizeText(match[1]);
-        const name = sanitizeText(match[2]);
-        if (!name || NON_FOOD_INGREDIENT_PATTERN.test(name)) continue;
-        candidates.push({ sku, name, price: "", url: "", imageUrl: "", _priceNum: 9999 });
-        if (candidates.length > count * 3) break;
-      }
-    }
-
-    // Filter + dedupe.
-    const matchTerm = normalizeIngredientForSearch(term) || term;
-    const byKey = new Map();
-    for (const c of candidates) {
-      const name = sanitizeText(c?.name || "");
-      if (!name) continue;
-      if (!ingredientMatchesProduct(matchTerm, name)) continue;
-      const key = sanitizeText(c?.sku || "") || sanitizeText(c?.url || "") || `${name}|${sanitizeText(c?.imageUrl || "")}`;
-      if (!key) continue;
-      if (!byKey.has(key)) {
-        byKey.set(key, {
-          sku: sanitizeText(c?.sku || ""),
-          name,
-          price: sanitizeText(c?.price || ""),
-          url: normalizeJumboUrl(c?.url || ""),
-          imageUrl: normalizeJumboUrl(c?.imageUrl || ""),
-          subtitle: sanitizeText(c?.subtitle || ""),
-          _priceNum: Number.isFinite(c?._priceNum) ? c._priceNum : 9999,
-        });
-      } else {
-        // Prefer the entry that has more fields + a real price.
-        const existing = byKey.get(key);
-        const candPrice = Number.isFinite(c?._priceNum) ? c._priceNum : 9999;
-        const existPrice = Number.isFinite(existing._priceNum) ? existing._priceNum : 9999;
-        if (candPrice < existPrice) {
-          existing.price = sanitizeText(c?.price || existing.price || "");
-          existing._priceNum = candPrice;
-        }
-        if (!existing.url) existing.url = normalizeJumboUrl(c?.url || "");
-        if (!existing.imageUrl) existing.imageUrl = normalizeJumboUrl(c?.imageUrl || "");
-        if (!existing.sku) existing.sku = sanitizeText(c?.sku || "");
-        if (!existing.subtitle) existing.subtitle = sanitizeText(c?.subtitle || "");
-      }
-    }
-
-    const products = [...byKey.values()]
-      .sort((a, b) => (a._priceNum || 9999) - (b._priceNum || 9999))
-      .slice(0, count)
-      .map(({ _priceNum, ...rest }) => rest);
-
-    return products;
-  } catch (err) {
-    console.error("⚠️ Jumbo scraping failed:", err?.message || err);
-    return [];
-  }
-}
-
 async function searchProductsForStore(store, ingredientNames) {
   const searches = ingredientNames.map(async (name) => {
     const product =
@@ -5693,7 +5395,7 @@ function buildStoreSearchUrl(store, items) {
   if (store === "albert-heijn") {
     return `https://www.ah.nl/zoeken?query=${query}`;
   }
-  return `https://www.jumbo.com/producten/?searchType=keyword&searchTerms=${query}`;
+  return `https://www.jumbo.com/zoeken/?searchTerms=${query}`;
 }
 
 function buildFoodInfluencersUrl(recipeId, store, biaIds = []) {
@@ -6998,8 +6700,7 @@ async function buildStoreBasket(body) {
   if (sourceUrl) {
     try {
       const html = await fetchHtml(sourceUrl);
-      const extractedUrl = extractFoodInfluencersDirectUrl(html, store);
-      const directUrl = store === "jumbo" ? "https://www.jumbo.com/mandje" : extractedUrl;
+      const directUrl = extractFoodInfluencersDirectUrl(html, store);
 
       if (directUrl) {
         return {
@@ -7060,19 +6761,6 @@ async function buildStoreBasket(body) {
         return { ingredient: ingredientName, product: products[0] ?? null, products };
       })
     ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
-  } else if (store === "jumbo") {
-    // Jumbo: scrape a larger pool so the "Wissel" sheet can show multiple choices,
-    // similar to AH, but without label-based grouping.
-    searchResults = await Promise.all(
-      items.map(async (item) => {
-        const rawName = sanitizeText(item.title || "");
-        const ingredientName = splitCompoundIngredientWords(rawName);
-        if (!ingredientName) return { ingredient: ingredientName, product: null, products: [] };
-
-        const products = await findJumboProducts(ingredientName, 12);
-        return { ingredient: ingredientName, product: products[0] ?? null, products };
-      })
-    ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
   } else {
     const raw = await searchProductsForStore(
       store,
@@ -7085,13 +6773,13 @@ async function buildStoreBasket(body) {
     const result = searchResults[index] || { product: null, products: [] };
     let choices;
 
-    if ((store === "albert-heijn" || store === "jumbo") && result.products.length) {
-      const multiChoices = result.products
+    if (store === "albert-heijn" && result.products.length) {
+      const ahChoices = result.products
         .map((product, i) =>
           buildMatchedChoiceFromProduct(store, item, product, i === 0 ? "Beste match" : "Alternatief")
         )
         .filter(Boolean);
-      choices = multiChoices.length ? multiChoices : buildStoreProductChoices(store, item);
+      choices = ahChoices.length ? ahChoices : buildStoreProductChoices(store, item);
     } else {
       const directChoice = result.product ? buildMatchedChoiceFromProduct(store, item, result.product) : null;
       const fallbackChoices = buildStoreProductChoices(store, item);
@@ -7102,7 +6790,7 @@ async function buildStoreBasket(body) {
 
     // AH gets a larger alternatives pool so the Wissel sheet can show more
     // products and allow chip-based filtering without starving the list.
-    const choicesCap = store === "albert-heijn" ? 30 : store === "jumbo" ? 12 : 3;
+    const choicesCap = store === "albert-heijn" ? 30 : 3;
 
     return {
       id: `basket-item-${index}`,
@@ -7116,13 +6804,11 @@ async function buildStoreBasket(body) {
 
   const foundResults = searchResults.filter((result) => result?.product);
   const directUrl =
-    store === "jumbo"
-      ? "https://www.jumbo.com/mandje"
-      : foundResults.length > 0
-        ? store === "albert-heijn"
-          ? buildAHDirectAddUrl(foundResults)
-          : buildJumboDirectAddUrl(foundResults)
-        : "";
+    foundResults.length > 0
+      ? store === "albert-heijn"
+        ? buildAHDirectAddUrl(foundResults)
+        : buildJumboDirectAddUrl(foundResults)
+      : "";
 
   return {
     kind: directUrl ? "direct" : "preview",
@@ -7131,7 +6817,7 @@ async function buildStoreBasket(body) {
     recipeTitle,
     sourceUrl,
     directUrl,
-    fallbackUrl: store === "jumbo" ? buildStoreSearchUrl(store, items) : buildStoreSearchUrl(store, items),
+    fallbackUrl: store === "jumbo" ? "https://www.jumbo.com/mandje/" : buildStoreSearchUrl(store, items),
     note:
       foundResults.length
         ? "Plately heeft echte winkelmatches gevonden. Controleer eventueel per ingrediënt en ga daarna door."
