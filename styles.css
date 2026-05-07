@@ -58,6 +58,11 @@ img { display: block; max-width: 100%; }
   overflow-x: hidden;
 }
 
+@media (min-width: 720px) {
+  .app-shell { width: min(100%, 720px); }
+  .bottom-nav { width: min(100vw, 720px); }
+}
+
 #homeScreen {
   position: relative;
   padding-bottom: 28px;

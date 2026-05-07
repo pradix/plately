@@ -6966,6 +6966,8 @@ function handleCookbookGridClick(event) {
 
   const selectModeBtn = target.closest("[data-cb-select-mode]");
   if (selectModeBtn instanceof HTMLElement && state.openCookbookId) {
+    event.preventDefault();
+    event.stopPropagation();
     state.cookbookSelectMode = !state.cookbookSelectMode;
     if (!state.cookbookSelectMode) {
       state.cookbookSelectedRecipeIds = [];
