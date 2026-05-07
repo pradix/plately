@@ -571,6 +571,7 @@ function buildDefaultUserData(userId = generateId("user")) {
     importedRecipes: [],
     cookbooks: [], // Empty for anonymous/guest users - no default cookbooks
     selectedCookbookId: "",
+    onboardingSeenAt: "",
     mealPlan: {
       maandag: null,
       dinsdag: null,
@@ -821,6 +822,7 @@ function buildAppStateFromUser(user) {
     followedChannelIds: Array.isArray(appState.followedChannelIds) ? appState.followedChannelIds.map(sanitizeText).filter(Boolean) : [],
     customChannels: Array.isArray(appState.customChannels) ? appState.customChannels : [],
     language: typeof appState.language === "string" && appState.language ? appState.language : "nl",
+    onboardingSeenAt: typeof appState.onboardingSeenAt === "string" ? sanitizeText(appState.onboardingSeenAt) : "",
     createdAt: user.created_at,
     updatedAt: user.updated_at,
   };
@@ -1192,12 +1194,17 @@ function sanitizeUserStatePayload(body, currentUser) {
     ? body.language
     : currentUser.language || "nl";
 
+  const onboardingSeenAt = typeof body?.onboardingSeenAt === "string"
+    ? sanitizeText(body.onboardingSeenAt).slice(0, 80)
+    : (typeof currentUser.onboardingSeenAt === "string" ? currentUser.onboardingSeenAt : "");
+
   return {
     ...currentUser,
     profile: body?.profile ? sanitizeProfilePayload(body.profile) : currentUser.profile,
     importedRecipes,
     cookbooks,
     selectedCookbookId: sanitizeText(body?.selectedCookbookId || currentUser.selectedCookbookId || "cookbook-1"),
+    onboardingSeenAt,
     mealPlan,
     groceryItems,
     recipeProgress,
@@ -6427,6 +6434,63 @@ const server = http.createServer(async (request, response) => {
           email: "",
         },
       });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/onboarding/seen" && request.method === "POST") {
+      // Auth required: store a server-side flag so it survives cache clears.
+      const nowIso = new Date().toISOString();
+
+      // Postgres auth (production path)
+      let authUser = await getAuthenticatedUser(request);
+
+      // Dev-only fallback auth (json-file mode)
+      if (!authUser && !isPostgresEnabled()) {
+        authUser = await getDevAuthenticatedUser(request);
+      }
+
+      if (!authUser) {
+        sendJson(response, 401, { ok: false, error: "Niet ingelogd." });
+        return;
+      }
+
+      if (isPostgresEnabled()) {
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        const existing = await pool.query(`SELECT id, email, app_state, created_at, updated_at FROM plately_users WHERE id = $1 LIMIT 1`, [authUser.id]);
+        const row = existing.rows[0];
+        if (!row) {
+          throw new HttpError(404, "Gebruiker niet gevonden.");
+        }
+        const appState = row?.app_state && typeof row.app_state === "object" ? row.app_state : {};
+        appState.onboardingSeenAt = nowIso;
+        const updated = await pool.query(
+          `
+            UPDATE plately_users
+            SET app_state = $2::jsonb,
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING *
+          `,
+          [authUser.id, JSON.stringify(appState)]
+        );
+        sendJson(response, 200, { ok: true, onboardingSeenAt: nowIso, user: buildAppStateFromUser(updated.rows[0]) });
+        return;
+      }
+
+      // json-file mode: persist in the user object
+      const db = await loadDatabase();
+      const userId = authUser.id;
+      const user = db.users?.[userId];
+      if (!user) {
+        throw new HttpError(404, "Gebruiker niet gevonden.");
+      }
+      user.onboardingSeenAt = nowIso;
+      user.updatedAt = new Date().toISOString();
+      db.users[userId] = user;
+      await persistDatabase();
+
+      sendJson(response, 200, { ok: true, onboardingSeenAt: nowIso, user: { ...user, authenticated: true, email: authUser.email || user.email || "" } });
       return;
     }
 

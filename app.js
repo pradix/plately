@@ -444,6 +444,7 @@ const state = {
     email: "",
     photo: "",
     favoriteSupermarket: "ah",
+    onboardingSeenAt: null,
   },
   language: "nl",
   groceryItems: [],
@@ -5031,12 +5032,19 @@ function applyPersistedAppState(user) {
   state.auth.email = user.email || "";
 
   if (user.profile && typeof user.profile === "object") {
+    const onboardingSeenAt =
+      user.profile.onboardingSeenAt ??
+      user.profile.onboarding_seen_at ??
+      user.onboardingSeenAt ??
+      user.onboardingSeenAtIso ??
+      null;
     state.profile = {
       name: user.profile.name || state.profile.name,
       handle: user.profile.handle || state.profile.handle,
       email: user.profile.email || state.profile.email || "",
       photo: user.profile.photo || state.profile.photo || "",
       favoriteSupermarket: user.profile.favoriteSupermarket || state.profile.favoriteSupermarket || "ah",
+      onboardingSeenAt: onboardingSeenAt || null,
     };
   }
   if (typeof user.language === "string" && user.language) {
@@ -8199,7 +8207,13 @@ function _obShow(index) {
 function _obFinish() {
   const overlay = document.getElementById("onboardingOverlay");
   if (overlay) { overlay.hidden = true; overlay.setAttribute("aria-hidden", "true"); }
-  try { localStorage.setItem(getOnboardingDoneKey(), "1"); } catch {}
+  if (state?.auth?.authenticated) {
+    if (!state.profile) state.profile = {};
+    if (!state.profile.onboardingSeenAt) state.profile.onboardingSeenAt = new Date().toISOString();
+    try { localStorage.setItem(getOnboardingDoneKey(), "1"); } catch {}
+    // Fire-and-forget: mark onboarding seen on server so it's once-per-account.
+    fetchJson(`${state.apiBase}/api/onboarding/seen`, { method: "POST" }).catch(() => {});
+  }
   window.scrollTo(0, 0);
 }
 
@@ -8207,8 +8221,8 @@ function startOnboarding() {
   // Show tooltips only once per account (persisted across sessions)
   if (!state.auth.authenticated) return;
 
-  // If already completed for this account, skip
-  try { if (localStorage.getItem(getOnboardingDoneKey())) return; } catch {}
+  // Source of truth: server-provided onboardingSeenAt
+  if (state?.profile?.onboardingSeenAt) return;
 
   // Check if we already showed tooltips in this session
   try { if (sessionStorage.getItem(ONBOARDING_SESSION_KEY)) return; } catch {}
