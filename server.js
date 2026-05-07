@@ -537,6 +537,23 @@ async function ensurePostgresSchema() {
         CREATE INDEX IF NOT EXISTS idx_plately_auth_sessions_user_id
         ON plately_auth_sessions (user_id);
       `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS plately_events (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL,
+          user_id TEXT REFERENCES plately_users(id) ON DELETE SET NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          meta JSONB NOT NULL DEFAULT '{}'::jsonb
+        );
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_plately_events_type_created_at
+        ON plately_events (type, created_at DESC);
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_plately_events_user_id_created_at
+        ON plately_events (user_id, created_at DESC);
+      `);
     })();
   }
 
@@ -4788,6 +4805,21 @@ async function importRecipe(url, note, imageHint = "") {
   return recipe;
 }
 
+async function recordEvent(type, userId, meta = {}) {
+  if (!isPostgresEnabled()) return;
+  try {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    await pool.query(
+      `INSERT INTO plately_events (id, type, user_id, meta) VALUES ($1, $2, $3, $4)`,
+      [generateId("evt"), sanitizeText(type), userId ? sanitizeText(userId) : null, meta && typeof meta === "object" ? meta : {}]
+    );
+  } catch (error) {
+    // Avoid breaking user flows due to analytics failures.
+    console.error("⚠️ recordEvent failed:", error.message);
+  }
+}
+
 /* ── Store product search (AH + Jumbo) ── */
 
 let ahTokenCache = { token: "", expiresAt: 0 };
@@ -6764,6 +6796,17 @@ const server = http.createServer(async (request, response) => {
         const urlMatch = rawInput.match(/https?:\/\/[^\s]+/);
         const cleanUrl = urlMatch ? urlMatch[0] : rawInput;
         const recipe = await importRecipe(cleanUrl, body.note || "", body.imageHint || "");
+        // Analytics: record import event (best-effort)
+        const authUser = await getAuthenticatedUser(request).catch(() => null);
+        const sourceHost = (() => {
+          try { return new URL(cleanUrl).hostname.replace(/^www\./, ""); } catch { return ""; }
+        })();
+        await recordEvent("import", authUser?.id || null, {
+          sourceUrl: cleanUrl,
+          sourceHost,
+          platform: recipe?.platform || "",
+          channelId: recipe?.channelId || "",
+        });
         sendJson(response, 200, { ok: true, recipe });
       } catch (error) {
         console.error("❌ Import error:", error.message);
@@ -6975,6 +7018,82 @@ const server = http.createServer(async (request, response) => {
         });
       }
       return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/analytics" && request.method === "GET") {
+      console.log("📈 /api/admin/analytics called");
+      try {
+        if (!isPostgresEnabled()) {
+          return sendJson(response, 200, { ok: true, analytics: { imports: { last30Days: [], total30d: 0, total7d: 0, topSources: [], topPlatforms: [] } } });
+        }
+
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+
+        const daily = await pool.query(
+          `
+          SELECT date_trunc('day', created_at) AS day, COUNT(*)::int AS count
+          FROM plately_events
+          WHERE type = 'import'
+            AND created_at >= NOW() - INTERVAL '30 days'
+          GROUP BY 1
+          ORDER BY 1 ASC
+          `
+        );
+
+        const totals = await pool.query(
+          `
+          SELECT
+            SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 ELSE 0 END)::int AS total7d,
+            COUNT(*)::int AS total30d
+          FROM plately_events
+          WHERE type = 'import'
+            AND created_at >= NOW() - INTERVAL '30 days'
+          `
+        );
+
+        const topSources = await pool.query(
+          `
+          SELECT COALESCE(meta->>'sourceHost','') AS source, COUNT(*)::int AS count
+          FROM plately_events
+          WHERE type = 'import'
+            AND created_at >= NOW() - INTERVAL '30 days'
+          GROUP BY 1
+          HAVING COALESCE(meta->>'sourceHost','') <> ''
+          ORDER BY 2 DESC
+          LIMIT 10
+          `
+        );
+
+        const topPlatforms = await pool.query(
+          `
+          SELECT COALESCE(meta->>'platform','') AS platform, COUNT(*)::int AS count
+          FROM plately_events
+          WHERE type = 'import'
+            AND created_at >= NOW() - INTERVAL '30 days'
+          GROUP BY 1
+          HAVING COALESCE(meta->>'platform','') <> ''
+          ORDER BY 2 DESC
+          LIMIT 10
+          `
+        );
+
+        return sendJson(response, 200, {
+          ok: true,
+          analytics: {
+            imports: {
+              last30Days: daily.rows.map((r) => ({ day: r.day, count: r.count })),
+              total7d: totals.rows[0]?.total7d || 0,
+              total30d: totals.rows[0]?.total30d || 0,
+              topSources: topSources.rows,
+              topPlatforms: topPlatforms.rows,
+            },
+          },
+        });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/analytics:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
     }
 
     if (requestUrl.pathname === "/api/admin/delete-user" && request.method === "POST") {

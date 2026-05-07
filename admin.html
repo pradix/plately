@@ -364,6 +364,31 @@
       </div>
 
       <div class="section">
+        <h2>📈 Imports (30 dagen)</h2>
+        <div class="stats-grid" style="margin-bottom:16px">
+          <div class="stat-card">
+            <div class="stat-value" id="imports7d">-</div>
+            <div class="stat-label">Imports (7d)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="imports30d">-</div>
+            <div class="stat-label">Imports (30d)</div>
+          </div>
+        </div>
+        <div id="importsTrend" style="display:flex;gap:6px;align-items:flex-end;height:120px;padding:10px 0"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+          <div>
+            <h3 style="font-size:14px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Top sources</h3>
+            <div id="importsTopSources" style="font-size:13px;color:#333"></div>
+          </div>
+          <div>
+            <h3 style="font-size:14px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Top platforms</h3>
+            <div id="importsTopPlatforms" style="font-size:13px;color:#333"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
         <h2>🔍 Gebruikers</h2>
         <div class="search-bar">
           <input type="text" id="searchInput" placeholder="Zoek gebruiker by email..." onkeyup="filterUsers()">
@@ -501,6 +526,7 @@
 
         renderUsers();
         loadPendingChannels();
+        loadAnalytics();
 
         document.getElementById("loading").style.display = "none";
         document.getElementById("content").style.display = "block";
@@ -508,6 +534,49 @@
         document.getElementById("loading").style.display = "none";
         document.getElementById("error").style.display = "block";
         document.getElementById("error").textContent = "❌ " + error.message;
+      }
+    }
+
+    async function loadAnalytics() {
+      try {
+        const response = await fetch("/api/admin/analytics");
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "Failed to load analytics");
+        }
+        const imports = data.analytics?.imports || {};
+        document.getElementById("imports7d").textContent = imports.total7d ?? 0;
+        document.getElementById("imports30d").textContent = imports.total30d ?? 0;
+
+        const trendEl = document.getElementById("importsTrend");
+        const series = Array.isArray(imports.last30Days) ? imports.last30Days : [];
+        const max = Math.max(1, ...series.map((d) => d.count || 0));
+        if (trendEl) {
+          trendEl.innerHTML = series.map((d) => {
+            const h = Math.max(2, Math.round(((d.count || 0) / max) * 110));
+            const day = new Date(d.day);
+            const label = day.toLocaleDateString('nl-NL', { day: '2-digit', month: 'short' });
+            return `<div title="${label}: ${d.count || 0}" style="width:10px;height:${h}px;background:#78936f;border-radius:6px;opacity:${d.count ? 1 : 0.25}"></div>`;
+          }).join("");
+        }
+
+        const topSourcesEl = document.getElementById("importsTopSources");
+        const topPlatformsEl = document.getElementById("importsTopPlatforms");
+        const topSources = Array.isArray(imports.topSources) ? imports.topSources : [];
+        const topPlatforms = Array.isArray(imports.topPlatforms) ? imports.topPlatforms : [];
+        if (topSourcesEl) {
+          topSourcesEl.innerHTML = topSources.length
+            ? `<ol style="padding-left:18px">${topSources.map((r) => `<li>${escapeHtml(r.source)} <span style="color:#666">(${r.count})</span></li>`).join("")}</ol>`
+            : `<p style="color:#999">Nog geen data</p>`;
+        }
+        if (topPlatformsEl) {
+          topPlatformsEl.innerHTML = topPlatforms.length
+            ? `<ol style="padding-left:18px">${topPlatforms.map((r) => `<li>${escapeHtml(r.platform)} <span style="color:#666">(${r.count})</span></li>`).join("")}</ol>`
+            : `<p style="color:#999">Nog geen data</p>`;
+        }
+      } catch (error) {
+        // keep admin usable even if analytics fails
+        console.warn("Analytics load failed:", error.message);
       }
     }
 
