@@ -827,7 +827,7 @@ function isCategoryEnabledForPrefs(prefs, categoryKey) {
   return false;
 }
 
-async function createAnnouncement({ title, body, url, category, imageUrl }) {
+async function createAnnouncement({ title, body, url, category, imageUrl, templateKey }) {
   const nowIso = new Date().toISOString();
   const id = generateId("ann");
   const row = {
@@ -837,6 +837,7 @@ async function createAnnouncement({ title, body, url, category, imageUrl }) {
     url: String(url || "").slice(0, 500),
     imageUrl: String(imageUrl || "").slice(0, 500),
     category: String(category || "").slice(0, 32),
+    templateKey: String(templateKey || "").slice(0, 64),
     createdAt: nowIso,
     metrics: { matched: 0, sent: 0, failed: 0, removed: 0 },
   };
@@ -846,10 +847,10 @@ async function createAnnouncement({ title, body, url, category, imageUrl }) {
     const pool = await getPostgresPool();
     await pool.query(
       `
-        INSERT INTO plately_announcements (id, title, body, url, image_url, category, matched_count, sent_count, failed_count, removed_count, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, 0, 0, 0, 0, NOW())
+        INSERT INTO plately_announcements (id, title, body, url, image_url, category, template_key, matched_count, sent_count, failed_count, removed_count, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 0, 0, 0, NOW())
       `,
-      [row.id, row.title, row.body, row.url, row.imageUrl, row.category]
+      [row.id, row.title, row.body, row.url, row.imageUrl, row.category, row.templateKey]
     );
     return row;
   }
@@ -906,7 +907,7 @@ async function getAnnouncementById(id) {
     await ensurePostgresSchema();
     const pool = await getPostgresPool();
     const res = await pool.query(
-      `SELECT id, title, body, url, image_url, category, matched_count, sent_count, failed_count, removed_count, created_at
+      `SELECT id, title, body, url, image_url, category, template_key, matched_count, sent_count, failed_count, removed_count, created_at
        FROM plately_announcements
        WHERE id = $1 LIMIT 1`,
       [safeId]
@@ -920,6 +921,7 @@ async function getAnnouncementById(id) {
       url: row.url,
       imageUrl: row.image_url || "",
       category: row.category,
+      templateKey: row.template_key || "",
       metrics: {
         matched: Number(row.matched_count || 0),
         sent: Number(row.sent_count || 0),
@@ -933,6 +935,58 @@ async function getAnnouncementById(id) {
   const db = await loadDatabase();
   const list = Array.isArray(db.announcements) ? db.announcements : [];
   return list.find((a) => String(a?.id || "") === safeId) || null;
+}
+
+async function listRecentAnnouncements({ limit = 50 } = {}) {
+  const n = Math.max(1, Math.min(200, Number(limit || 50) || 50));
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const res = await pool.query(
+      `SELECT id, title, body, url, image_url, category, template_key, matched_count, sent_count, failed_count, removed_count, created_at
+       FROM plately_announcements
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [n]
+    );
+    return (res.rows || []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      body: row.body,
+      url: row.url,
+      imageUrl: row.image_url || "",
+      category: row.category,
+      templateKey: row.template_key || "",
+      metrics: {
+        matched: Number(row.matched_count || 0),
+        sent: Number(row.sent_count || 0),
+        failed: Number(row.failed_count || 0),
+        removed: Number(row.removed_count || 0),
+      },
+      createdAt: row.created_at ? new Date(row.created_at).toISOString() : "",
+    }));
+  }
+  const db = await loadDatabase();
+  const list = Array.isArray(db.announcements) ? db.announcements : [];
+  return list.slice(0, n);
+}
+
+async function deleteAnnouncementById(id) {
+  const safeId = String(id || "").trim();
+  if (!safeId) return false;
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const res = await pool.query(`DELETE FROM plately_announcements WHERE id = $1`, [safeId]);
+    return Number(res.rowCount || 0) > 0;
+  }
+  const db = await loadDatabase();
+  const list = Array.isArray(db.announcements) ? db.announcements : [];
+  const next = list.filter((a) => String(a?.id || "") !== safeId);
+  const deleted = next.length !== list.length;
+  db.announcements = next;
+  if (deleted) await persistDatabase();
+  return deleted;
 }
 
 function createEmptyDatabase() {
@@ -1165,6 +1219,7 @@ async function ensurePostgresSchema() {
           url TEXT NOT NULL,
           image_url TEXT NOT NULL DEFAULT '',
           category TEXT NOT NULL,
+          template_key TEXT NOT NULL DEFAULT '',
           matched_count INT NOT NULL DEFAULT 0,
           sent_count INT NOT NULL DEFAULT 0,
           failed_count INT NOT NULL DEFAULT 0,
@@ -1173,6 +1228,7 @@ async function ensurePostgresSchema() {
         );
       `);
       await pool.query(`ALTER TABLE plately_announcements ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT '';`);
+      await pool.query(`ALTER TABLE plately_announcements ADD COLUMN IF NOT EXISTS template_key TEXT NOT NULL DEFAULT '';`);
       await pool.query(`ALTER TABLE plately_announcements ADD COLUMN IF NOT EXISTS matched_count INT NOT NULL DEFAULT 0;`);
       await pool.query(`ALTER TABLE plately_announcements ADD COLUMN IF NOT EXISTS sent_count INT NOT NULL DEFAULT 0;`);
       await pool.query(`ALTER TABLE plately_announcements ADD COLUMN IF NOT EXISTS failed_count INT NOT NULL DEFAULT 0;`);
@@ -9645,13 +9701,14 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/api/admin/push/announce" && request.method === "POST") {
-      await requireAdmin(request);
+      const adminUser = await requireAdmin(request);
       const body = await readRequestBody(request);
       const title = sanitizeText(body?.title || "").slice(0, 120);
       const message = sanitizeText(body?.body || "").slice(0, 280);
       const url = sanitizeText(body?.url || "").slice(0, 500);
       const imageUrl = sanitizeText(body?.imageUrl || body?.image || "").slice(0, 500);
       const category = sanitizeText(body?.category || "features").slice(0, 32);
+      const templateKey = sanitizeText(body?.templateKey || body?.template || "").slice(0, 64);
       const segment = body?.segment && typeof body.segment === "object" ? body.segment : {};
       if (!title || !message) {
         throw new HttpError(400, "title en body zijn verplicht.");
@@ -9661,18 +9718,22 @@ const server = http.createServer(async (request, response) => {
       }
 
       const webPush = ensureWebPushConfigured();
-      const announcement = await createAnnouncement({ title, body: message, url: url || "", category, imageUrl });
+      const announcement = await createAnnouncement({ title, body: message, url: url || "", category, imageUrl, templateKey });
       const deepLink = `/?announce=${encodeURIComponent(announcement.id)}`;
       const effectiveUrl = url || deepLink;
       const payload = JSON.stringify({ title, body: message, url: effectiveUrl, imageUrl: imageUrl || undefined, announcementId: announcement.id });
       const subscriptions = await listPushSubscriptionsWithMeta();
       const onlyAh = Boolean(segment?.onlyFavoriteSupermarketAh);
+      const onlyBasketReady = Boolean(segment?.onlyTriggerAhBasketReadyEnabled);
+      const onlyBonus = Boolean(segment?.onlyTriggerAhBonusEnabled);
       const filtered = subscriptions.filter((sub) => {
         if (!isCategoryEnabledForPrefs(sub.prefs, category)) return false;
         if (onlyAh) {
           const fav = pickFavoriteSupermarketFromAppState(sub.userAppState);
           if (fav !== "ah") return false;
         }
+        if (onlyBasketReady && !Boolean(sub?.prefs?.triggers?.ahBasketReady)) return false;
+        if (onlyBonus && !Boolean(sub?.prefs?.triggers?.ahBonus)) return false;
         return true;
       });
 
@@ -9730,7 +9791,163 @@ const server = http.createServer(async (request, response) => {
         matched: filtered.length,
         announcementId: announcement.id,
         deepLink,
+        templateKey,
+        admin: { userId: String(adminUser?.id || ""), email: String(adminUser?.email || "") },
       });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/push/announcements" && request.method === "GET") {
+      await requireAdmin(request);
+      const limit = Number(requestUrl.searchParams.get("limit") || 50) || 50;
+      const announcements = await listRecentAnnouncements({ limit });
+      const vapidConfigured = Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY && VAPID_SUBJECT);
+      sendJson(response, 200, {
+        ok: true,
+        announcements,
+        config: {
+          vapidConfigured,
+          vapidSubject: VAPID_SUBJECT ? String(VAPID_SUBJECT) : "",
+          vapidPublicKeyPresent: Boolean(VAPID_PUBLIC_KEY),
+          vapidPrivateKeyPresent: Boolean(VAPID_PRIVATE_KEY),
+        },
+      });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/push/delete" && request.method === "POST") {
+      await requireAdmin(request);
+      const body = await readRequestBody(request);
+      const announcementId = sanitizeText(body?.announcementId || body?.id || "").trim();
+      if (!announcementId) throw new HttpError(400, "announcementId is verplicht.");
+      const deleted = await deleteAnnouncementById(announcementId);
+      if (!deleted) throw new HttpError(404, "Aankondiging niet gevonden.");
+      sendJson(response, 200, { ok: true, deleted: true, announcementId });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/push/resend" && request.method === "POST") {
+      await requireAdmin(request);
+      const body = await readRequestBody(request);
+      const announcementId = sanitizeText(body?.announcementId || body?.id || "").trim();
+      const segment = body?.segment && typeof body.segment === "object" ? body.segment : {};
+      if (!announcementId) throw new HttpError(400, "announcementId is verplicht.");
+      const existing = await getAnnouncementById(announcementId);
+      if (!existing) throw new HttpError(404, "Aankondiging niet gevonden.");
+
+      const title = sanitizeText(existing.title || "").slice(0, 120);
+      const message = sanitizeText(existing.body || "").slice(0, 280);
+      const url = sanitizeText(existing.url || "").slice(0, 500);
+      const imageUrl = sanitizeText(existing.imageUrl || "").slice(0, 500);
+      const category = sanitizeText(existing.category || "features").slice(0, 32);
+      const templateKey = sanitizeText(existing.templateKey || "").slice(0, 64);
+      if (!PUSH_CATEGORIES[category]) throw new HttpError(400, "Ongeldige category.");
+
+      const webPush = ensureWebPushConfigured();
+      const announcement = await createAnnouncement({ title, body: message, url: url || "", category, imageUrl, templateKey });
+      const deepLink = `/?announce=${encodeURIComponent(announcement.id)}`;
+      const effectiveUrl = url || deepLink;
+      const payload = JSON.stringify({ title, body: message, url: effectiveUrl, imageUrl: imageUrl || undefined, announcementId: announcement.id });
+
+      const subscriptions = await listPushSubscriptionsWithMeta();
+      const onlyAh = Boolean(segment?.onlyFavoriteSupermarketAh);
+      const onlyBasketReady = Boolean(segment?.onlyTriggerAhBasketReadyEnabled);
+      const onlyBonus = Boolean(segment?.onlyTriggerAhBonusEnabled);
+      const filtered = subscriptions.filter((sub) => {
+        if (!isCategoryEnabledForPrefs(sub.prefs, category)) return false;
+        if (onlyAh) {
+          const fav = pickFavoriteSupermarketFromAppState(sub.userAppState);
+          if (fav !== "ah") return false;
+        }
+        if (onlyBasketReady && !Boolean(sub?.prefs?.triggers?.ahBasketReady)) return false;
+        if (onlyBonus && !Boolean(sub?.prefs?.triggers?.ahBonus)) return false;
+        return true;
+      });
+
+      const endpointsToRemove = new Set();
+      let sent = 0;
+      let failed = 0;
+      const concurrency = 10;
+      const queue = filtered.slice();
+      const workers = Array.from({ length: Math.min(concurrency, queue.length || 1) }).map(async () => {
+        while (queue.length) {
+          const sub = queue.shift();
+          if (!sub) return;
+          try {
+            await webPush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload, { TTL: 60 * 60 * 24 });
+            sent += 1;
+          } catch (err) {
+            failed += 1;
+            const status = Number(err?.statusCode || err?.status || 0);
+            if (status === 404 || status === 410) {
+              endpointsToRemove.add(String(sub?.endpoint || ""));
+            }
+          }
+        }
+      });
+      await Promise.all(workers);
+
+      if (endpointsToRemove.size) {
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          await pool.query(`DELETE FROM plately_push_subscriptions WHERE endpoint = ANY($1::text[])`, [
+            Array.from(endpointsToRemove),
+          ]);
+        } else {
+          for (const endpoint of endpointsToRemove) {
+            await removeJsonPushSubscriptionByEndpoint(endpoint);
+          }
+        }
+      }
+
+      await updateAnnouncementMetrics(announcement.id, {
+        matched: filtered.length,
+        sent,
+        failed,
+        removed: endpointsToRemove.size,
+      });
+
+      sendJson(response, 200, {
+        ok: true,
+        resentFrom: announcementId,
+        announcementId: announcement.id,
+        deepLink,
+        category,
+        templateKey,
+        matched: filtered.length,
+        sent,
+        failed,
+        removed: endpointsToRemove.size,
+      });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/push/test" && request.method === "POST") {
+      const adminUser = await requireAdmin(request);
+      const body = await readRequestBody(request);
+      const title = sanitizeText(body?.title || "").slice(0, 120);
+      const message = sanitizeText(body?.body || "").slice(0, 280);
+      const url = sanitizeText(body?.url || "").slice(0, 500);
+      const imageUrl = sanitizeText(body?.imageUrl || body?.image || "").slice(0, 500);
+      const category = sanitizeText(body?.category || "features").slice(0, 32);
+      if (!title || !message) throw new HttpError(400, "title en body zijn verplicht.");
+      if (!PUSH_CATEGORIES[category]) throw new HttpError(400, "Ongeldige category.");
+
+      const webPush = ensureWebPushConfigured();
+      const subs = await listPushSubscriptionsForUser(adminUser?.id || "");
+      const payload = JSON.stringify({ title, body: message, url: url || "/", imageUrl: imageUrl || undefined });
+      let sent = 0;
+      let failed = 0;
+      for (const sub of subs) {
+        try {
+          await webPush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload, { TTL: 60 * 15 });
+          sent += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      sendJson(response, 200, { ok: true, sent, failed, matched: subs.length });
       return;
     }
 

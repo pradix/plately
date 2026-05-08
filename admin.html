@@ -544,6 +544,17 @@
 
     <div id="error" class="error" style="display: none;"></div>
 
+    <nav class="admin-tabs" aria-label="Admin tabs">
+      <div class="admin-tabs__rail" id="adminTabsRail" role="tablist" aria-label="Admin secties">
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="true" data-admin-tab="overview">Overzicht</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channels">Kanalen</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="users">Gebruikers</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="search-terms">Zoekwoorden</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="notifications">Notificaties</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Kanaal test</button>
+      </div>
+    </nav>
+
     <div id="loading" class="loading">
       ⏳ Statistieken laden...
     </div>
@@ -600,24 +611,63 @@
       </div>
       </div>
 
-      <div class="admin-tab-section" id="adminTabPush" data-tab="push">
-      <div class="section" id="pushAnnounceSection">
+      <div class="admin-tab-section" id="adminTabNotifications" data-tab="notifications">
+      <div class="section" id="notificationsSection">
         <div class="section-header">
-          <h2>📣 Push — Nieuwe functies</h2>
-          <div class="muted">Verstuur naar alle abonnees</div>
+          <h2>🔔 Notificaties</h2>
+          <div class="muted">Templates, segmenten, test &amp; historie</div>
         </div>
         <div id="pushConfigStatus" class="muted" style="margin-top:-6px;margin-bottom:10px"></div>
         <div class="admin-test__row">
-          <input id="pushAnnounceTitle" class="admin-test__input" type="text" placeholder="Titel" />
-          <input id="pushAnnounceUrl" class="admin-test__input" type="text" placeholder="Deep link (optioneel, bijv. /?new=1)" />
+          <select id="notifTemplateKey" class="admin-test__select" aria-label="Template">
+            <option value="features_new" selected>Nieuwe functies</option>
+            <option value="ah_basket_ready">AH lijst klaar</option>
+            <option value="ah_bonus">AH bonus</option>
+            <option value="cookmode_tips">Kookstand tips</option>
+          </select>
+          <select id="notifCategory" class="admin-test__select" aria-label="Categorie">
+            <option value="features" selected>features</option>
+            <option value="ah">ah</option>
+            <option value="cookmode">cookmode</option>
+          </select>
+        </div>
+        <div class="admin-test__row">
+          <input id="notifTitle" class="admin-test__input" type="text" placeholder="Titel" />
+          <input id="notifUrl" class="admin-test__input" type="text" placeholder="Deep link (optioneel, leeg = automatisch)" />
         </div>
         <div style="margin-top:10px">
-          <textarea id="pushAnnounceBody" class="admin-test__input" rows="3" placeholder="Bericht" style="width:100%;resize:vertical"></textarea>
+          <textarea id="notifBody" class="admin-test__input" rows="3" placeholder="Bericht" style="width:100%;resize:vertical"></textarea>
         </div>
         <div class="admin-test__row" style="margin-top:10px">
-          <button class="btn btn-primary" type="button" id="pushAnnounceBtn" onclick="sendPushAnnouncement()">Verstuur</button>
-          <div id="pushAnnounceStatus" class="muted" style="flex:2;min-width:240px"></div>
+          <input id="notifImageUrl" class="admin-test__input" type="text" placeholder="Afbeelding URL (optioneel)" />
         </div>
+        <div class="admin-test__row" style="margin-top:10px">
+          <label class="pill" style="cursor:pointer;flex:0 0 auto;min-width:260px">
+            <input id="notifSegOnlyAh" type="checkbox" style="margin-right:8px" />
+            Alleen fav supermarkt: AH
+          </label>
+          <label class="pill" style="cursor:pointer;flex:0 0 auto;min-width:260px">
+            <input id="notifSegOnlyBasketReady" type="checkbox" style="margin-right:8px" />
+            Alleen trigger: AH lijst klaar
+          </label>
+          <label class="pill" style="cursor:pointer;flex:0 0 auto;min-width:240px">
+            <input id="notifSegOnlyBonus" type="checkbox" style="margin-right:8px" />
+            Alleen trigger: AH bonus
+          </label>
+        </div>
+        <div class="admin-test__row" style="margin-top:10px">
+          <button class="btn" type="button" id="notifTestBtn" onclick="sendNotificationTest()">Test naar mij</button>
+          <button class="btn btn-primary" type="button" id="notifSendBtn" onclick="sendNotificationAnnouncement()">Verstuur naar segment</button>
+          <div id="notifStatus" class="muted" style="flex:2;min-width:240px"></div>
+        </div>
+
+        <hr class="divider" />
+        <div class="section-header">
+          <h2>Recente aankondigingen</h2>
+          <div class="muted">Matched / Sent / Failed / Removed</div>
+        </div>
+        <div id="notifHistoryStatus" class="muted" style="margin-top:-6px;margin-bottom:10px"></div>
+        <div id="notifHistoryTable"></div>
       </div>
       </div>
 
@@ -2345,39 +2395,221 @@
       }
     }
 
-    async function sendPushAnnouncement() {
-      const title = (document.getElementById("pushAnnounceTitle")?.value || "").trim();
-      const body = (document.getElementById("pushAnnounceBody")?.value || "").trim();
-      const url = (document.getElementById("pushAnnounceUrl")?.value || "").trim();
-      const statusEl = document.getElementById("pushAnnounceStatus");
-      const btn = document.getElementById("pushAnnounceBtn");
-      if (!title || !body) {
-        if (statusEl) statusEl.textContent = "Titel en bericht zijn verplicht.";
+    function readNotificationForm() {
+      const templateKey = String(document.getElementById("notifTemplateKey")?.value || "").trim();
+      const category = String(document.getElementById("notifCategory")?.value || "features").trim();
+      const title = String(document.getElementById("notifTitle")?.value || "").trim();
+      const body = String(document.getElementById("notifBody")?.value || "").trim();
+      const url = String(document.getElementById("notifUrl")?.value || "").trim();
+      const imageUrl = String(document.getElementById("notifImageUrl")?.value || "").trim();
+      const onlyAh = Boolean(document.getElementById("notifSegOnlyAh")?.checked);
+      const onlyBasketReady = Boolean(document.getElementById("notifSegOnlyBasketReady")?.checked);
+      const onlyBonus = Boolean(document.getElementById("notifSegOnlyBonus")?.checked);
+      return {
+        templateKey,
+        category,
+        title,
+        body,
+        url: url || undefined,
+        imageUrl: imageUrl || undefined,
+        segment: {
+          onlyFavoriteSupermarketAh: onlyAh,
+          onlyTriggerAhBasketReadyEnabled: onlyBasketReady,
+          onlyTriggerAhBonusEnabled: onlyBonus,
+        },
+      };
+    }
+
+    function setNotifStatus(htmlOrText) {
+      const el = document.getElementById("notifStatus");
+      if (!el) return;
+      el.innerHTML = String(htmlOrText || "");
+    }
+
+    async function sendNotificationAnnouncement() {
+      const sendBtn = document.getElementById("notifSendBtn");
+      const testBtn = document.getElementById("notifTestBtn");
+      const payload = readNotificationForm();
+      if (!payload.title || !payload.body) {
+        setNotifStatus("Titel en bericht zijn verplicht.");
         return;
       }
-      if (btn) btn.disabled = true;
-      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> Versturen…`;
+      if (sendBtn) sendBtn.disabled = true;
+      if (testBtn) testBtn.disabled = true;
+      setNotifStatus(`<span class="spinner" aria-hidden="true"></span> Versturen…`);
       try {
         const response = await fetch("/api/admin/push/announce", adminFetchInit({
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, body, url: url || undefined }),
+          body: JSON.stringify(payload),
         }));
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || "Versturen mislukt");
         const sent = Number(data.sent || 0);
         const failed = Number(data.failed || 0);
-        if (statusEl) statusEl.textContent = `✅ Verstuurd: ${sent} · Mislukt: ${failed}`;
+        const matched = Number(data.matched || 0);
+        const deepLink = String(data.deepLink || "").trim();
+        const link = deepLink ? ` · <a href="${deepLink}" target="_blank" rel="noopener" style="color:rgba(45, 74, 46, 0.92);text-decoration:underline">Deep link</a>` : "";
+        setNotifStatus(`✅ Verstuurd: ${sent}/${matched} · Mislukt: ${failed}${link}`);
+        refreshNotificationHistory().catch(() => {});
       } catch (error) {
-        if (statusEl) statusEl.textContent = `❌ ${error.message}`;
+        setNotifStatus(`❌ ${escapeHtml(error.message)}`);
       } finally {
-        if (btn) btn.disabled = false;
+        if (sendBtn) sendBtn.disabled = false;
+        if (testBtn) testBtn.disabled = false;
+      }
+    }
+
+    async function sendNotificationTest() {
+      const sendBtn = document.getElementById("notifSendBtn");
+      const testBtn = document.getElementById("notifTestBtn");
+      const payload = readNotificationForm();
+      if (!payload.title || !payload.body) {
+        setNotifStatus("Titel en bericht zijn verplicht.");
+        return;
+      }
+      if (sendBtn) sendBtn.disabled = true;
+      if (testBtn) testBtn.disabled = true;
+      setNotifStatus(`<span class="spinner" aria-hidden="true"></span> Test sturen…`);
+      try {
+        const response = await fetch("/api/admin/push/test", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Test mislukt");
+        const sent = Number(data.sent || 0);
+        const matched = Number(data.matched || 0);
+        const failed = Number(data.failed || 0);
+        setNotifStatus(`✅ Test gestuurd: ${sent}/${matched} · Mislukt: ${failed}`);
+      } catch (error) {
+        setNotifStatus(`❌ ${escapeHtml(error.message)}`);
+      } finally {
+        if (sendBtn) sendBtn.disabled = false;
+        if (testBtn) testBtn.disabled = false;
+      }
+    }
+
+    function renderNotifHistoryTable(list) {
+      const wrap = document.getElementById("notifHistoryTable");
+      if (!wrap) return;
+      const rows = Array.isArray(list) ? list : [];
+      if (!rows.length) {
+        wrap.innerHTML = `<div class="muted">Nog geen aankondigingen.</div>`;
+        return;
+      }
+      wrap.innerHTML = `
+        <table class="users-table" style="margin-top:0">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Titel</th>
+              <th>Deep link</th>
+              <th class="num">Matched</th>
+              <th class="num">Sent</th>
+              <th class="num">Failed</th>
+              <th class="num">Removed</th>
+              <th>Created</th>
+              <th>Acties</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((a) => {
+              const id = escapeHtml(a?.id || "");
+              const templateKey = escapeHtml(a?.templateKey || a?.category || "");
+              const title = escapeHtml(a?.title || "");
+              const deepLink = `/?announce=${encodeURIComponent(a?.id || "")}`;
+              const m = a?.metrics || {};
+              const created = a?.createdAt ? new Date(a.createdAt).toLocaleString("nl-NL") : "—";
+              return `
+                <tr>
+                  <td style="font-weight:800;color:rgba(0,0,0,0.78)">${templateKey || "—"}</td>
+                  <td title="${title}" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${title || "—"}</td>
+                  <td class="mono" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                    <a href="${deepLink}" target="_blank" rel="noopener" style="color:rgba(45, 74, 46, 0.92);text-decoration:underline">${escapeHtml(deepLink)}</a>
+                  </td>
+                  <td class="num">${Number(m.matched || 0)}</td>
+                  <td class="num">${Number(m.sent || 0)}</td>
+                  <td class="num">${Number(m.failed || 0)}</td>
+                  <td class="num">${Number(m.removed || 0)}</td>
+                  <td>${escapeHtml(created)}</td>
+                  <td style="white-space:nowrap">
+                    <button class="btn" type="button" data-notif-resend="${id}" style="padding:6px 10px">Resend</button>
+                    <button class="btn" type="button" data-notif-delete="${id}" style="padding:6px 10px;border-color:rgba(220,53,69,0.22);color:rgba(140,23,35,0.95)">Delete</button>
+                  </td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function refreshNotificationHistory() {
+      const statusEl = document.getElementById("notifHistoryStatus");
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> Laden…`;
+      try {
+        const res = await fetch("/api/admin/push/announcements?limit=50", adminFetchInit({ method: "GET" }));
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || "Kan aankondigingen niet ophalen");
+        renderNotifHistoryTable(data.announcements || []);
+        document.querySelectorAll("[data-notif-resend]").forEach((btn) => {
+          btn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            const id = btn.getAttribute("data-notif-resend") || "";
+            if (!id) return;
+            if (!confirm("Deze aankondiging opnieuw versturen?")) return;
+            setNotifStatus(`<span class="spinner" aria-hidden="true"></span> Resend…`);
+            try {
+              const response = await fetch("/api/admin/push/resend", adminFetchInit({
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ announcementId: id, segment: readNotificationForm().segment }),
+              }));
+              const out = await response.json().catch(() => ({}));
+              if (!response.ok || !out.ok) throw new Error(out.error || "Resend mislukt");
+              const sent = Number(out.sent || 0);
+              const failed = Number(out.failed || 0);
+              const matched = Number(out.matched || 0);
+              setNotifStatus(`✅ Resent: ${sent}/${matched} · Mislukt: ${failed}`);
+              refreshNotificationHistory().catch(() => {});
+            } catch (err) {
+              setNotifStatus(`❌ ${escapeHtml(err.message)}`);
+            }
+          }, { once: true });
+        });
+        document.querySelectorAll("[data-notif-delete]").forEach((btn) => {
+          btn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            const id = btn.getAttribute("data-notif-delete") || "";
+            if (!id) return;
+            if (!confirm("Deze aankondiging verwijderen?")) return;
+            setNotifStatus(`<span class="spinner" aria-hidden="true"></span> Verwijderen…`);
+            try {
+              const response = await fetch("/api/admin/push/delete", adminFetchInit({
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ announcementId: id }),
+              }));
+              const out = await response.json().catch(() => ({}));
+              if (!response.ok || !out.ok) throw new Error(out.error || "Verwijderen mislukt");
+              setNotifStatus("✅ Verwijderd");
+              refreshNotificationHistory().catch(() => {});
+            } catch (err) {
+              setNotifStatus(`❌ ${escapeHtml(err.message)}`);
+            }
+          }, { once: true });
+        });
+        if (statusEl) statusEl.textContent = "";
+      } catch (err) {
+        if (statusEl) statusEl.textContent = `⚠️ ${err.message || "Laden mislukt"}`;
       }
     }
 
     async function refreshPushConfigStatus() {
       const el = document.getElementById("pushConfigStatus");
-      const btn = document.getElementById("pushAnnounceBtn");
+      const btn = document.getElementById("notifSendBtn");
       if (!el) return;
       try {
         const res = await fetch("/api/push/vapid-public-key", adminFetchInit());
@@ -2485,6 +2717,7 @@
 
     // Initial push config status
     refreshPushConfigStatus();
+    refreshNotificationHistory().catch(() => {});
 
     async function runWithConcurrency(items, concurrency, worker, onProgress) {
       const q = Array.isArray(items) ? items.slice() : [];

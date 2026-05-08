@@ -7678,79 +7678,198 @@ async function renderAdminScreen() {
     recipeCountEl.textContent = totalRecipes || 0;
   }
 
-  // Push announcement (Nieuwe functies)
-  const pushBtn = document.getElementById("adminPushAnnounceBtn");
-  const pushCategory = document.getElementById("adminPushAnnounceCategory");
-  const pushTitle = document.getElementById("adminPushAnnounceTitle");
-  const pushBody = document.getElementById("adminPushAnnounceBody");
-  const pushUrl = document.getElementById("adminPushAnnounceUrl");
-  const pushImage = document.getElementById("adminPushAnnounceImageUrl");
-  const pushSegAh = document.getElementById("adminPushAnnounceSegmentAh");
-  const pushStatus = document.getElementById("adminPushAnnounceStatus");
-  const pushDeepLink = document.getElementById("adminPushAnnounceDeepLink");
-  let pushConfiguredOk = false;
-  if (pushStatus) pushStatus.textContent = "";
-  if (pushDeepLink) pushDeepLink.textContent = "";
-  if (pushBtn) {
-    try {
-      const keyRes = await fetchJson(`${state.apiBase}/api/push/vapid-public-key`, { method: "GET" });
-      const key = String(keyRes?.publicKey || "").trim();
-      const ok = Boolean(key);
-      pushConfiguredOk = ok;
-      pushBtn.disabled = !ok;
-      if (pushStatus) {
-        pushStatus.textContent = ok
-          ? "✅ Push is geconfigureerd"
-          : "❌ Push is niet geconfigureerd (VAPID keys ontbreken op de server).";
-      }
-    } catch {
-      pushBtn.disabled = true;
-      pushConfiguredOk = false;
-      if (pushStatus) pushStatus.textContent = "⚠️ Kan push-configuratie niet ophalen.";
-    }
+  // Admin notifications (templates + history)
+  const notifStatus = document.getElementById("adminNotifStatus");
+  const notifTemplateKey = document.getElementById("adminNotifTemplateKey");
+  const notifCategory = document.getElementById("adminNotifCategory");
+  const notifTitle = document.getElementById("adminNotifTitle");
+  const notifBody = document.getElementById("adminNotifBody");
+  const notifUrl = document.getElementById("adminNotifUrl");
+  const notifImage = document.getElementById("adminNotifImageUrl");
+  const notifSegAh = document.getElementById("adminNotifSegOnlyAh");
+  const notifSegBasketReady = document.getElementById("adminNotifSegOnlyBasketReady");
+  const notifSegBonus = document.getElementById("adminNotifSegOnlyBonus");
+  const notifTestBtn = document.getElementById("adminNotifTestBtn");
+  const notifSendBtn = document.getElementById("adminNotifSendBtn");
+  const notifHistoryStatus = document.getElementById("adminNotifHistoryStatus");
+  const notifHistoryList = document.getElementById("adminNotifHistoryList");
+
+  const setNotifStatus = (text) => {
+    if (notifStatus) notifStatus.textContent = String(text || "");
+  };
+
+  const readNotifPayload = () => {
+    const templateKey = String(notifTemplateKey?.value || "").trim();
+    const category = String(notifCategory?.value || "features").trim();
+    const title = String(notifTitle?.value || "").trim();
+    const body = String(notifBody?.value || "").trim();
+    const url = String(notifUrl?.value || "").trim();
+    const imageUrl = String(notifImage?.value || "").trim();
+    const onlyAh = Boolean(notifSegAh?.checked);
+    const onlyBasketReady = Boolean(notifSegBasketReady?.checked);
+    const onlyBonus = Boolean(notifSegBonus?.checked);
+    return {
+      templateKey,
+      category,
+      title,
+      body,
+      url: url || undefined,
+      imageUrl: imageUrl || undefined,
+      segment: {
+        onlyFavoriteSupermarketAh: onlyAh,
+        onlyTriggerAhBasketReadyEnabled: onlyBasketReady,
+        onlyTriggerAhBonusEnabled: onlyBonus,
+      },
+    };
+  };
+
+  let vapidOk = false;
+  try {
+    const keyRes = await fetchJson(`${state.apiBase}/api/push/vapid-public-key`, { method: "GET" });
+    vapidOk = Boolean(String(keyRes?.publicKey || "").trim());
+    if (!vapidOk) setNotifStatus("❌ Push is niet geconfigureerd (VAPID keys ontbreken op de server).");
+  } catch {
+    vapidOk = false;
+    setNotifStatus("⚠️ Kan push-configuratie niet ophalen.");
   }
-  if (pushBtn) {
-    pushBtn.onclick = async () => {
-      const category = String(pushCategory?.value || "features").trim();
-      const title = String(pushTitle?.value || "").trim();
-      const body = String(pushBody?.value || "").trim();
-      const url = String(pushUrl?.value || "").trim();
-      const imageUrl = String(pushImage?.value || "").trim();
-      const onlyAh = Boolean(pushSegAh?.checked);
-      if (!title || !body) {
-        if (pushStatus) pushStatus.textContent = "Titel en bericht zijn verplicht.";
+  if (notifSendBtn) notifSendBtn.disabled = !vapidOk;
+  if (notifTestBtn) notifTestBtn.disabled = !vapidOk;
+
+  const renderNotifHistory = (announcements) => {
+    if (!notifHistoryList) return;
+    const list = Array.isArray(announcements) ? announcements : [];
+    if (!list.length) {
+      notifHistoryList.innerHTML = `<div style="color:#989188;font-size:0.9rem">Nog geen aankondigingen.</div>`;
+      return;
+    }
+    notifHistoryList.innerHTML = list.slice(0, 30).map((a) => {
+      const id = escapeHtml(a?.id || "");
+      const key = escapeHtml(a?.templateKey || a?.category || "");
+      const title = escapeHtml(a?.title || "");
+      const deepLink = `/?announce=${encodeURIComponent(a?.id || "")}`;
+      const m = a?.metrics || {};
+      const createdAt = a?.createdAt ? new Date(a.createdAt).toLocaleString("nl-NL") : "—";
+      return `
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #f3f5ef;border-radius:12px;background:#fff;margin-bottom:8px">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;color:#3d3d3b">${key || "—"} · ${title || "—"}</div>
+            <div style="font-size:0.85rem;color:#989188;margin-top:4px;word-break:break-all">
+              <a href="${deepLink}" target="_blank" rel="noopener" style="color:#6b6258;text-decoration:underline">${escapeHtml(deepLink)}</a>
+            </div>
+            <div style="font-size:0.8rem;color:#b9ada0;margin-top:4px">
+              Matched: ${Number(m.matched || 0)} · Sent: ${Number(m.sent || 0)} · Failed: ${Number(m.failed || 0)} · Removed: ${Number(m.removed || 0)} · ${escapeHtml(createdAt)}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+            <button class="secondary-button" type="button" data-admin-notif-resend="${id}" style="white-space:nowrap">Resend</button>
+            <button class="secondary-button" type="button" data-admin-notif-delete="${id}" style="white-space:nowrap;border-color:rgba(220,53,69,0.25);color:rgba(140,23,35,0.95)">Delete</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  };
+
+  const refreshNotifHistory = async () => {
+    if (notifHistoryStatus) notifHistoryStatus.textContent = "Laden…";
+    try {
+      const res = await fetchJson(`${state.apiBase}/api/admin/push/announcements?limit=50`, { method: "GET" });
+      renderNotifHistory(res?.announcements || []);
+      if (notifHistoryStatus) notifHistoryStatus.textContent = "";
+    } catch (err) {
+      if (notifHistoryStatus) notifHistoryStatus.textContent = `⚠️ ${err.message}`;
+    }
+  };
+  refreshNotifHistory().catch(() => {});
+
+  const withNotifBusy = async (fn) => {
+    if (notifSendBtn) notifSendBtn.disabled = true;
+    if (notifTestBtn) notifTestBtn.disabled = true;
+    try { await fn(); } finally {
+      if (notifSendBtn) notifSendBtn.disabled = !vapidOk;
+      if (notifTestBtn) notifTestBtn.disabled = !vapidOk;
+    }
+  };
+
+  if (notifSendBtn) {
+    notifSendBtn.onclick = () => withNotifBusy(async () => {
+      const payload = readNotifPayload();
+      if (!payload.title || !payload.body) {
+        setNotifStatus("Titel en bericht zijn verplicht.");
         return;
       }
-      if (pushStatus) pushStatus.textContent = "Versturen…";
-      if (pushDeepLink) pushDeepLink.textContent = "";
-      pushBtn.disabled = true;
-      try {
-        const res = await fetchJson(`${state.apiBase}/api/admin/push/announce`, {
+      setNotifStatus("Versturen…");
+      const res = await fetchJson(`${state.apiBase}/api/admin/push/announce`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const sent = Number(res?.sent || 0);
+      const failed = Number(res?.failed || 0);
+      const matched = Number(res?.matched || 0);
+      setNotifStatus(`✅ Verstuurd: ${sent}/${matched} · Mislukt: ${failed}`);
+      refreshNotifHistory().catch(() => {});
+    }).catch((err) => setNotifStatus(`❌ Mislukt: ${err.message}`));
+  }
+
+  if (notifTestBtn) {
+    notifTestBtn.onclick = () => withNotifBusy(async () => {
+      const payload = readNotifPayload();
+      if (!payload.title || !payload.body) {
+        setNotifStatus("Titel en bericht zijn verplicht.");
+        return;
+      }
+      setNotifStatus("Test sturen…");
+      const res = await fetchJson(`${state.apiBase}/api/admin/push/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const sent = Number(res?.sent || 0);
+      const failed = Number(res?.failed || 0);
+      const matched = Number(res?.matched || 0);
+      setNotifStatus(`✅ Test gestuurd: ${sent}/${matched} · Mislukt: ${failed}`);
+    }).catch((err) => setNotifStatus(`❌ Mislukt: ${err.message}`));
+  }
+
+  document.querySelectorAll("[data-admin-notif-resend]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute("data-admin-notif-resend") || "";
+      if (!id) return;
+      if (!confirm("Deze aankondiging opnieuw versturen?")) return;
+      await withNotifBusy(async () => {
+        setNotifStatus("Resend…");
+        const res = await fetchJson(`${state.apiBase}/api/admin/push/resend`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title,
-            body,
-            url: url || undefined,
-            imageUrl: imageUrl || undefined,
-            category,
-            segment: { onlyFavoriteSupermarketAh: onlyAh },
-          }),
+          body: JSON.stringify({ announcementId: id, segment: readNotifPayload().segment }),
         });
         const sent = Number(res?.sent || 0);
         const failed = Number(res?.failed || 0);
         const matched = Number(res?.matched || 0);
-        if (pushStatus) pushStatus.textContent = `✅ Verstuurd: ${sent}/${matched} · Mislukt: ${failed}`;
-        const deepLink = String(res?.deepLink || "");
-        if (pushDeepLink && deepLink) pushDeepLink.textContent = `Deep link: ${deepLink}`;
-      } catch (err) {
-        if (pushStatus) pushStatus.textContent = `❌ Mislukt: ${err.message}`;
-      } finally {
-        // Preserve the config gate if keys are missing.
-        pushBtn.disabled = !pushConfiguredOk;
-      }
-    };
-  }
+        setNotifStatus(`✅ Resent: ${sent}/${matched} · Mislukt: ${failed}`);
+        refreshNotifHistory().catch(() => {});
+      });
+    }, { once: true });
+  });
+  document.querySelectorAll("[data-admin-notif-delete]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute("data-admin-notif-delete") || "";
+      if (!id) return;
+      if (!confirm("Deze aankondiging verwijderen?")) return;
+      await withNotifBusy(async () => {
+        setNotifStatus("Verwijderen…");
+        await fetchJson(`${state.apiBase}/api/admin/push/delete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ announcementId: id }),
+        });
+        setNotifStatus("✅ Verwijderd");
+        refreshNotifHistory().catch(() => {});
+      });
+    }, { once: true });
+  });
 
   // Render user list
   const usersList = document.getElementById("adminUsersList");

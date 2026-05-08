@@ -1166,7 +1166,7 @@
                 <button class="admin-tabs__btn" type="button" role="tab" data-admin-tab="overview" aria-selected="false">Overzicht</button>
                 <button class="admin-tabs__btn" type="button" role="tab" data-admin-tab="channels" aria-selected="false">Kanalen</button>
                 <button class="admin-tabs__btn" type="button" role="tab" data-admin-tab="channel-test" aria-selected="false">Kanaal test</button>
-                <button class="admin-tabs__btn" type="button" role="tab" data-admin-tab="push" aria-selected="false">Push</button>
+                <button class="admin-tabs__btn" type="button" role="tab" data-admin-tab="notifications" aria-selected="false">Notificaties</button>
                 <button class="admin-tabs__btn" type="button" role="tab" data-admin-tab="users" aria-selected="false">Users</button>
                 <button class="admin-tabs__btn" type="button" role="tab" data-admin-tab="search-terms" aria-selected="false">Zoekwoorden</button>
               </div>
@@ -1192,30 +1192,51 @@
             </div>
             </div>
 
-            <div class="admin-tab-section" id="inAppAdminTabPush" data-tab="push">
-            <p class="profile2-section-label">📣 PUSH — Aankondiging</p>
+            <div class="admin-tab-section" id="inAppAdminTabNotifications" data-tab="notifications">
+            <p class="profile2-section-label">🔔 Notificaties</p>
             <div class="profile2-card">
               <div style="padding:14px 16px">
-                <div id="adminPushAnnounceStatus" style="color:#989188;font-size:0.9rem;margin-bottom:10px">Stuur een melding naar alle abonnees.</div>
+                <div id="adminNotifStatus" style="color:#989188;font-size:0.9rem;margin-bottom:10px">Template + segment → test of verstuur.</div>
                 <div style="display:grid;gap:10px">
-                  <select id="adminPushAnnounceCategory" aria-label="Categorie" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;background:#fff">
-                    <option value="features">Nieuwe functies</option>
-                    <option value="ah">AH &amp; boodschappen</option>
-                    <option value="cookmode">Kookstand tips</option>
+                  <select id="adminNotifTemplateKey" aria-label="Template" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;background:#fff">
+                    <option value="features_new" selected>Nieuwe functies</option>
+                    <option value="ah_basket_ready">AH lijst klaar</option>
+                    <option value="ah_bonus">AH bonus</option>
+                    <option value="cookmode_tips">Kookstand tips</option>
                   </select>
-                  <input id="adminPushAnnounceTitle" type="text" placeholder="Titel" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem" />
-                  <textarea id="adminPushAnnounceBody" rows="3" placeholder="Bericht" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem;resize:vertical"></textarea>
-                  <input id="adminPushAnnounceUrl" type="text" placeholder="Deep link (optioneel, leeg = automatisch)" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem" />
-                  <input id="adminPushAnnounceImageUrl" type="text" placeholder="Afbeelding URL (optioneel)" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem" />
+                  <select id="adminNotifCategory" aria-label="Categorie" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;background:#fff">
+                    <option value="features" selected>features</option>
+                    <option value="ah">ah</option>
+                    <option value="cookmode">cookmode</option>
+                  </select>
+                  <input id="adminNotifTitle" type="text" placeholder="Titel" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem" />
+                  <textarea id="adminNotifBody" rows="3" placeholder="Bericht" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem;resize:vertical"></textarea>
+                  <input id="adminNotifUrl" type="text" placeholder="Deep link (optioneel, leeg = automatisch)" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem" />
+                  <input id="adminNotifImageUrl" type="text" placeholder="Afbeelding URL (optioneel)" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem" />
                   <label style="display:flex;gap:10px;align-items:center;color:#6b6258;font-size:0.9rem">
-                    <input id="adminPushAnnounceSegmentAh" type="checkbox" />
-                    Alleen gebruikers met favoriete supermarkt: AH
+                    <input id="adminNotifSegOnlyAh" type="checkbox" />
+                    Alleen favoriete supermarkt: AH
                   </label>
-                  <div id="adminPushAnnounceDeepLink" style="color:#989188;font-size:0.9rem"></div>
+                  <label style="display:flex;gap:10px;align-items:center;color:#6b6258;font-size:0.9rem">
+                    <input id="adminNotifSegOnlyBasketReady" type="checkbox" />
+                    Alleen trigger: AH lijst klaar
+                  </label>
+                  <label style="display:flex;gap:10px;align-items:center;color:#6b6258;font-size:0.9rem">
+                    <input id="adminNotifSegOnlyBonus" type="checkbox" />
+                    Alleen trigger: AH bonus
+                  </label>
                   <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-                    <button class="primary-button" id="adminPushAnnounceBtn" type="button" style="white-space:nowrap">Verstuur</button>
+                    <button class="secondary-button" id="adminNotifTestBtn" type="button" style="white-space:nowrap">Test naar mij</button>
+                    <button class="primary-button" id="adminNotifSendBtn" type="button" style="white-space:nowrap">Verstuur naar segment</button>
                   </div>
                 </div>
+              </div>
+            </div>
+            <p class="profile2-section-label" style="margin-top:16px">Recente aankondigingen</p>
+            <div class="profile2-card">
+              <div style="padding:14px 16px">
+                <div id="adminNotifHistoryStatus" style="color:#989188;font-size:0.9rem;margin-bottom:10px"></div>
+                <div id="adminNotifHistoryList"></div>
               </div>
             </div>
             </div>
