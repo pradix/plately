@@ -236,6 +236,79 @@ function ingredientMatchesProduct(ingredient, productTitle) {
   }
 }
 
+function ingredientMatchesAnyProductTerm(terms, productTitle) {
+  const list = Array.isArray(terms) ? terms : [];
+  if (!list.length) return true;
+  for (const t of list) {
+    if (!t) continue;
+    if (ingredientMatchesProduct(t, productTitle)) return true;
+  }
+  return false;
+}
+
+function tokenizeForMatch(raw) {
+  const text = sanitizeText(raw || "").toLowerCase();
+  const cleaned = text
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9\u00c0-\u024f]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return [];
+  const stop = new Set([
+    "de",
+    "het",
+    "een",
+    "en",
+    "van",
+    "voor",
+    "met",
+    "naar",
+    "smaak",
+    "optioneel",
+    "evt",
+    "eventueel",
+    "vers",
+    "bio",
+    "biologisch",
+    "extra",
+    "vierge",
+    "vergine",
+    "groot",
+    "klein",
+  ]);
+  return cleaned
+    .split(" ")
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2 && !stop.has(t));
+}
+
+function buildIngredientMatchTerms(rawIngredient, normalizedBase) {
+  const raw = sanitizeText(rawIngredient || "").toLowerCase();
+  const base = sanitizeText(normalizedBase || "").toLowerCase();
+  const terms = new Set([base].filter(Boolean));
+
+  // Keep the raw ingredient as a fallback (helps when base is canonicalized).
+  if (raw && raw.length >= 2) terms.add(raw);
+
+  // Cheese equivalences (not only search canonical; also matching against titles).
+  if (base === "parmezaanse kaas") {
+    terms.add("parmezaan");
+    terms.add("parmigiano");
+    terms.add("parmigiano reggiano");
+    terms.add("grana padano");
+  }
+  if (base === "grana padano") {
+    terms.add("grana padano");
+    terms.add("parmezaan");
+    terms.add("parmigiano");
+  }
+  if (base === "pecorino") {
+    terms.add("pecorino romano");
+  }
+
+  return [...terms].filter(Boolean);
+}
+
 // ── Ingredient search normalisation ──────────────────────────────────────────
 // Strips quantities, descriptors and maps variants to the best AH search term.
 function normalizeIngredientForSearch(raw) {
@@ -251,6 +324,13 @@ function normalizeIngredientForSearch(raw) {
   const DESC =
     /^(vers(?:e|en)?|biologisch(?:e)?|bio|extra\s+vierge?|extra\s+vergine|extra|groot(?:e)?|klein(?:e)?|fijn(?:gesneden)?|grof(?:gesneden)?|gesneden|gehakt(?:e)?|geraspte?|gedroogde?|gezouten?|gepeld(?:e)?|ongepeld(?:e)?|gewassen?|rood(?:e)?|groen(?:e)?|geel(?:e)?|wit(?:te)?|zwart(?:e)?|halve?|half\s+een|volle?|magere?|licht(?:e)?|geroosterd(?:e)?|gebakken|gekookt(?:e)?|rauw(?:e)?|zacht(?:e)?|koud(?:e)?|warm(?:e)?|in\s+reepjes|in\s+blokjes)\s+/i;
   t = t.replace(DESC, "").replace(DESC, "").trim();
+
+  // 2a. Strip common trailing / inline cooking descriptors ("naar smaak", "optioneel", etc.)
+  t = t
+    .replace(/\b(naar\s+smaak|om\s+te\s+serveren|ter\s+garnering|optioneel|evt\.?|eventueel|zo\s+nodig|voor\s+erbij)\b/gi, "")
+    .replace(/\s*,\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
   // 2b. A few high-impact Dutch webshop normalizations
   if (/^sinaasappels?$/.test(t)) return "handsinaasappel";
@@ -302,9 +382,11 @@ function normalizeIngredientForSearch(raw) {
   if (/lente.?ui/.test(t)) return "lente-ui";
 
   // 9. Cheese
-  if (/parmezaan|parmigiano/.test(t)) return "parmezaan";
+  if (/\b(parmigiano(?:\s+reggiano)?|parmigiana|parmezaan(?:se)?(?:\s+kaas)?)\b/.test(t))
+    return "parmezaanse kaas";
+  if (/\bgrana\s*padano\b/.test(t)) return "grana padano";
   if (/pecorino/.test(t)) return "pecorino";
-  if (/grana\s*padano/.test(t)) return "grana padano";
+  if (/\bpecorino\s+romano\b/.test(t)) return "pecorino";
   if (/mozzarella/.test(t)) return "mozzarella";
   if (/burrata/.test(t)) return "burrata";
 
@@ -1660,6 +1742,30 @@ function splitCompoundIngredientWords(text) {
     .filter(Boolean)
     .map(splitToken)
     .join(" ");
+}
+
+function canonicalizeIngredientForStoreSearch(value) {
+  const raw = splitCompoundIngredientWords(sanitizeText(value || ""));
+  if (!raw) return "";
+
+  const key = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Cheese-focused canonicalization for more reliable store matches.
+  // Keep this intentionally small and conservative.
+  if (/\b(parmigiano|reggiano|parmigiana)\b/.test(key) || /\bparmezaan(se)?\b/.test(key)) {
+    return "parmezaan";
+  }
+  if (/\bgrana\s*padano\b/.test(key) || (/\bgrana\b/.test(key) && /\bpadano\b/.test(key))) {
+    return "grana padano";
+  }
+
+  return raw;
 }
 
 function decodeHtml(value) {
@@ -5917,47 +6023,89 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
     if (!response.ok) return [];
 
     const data = await response.json();
-    // Use the original ingredient term for the relevance filter so label-specific
-    // queries like "biologisch tomaat" still match plain "tomaat" results.
-    const matchTerm = baseTerm;
     const baseLower = sanitizeText(baseTerm).toLowerCase();
     const rawLower = sanitizeText(ingredient).toLowerCase();
+    const matchTerms = buildIngredientMatchTerms(ingredient, baseTerm);
     const wantsButter = /\bboter\b/.test(baseLower) || /\bboter\b/.test(rawLower);
     const wantsGarlicButter = /\b(kruidenboter|knoflookboter)\b/.test(baseLower) || /\b(kruidenboter|knoflookboter)\b/.test(rawLower);
 
+    const ingredientTokens = tokenizeForMatch(baseLower);
+    const allowCheeseEquivs =
+      baseLower === "parmezaanse kaas" || /\b(parmezaan|parmigiano|grana\s*padano)\b/.test(rawLower);
+    const cheeseEquivTokens = allowCheeseEquivs
+      ? ["parmezaan", "parmezaanse", "parmigiano", "reggiano", "grana", "padano"]
+      : [];
+
     const scoreForIngredient = (productTitle) => {
       const title = sanitizeText(productTitle).toLowerCase();
-      let penalty = 0;
+      let score = 0;
+
+      const titleTokens = tokenizeForMatch(title);
+      const tokenSet = new Set(titleTokens);
+
+      // Token overlap bonus: more shared tokens means a better match.
+      let overlap = 0;
+      for (const tok of ingredientTokens) {
+        if (tokenSet.has(tok)) overlap += 1;
+      }
+      score -= overlap * 18;
+
+      // Cheese equivalents: if ingredient is parmesan-like, accept Italian names too.
+      if (cheeseEquivTokens.length) {
+        for (const tok of cheeseEquivTokens) {
+          if (tokenSet.has(tok)) {
+            score -= 8;
+            break;
+          }
+        }
+      }
 
       // If the ingredient is plain garlic, avoid "knoflook kruidenboter" style matches.
       if (baseLower === "knoflook" && !wantsButter && !wantsGarlicButter) {
-        if (/\b(kruidenboter|knoflookboter)\b/.test(title)) penalty += 50;
-        if (/\bboter\b/.test(title)) penalty += 30;
+        if (/\b(kruidenboter|knoflookboter)\b/.test(title)) score += 70;
+        if (/\bboter\b/.test(title)) score += 45;
       }
 
       // General: don't auto-pick butter-containing products unless the ingredient mentions butter.
-      if (!wantsButter && /\bboter\b/.test(title)) penalty += 20;
+      if (!wantsButter && /\bboter\b/.test(title)) score += 25;
 
       // Prefer "net" / "bol" garlic over processed variants when searching for knoflook.
       if (baseLower === "knoflook") {
         // Prefer titles that are basically "knoflook" (fresh garlic) over
         // products that merely *contain* garlic.
-        if (!/^(?:ah\\s+)?(?:biologisch\\s+)?knoflook\\b/.test(title)) penalty += 35;
-        if (/\b(net|bol)\b/.test(title)) penalty -= 5;
+        if (!/^(?:ah\\s+)?(?:biologisch\\s+)?knoflook\\b/.test(title)) score += 45;
+        if (/\b(net|bol)\b/.test(title)) score -= 6;
         // Avoid "knoflook"-flavoured products when the ingredient is plain garlic.
-        if (/\b(roomkaas|kaas|kruidenmix|mix|saus)\b/.test(title)) penalty += 25;
+        if (/\b(roomkaas|kaas|kruidenmix|mix|saus)\b/.test(title)) score += 35;
         // Avoid "knoflook as flavour" in unrelated products.
-        if (/\b(tomatenpuree|tomatenpasta)\b/.test(title)) penalty += 55;
-        if (/\b(aardappel|partjes|wok|smaakmaker|woksmaakmaker)\b/.test(title)) penalty += 45;
-        if (/\b(pasta|puree|poeder|granulaat|zout)\b/.test(title)) penalty += 12;
+        if (/\b(tomatenpuree|tomatenpasta)\b/.test(title)) score += 75;
+        if (/\b(aardappel|partjes|wok|smaakmaker|woksmaakmaker)\b/.test(title)) score += 55;
+        if (/\b(pasta|puree|poeder|granulaat|zout)\b/.test(title)) score += 15;
       }
 
-      return penalty;
+      // Penalize processed / "extra" items unless explicitly asked for.
+      const processedPenalty = [
+        { re: /\b(kruidenboter|knoflookboter)\b/, score: 55, okIf: wantsGarlicButter || wantsButter },
+        { re: /\broomkaas\b/, score: 45, okIf: /\broomkaas\b/.test(baseLower) || /\broomkaas\b/.test(rawLower) },
+        { re: /\b(saus|dressing|marinade)\b/, score: 55, okIf: /\b(saus|dressing|marinade)\b/.test(baseLower) },
+        { re: /\b(mix|kruidenmix|kruiden)\b/, score: 35, okIf: /\b(mix|kruiden)\b/.test(baseLower) },
+        { re: /\b(pasta|poeder|granulaat|puree)\b/, score: 28, okIf: /\b(pasta|poeder|granulaat|puree)\b/.test(baseLower) },
+      ];
+      for (const p of processedPenalty) {
+        if (!p.okIf && p.re.test(title)) score += p.score;
+      }
+
+      // Cheese-specific "avoid": parmesan is often matched to sauces/spreads; avoid those.
+      if (baseLower === "parmezaanse kaas") {
+        if (/\b(saus|pesto|kruidenboter|spread)\b/.test(title)) score += 80;
+      }
+
+      return score;
     };
 
     const products = (data.products || [])
       .filter((p) => !NON_FOOD_INGREDIENT_PATTERN.test(sanitizeText(p.title)))
-      .filter((p) => ingredientMatchesProduct(matchTerm, sanitizeText(p.title)))
+      .filter((p) => ingredientMatchesAnyProductTerm(matchTerms, sanitizeText(p.title)))
       .sort((a, b) => {
         const sa = scoreForIngredient(a.title);
         const sb = scoreForIngredient(b.title);
@@ -5979,7 +6127,8 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
 // dietary preference. Returns a deduplicated, price-sorted list of up to
 // `maxCount` products. Each product carries its inferred labels.
 async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) {
-  const base = sanitizeText(ingredient || "");
+  const rawBase = sanitizeText(ingredient || "");
+  const base = normalizeIngredientForSearch(rawBase) || rawBase;
   if (!base) return [];
 
   // We want a richer pool than the on-screen cap so the frontend can:
@@ -8175,7 +8324,7 @@ async function buildStoreBasket(body) {
   // steer search results toward matching products.
   // For other stores: keep single-match behaviour.
   const buildAHSearchQuery = (rawName, prefs) => {
-    const base = splitCompoundIngredientWords(sanitizeText(rawName || ""));
+    const base = canonicalizeIngredientForStoreSearch(rawName || "");
     if (!base) return "";
     const tokens = [];
     if (prefs?.bio) tokens.push("biologisch");
@@ -8191,7 +8340,7 @@ async function buildStoreBasket(body) {
     searchResults = await Promise.all(
       items.map(async (item) => {
         const rawName = sanitizeText(item.title || "");
-        const ingredientName = splitCompoundIngredientWords(rawName);
+        const ingredientName = canonicalizeIngredientForStoreSearch(rawName);
         if (!ingredientName) return { ingredient: ingredientName, product: null, products: [] };
 
         // Fetch a wider, label-tagged set of alternatives so the AH "Wissel"
@@ -8258,7 +8407,7 @@ async function buildStoreBasket(body) {
 
     return {
       id: `basket-item-${index}`,
-      ingredientTitle: splitCompoundIngredientWords(sanitizeText(item.title || "Ingrediënt")),
+      ingredientTitle: canonicalizeIngredientForStoreSearch(item.title || "Ingrediënt"),
       ingredientAmount: sanitizeText(item.amount || "1 verpakking"),
       confidence: result.product ? "Gevonden in winkel" : getMatchConfidenceLabel(item.title || ""),
       choices: choices.slice(0, choicesCap),
