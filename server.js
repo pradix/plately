@@ -384,7 +384,7 @@ const SEED_CHANNEL_DEFAULTS = {
   },
   "ch-24k": {
     baseUrl: "https://www.24kitchen.nl",
-    searchUrlTemplate: "https://www.24kitchen.nl/recepten/zoeken?q=<zoekwoord>&size=n_12_n",
+    searchUrlTemplate: "https://www.24kitchen.nl/recepten/zoeken?q={q}&size=n_12_n",
   },
   "ch-up": {
     baseUrl: "https://uitpaulineskeuken.nl",
@@ -6105,6 +6105,88 @@ function parseChicksLoveFood(html, _baseUrl, channelName, channelId, count) {
   return results;
 }
 
+function parse24Kitchen(html, baseUrl, channelName, channelId, count) {
+  const results = [];
+  const seenUrls = new Set();
+  const text = String(html || "");
+  const base = String(baseUrl || "").replace(/\/+$/, "");
+
+  const abs = (u) => {
+    const raw = sanitizeText(u || "");
+    if (!raw) return "";
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (raw.startsWith("/")) return `${base}${raw}`;
+    return raw;
+  };
+
+  const push = (titleRaw, urlRaw, thumbRaw) => {
+    if (results.length >= count) return;
+    const url = abs(urlRaw);
+    if (!url || seenUrls.has(url)) return;
+    if (/\/recepten\/(?:zoeken|search)(?:\/|$)/i.test(url)) return;
+    if (!urlLooksLikeRecipe(url)) return;
+
+    const title = decodeHtmlEntities(stripHtmlTags(titleRaw || "")).trim();
+    if (!title || title.length < 3) return;
+    if (!titleLooksLikeRecipe(title)) return;
+
+    const thumbnail = cleanImageUrl(thumbRaw || "");
+    if (thumbnail && (/\.svg(?:\?|$)/i.test(thumbnail) || isDecorativeImageUrl(thumbnail))) return;
+
+    seenUrls.add(url);
+    results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
+  };
+
+  const hrefRe = /<a[^>]+href="([^"]*\/recepten\/[^"]+)"[^>]*>/gi;
+  for (const m of text.matchAll(hrefRe)) {
+    if (results.length >= count) break;
+    const href = m[1] || "";
+    const url = abs(href);
+    if (!url || seenUrls.has(url)) continue;
+    if (/\/recepten\/(?:zoeken|search)(?:\/|$)/i.test(url)) continue;
+
+    const start = Math.max(0, (m.index || 0) - 300);
+    const block = text.slice(start, start + 2600);
+
+    const title =
+      block.match(/aria-label="([^"]{3,200})"/i)?.[1]
+      || block.match(/title="([^"]{3,200})"/i)?.[1]
+      || block.match(/<h[2-4][^>]*>([\s\S]{0,300}?)<\/h[2-4]>/i)?.[1]
+      || block.match(/<img[^>]+alt="([^"]{3,200})"/i)?.[1]
+      || "";
+
+    const thumb =
+      block.match(/data-src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i)?.[1]
+      || block.match(/src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i)?.[1]
+      || block.match(/srcset="(https?:\/\/[^"\s]+?\.(?:jpe?g|png|webp)[^"\s]*)/i)?.[1]
+      || "";
+
+    push(title, url, thumb);
+  }
+
+  if (results.length === 0) {
+    const urlRe = /https?:\/\/(?:www\.)?24kitchen\.nl\/recepten\/(?!zoeken\b)[^"'<\s]+/gi;
+    for (const m of text.matchAll(urlRe)) {
+      if (results.length >= count) break;
+      const url = m[0];
+      if (!url || seenUrls.has(url)) continue;
+      const start = Math.max(0, (m.index || 0) - 250);
+      const block = text.slice(start, start + 2200);
+      const title =
+        block.match(/<h[2-4][^>]*>([\s\S]{0,300}?)<\/h[2-4]>/i)?.[1]
+        || block.match(/<img[^>]+alt="([^"]{3,200})"/i)?.[1]
+        || "";
+      const thumb =
+        block.match(/data-src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i)?.[1]
+        || block.match(/src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i)?.[1]
+        || "";
+      push(title, url, thumb);
+    }
+  }
+
+  return results.slice(0, count);
+}
+
 /**
  * Generic WordPress search HTML parser.
  * Handles standard WP themes where <article> contains <h2 class="entry-title"><a href="...">
@@ -7078,7 +7160,9 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     maybeSearch("ch-les", () => scrapeOrRest(cfg("ch-les").baseUrl || "https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les",
       buildSeedChannelSearchUrl("ch-les", cfg("ch-les"), query),
       parseLekkerSimpel, 4)),
-    maybeSearch("ch-24k", () => wpRestSearch(cfg("ch-24k").baseUrl || "https://www.24kitchen.nl", "24 Kitchen", "ch-24k", query, 4)),
+    maybeSearch("ch-24k", () => scrapeOrRest(cfg("ch-24k").baseUrl || "https://www.24kitchen.nl", "24 Kitchen", "ch-24k",
+      buildSeedChannelSearchUrl("ch-24k", cfg("ch-24k"), query),
+      parse24Kitchen, 4)),
 
     // MEDIUM: May be slower, but try anyway
     maybeSearch("ch-lb", () => scrapeOrRest(cfg("ch-lb").baseUrl || "https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb",
@@ -9419,9 +9503,16 @@ const server = http.createServer(async (request, response) => {
           usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
           results = await searchJumboRecipes(query, count, { searchUrlTemplate: eff.searchUrlTemplate });
         } else if (channelId === "ch-24k") {
-          const meta = {};
-          results = await wpRestSearch(eff.baseUrl || "https://www.24kitchen.nl", "24 Kitchen", "ch-24k", query, count, meta);
-          usedUrl = sanitizeText(meta.usedUrl || "");
+          usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
+          results = await scrapeOrRestPublic(
+            eff.baseUrl || "https://www.24kitchen.nl",
+            "24 Kitchen",
+            "ch-24k",
+            usedUrl,
+            parse24Kitchen,
+            count,
+            query
+          );
         } else if (channelId === "ch-up") {
           const meta = {};
           results = await wpRestSearch(eff.baseUrl || "https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, count, meta);
