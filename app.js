@@ -703,7 +703,6 @@ const recipeUrlInput = document.getElementById("recipeUrl");
 const recipeNoteInput = document.getElementById("recipeNote");
 const searchInput = document.getElementById("searchInput");
 const homeSearchChipsWrap = document.querySelector(".home-search-chips");
-const homeSearchChipsRefresh = document.getElementById("homeSearchChipsRefresh");
 const homeSearchChipsMore = document.getElementById("homeSearchChipsMore");
 const channelSearchSection = document.getElementById("channelSearchSection");
 const channelSearchResults = document.getElementById("channelSearchResults");
@@ -8173,18 +8172,6 @@ bindEvent(homeSearchChipsWrap, "click", (event) => {
   searchInput.focus();
   searchInput.dispatchEvent(new Event("input", { bubbles: true }));
 });
-
-if (homeSearchChipsRefresh) {
-  homeSearchChipsRefresh.addEventListener(
-    "click",
-    (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      renderHomeQuickChips();
-    },
-    { capture: true }
-  );
-}
 
 if (homeSearchChipsMore) {
   homeSearchChipsMore.addEventListener(
