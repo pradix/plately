@@ -9458,6 +9458,7 @@ bindEvent(document.getElementById("profileSubChannelsSave"), "click", () => {
 });
 bindEvent(document.getElementById("profileSubLanguageBack"), "click", () => closeProfileSubPanel("profileSubLanguage"));
 bindEvent(document.getElementById("profileSubChangelogBack"), "click", () => closeProfileSubPanel("profileSubChangelog"));
+bindEvent(document.getElementById("profileSubNotificationsBack"), "click", () => closeProfileSubPanel("profileSubNotifications"));
 
 // Language option selection (select but don't save yet)
 bindEvent(document.getElementById("profileSubLanguage"), "click", (e) => {
@@ -10245,6 +10246,12 @@ bindEvent(document.getElementById("profileSubSupermarketSave"), "click", () => {
 bindEvent(document.getElementById("goToLanguageBtn"), "click", () => {
   updateLanguagePanel();
   openProfileSubPanel("profileSubLanguage");
+});
+
+// "Notificaties" on profile → open notifications sub-panel
+bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
+  renderFeaturePushUI();
+  openProfileSubPanel("profileSubNotifications");
 });
 
 // "Over deze App" → about sub-panel

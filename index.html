@@ -575,47 +575,16 @@
           <!-- NOTIFICATIES section -->
           <p class="profile2-section-label">NOTIFICATIES</p>
           <div class="profile2-card">
-            <div class="profile2-row" id="featurePushRow" role="group" aria-label="Push meldingen">
+            <button class="profile2-row" type="button" id="goToNotificationsBtn">
               <span class="profile2-row__icon" style="background:#e0f2fe">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#0369a1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/>
                   <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
                 </svg>
               </span>
-              <span class="profile2-row__label">Push meldingen</span>
-              <span class="profile2-row__meta" id="featurePushMeta"></span>
-              <span class="toggle-switch" id="featurePushToggle" role="switch" aria-checked="false" tabindex="0"></span>
-            </div>
-            <div class="profile2-row-divider"></div>
-            <div class="profile2-row profile2-row--sub" id="pushCatFeaturesRow" role="group" aria-label="Nieuwe functies">
-              <span class="profile2-row__label">Nieuwe functies</span>
-              <span class="profile2-row__meta" id="pushCatFeaturesMeta"></span>
-              <span class="toggle-switch" id="pushCatFeaturesToggle" role="switch" aria-checked="true" tabindex="0"></span>
-            </div>
-            <div class="profile2-row-divider"></div>
-            <div class="profile2-row profile2-row--sub" id="pushCatAhRow" role="group" aria-label="AH &amp; boodschappen">
-              <span class="profile2-row__label">AH &amp; boodschappen</span>
-              <span class="profile2-row__meta" id="pushCatAhMeta"></span>
-              <span class="toggle-switch" id="pushCatAhToggle" role="switch" aria-checked="false" tabindex="0"></span>
-            </div>
-            <div class="profile2-row-divider"></div>
-            <div class="profile2-row profile2-row--sub2" id="pushTrigAhBasketReadyRow" role="group" aria-label="AH lijst klaar">
-              <span class="profile2-row__label">Stuur melding als lijst klaar is</span>
-              <span class="profile2-row__meta" id="pushTrigAhBasketReadyMeta"></span>
-              <span class="toggle-switch" id="pushTrigAhBasketReadyToggle" role="switch" aria-checked="false" tabindex="0"></span>
-            </div>
-            <div class="profile2-row-divider"></div>
-            <div class="profile2-row profile2-row--sub2" id="pushTrigAhBonusRow" role="group" aria-label="AH bonus">
-              <span class="profile2-row__label">Stuur melding bij bonus items</span>
-              <span class="profile2-row__meta" id="pushTrigAhBonusMeta"></span>
-              <span class="toggle-switch" id="pushTrigAhBonusToggle" role="switch" aria-checked="false" tabindex="0"></span>
-            </div>
-            <div class="profile2-row-divider"></div>
-            <div class="profile2-row profile2-row--sub" id="pushCatCookmodeRow" role="group" aria-label="Kookstand tips">
-              <span class="profile2-row__label">Kookstand tips</span>
-              <span class="profile2-row__meta" id="pushCatCookmodeMeta"></span>
-              <span class="toggle-switch" id="pushCatCookmodeToggle" role="switch" aria-checked="false" tabindex="0"></span>
-            </div>
+              <span class="profile2-row__label">Notificaties</span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
           </div>
 
           <!-- Logout (alleen zichtbaar als ingelogd) -->
@@ -873,6 +842,69 @@
                 </button>
               </div>
               <button class="profile-subpanel__save-btn" id="profileSubLanguageSave" type="button">Opslaan</button>
+            </div>
+          </div>
+
+          <!-- ══ Sub-panel: Notificaties ══ -->
+          <div class="profile-subpanel" id="profileSubNotifications" aria-hidden="true">
+            <header class="topbar--sub">
+              <button class="topbar-back-btn" id="profileSubNotificationsBack" type="button" aria-label="Terug">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <h1 class="topbar-title">Notificaties</h1>
+              <span class="topbar-spacer"></span>
+            </header>
+            <div class="profile-subpanel__body">
+              <p class="profile2-section-label" style="margin-top:8px">PUSH</p>
+              <div class="profile2-card">
+                <div class="profile2-row" id="featurePushRow" role="group" aria-label="Push meldingen">
+                  <span class="profile2-row__icon" style="background:#e0f2fe">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#0369a1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/>
+                      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                    </svg>
+                  </span>
+                  <span class="profile2-row__label">Push meldingen</span>
+                  <span class="profile2-row__meta" id="featurePushMeta"></span>
+                  <span class="toggle-switch" id="featurePushToggle" role="switch" aria-checked="false" tabindex="0"></span>
+                </div>
+              </div>
+
+              <p class="profile2-section-label">CATEGORIEEN</p>
+              <div class="profile2-card">
+                <div class="profile2-row profile2-row--sub" id="pushCatFeaturesRow" role="group" aria-label="Nieuwe functies">
+                  <span class="profile2-row__label">Nieuwe functies</span>
+                  <span class="profile2-row__meta" id="pushCatFeaturesMeta"></span>
+                  <span class="toggle-switch" id="pushCatFeaturesToggle" role="switch" aria-checked="true" tabindex="0"></span>
+                </div>
+                <div class="profile2-row-divider"></div>
+                <div class="profile2-row profile2-row--sub" id="pushCatAhRow" role="group" aria-label="AH &amp; boodschappen">
+                  <span class="profile2-row__label">AH &amp; boodschappen</span>
+                  <span class="profile2-row__meta" id="pushCatAhMeta"></span>
+                  <span class="toggle-switch" id="pushCatAhToggle" role="switch" aria-checked="false" tabindex="0"></span>
+                </div>
+                <div class="profile2-row-divider"></div>
+                <div class="profile2-row profile2-row--sub" id="pushCatCookmodeRow" role="group" aria-label="Kookstand tips">
+                  <span class="profile2-row__label">Kookstand tips</span>
+                  <span class="profile2-row__meta" id="pushCatCookmodeMeta"></span>
+                  <span class="toggle-switch" id="pushCatCookmodeToggle" role="switch" aria-checked="false" tabindex="0"></span>
+                </div>
+              </div>
+
+              <p class="profile2-section-label">AH MELDINGEN</p>
+              <div class="profile2-card">
+                <div class="profile2-row profile2-row--sub2" id="pushTrigAhBasketReadyRow" role="group" aria-label="AH lijst klaar">
+                  <span class="profile2-row__label">Stuur melding als lijst klaar is</span>
+                  <span class="profile2-row__meta" id="pushTrigAhBasketReadyMeta"></span>
+                  <span class="toggle-switch" id="pushTrigAhBasketReadyToggle" role="switch" aria-checked="false" tabindex="0"></span>
+                </div>
+                <div class="profile2-row-divider"></div>
+                <div class="profile2-row profile2-row--sub2" id="pushTrigAhBonusRow" role="group" aria-label="AH bonus">
+                  <span class="profile2-row__label">Stuur melding bij bonus items</span>
+                  <span class="profile2-row__meta" id="pushTrigAhBonusMeta"></span>
+                  <span class="toggle-switch" id="pushTrigAhBonusToggle" role="switch" aria-checked="false" tabindex="0"></span>
+                </div>
+              </div>
             </div>
           </div>
 
