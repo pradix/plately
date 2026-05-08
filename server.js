@@ -771,7 +771,18 @@ function getEffectiveSeedChannelConfig(channelId, overrides) {
   const over = overrides && typeof overrides === "object" ? overrides[id] : null;
   const next = over && typeof over === "object" ? over : {};
   const baseUrl = sanitizeText(next.baseUrl || base.baseUrl || "");
-  const searchUrlTemplate = sanitizeText(next.searchUrlTemplate || base.searchUrlTemplate || "");
+  let searchUrlTemplate = sanitizeText(next.searchUrlTemplate || base.searchUrlTemplate || "");
+
+  // Migration guard: older Pauline overrides used the generic WP `/?s={q}` template,
+  // but Pauline recipes live behind the custom `/zoeken?_search_keyword=...` endpoint.
+  if (
+    id === "ch-up" &&
+    searchUrlTemplate &&
+    !/_search_keyword=/i.test(searchUrlTemplate) &&
+    /\b\?s=|\b\/\?s=/i.test(searchUrlTemplate)
+  ) {
+    searchUrlTemplate = sanitizeText(base.searchUrlTemplate || "");
+  }
   return {
     channelId: id,
     defaultBaseUrl: sanitizeText(base.baseUrl || ""),
@@ -6187,6 +6198,149 @@ function parse24Kitchen(html, baseUrl, channelName, channelId, count) {
   return results.slice(0, count);
 }
 
+let cached24KitchenFacPath = { path: "", at: 0 };
+async function search24KitchenFac(query, count, effectiveSeedConfig) {
+  const channelName = "24 Kitchen";
+  const channelId = "ch-24k";
+  const eff = effectiveSeedConfig && typeof effectiveSeedConfig === "object" ? effectiveSeedConfig : {};
+  const baseUrl = sanitizeText(eff.baseUrl || "https://www.24kitchen.nl").replace(/\/+$/, "");
+  const q = sanitizeText(query || "").trim();
+  if (!q) return [];
+
+  const now = Date.now();
+  const MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6h
+  let facPath = cached24KitchenFacPath.path;
+  if (!facPath || (now - cached24KitchenFacPath.at) > MAX_AGE_MS) {
+    try {
+      const probeUrl = `${baseUrl}/recepten/zoeken?q=${encodeURIComponent(q.slice(0, 6) || "pasta")}`;
+      const html = await fetchHtml(probeUrl);
+      const settingsJson =
+        html?.match(/<script[^>]+data-drupal-selector="drupal-settings-json"[^>]*>([\s\S]*?)<\/script>/i)?.[1] || "";
+      const settings = settingsJson ? safelyParseJson(settingsJson.trim()) : null;
+      const nextPath = sanitizeText(settings?.fac?.search?.jsonFilesPath || "");
+      if (nextPath) {
+        facPath = nextPath.startsWith("/") ? nextPath : `/${nextPath}`;
+        cached24KitchenFacPath = { path: facPath, at: now };
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (!facPath) return [];
+
+  const facKey = q.trim().replace(/\s*\/\s*/g, "_").replace(/\s+/g, "_").slice(0, 15);
+  if (!facKey) return [];
+
+  const url = `${baseUrl}${facPath.replace(/\/+$/, "")}/${encodeURIComponent(facKey)}.json`;
+  try {
+    const resp = await fetch(url, {
+      headers: { ...FETCH_HEADERS, accept: "application/json" },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json().catch(() => null);
+    const items = data?.items?.results;
+    if (!Array.isArray(items) || items.length === 0) return [];
+
+    const results = [];
+    const seen = new Set();
+    for (const item of items) {
+      if (results.length >= count) break;
+      if (!item || item.type !== "recipe") continue;
+      const title = sanitizeText(item.title || "");
+      const rel = sanitizeText(item.url || "");
+      const thumbnail = cleanImageUrl(String(item.thumbnail || "").replace(/\s+/g, ""));
+      const absUrl = rel && rel.startsWith("http") ? rel : (rel.startsWith("/") ? `${baseUrl}${rel}` : "");
+      if (!title || !absUrl || seen.has(absUrl)) continue;
+      if (!urlLooksLikeRecipe(absUrl) || !titleLooksLikeRecipe(title) || !titleMatchesQuery(title, q)) continue;
+      if (thumbnail && (/\.svg(?:\?|$)/i.test(thumbnail) || isDecorativeImageUrl(thumbnail))) continue;
+      seen.add(absUrl);
+      results.push({ title, url: absUrl, thumbnail, channel: channelName, channelId, description: "", time: "" });
+    }
+    return results.slice(0, count);
+  } catch {
+    return [];
+  }
+}
+
+function parsePaulineSearch(html, baseUrl, channelName, channelId, count) {
+  const results = [];
+  const seenUrls = new Set();
+  const text = String(html || "");
+  const base = String(baseUrl || "").replace(/\/+$/, "");
+
+  const abs = (u) => {
+    const raw = sanitizeText(u || "");
+    if (!raw) return "";
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (raw.startsWith("/")) return `${base}${raw}`;
+    return raw;
+  };
+
+  const push = (titleRaw, urlRaw, thumbRaw) => {
+    if (results.length >= count) return;
+    const url = abs(urlRaw);
+    if (!url || seenUrls.has(url)) return;
+    if (!/\/recept\//i.test(url)) return;
+    if (!urlLooksLikeRecipe(url)) return;
+
+    const title = sanitizeText(decodeHtmlEntities(stripHtmlTags(titleRaw || ""))).trim();
+    if (!title || title.length < 3) return;
+    if (!titleLooksLikeRecipe(title)) return;
+
+    const thumbnail = cleanImageUrl(String(thumbRaw || "").replace(/\s+/g, ""));
+    if (thumbnail && (/\.svg(?:\?|$)/i.test(thumbnail) || isDecorativeImageUrl(thumbnail))) return;
+
+    seenUrls.add(url);
+    results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
+  };
+
+  const hrefRe = /<a[^>]+href="([^"]*\/recept\/[^"]+)"[^>]*>/gi;
+  for (const m of text.matchAll(hrefRe)) {
+    if (results.length >= count) break;
+    const href = m[1] || "";
+    const start = Math.max(0, (m.index || 0) - 280);
+    const block = text.slice(start, start + 2600);
+
+    const title =
+      block.match(/aria-label="([^"]{3,200})"/i)?.[1]
+      || block.match(/title="([^"]{3,200})"/i)?.[1]
+      || block.match(/<h[2-4][^>]*>([\s\S]{0,300}?)<\/h[2-4]>/i)?.[1]
+      || block.match(/<img[^>]+alt="([^"]{3,200})"/i)?.[1]
+      || "";
+
+    const thumb =
+      block.match(/data-src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i)?.[1]
+      || block.match(/src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i)?.[1]
+      || block.match(/srcset="(https?:\/\/[^"\s]+?\.(?:jpe?g|png|webp)[^"\s]*)/i)?.[1]
+      || "";
+
+    push(title, href, thumb);
+  }
+
+  // Fallback: pull plain URLs if cards aren’t link-wrapped.
+  if (results.length === 0) {
+    const urlRe = /https?:\/\/(?:www\.)?uitpaulineskeuken\.nl\/recept\/[^"'<\s]+/gi;
+    for (const m of text.matchAll(urlRe)) {
+      if (results.length >= count) break;
+      const url = m[0];
+      const start = Math.max(0, (m.index || 0) - 250);
+      const block = text.slice(start, start + 2200);
+      const title =
+        block.match(/<h[2-4][^>]*>([\s\S]{0,300}?)<\/h[2-4]>/i)?.[1]
+        || block.match(/<img[^>]+alt="([^"]{3,200})"/i)?.[1]
+        || "";
+      const thumb =
+        block.match(/data-src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i)?.[1]
+        || block.match(/src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i)?.[1]
+        || "";
+      push(title, url, thumb);
+    }
+  }
+
+  return results.slice(0, count);
+}
+
 /**
  * Generic WordPress search HTML parser.
  * Handles standard WP themes where <article> contains <h2 class="entry-title"><a href="...">
@@ -6223,33 +6377,73 @@ function parseWPStandard(html, _baseUrl, channelName, channelId, count) {
 function parseReaderSearchResults(markdown, channelName, channelId, count, query) {
   const results = [];
   const seenUrls = new Set();
-  const imageLinks = [...String(markdown || "").matchAll(/\[!\[([^\]]*)\]\((https?:\/\/[^)\s]+\.(?:jpe?g|png|webp)(?:\?[^)]*)?)\)\]\((https?:\/\/[^)\s]+)\)/gi)];
+  const text = String(markdown || "");
 
-  for (let i = 0; i < imageLinks.length && results.length < count; i += 1) {
-    const match = imageLinks[i];
+  const normalizeThumb = (raw) => {
+    const rawThumb = String(raw || "");
+    const extractedThumbRaw =
+      rawThumb.match(/https?:\/\/[^\s]+?\.(?:jpe?g|png|webp)(?:\?[^\s\)]*)?/i)?.[0] || rawThumb;
+    const extractedThumb = extractedThumbRaw.replace(/[)\]]+$/g, "");
+    return cleanImageUrl(extractedThumb.replace(/\s+/g, ""));
+  };
+
+  // Pattern A: [![alt](img)](url)
+  // Allow parentheses inside img URLs by matching until the `)` before `](`.
+  const linkedImages = [...text.matchAll(/\[!\[([^\]]*)\]\((https?:\/\/[\s\S]*?)\)\]\((https?:\/\/[^)\s]+)\)/gi)];
+  for (let i = 0; i < linkedImages.length && results.length < count; i += 1) {
+    const match = linkedImages[i];
     const alt = decodeHtmlEntities(match[1] || "").replace(/^Image\s+\d+:\s*/i, "").trim();
-    const thumbnail = cleanImageUrl(match[2] || "");
-    const imageLinkUrl = match[3] || "";
-    const nextIndex = imageLinks[i + 1]?.index ?? markdown.length;
-    const nearby = markdown.slice((match.index || 0) + match[0].length, nextIndex);
-    const headingMatch = nearby.match(/#{1,4}\s+\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/i);
+    const thumbnail = normalizeThumb(match[2]);
+    const url = sanitizeText(match[3] || "");
+    if (!alt || !url || seenUrls.has(url)) continue;
+    if (thumbnail && (/\.svg(?:\?|$)/i.test(thumbnail) || isDecorativeImageUrl(thumbnail))) continue;
+    if (!urlLooksLikeRecipe(url)) continue;
 
-    const title = sanitizeText(decodeHtmlEntities(headingMatch?.[1] || alt));
-    const url = sanitizeText(headingMatch?.[2] || imageLinkUrl);
-    if (!title || !url || seenUrls.has(url)) continue;
-    if (/\.svg(?:\?|$)/i.test(thumbnail) || isDecorativeImageUrl(thumbnail)) continue;
-    if (!urlLooksLikeRecipe(url) || !titleLooksLikeRecipe(title) || !titleMatchesQuery(title, query)) continue;
+    const title = sanitizeText(alt);
+    if (!title || !titleLooksLikeRecipe(title) || !titleMatchesQuery(title, query)) continue;
 
     seenUrls.add(url);
-    results.push({
-      title,
-      url,
-      thumbnail,
-      channel: channelName,
-      channelId,
-      description: "",
-      time: "",
-    });
+    results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
+  }
+
+  // Pattern B: ![alt](img) ... later in same bullet/paragraph a recipe URL appears.
+  if (results.length === 0) {
+    const imageOnly = [...text.matchAll(/!\[([^\]]*)\]\((https?:\/\/[\s\S]*?)\)(?=\s)/gi)];
+    for (let i = 0; i < imageOnly.length && results.length < count; i += 1) {
+      const match = imageOnly[i];
+      const alt = decodeHtmlEntities(match[1] || "").replace(/^Image\s+\d+:\s*/i, "").trim();
+      const thumbnail = normalizeThumb(match[2]);
+      if (!alt) continue;
+      if (thumbnail && (/\.svg(?:\?|$)/i.test(thumbnail) || isDecorativeImageUrl(thumbnail))) continue;
+
+      const start = (match.index || 0) + match[0].length;
+      const nearby = text.slice(start, start + 1200);
+      const urlMatch = nearby.match(/https?:\/\/[^\s\)]+/i);
+      const url = sanitizeText(urlMatch?.[0] || "");
+      const title = sanitizeText(alt);
+      if (!url || seenUrls.has(url)) continue;
+      if (!urlLooksLikeRecipe(url) || !titleLooksLikeRecipe(title) || !titleMatchesQuery(title, query)) continue;
+
+      seenUrls.add(url);
+      results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
+    }
+  }
+
+  // Pattern C: last resort — just pull recipe URLs and derive a title.
+  if (results.length === 0) {
+    const urlMatches = [...text.matchAll(/https?:\/\/[^\s\)]+/gi)];
+    for (const m of urlMatches) {
+      if (results.length >= count) break;
+      const url = sanitizeText(m[0] || "");
+      if (!url || seenUrls.has(url) || !urlLooksLikeRecipe(url)) continue;
+      const slug = (() => {
+        try { return new URL(url).pathname.split("/").filter(Boolean).pop() || ""; } catch { return ""; }
+      })();
+      const title = sanitizeText(decodeURIComponent(slug).replace(/[-_]+/g, " ").trim());
+      if (!title || !titleLooksLikeRecipe(title) || !titleMatchesQuery(title, query)) continue;
+      seenUrls.add(url);
+      results.push({ title, url, thumbnail: "", channel: channelName, channelId, description: "", time: "" });
+    }
   }
 
   return results
@@ -6259,7 +6453,9 @@ function parseReaderSearchResults(markdown, channelName, channelId, count, query
 
 async function readerSearchFallback(searchUrl, channelName, channelId, count, query) {
   try {
-    const readerUrl = `https://r.jina.ai/http://${searchUrl}`;
+    const target = String(searchUrl || "").trim();
+    if (!target) return [];
+    const readerUrl = `https://r.jina.ai/${target}`;
     const response = await fetch(readerUrl, {
       headers: FETCH_HEADERS,
       signal: AbortSignal.timeout(8000),
@@ -7162,7 +7358,10 @@ async function searchChannelRecipes(query, allowedChannels = null) {
       parseLekkerSimpel, 4)),
     maybeSearch("ch-24k", () => scrapeOrRest(cfg("ch-24k").baseUrl || "https://www.24kitchen.nl", "24 Kitchen", "ch-24k",
       buildSeedChannelSearchUrl("ch-24k", cfg("ch-24k"), query),
-      parse24Kitchen, 4)),
+      parse24Kitchen, 4).then(async (items) => {
+        if (Array.isArray(items) && items.length) return items;
+        return search24KitchenFac(query, 4, cfg("ch-24k"));
+      })),
 
     // MEDIUM: May be slower, but try anyway
     maybeSearch("ch-lb", () => scrapeOrRest(cfg("ch-lb").baseUrl || "https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb",
@@ -7171,8 +7370,9 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     maybeSearch("ch-ek", () => scrapeOrRest(cfg("ch-ek").baseUrl || "https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek",
       buildSeedChannelSearchUrl("ch-ek", cfg("ch-ek"), query),
       parseWPStandard, 3)),
-    maybeSearch("ch-up", () => wpRestSearch(cfg("ch-up").baseUrl || "https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 4)
-      .then((items) => items.filter((r) => !/\/\d{4}\/\d{2}\//.test(r.url)).slice(0, 4))),
+    maybeSearch("ch-up", () => scrapeOrRest(cfg("ch-up").baseUrl || "https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up",
+      buildSeedChannelSearchUrl("ch-up", cfg("ch-up"), query),
+      parsePaulineSearch, 4)),
     maybeSearch("ch-clf", () => scrapeOrRest(cfg("ch-clf").baseUrl || "https://www.chickslovefood.com", "Chicks Love Food", "ch-clf",
       buildSeedChannelSearchUrl("ch-clf", cfg("ch-clf"), query),
       parseChicksLoveFood, 3)),
@@ -9513,11 +9713,20 @@ const server = http.createServer(async (request, response) => {
             count,
             query
           );
+          if (!results || results.length === 0) {
+            results = await search24KitchenFac(query, count, eff);
+          }
         } else if (channelId === "ch-up") {
-          const meta = {};
-          results = await wpRestSearch(eff.baseUrl || "https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, count, meta);
-          results = (results || []).filter((r) => !/\/\d{4}\/\d{2}\//.test(r.url)).slice(0, count);
-          usedUrl = sanitizeText(meta.usedUrl || "");
+          usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
+          results = await scrapeOrRestPublic(
+            eff.baseUrl || "https://uitpaulineskeuken.nl",
+            "Uit Paulines Keuken",
+            "ch-up",
+            usedUrl,
+            parsePaulineSearch,
+            count,
+            query
+          );
         } else if (channelId === "ch-les") {
           usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
           results = await scrapeOrRestPublic(eff.baseUrl || "https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les", usedUrl, parseLekkerSimpel, count, query);
