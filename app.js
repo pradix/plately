@@ -3139,6 +3139,47 @@ function countActiveFollowedChannels() {
   return seedActive + approvedCustomActive;
 }
 
+function normalizeChannelUrlForCompare(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    const host = u.hostname.replace(/^www\./, "").toLowerCase();
+    const path = (u.pathname || "/").replace(/\/+$/, "") || "/";
+    return { host, path };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeChannelBase(url) {
+  const norm = normalizeChannelUrlForCompare(url);
+  if (!norm) return "";
+  const seg = norm.path.split("/").filter(Boolean)[0] || "";
+  return seg ? `${norm.host}/${seg}` : norm.host;
+}
+
+function channelUrlsMatchByBaseOrPrefix(aUrl, bUrl) {
+  const a = normalizeChannelUrlForCompare(aUrl);
+  const b = normalizeChannelUrlForCompare(bUrl);
+  if (!a || !b) return false;
+  if (a.host !== b.host) return false;
+  if (a.path === b.path) return true;
+  const aBase = normalizeChannelBase(aUrl);
+  const bBase = normalizeChannelBase(bUrl);
+  if (aBase && bBase && aBase === bBase) return true;
+  const aPath = a.path.endsWith("/") ? a.path : `${a.path}/`;
+  const bPath = b.path.endsWith("/") ? b.path : `${b.path}/`;
+  return aPath.startsWith(bPath) || bPath.startsWith(aPath);
+}
+
+function findMatchingSeedChannelForUrl(customUrl) {
+  for (const seed of SEED_CHANNELS) {
+    if (channelUrlsMatchByBaseOrPrefix(customUrl, seed.url)) return seed;
+  }
+  return null;
+}
+
 function normalizeChannelThumbnailUrl(url) {
   const raw = String(url || "").trim().replace(/[\\'"]+$/g, "");
   if (!raw) return "";
@@ -3336,8 +3377,21 @@ async function searchChannels(query) {
   try {
     const channels = getActiveFollowedSeedChannelIds().join(",");
     // Only include approved custom channels in search
-    const followedCustomChannels = state.customChannels.filter((ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved");
-    const customChannelsParam = followedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
+    const followedCustomChannels = state.customChannels.filter(
+      (ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved"
+    );
+    const dedupedCustomChannels = followedCustomChannels.filter((ch) => {
+      const seed = findMatchingSeedChannelForUrl(ch.url);
+      // Only dedupe when the user also follows the matching seed channel.
+      return !(seed && state.followedChannelIds.includes(seed.id));
+    });
+    if (dedupedCustomChannels.length !== followedCustomChannels.length) {
+      console.log("🧹 Deduped custom channels for search:", {
+        before: followedCustomChannels.length,
+        after: dedupedCustomChannels.length,
+      });
+    }
+    const customChannelsParam = dedupedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
     let url = `/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`;
     if (customChannelsParam) url += `&customChannels=${encodeURIComponent(customChannelsParam)}`;
 
@@ -3377,8 +3431,21 @@ async function searchChannelsOnImportScreen(query) {
   try {
     const channels = getActiveFollowedSeedChannelIds().join(",");
     // Only include approved custom channels in search
-    const followedCustomChannels = state.customChannels.filter((ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved");
-    const customChannelsParam = followedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
+    const followedCustomChannels = state.customChannels.filter(
+      (ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved"
+    );
+    const dedupedCustomChannels = followedCustomChannels.filter((ch) => {
+      const seed = findMatchingSeedChannelForUrl(ch.url);
+      // Only dedupe when the user also follows the matching seed channel.
+      return !(seed && state.followedChannelIds.includes(seed.id));
+    });
+    if (dedupedCustomChannels.length !== followedCustomChannels.length) {
+      console.log("🧹 Deduped custom channels for search (import):", {
+        before: followedCustomChannels.length,
+        after: dedupedCustomChannels.length,
+      });
+    }
+    const customChannelsParam = dedupedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
     let url = `/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`;
     if (customChannelsParam) url += `&customChannels=${encodeURIComponent(customChannelsParam)}`;
     const resp = await fetch(url);
@@ -3782,6 +3849,10 @@ function renderChannelSettings() {
       const followed = state.followedChannelIds.includes(ch.id);
       const faviconUrl = getSourceIconUrl(ch.url);
       const status = ch.status || "approved";
+      const seedMatch = findMatchingSeedChannelForUrl(ch.url);
+      const dupeBadgeHtml = seedMatch
+        ? `<span class="channel-dupe-badge">Toegevoegd aan standaard kanalen</span>`
+        : "";
       const statusClass =
         status === "pending" ? "channel-status-badge--pending" :
         status === "rejected" ? "channel-status-badge--rejected" :
@@ -3806,6 +3877,7 @@ function renderChannelSettings() {
           <div class="channel-toggle-info">
             <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
             <span class="channel-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+            ${dupeBadgeHtml}
           </div>
           ${toggleHtml}
           <button class="channel-delete-btn" type="button" aria-label="Verwijder ${escapeHtml(ch.name)}" data-delete-channel="${ch.id}">×</button>

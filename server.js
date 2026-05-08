@@ -8579,9 +8579,23 @@ const server = http.createServer(async (request, response) => {
           })
           .filter((ch) => ch && ch.id && ch.name && ch.url);
 
-        if (customChannelEntries.length) {
+        const enabledSeedIds = Array.isArray(allowedChannels) && allowedChannels.length
+          ? allowedChannels
+          : Object.keys(SEED_CHANNEL_DEFAULTS);
+        const enabledSeedBaseUrls = enabledSeedIds
+          .map((id) => SEED_CHANNEL_DEFAULTS[id]?.baseUrl || "")
+          .filter(Boolean);
+        const dedupedCustomChannelEntries = customChannelEntries.filter((ch) => {
+          // Prefer seed channels when a custom channel points to the same base domain/path.
+          for (const seedBaseUrl of enabledSeedBaseUrls) {
+            if (channelUrlsMatchByBaseOrPrefix(ch.url, seedBaseUrl)) return false;
+          }
+          return true;
+        });
+
+        if (dedupedCustomChannelEntries.length) {
           const customSearches = await Promise.allSettled(
-            customChannelEntries.map((ch) =>
+            dedupedCustomChannelEntries.map((ch) =>
               (() => {
                 const eff = getEffectiveCustomChannelConfig({ channelId: ch.id, url: ch.url }, channelOverrides);
                 const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
