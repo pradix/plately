@@ -582,6 +582,39 @@ function sanitizePushSubscription(subscription) {
   return { endpoint, keys: { p256dh, auth } };
 }
 
+const PUSH_CATEGORIES = Object.freeze({
+  features: "Nieuwe functies",
+  ah: "AH & boodschappen",
+  cookmode: "Kookstand tips",
+});
+
+function defaultPushPrefs() {
+  return {
+    categories: {
+      features: true,
+      ah: false,
+      cookmode: false,
+    },
+    triggers: {
+      ahBasketReady: false,
+      ahBonus: false,
+    },
+  };
+}
+
+function sanitizePushPrefs(input) {
+  const raw = input && typeof input === "object" ? input : {};
+  const rawCats = raw.categories && typeof raw.categories === "object" ? raw.categories : {};
+  const rawTriggers = raw.triggers && typeof raw.triggers === "object" ? raw.triggers : {};
+  const out = defaultPushPrefs();
+  out.categories.features = Boolean(rawCats.features);
+  out.categories.ah = Boolean(rawCats.ah);
+  out.categories.cookmode = Boolean(rawCats.cookmode);
+  out.triggers.ahBasketReady = Boolean(rawTriggers.ahBasketReady);
+  out.triggers.ahBonus = Boolean(rawTriggers.ahBonus);
+  return out;
+}
+
 function ensureAnonIdCookie(request, response) {
   const cookies = parseCookies(request.headers.cookie);
   let anon = String(cookies.plately_anon || "").trim();
@@ -632,6 +665,10 @@ async function upsertJsonPushSubscription(identity, subscription) {
     email: identity.email || "",
     endpoint,
     keys: subscription.keys,
+    prefs:
+      existingIndex >= 0 && db.pushSubscriptions[existingIndex]?.prefs
+        ? sanitizePushPrefs(db.pushSubscriptions[existingIndex].prefs)
+        : defaultPushPrefs(),
     createdAt: existingIndex >= 0 ? (db.pushSubscriptions[existingIndex].createdAt || nowIso) : nowIso,
     updatedAt: nowIso,
   };
@@ -642,6 +679,22 @@ async function upsertJsonPushSubscription(identity, subscription) {
   }
   await persistDatabase();
   return next;
+}
+
+async function updateJsonPushSubscriptionPrefsByEndpoint(endpoint, prefs) {
+  const db = await loadDatabase();
+  if (!Array.isArray(db.pushSubscriptions) || !endpoint) return null;
+  const idx = db.pushSubscriptions.findIndex((it) => String(it?.endpoint || "") === endpoint);
+  if (idx < 0) return null;
+  const nowIso = new Date().toISOString();
+  const prev = db.pushSubscriptions[idx] || {};
+  db.pushSubscriptions[idx] = {
+    ...prev,
+    prefs: sanitizePushPrefs(prefs),
+    updatedAt: nowIso,
+  };
+  await persistDatabase();
+  return db.pushSubscriptions[idx];
 }
 
 async function removeJsonPushSubscriptionByEndpoint(endpoint) {
@@ -662,13 +715,14 @@ async function upsertPostgresPushSubscription(identity, subscription) {
   const nowIso = new Date().toISOString();
   const endpoint = subscription.endpoint;
   const keysJson = JSON.stringify(subscription.keys);
+  const prefsJson = JSON.stringify(defaultPushPrefs());
   const userId = identity.userId || null;
   const email = identity.email || null;
 
   const result = await pool.query(
     `
-      INSERT INTO plately_push_subscriptions (id, user_id, email, endpoint, keys, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5::jsonb, NOW(), NOW())
+      INSERT INTO plately_push_subscriptions (id, user_id, email, endpoint, keys, prefs, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, NOW(), NOW())
       ON CONFLICT (endpoint)
       DO UPDATE SET
         user_id = EXCLUDED.user_id,
@@ -677,9 +731,20 @@ async function upsertPostgresPushSubscription(identity, subscription) {
         updated_at = NOW()
       RETURNING *
     `,
-    [generateId("pushsub"), userId, email, endpoint, keysJson]
+    [generateId("pushsub"), userId, email, endpoint, keysJson, prefsJson]
   );
   return { ...result.rows[0], updatedAt: nowIso };
+}
+
+async function updatePostgresPushSubscriptionPrefsByEndpoint(endpoint, prefs) {
+  await ensurePostgresSchema();
+  const pool = await getPostgresPool();
+  const prefsJson = JSON.stringify(sanitizePushPrefs(prefs));
+  const res = await pool.query(
+    `UPDATE plately_push_subscriptions SET prefs = $2::jsonb, updated_at = NOW() WHERE endpoint = $1 RETURNING *`,
+    [endpoint, prefsJson]
+  );
+  return res.rows?.[0] || null;
 }
 
 async function removePostgresPushSubscriptionByEndpoint(endpoint) {
@@ -704,12 +769,179 @@ async function listAllPushSubscriptions() {
   return list.map((r) => ({ endpoint: r.endpoint, keys: r.keys }));
 }
 
+async function listPushSubscriptionsWithMeta() {
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const res = await pool.query(`
+      SELECT s.endpoint, s.keys, s.prefs, s.user_id, u.app_state
+      FROM plately_push_subscriptions s
+      LEFT JOIN plately_users u ON u.id = s.user_id
+    `);
+    return res.rows.map((r) => ({
+      endpoint: r.endpoint,
+      keys: r.keys,
+      prefs: sanitizePushPrefs(r.prefs),
+      userId: String(r.user_id || ""),
+      userAppState: r.app_state && typeof r.app_state === "object" ? r.app_state : {},
+    }));
+  }
+  const db = await loadDatabase();
+  const subs = Array.isArray(db.pushSubscriptions) ? db.pushSubscriptions : [];
+  return subs.map((s) => ({
+    endpoint: s.endpoint,
+    keys: s.keys,
+    prefs: sanitizePushPrefs(s.prefs),
+    userId: String(s.userId || ""),
+    userAppState: db.users?.[String(s.userId || "")] || {},
+  }));
+}
+
+async function listPushSubscriptionsForUser(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid) return [];
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const res = await pool.query(`SELECT endpoint, keys, prefs FROM plately_push_subscriptions WHERE user_id = $1`, [uid]);
+    return res.rows.map((r) => ({ endpoint: r.endpoint, keys: r.keys, prefs: sanitizePushPrefs(r.prefs) }));
+  }
+  const db = await loadDatabase();
+  const subs = Array.isArray(db.pushSubscriptions) ? db.pushSubscriptions : [];
+  return subs
+    .filter((s) => String(s?.userId || "") === uid)
+    .map((s) => ({ endpoint: s.endpoint, keys: s.keys, prefs: sanitizePushPrefs(s.prefs) }));
+}
+
+function pickFavoriteSupermarketFromAppState(appState) {
+  const profile = appState?.profile && typeof appState.profile === "object" ? appState.profile : {};
+  return String(profile.favoriteSupermarket || "").toLowerCase().trim();
+}
+
+function isCategoryEnabledForPrefs(prefs, categoryKey) {
+  const p = sanitizePushPrefs(prefs);
+  const key = String(categoryKey || "").trim();
+  if (key === "features" || key === "ah" || key === "cookmode") {
+    return Boolean(p.categories[key]);
+  }
+  return false;
+}
+
+async function createAnnouncement({ title, body, url, category, imageUrl }) {
+  const nowIso = new Date().toISOString();
+  const id = generateId("ann");
+  const row = {
+    id,
+    title: String(title || "").slice(0, 120),
+    body: String(body || "").slice(0, 280),
+    url: String(url || "").slice(0, 500),
+    imageUrl: String(imageUrl || "").slice(0, 500),
+    category: String(category || "").slice(0, 32),
+    createdAt: nowIso,
+    metrics: { matched: 0, sent: 0, failed: 0, removed: 0 },
+  };
+
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    await pool.query(
+      `
+        INSERT INTO plately_announcements (id, title, body, url, image_url, category, matched_count, sent_count, failed_count, removed_count, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, 0, 0, 0, 0, NOW())
+      `,
+      [row.id, row.title, row.body, row.url, row.imageUrl, row.category]
+    );
+    return row;
+  }
+
+  const db = await loadDatabase();
+  if (!Array.isArray(db.announcements)) {
+    db.announcements = [];
+  }
+  db.announcements.unshift(row);
+  db.announcements = db.announcements.slice(0, 200);
+  await persistDatabase();
+  return row;
+}
+
+async function updateAnnouncementMetrics(id, metrics) {
+  const safeId = String(id || "").trim();
+  if (!safeId) return;
+  const m = metrics && typeof metrics === "object" ? metrics : {};
+  const next = {
+    matched: Number(m.matched || 0),
+    sent: Number(m.sent || 0),
+    failed: Number(m.failed || 0),
+    removed: Number(m.removed || 0),
+  };
+
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    await pool.query(
+      `
+        UPDATE plately_announcements
+        SET matched_count = $2, sent_count = $3, failed_count = $4, removed_count = $5
+        WHERE id = $1
+      `,
+      [safeId, next.matched, next.sent, next.failed, next.removed]
+    );
+    return;
+  }
+
+  const db = await loadDatabase();
+  const list = Array.isArray(db.announcements) ? db.announcements : [];
+  const idx = list.findIndex((a) => String(a?.id || "") === safeId);
+  if (idx < 0) return;
+  list[idx] = { ...list[idx], metrics: next };
+  db.announcements = list;
+  await persistDatabase();
+}
+
+async function getAnnouncementById(id) {
+  const safeId = String(id || "").trim();
+  if (!safeId) return null;
+
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const res = await pool.query(
+      `SELECT id, title, body, url, image_url, category, matched_count, sent_count, failed_count, removed_count, created_at
+       FROM plately_announcements
+       WHERE id = $1 LIMIT 1`,
+      [safeId]
+    );
+    const row = res.rows?.[0];
+    if (!row) return null;
+    return {
+      id: row.id,
+      title: row.title,
+      body: row.body,
+      url: row.url,
+      imageUrl: row.image_url || "",
+      category: row.category,
+      metrics: {
+        matched: Number(row.matched_count || 0),
+        sent: Number(row.sent_count || 0),
+        failed: Number(row.failed_count || 0),
+        removed: Number(row.removed_count || 0),
+      },
+      createdAt: row.created_at ? new Date(row.created_at).toISOString() : "",
+    };
+  }
+
+  const db = await loadDatabase();
+  const list = Array.isArray(db.announcements) ? db.announcements : [];
+  return list.find((a) => String(a?.id || "") === safeId) || null;
+}
+
 function createEmptyDatabase() {
   return {
     users: {},
     sessions: {},
     authSessions: {}, // Dev-only: simple auth token -> {email, userId} mapping
     pushSubscriptions: [],
+    announcements: [],
   };
 }
 
@@ -916,9 +1148,38 @@ async function ensurePostgresSchema() {
           email TEXT,
           endpoint TEXT UNIQUE NOT NULL,
           keys JSONB NOT NULL,
+          prefs JSONB NOT NULL DEFAULT '{}'::jsonb,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+      `);
+      await pool.query(`
+        ALTER TABLE plately_push_subscriptions
+        ADD COLUMN IF NOT EXISTS prefs JSONB NOT NULL DEFAULT '{}'::jsonb;
+      `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS plately_announcements (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          body TEXT NOT NULL,
+          url TEXT NOT NULL,
+          image_url TEXT NOT NULL DEFAULT '',
+          category TEXT NOT NULL,
+          matched_count INT NOT NULL DEFAULT 0,
+          sent_count INT NOT NULL DEFAULT 0,
+          failed_count INT NOT NULL DEFAULT 0,
+          removed_count INT NOT NULL DEFAULT 0,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await pool.query(`ALTER TABLE plately_announcements ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT '';`);
+      await pool.query(`ALTER TABLE plately_announcements ADD COLUMN IF NOT EXISTS matched_count INT NOT NULL DEFAULT 0;`);
+      await pool.query(`ALTER TABLE plately_announcements ADD COLUMN IF NOT EXISTS sent_count INT NOT NULL DEFAULT 0;`);
+      await pool.query(`ALTER TABLE plately_announcements ADD COLUMN IF NOT EXISTS failed_count INT NOT NULL DEFAULT 0;`);
+      await pool.query(`ALTER TABLE plately_announcements ADD COLUMN IF NOT EXISTS removed_count INT NOT NULL DEFAULT 0;`);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_plately_announcements_created_at
+        ON plately_announcements (created_at DESC);
       `);
       await pool.query(`
         CREATE INDEX IF NOT EXISTS idx_plately_push_subscriptions_user_id
@@ -9184,6 +9445,90 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/push/preferences" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const endpoint = String(body?.endpoint || "").trim();
+      const prefs = sanitizePushPrefs(body?.prefs || body?.preferences || {});
+      if (!endpoint) {
+        throw new HttpError(400, "endpoint is verplicht.");
+      }
+      const updated = isPostgresEnabled()
+        ? await updatePostgresPushSubscriptionPrefsByEndpoint(endpoint, prefs)
+        : await updateJsonPushSubscriptionPrefsByEndpoint(endpoint, prefs);
+      if (!updated) {
+        throw new HttpError(404, "Subscription niet gevonden.");
+      }
+      sendJson(response, 200, { ok: true });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/push/trigger" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const identity = await resolvePushIdentity(request, response);
+      const type = sanitizeText(body?.type || "").slice(0, 64);
+      const url = sanitizeText(body?.url || "").slice(0, 500) || "/?new=1";
+      const hasBonus = Boolean(body?.hasBonus);
+
+      if (!type) {
+        throw new HttpError(400, "type is verplicht.");
+      }
+
+      const subs = await listPushSubscriptionsForUser(identity.userId);
+      if (!subs.length) {
+        sendJson(response, 200, { ok: true, sent: 0, skipped: true });
+        return;
+      }
+
+      const webPush = ensureWebPushConfigured();
+      const endpointsToRemove = new Set();
+      let sent = 0;
+      let failed = 0;
+
+      const shouldSend = (prefs) => {
+        const p = sanitizePushPrefs(prefs);
+        if (!p.categories.ah) return false;
+        if (type === "ah_basket_ready") return Boolean(p.triggers.ahBasketReady);
+        if (type === "ah_bonus") return Boolean(hasBonus && p.triggers.ahBonus);
+        return false;
+      };
+
+      const targets = subs.filter((s) => shouldSend(s.prefs));
+      if (!targets.length) {
+        sendJson(response, 200, { ok: true, sent: 0, skipped: true });
+        return;
+      }
+
+      const title = type === "ah_bonus" ? "Bonus items in je lijst" : "Boodschappenlijst klaar";
+      const msg = type === "ah_bonus" ? "Er staan bonus aanbiedingen in je AH lijst." : "Je AH boodschappenlijst staat klaar om te openen.";
+      const payload = JSON.stringify({ title, body: msg, url, category: "ah", triggerType: type });
+
+      for (const sub of targets) {
+        try {
+          await webPush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload, { TTL: 60 * 60 * 6 });
+          sent += 1;
+        } catch (err) {
+          failed += 1;
+          const status = Number(err?.statusCode || err?.status || 0);
+          if (status === 404 || status === 410) endpointsToRemove.add(String(sub?.endpoint || ""));
+        }
+      }
+
+      if (endpointsToRemove.size) {
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          await pool.query(`DELETE FROM plately_push_subscriptions WHERE endpoint = ANY($1::text[])`, [
+            Array.from(endpointsToRemove),
+          ]);
+        } else {
+          for (const endpoint of endpointsToRemove) await removeJsonPushSubscriptionByEndpoint(endpoint);
+        }
+      }
+
+      sendJson(response, 200, { ok: true, sent, failed, removed: endpointsToRemove.size });
+      return;
+    }
+
     if (requestUrl.pathname === "/api/push/unsubscribe" && request.method === "POST") {
       const body = await readRequestBody(request);
       const endpoint = String(body?.endpoint || body?.subscription?.endpoint || "").trim();
@@ -9194,6 +9539,16 @@ const server = http.createServer(async (request, response) => {
         ? await removePostgresPushSubscriptionByEndpoint(endpoint)
         : await removeJsonPushSubscriptionByEndpoint(endpoint);
       sendJson(response, 200, { ok: true, removed });
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith("/api/announce/") && request.method === "GET") {
+      const id = decodeURIComponent(requestUrl.pathname.slice("/api/announce/".length) || "").trim();
+      const announcement = await getAnnouncementById(id);
+      if (!announcement) {
+        throw new HttpError(404, "Aankondiging niet gevonden.");
+      }
+      sendJson(response, 200, { ok: true, announcement });
       return;
     }
 
@@ -9295,32 +9650,50 @@ const server = http.createServer(async (request, response) => {
       const title = sanitizeText(body?.title || "").slice(0, 120);
       const message = sanitizeText(body?.body || "").slice(0, 280);
       const url = sanitizeText(body?.url || "").slice(0, 500);
+      const imageUrl = sanitizeText(body?.imageUrl || body?.image || "").slice(0, 500);
+      const category = sanitizeText(body?.category || "features").slice(0, 32);
+      const segment = body?.segment && typeof body.segment === "object" ? body.segment : {};
       if (!title || !message) {
         throw new HttpError(400, "title en body zijn verplicht.");
       }
+      if (!PUSH_CATEGORIES[category]) {
+        throw new HttpError(400, "Ongeldige category.");
+      }
 
       const webPush = ensureWebPushConfigured();
-      const payload = JSON.stringify({ title, body: message, url: url || "/" });
-      const subscriptions = await listAllPushSubscriptions();
+      const announcement = await createAnnouncement({ title, body: message, url: url || "", category, imageUrl });
+      const deepLink = `/?announce=${encodeURIComponent(announcement.id)}`;
+      const effectiveUrl = url || deepLink;
+      const payload = JSON.stringify({ title, body: message, url: effectiveUrl, imageUrl: imageUrl || undefined, announcementId: announcement.id });
+      const subscriptions = await listPushSubscriptionsWithMeta();
+      const onlyAh = Boolean(segment?.onlyFavoriteSupermarketAh);
+      const filtered = subscriptions.filter((sub) => {
+        if (!isCategoryEnabledForPrefs(sub.prefs, category)) return false;
+        if (onlyAh) {
+          const fav = pickFavoriteSupermarketFromAppState(sub.userAppState);
+          if (fav !== "ah") return false;
+        }
+        return true;
+      });
 
       const endpointsToRemove = new Set();
       let sent = 0;
       let failed = 0;
 
       const concurrency = 10;
-      const queue = subscriptions.slice();
+      const queue = filtered.slice();
       const workers = Array.from({ length: Math.min(concurrency, queue.length || 1) }).map(async () => {
         while (queue.length) {
           const sub = queue.shift();
           if (!sub) return;
           try {
-            await webPush.sendNotification(sub, payload, { TTL: 60 * 60 * 24 });
+            await webPush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload, { TTL: 60 * 60 * 24 });
             sent += 1;
           } catch (err) {
             failed += 1;
             const status = Number(err?.statusCode || err?.status || 0);
             if (status === 404 || status === 410) {
-              endpointsToRemove.add(String(sub.endpoint || ""));
+              endpointsToRemove.add(String(sub?.endpoint || ""));
             }
           }
         }
@@ -9341,7 +9714,23 @@ const server = http.createServer(async (request, response) => {
         }
       }
 
-      sendJson(response, 200, { ok: true, sent, failed, removed: endpointsToRemove.size });
+      await updateAnnouncementMetrics(announcement.id, {
+        matched: filtered.length,
+        sent,
+        failed,
+        removed: endpointsToRemove.size,
+      });
+
+      sendJson(response, 200, {
+        ok: true,
+        sent,
+        failed,
+        removed: endpointsToRemove.size,
+        category,
+        matched: filtered.length,
+        announcementId: announcement.id,
+        deepLink,
+      });
       return;
     }
 

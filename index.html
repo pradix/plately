@@ -575,16 +575,46 @@
           <!-- NOTIFICATIES section -->
           <p class="profile2-section-label">NOTIFICATIES</p>
           <div class="profile2-card">
-            <div class="profile2-row" id="featurePushRow" role="group" aria-label="Meldingen over nieuwe functies">
+            <div class="profile2-row" id="featurePushRow" role="group" aria-label="Push meldingen">
               <span class="profile2-row__icon" style="background:#e0f2fe">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#0369a1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/>
                   <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
                 </svg>
               </span>
-              <span class="profile2-row__label">Meldingen over nieuwe functies</span>
+              <span class="profile2-row__label">Push meldingen</span>
               <span class="profile2-row__meta" id="featurePushMeta"></span>
               <span class="toggle-switch" id="featurePushToggle" role="switch" aria-checked="false" tabindex="0"></span>
+            </div>
+            <div class="profile2-row-divider"></div>
+            <div class="profile2-row profile2-row--sub" id="pushCatFeaturesRow" role="group" aria-label="Nieuwe functies">
+              <span class="profile2-row__label">Nieuwe functies</span>
+              <span class="profile2-row__meta" id="pushCatFeaturesMeta"></span>
+              <span class="toggle-switch" id="pushCatFeaturesToggle" role="switch" aria-checked="true" tabindex="0"></span>
+            </div>
+            <div class="profile2-row-divider"></div>
+            <div class="profile2-row profile2-row--sub" id="pushCatAhRow" role="group" aria-label="AH &amp; boodschappen">
+              <span class="profile2-row__label">AH &amp; boodschappen</span>
+              <span class="profile2-row__meta" id="pushCatAhMeta"></span>
+              <span class="toggle-switch" id="pushCatAhToggle" role="switch" aria-checked="false" tabindex="0"></span>
+            </div>
+            <div class="profile2-row-divider"></div>
+            <div class="profile2-row profile2-row--sub2" id="pushTrigAhBasketReadyRow" role="group" aria-label="AH lijst klaar">
+              <span class="profile2-row__label">Stuur melding als lijst klaar is</span>
+              <span class="profile2-row__meta" id="pushTrigAhBasketReadyMeta"></span>
+              <span class="toggle-switch" id="pushTrigAhBasketReadyToggle" role="switch" aria-checked="false" tabindex="0"></span>
+            </div>
+            <div class="profile2-row-divider"></div>
+            <div class="profile2-row profile2-row--sub2" id="pushTrigAhBonusRow" role="group" aria-label="AH bonus">
+              <span class="profile2-row__label">Stuur melding bij bonus items</span>
+              <span class="profile2-row__meta" id="pushTrigAhBonusMeta"></span>
+              <span class="toggle-switch" id="pushTrigAhBonusToggle" role="switch" aria-checked="false" tabindex="0"></span>
+            </div>
+            <div class="profile2-row-divider"></div>
+            <div class="profile2-row profile2-row--sub" id="pushCatCookmodeRow" role="group" aria-label="Kookstand tips">
+              <span class="profile2-row__label">Kookstand tips</span>
+              <span class="profile2-row__meta" id="pushCatCookmodeMeta"></span>
+              <span class="toggle-switch" id="pushCatCookmodeToggle" role="switch" aria-checked="false" tabindex="0"></span>
             </div>
           </div>
 
@@ -1111,14 +1141,25 @@
               </div>
             </div>
 
-            <p class="profile2-section-label">📣 PUSH — Nieuwe functies</p>
+            <p class="profile2-section-label">📣 PUSH — Aankondiging</p>
             <div class="profile2-card">
               <div style="padding:14px 16px">
                 <div id="adminPushAnnounceStatus" style="color:#989188;font-size:0.9rem;margin-bottom:10px">Stuur een melding naar alle abonnees.</div>
                 <div style="display:grid;gap:10px">
+                  <select id="adminPushAnnounceCategory" aria-label="Categorie" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;background:#fff">
+                    <option value="features">Nieuwe functies</option>
+                    <option value="ah">AH &amp; boodschappen</option>
+                    <option value="cookmode">Kookstand tips</option>
+                  </select>
                   <input id="adminPushAnnounceTitle" type="text" placeholder="Titel" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem" />
                   <textarea id="adminPushAnnounceBody" rows="3" placeholder="Bericht" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem;resize:vertical"></textarea>
-                  <input id="adminPushAnnounceUrl" type="text" placeholder="Deep link (optioneel, bijv. /?new=1)" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem" />
+                  <input id="adminPushAnnounceUrl" type="text" placeholder="Deep link (optioneel, leeg = automatisch)" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem" />
+                  <input id="adminPushAnnounceImageUrl" type="text" placeholder="Afbeelding URL (optioneel)" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem" />
+                  <label style="display:flex;gap:10px;align-items:center;color:#6b6258;font-size:0.9rem">
+                    <input id="adminPushAnnounceSegmentAh" type="checkbox" />
+                    Alleen gebruikers met favoriete supermarkt: AH
+                  </label>
+                  <div id="adminPushAnnounceDeepLink" style="color:#989188;font-size:0.9rem"></div>
                   <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
                     <button class="primary-button" id="adminPushAnnounceBtn" type="button" style="white-space:nowrap">Verstuur</button>
                   </div>
@@ -1184,10 +1225,13 @@
 
       <nav class="bottom-nav" aria-label="Hoofdnavigatie">
         <button type="button" class="nav-item nav-item--active" data-view="home">
-          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9.5Z"/>
-            <path d="M9 21V12h6v9"/>
-          </svg>
+          <span class="nav-icon-wrap">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9.5Z"/>
+              <path d="M9 21V12h6v9"/>
+            </svg>
+            <span class="nav-badge nav-badge--dot" id="homeAnnounceBadge" aria-label="nieuw"></span>
+          </span>
           <span class="nav-label" data-i18n="nav.home">Home</span>
         </button>
         <button type="button" class="nav-item" data-view="cookbooks">
@@ -1212,6 +1256,7 @@
         <button type="button" class="nav-item nav-item--profile" data-view="settings" aria-label="Profiel">
           <div class="profile2-avatar profile2-avatar--nav" id="profileAvatarDisplay">
             <img src="assets/profile-avatar.svg" alt="" class="profile2-avatar__img" aria-hidden="true" />
+            <span class="nav-badge nav-badge--dot nav-badge--avatar" id="profileAnnounceBadge" aria-label="nieuw"></span>
           </div>
         </button>
       </nav>

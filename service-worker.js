@@ -18,7 +18,7 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  const fallback = { title: "Plately", body: "", url: "/" };
+  const fallback = { title: "Plately", body: "", url: "/", imageUrl: "" };
   let data = fallback;
   try {
     if (event?.data) {
@@ -31,12 +31,18 @@ self.addEventListener("push", (event) => {
   const title = String(data.title || fallback.title);
   const body = String(data.body || "");
   const url = String(data.url || "/");
+  const imageUrl = String(data.imageUrl || "");
 
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
       icon: "/assets/icon-192.png",
       badge: "/assets/icon-192.png",
+      image: imageUrl || undefined,
+      actions: [
+        { action: "open", title: "Open" },
+        { action: "view", title: "Bekijk nieuw" },
+      ],
       data: { url },
     })
   );
@@ -45,6 +51,7 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification?.close?.();
   const url = event?.notification?.data?.url || "/";
+  const action = String(event?.action || "");
 
   event.waitUntil(
     (async () => {
@@ -62,7 +69,9 @@ self.addEventListener("notificationclick", (event) => {
           // keep searching
         }
       }
-      await self.clients.openWindow(url);
+      if (action === "open" || action === "view" || !action) {
+        await self.clients.openWindow(url);
+      }
     })()
   );
 });

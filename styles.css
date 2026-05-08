@@ -2995,6 +2995,68 @@ img { display: block; max-width: 100%; }
 
 .nav-badge:not(:empty) { display: flex; }
 
+/* Nav dot badge (announcements) */
+.nav-badge--dot {
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  border-radius: 999px;
+  background: #e04458;
+  border: 2px solid rgba(255,255,255,0.95);
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 160ms ease, transform 160ms ease;
+  pointer-events: none;
+}
+
+.nav-badge--visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Announcement modal */
+.announce-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 9999;
+}
+
+.announce-modal {
+  width: min(420px, 100%);
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.24);
+  padding: 16px 16px 14px;
+}
+
+.announce-modal__title {
+  margin: 2px 0 8px;
+  font-size: 1.05rem;
+  color: #2f2d2a;
+}
+
+.announce-modal__body {
+  margin: 0 0 14px;
+  color: #5e564e;
+  line-height: 1.45;
+}
+
+.announce-modal__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 /* ── Kanalen row ── */
 .channel-row {
   display: flex;
@@ -3623,6 +3685,24 @@ img { display: block; max-width: 100%; }
   font-size: 0.98rem;
   font-weight: 500;
   color: #1a1a1a;
+}
+
+.profile2-row.profile2-row--sub,
+.profile2-row.profile2-row--sub2 {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.profile2-row.profile2-row--sub .profile2-row__label {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #2f2d2a;
+}
+
+.profile2-row.profile2-row--sub2 .profile2-row__label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #6b6258;
 }
 
 .profile2-row--danger .profile2-row__label {

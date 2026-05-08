@@ -533,6 +533,13 @@ const state = {
     permission: "default",
     subscribed: false,
     refreshing: false,
+    prefs: {
+      categories: { features: true, ah: false, cookmode: false },
+    },
+  },
+  announce: {
+    pending: null, // { id?, title?, body?, url? }
+    unseen: false,
   },
 };
 
@@ -835,6 +842,23 @@ const logoutButton = document.getElementById("logoutButton");
 const featurePushRow = document.getElementById("featurePushRow");
 const featurePushToggle = document.getElementById("featurePushToggle");
 const featurePushMeta = document.getElementById("featurePushMeta");
+const pushCatFeaturesRow = document.getElementById("pushCatFeaturesRow");
+const pushCatFeaturesToggle = document.getElementById("pushCatFeaturesToggle");
+const pushCatFeaturesMeta = document.getElementById("pushCatFeaturesMeta");
+const pushCatAhRow = document.getElementById("pushCatAhRow");
+const pushCatAhToggle = document.getElementById("pushCatAhToggle");
+const pushCatAhMeta = document.getElementById("pushCatAhMeta");
+const pushCatCookmodeRow = document.getElementById("pushCatCookmodeRow");
+const pushCatCookmodeToggle = document.getElementById("pushCatCookmodeToggle");
+const pushCatCookmodeMeta = document.getElementById("pushCatCookmodeMeta");
+const pushTrigAhBasketReadyRow = document.getElementById("pushTrigAhBasketReadyRow");
+const pushTrigAhBasketReadyToggle = document.getElementById("pushTrigAhBasketReadyToggle");
+const pushTrigAhBasketReadyMeta = document.getElementById("pushTrigAhBasketReadyMeta");
+const pushTrigAhBonusRow = document.getElementById("pushTrigAhBonusRow");
+const pushTrigAhBonusToggle = document.getElementById("pushTrigAhBonusToggle");
+const pushTrigAhBonusMeta = document.getElementById("pushTrigAhBonusMeta");
+const homeAnnounceBadge = document.getElementById("homeAnnounceBadge");
+const profileAnnounceBadge = document.getElementById("profileAnnounceBadge");
 const brandHomeButtons = [...document.querySelectorAll("[data-home-link]")];
 const importScreenForm = document.getElementById("importScreenForm");
 const importScreenUrl = document.getElementById("importScreenUrl");
@@ -6856,6 +6880,36 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
     };
     openBasketModal(state.basketPreview);
     showToast(`Selectie klaar voor ${storeName}.`);
+
+    // Optional push trigger (per-user) when basket is ready.
+    try {
+      const prefs = sanitizePushPrefsClient(state.push.prefs || getDefaultPushPrefs());
+      const hasBonus = Boolean(payload?.meta?.appliedBonuses?.length);
+      if (prefs.categories.ah && prefs.triggers.ahBasketReady) {
+        fetchJson(`${state.apiBase}/api/push/trigger`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "ah_basket_ready", url: "/?new=1", hasBonus }),
+        }).catch(() => {});
+      }
+      if (prefs.categories.ah && prefs.triggers.ahBonus && hasBonus) {
+        const dayKey = new Date().toISOString().slice(0, 10);
+        const seenKey = `plately-bonus-notified-${dayKey}`;
+        const already = (() => {
+          try { return localStorage.getItem(seenKey) === "1"; } catch { return false; }
+        })();
+        if (!already) {
+          try { localStorage.setItem(seenKey, "1"); } catch {}
+          fetchJson(`${state.apiBase}/api/push/trigger`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "ah_bonus", url: "/?new=1", hasBonus: true }),
+          }).catch(() => {});
+        }
+      }
+    } catch {
+      // ignore
+    }
   } catch {
     showToast(`Kon ${storeName} niet voorbereiden.`);
   } finally {
@@ -7594,12 +7648,17 @@ async function renderAdminScreen() {
 
   // Push announcement (Nieuwe functies)
   const pushBtn = document.getElementById("adminPushAnnounceBtn");
+  const pushCategory = document.getElementById("adminPushAnnounceCategory");
   const pushTitle = document.getElementById("adminPushAnnounceTitle");
   const pushBody = document.getElementById("adminPushAnnounceBody");
   const pushUrl = document.getElementById("adminPushAnnounceUrl");
+  const pushImage = document.getElementById("adminPushAnnounceImageUrl");
+  const pushSegAh = document.getElementById("adminPushAnnounceSegmentAh");
   const pushStatus = document.getElementById("adminPushAnnounceStatus");
+  const pushDeepLink = document.getElementById("adminPushAnnounceDeepLink");
   let pushConfiguredOk = false;
   if (pushStatus) pushStatus.textContent = "";
+  if (pushDeepLink) pushDeepLink.textContent = "";
   if (pushBtn) {
     try {
       const keyRes = await fetchJson(`${state.apiBase}/api/push/vapid-public-key`, { method: "GET" });
@@ -7620,24 +7679,38 @@ async function renderAdminScreen() {
   }
   if (pushBtn) {
     pushBtn.onclick = async () => {
+      const category = String(pushCategory?.value || "features").trim();
       const title = String(pushTitle?.value || "").trim();
       const body = String(pushBody?.value || "").trim();
       const url = String(pushUrl?.value || "").trim();
+      const imageUrl = String(pushImage?.value || "").trim();
+      const onlyAh = Boolean(pushSegAh?.checked);
       if (!title || !body) {
         if (pushStatus) pushStatus.textContent = "Titel en bericht zijn verplicht.";
         return;
       }
       if (pushStatus) pushStatus.textContent = "Versturen…";
+      if (pushDeepLink) pushDeepLink.textContent = "";
       pushBtn.disabled = true;
       try {
         const res = await fetchJson(`${state.apiBase}/api/admin/push/announce`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, body, url: url || undefined }),
+          body: JSON.stringify({
+            title,
+            body,
+            url: url || undefined,
+            imageUrl: imageUrl || undefined,
+            category,
+            segment: { onlyFavoriteSupermarketAh: onlyAh },
+          }),
         });
         const sent = Number(res?.sent || 0);
         const failed = Number(res?.failed || 0);
-        if (pushStatus) pushStatus.textContent = `✅ Verstuurd: ${sent} · Mislukt: ${failed}`;
+        const matched = Number(res?.matched || 0);
+        if (pushStatus) pushStatus.textContent = `✅ Verstuurd: ${sent}/${matched} · Mislukt: ${failed}`;
+        const deepLink = String(res?.deepLink || "");
+        if (pushDeepLink && deepLink) pushDeepLink.textContent = `Deep link: ${deepLink}`;
       } catch (err) {
         if (pushStatus) pushStatus.textContent = `❌ Mislukt: ${err.message}`;
       } finally {
@@ -7955,6 +8028,125 @@ async function refreshChannelStatusesFromServer() {
   }
 }
 
+const ANNOUNCE_SEEN_KEY = "plately-announcements-seen";
+
+function getSeenAnnouncementIds() {
+  try {
+    const raw = localStorage.getItem(ANNOUNCE_SEEN_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.map((x) => String(x || "")).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function markAnnouncementSeen(id) {
+  const safeId = String(id || "").trim();
+  if (!safeId) return;
+  const ids = new Set(getSeenAnnouncementIds());
+  ids.add(safeId);
+  try {
+    localStorage.setItem(ANNOUNCE_SEEN_KEY, JSON.stringify(Array.from(ids).slice(-200)));
+  } catch {
+    // ignore
+  }
+}
+
+function setAnnounceBadgeVisible(visible) {
+  const on = Boolean(visible);
+  if (homeAnnounceBadge) homeAnnounceBadge.classList.toggle("nav-badge--visible", on);
+  if (profileAnnounceBadge) profileAnnounceBadge.classList.toggle("nav-badge--visible", on);
+}
+
+function showAnnouncementModal(announcement) {
+  const a = announcement && typeof announcement === "object" ? announcement : {};
+  const title = String(a.title || "Nieuw");
+  const body = String(a.body || "");
+  const id = String(a.id || "");
+  const url = String(a.url || "");
+
+  state.announce.unseen = true;
+  setAnnounceBadgeVisible(true);
+
+  const overlay = document.createElement("div");
+  overlay.className = "announce-modal-overlay";
+  overlay.innerHTML = `
+    <div class="announce-modal" role="dialog" aria-modal="true" aria-label="Nieuw">
+      <h3 class="announce-modal__title"></h3>
+      <p class="announce-modal__body"></p>
+      <div class="announce-modal__actions">
+        ${url ? `<button class="primary-button" type="button" data-announce-open>Open</button>` : ""}
+        <button class="secondary-button" type="button" data-announce-dismiss>Sluiten</button>
+      </div>
+    </div>
+  `;
+  const titleEl = overlay.querySelector(".announce-modal__title");
+  const bodyEl = overlay.querySelector(".announce-modal__body");
+  if (titleEl) titleEl.textContent = title;
+  if (bodyEl) bodyEl.textContent = body;
+
+  const cleanup = () => {
+    overlay.remove();
+    if (id) markAnnouncementSeen(id);
+    state.announce.unseen = false;
+    setAnnounceBadgeVisible(false);
+  };
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) cleanup();
+  });
+  overlay.querySelector("[data-announce-dismiss]")?.addEventListener("click", cleanup);
+  overlay.querySelector("[data-announce-open]")?.addEventListener("click", () => {
+    if (!url) return;
+    window.location.assign(url);
+    cleanup();
+  });
+
+  document.body.appendChild(overlay);
+}
+
+async function handleAnnouncementQueryParams() {
+  const params = new URLSearchParams(window.location.search);
+  const announceId = String(params.get("announce") || "").trim();
+  const isNew = String(params.get("new") || "").trim() === "1";
+
+  if (!announceId && !isNew) {
+    setAnnounceBadgeVisible(Boolean(state.announce.unseen));
+    return;
+  }
+
+  const clearParams = () => {
+    try {
+      const next = new URL(window.location.href);
+      next.searchParams.delete("announce");
+      next.searchParams.delete("new");
+      window.history.replaceState({}, document.title, next.pathname + next.search);
+    } catch {
+      // ignore
+    }
+  };
+
+  if (isNew) {
+    clearParams();
+    const id = "new-1";
+    if (getSeenAnnouncementIds().includes(id)) return;
+    showAnnouncementModal({ id, title: "Nieuw", body: "Er is iets nieuws in Plately.", url: "/" });
+    return;
+  }
+
+  clearParams();
+  if (getSeenAnnouncementIds().includes(announceId)) return;
+
+  try {
+    const res = await fetchJson(`${state.apiBase}/api/announce/${encodeURIComponent(announceId)}`, { method: "GET" });
+    const a = res?.announcement;
+    if (!a) return;
+    showAnnouncementModal(a);
+  } catch {
+    // ignore
+  }
+}
+
 async function bootstrapSession() {
   let sessionCheckSucceeded = false;
   // Save any locally persisted grocery items before applying server state
@@ -8053,6 +8245,9 @@ async function bootstrapSession() {
     if (state.view !== "detail") {
       scrollToTopSoon();
     }
+
+    // Handle announce deep links (/?announce=... or /?new=1)
+    handleAnnouncementQueryParams().catch(() => {});
 
     // Show auth modal to all unauthenticated users
     // IMPORTANT: Check state.auth.authenticated (from server) NOT cached localStorage
@@ -8303,6 +8498,87 @@ async function getFeaturePushRegistration() {
   return reg || null;
 }
 
+function setToggleSwitchState(el, on) {
+  if (!el) return;
+  el.classList.toggle("toggle-switch--on", Boolean(on));
+  el.setAttribute("aria-checked", String(Boolean(on)));
+}
+
+function getDefaultPushPrefs() {
+  return {
+    categories: { features: true, ah: false, cookmode: false },
+    triggers: { ahBasketReady: false, ahBonus: false },
+  };
+}
+
+function sanitizePushPrefsClient(prefs) {
+  const raw = prefs && typeof prefs === "object" ? prefs : {};
+  const cats = raw.categories && typeof raw.categories === "object" ? raw.categories : {};
+  const triggers = raw.triggers && typeof raw.triggers === "object" ? raw.triggers : {};
+  return {
+    categories: {
+      features: Boolean(cats.features),
+      ah: Boolean(cats.ah),
+      cookmode: Boolean(cats.cookmode),
+    },
+    triggers: {
+      ahBasketReady: Boolean(triggers.ahBasketReady),
+      ahBonus: Boolean(triggers.ahBonus),
+    },
+  };
+}
+
+async function updatePushPrefsOnServer(prefs) {
+  const reg = await getFeaturePushRegistration();
+  const sub = await reg?.pushManager?.getSubscription?.();
+  if (!sub?.endpoint) {
+    throw new Error("Push subscription niet gevonden.");
+  }
+  await fetchJson(`${state.apiBase}/api/push/preferences`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint: sub.endpoint, prefs }),
+  });
+}
+
+function renderPushCategoryUI() {
+  const supported = isFeaturePushSupported();
+  const on = Boolean(state.push.subscribed) && supported && (state.push.permission === "granted");
+  const prefs = sanitizePushPrefsClient(state.push.prefs || getDefaultPushPrefs());
+  state.push.prefs = prefs;
+
+  const rows = [
+    [pushCatFeaturesRow, pushCatFeaturesToggle, pushCatFeaturesMeta, "features"],
+    [pushCatAhRow, pushCatAhToggle, pushCatAhMeta, "ah"],
+    [pushCatCookmodeRow, pushCatCookmodeToggle, pushCatCookmodeMeta, "cookmode"],
+  ];
+
+  for (const [row, toggle, meta, key] of rows) {
+    if (!row || !toggle) continue;
+    row.style.opacity = on ? "" : "0.6";
+    toggle.toggleAttribute("disabled", !on);
+    toggle.setAttribute("aria-disabled", on ? "false" : "true");
+    const enabled = Boolean(prefs.categories[key]);
+    setToggleSwitchState(toggle, enabled);
+    if (meta) meta.textContent = on ? (enabled ? "Aan" : "Uit") : "Niet actief";
+  }
+
+  const triggerRows = [
+    [pushTrigAhBasketReadyRow, pushTrigAhBasketReadyToggle, pushTrigAhBasketReadyMeta, "ahBasketReady"],
+    [pushTrigAhBonusRow, pushTrigAhBonusToggle, pushTrigAhBonusMeta, "ahBonus"],
+  ];
+  const triggersEnabled = on && Boolean(prefs.categories.ah);
+  for (const [row, toggle, meta, key] of triggerRows) {
+    if (!row || !toggle) continue;
+    row.style.opacity = triggersEnabled ? "" : "0.6";
+    toggle.toggleAttribute("disabled", !triggersEnabled);
+    toggle.setAttribute("aria-disabled", triggersEnabled ? "false" : "true");
+    const enabled = Boolean(prefs.triggers[key]);
+    setToggleSwitchState(toggle, enabled);
+    if (meta) meta.textContent = triggersEnabled ? (enabled ? "Aan" : "Uit") : "Schakel eerst AH aan";
+  }
+}
+
 function renderFeaturePushUI() {
   if (!featurePushRow || !featurePushToggle) return;
 
@@ -8323,6 +8599,8 @@ function renderFeaturePushUI() {
     else if (state.push.permission === "denied") featurePushMeta.textContent = "Geblokkeerd";
     else featurePushMeta.textContent = on ? "Aan" : "Uit";
   }
+
+  renderPushCategoryUI();
 }
 
 async function refreshFeaturePushState() {
@@ -8387,6 +8665,14 @@ async function enableFeaturePush() {
     body: JSON.stringify({ subscription }),
   });
 
+  try {
+    const prefs = sanitizePushPrefsClient(state.push.prefs || getDefaultPushPrefs());
+    state.push.prefs = prefs;
+    await updatePushPrefsOnServer(prefs);
+  } catch {
+    // best-effort
+  }
+
   state.push.subscribed = true;
   renderFeaturePushUI();
   showToast("Meldingen staan aan.");
@@ -8435,6 +8721,76 @@ function bindFeaturePushToggle() {
       act().catch(() => {});
     }
   });
+}
+
+function bindPushCategoryToggles() {
+  const entries = [
+    ["features", pushCatFeaturesToggle],
+    ["ah", pushCatAhToggle],
+    ["cookmode", pushCatCookmodeToggle],
+  ];
+
+  for (const [key, el] of entries) {
+    if (!el) continue;
+    const act = async () => {
+      if (el.hasAttribute("disabled")) return;
+      const prefs = sanitizePushPrefsClient(state.push.prefs || getDefaultPushPrefs());
+      prefs.categories[key] = !prefs.categories[key];
+      state.push.prefs = prefs;
+      renderPushCategoryUI();
+      try {
+        await updatePushPrefsOnServer(prefs);
+      } catch (err) {
+        // Revert UI on failure
+        prefs.categories[key] = !prefs.categories[key];
+        state.push.prefs = prefs;
+        renderPushCategoryUI();
+        showToast("Opslaan mislukt: " + (err?.message || "onbekende fout"));
+      }
+    };
+
+    el.addEventListener("click", () => { act().catch(() => {}); });
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        act().catch(() => {});
+      }
+    });
+  }
+}
+
+function bindPushTriggerToggles() {
+  const entries = [
+    ["ahBasketReady", pushTrigAhBasketReadyToggle],
+    ["ahBonus", pushTrigAhBonusToggle],
+  ];
+
+  for (const [key, el] of entries) {
+    if (!el) continue;
+    const act = async () => {
+      if (el.hasAttribute("disabled")) return;
+      const prefs = sanitizePushPrefsClient(state.push.prefs || getDefaultPushPrefs());
+      prefs.triggers[key] = !prefs.triggers[key];
+      state.push.prefs = prefs;
+      renderPushCategoryUI();
+      try {
+        await updatePushPrefsOnServer(prefs);
+      } catch (err) {
+        prefs.triggers[key] = !prefs.triggers[key];
+        state.push.prefs = prefs;
+        renderPushCategoryUI();
+        showToast("Opslaan mislukt: " + (err?.message || "onbekende fout"));
+      }
+    };
+
+    el.addEventListener("click", () => { act().catch(() => {}); });
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        act().catch(() => {});
+      }
+    });
+  }
 }
 
 async function toggleWakeLock() {
@@ -11278,6 +11634,8 @@ document.querySelectorAll(".brand-logo").forEach((logo) => {
 refreshBackendStatus();
 registerServiceWorker();
 bindFeaturePushToggle();
+bindPushCategoryToggles();
+bindPushTriggerToggles();
 refreshFeaturePushState().catch(() => {});
 
 // Prevent browser history navigation from restoring scroll position.
