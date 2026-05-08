@@ -23,6 +23,11 @@ const META_APP_ID = process.env.META_APP_ID || "";
 const META_APP_SECRET = process.env.META_APP_SECRET || "";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const DATABASE_URL = process.env.DATABASE_URL || "";
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "";
+
+let webPushModule = null;
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -539,11 +544,172 @@ class HttpError extends Error {
   }
 }
 
+function getWebPush() {
+  if (webPushModule) {
+    return webPushModule;
+  }
+  try {
+    webPushModule = require("web-push");
+    return webPushModule;
+  } catch {
+    throw new HttpError(500, "Dependency 'web-push' ontbreekt. Run: npm install");
+  }
+}
+
+function ensureWebPushConfigured() {
+  const webPush = getWebPush();
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) {
+    throw new HttpError(
+      500,
+      "Web Push is niet geconfigureerd. Zet VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY en VAPID_SUBJECT in de env."
+    );
+  }
+  webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  return webPush;
+}
+
+function sanitizePushSubscription(subscription) {
+  const endpoint = String(subscription?.endpoint || "").trim();
+  const keys = subscription?.keys && typeof subscription.keys === "object" ? subscription.keys : {};
+  const p256dh = String(keys?.p256dh || "").trim();
+  const auth = String(keys?.auth || "").trim();
+  if (!endpoint || !endpoint.startsWith("https://")) {
+    throw new HttpError(400, "Ongeldige push subscription endpoint.");
+  }
+  if (!p256dh || !auth) {
+    throw new HttpError(400, "Ongeldige push subscription keys.");
+  }
+  return { endpoint, keys: { p256dh, auth } };
+}
+
+function ensureAnonIdCookie(request, response) {
+  const cookies = parseCookies(request.headers.cookie);
+  let anon = String(cookies.plately_anon || "").trim();
+  if (anon) {
+    return anon;
+  }
+  anon = crypto.randomBytes(18).toString("hex");
+  appendSetCookie(
+    response,
+    serializeCookie("plately_anon", anon, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: true,
+      maxAge: 60 * 60 * 24 * 365,
+    })
+  );
+  return anon;
+}
+
+async function resolvePushIdentity(request, response) {
+  let authUser = await getAuthenticatedUser(request).catch(() => null);
+  if (!authUser && !isPostgresEnabled()) {
+    authUser = await getDevAuthenticatedUser(request).catch(() => null);
+  }
+  if (authUser?.id || authUser?.email) {
+    return { userId: String(authUser.id || ""), email: sanitizeText(authUser.email || "") };
+  }
+  if (!isPostgresEnabled()) {
+    const user = await ensureUserSession(request, response);
+    return { userId: String(user?.id || ""), email: "" };
+  }
+  const anonId = ensureAnonIdCookie(request, response);
+  return { userId: `anon-${anonId}`, email: "" };
+}
+
+async function upsertJsonPushSubscription(identity, subscription) {
+  const db = await loadDatabase();
+  if (!Array.isArray(db.pushSubscriptions)) {
+    db.pushSubscriptions = [];
+  }
+  const nowIso = new Date().toISOString();
+  const endpoint = subscription.endpoint;
+  const existingIndex = db.pushSubscriptions.findIndex((it) => String(it?.endpoint || "") === endpoint);
+  const next = {
+    id: existingIndex >= 0 ? db.pushSubscriptions[existingIndex].id : generateId("pushsub"),
+    userId: identity.userId || "",
+    email: identity.email || "",
+    endpoint,
+    keys: subscription.keys,
+    createdAt: existingIndex >= 0 ? (db.pushSubscriptions[existingIndex].createdAt || nowIso) : nowIso,
+    updatedAt: nowIso,
+  };
+  if (existingIndex >= 0) {
+    db.pushSubscriptions[existingIndex] = next;
+  } else {
+    db.pushSubscriptions.push(next);
+  }
+  await persistDatabase();
+  return next;
+}
+
+async function removeJsonPushSubscriptionByEndpoint(endpoint) {
+  const db = await loadDatabase();
+  if (!Array.isArray(db.pushSubscriptions) || !endpoint) return 0;
+  const before = db.pushSubscriptions.length;
+  db.pushSubscriptions = db.pushSubscriptions.filter((it) => String(it?.endpoint || "") !== endpoint);
+  const removed = before - db.pushSubscriptions.length;
+  if (removed) {
+    await persistDatabase();
+  }
+  return removed;
+}
+
+async function upsertPostgresPushSubscription(identity, subscription) {
+  await ensurePostgresSchema();
+  const pool = await getPostgresPool();
+  const nowIso = new Date().toISOString();
+  const endpoint = subscription.endpoint;
+  const keysJson = JSON.stringify(subscription.keys);
+  const userId = identity.userId || null;
+  const email = identity.email || null;
+
+  const result = await pool.query(
+    `
+      INSERT INTO plately_push_subscriptions (id, user_id, email, endpoint, keys, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5::jsonb, NOW(), NOW())
+      ON CONFLICT (endpoint)
+      DO UPDATE SET
+        user_id = EXCLUDED.user_id,
+        email = EXCLUDED.email,
+        keys = EXCLUDED.keys,
+        updated_at = NOW()
+      RETURNING *
+    `,
+    [generateId("pushsub"), userId, email, endpoint, keysJson]
+  );
+  return { ...result.rows[0], updatedAt: nowIso };
+}
+
+async function removePostgresPushSubscriptionByEndpoint(endpoint) {
+  await ensurePostgresSchema();
+  const pool = await getPostgresPool();
+  const res = await pool.query(`DELETE FROM plately_push_subscriptions WHERE endpoint = $1`, [endpoint]);
+  return Number(res.rowCount || 0);
+}
+
+async function listAllPushSubscriptions() {
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const res = await pool.query(`SELECT endpoint, keys FROM plately_push_subscriptions`);
+    return res.rows.map((r) => ({
+      endpoint: r.endpoint,
+      keys: r.keys,
+    }));
+  }
+  const db = await loadDatabase();
+  const list = Array.isArray(db.pushSubscriptions) ? db.pushSubscriptions : [];
+  return list.map((r) => ({ endpoint: r.endpoint, keys: r.keys }));
+}
+
 function createEmptyDatabase() {
   return {
     users: {},
     sessions: {},
     authSessions: {}, // Dev-only: simple auth token -> {email, userId} mapping
+    pushSubscriptions: [],
   };
 }
 
@@ -742,6 +908,21 @@ async function ensurePostgresSchema() {
           value JSONB NOT NULL DEFAULT '{}'::jsonb,
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+      `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS plately_push_subscriptions (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          email TEXT,
+          endpoint TEXT UNIQUE NOT NULL,
+          keys JSONB NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_plately_push_subscriptions_user_id
+        ON plately_push_subscriptions (user_id);
       `);
       await pool.query(`
         CREATE INDEX IF NOT EXISTS idx_plately_events_type_created_at
@@ -1129,6 +1310,7 @@ async function initializeTestData() {
       "session-test-2": "user-test-2",
     },
     authSessions: {},
+    pushSubscriptions: [],
   };
 
   await fsp.writeFile(DATA_FILE, JSON.stringify(testDb, null, 2), "utf8");
@@ -1153,11 +1335,14 @@ async function loadDatabase() {
         users: parsed?.users && typeof parsed.users === "object" ? parsed.users : {},
         sessions: parsed?.sessions && typeof parsed.sessions === "object" ? parsed.sessions : {},
         authSessions: parsed?.authSessions && typeof parsed.authSessions === "object" ? parsed.authSessions : {},
+        pushSubscriptions: Array.isArray(parsed?.pushSubscriptions) ? parsed.pushSubscriptions : [],
       };
       const userCount = Object.keys(databaseCache.users).length;
       const sessionCount = Object.keys(databaseCache.sessions).length;
       const authCount = Object.keys(databaseCache.authSessions).length;
+      const pushCount = Array.isArray(databaseCache.pushSubscriptions) ? databaseCache.pushSubscriptions.length : 0;
       console.log(`✅ Database loaded from disk: ${userCount} users, ${sessionCount} sessions, ${authCount} auth sessions`);
+      console.log(`   pushSubscriptions=${pushCount}`);
     } catch (parseError) {
       console.error("❌ Database parse error:", parseError.message);
       databaseCache = createEmptyDatabase();
@@ -1182,8 +1367,9 @@ async function persistDatabase() {
     const userCount = Object.keys(db.users || {}).length;
     const sessionCount = Object.keys(db.sessions || {}).length;
     const authCount = Object.keys(db.authSessions || {}).length;
+    const pushCount = Array.isArray(db.pushSubscriptions) ? db.pushSubscriptions.length : 0;
     console.log(`💾 Writing database to ${DATA_FILE}`);
-    console.log(`   users=${userCount}, sessions=${sessionCount}, authSessions=${authCount}`);
+    console.log(`   users=${userCount}, sessions=${sessionCount}, authSessions=${authCount}, pushSubscriptions=${pushCount}`);
     await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2), "utf8");
     console.log(`✅ Database written successfully to ${DATA_FILE}`);
   });
@@ -1834,7 +2020,7 @@ function canonicalizeIngredientForStoreSearch(value) {
   // Cheese-focused canonicalization for more reliable store matches.
   // Keep this intentionally small and conservative.
   if (/\b(parmigiano|reggiano|parmigiana)\b/.test(key) || /\bparmezaan(se)?\b/.test(key)) {
-    return "parmezaan";
+    return "parmezaanse kaas";
   }
   if (/\bgrana\s*padano\b/.test(key) || (/\bgrana\b/.test(key) && /\bpadano\b/.test(key))) {
     return "grana padano";
@@ -1997,6 +2183,7 @@ function createStoreChoice(store, choice) {
     labels: normalizedChoice.labels || [],
     isBonus: Boolean(normalizedChoice.isBonus),
     promotionLabel: sanitizeText(normalizedChoice.promotionLabel || ""),
+    matchMeta: normalizedChoice.matchMeta && typeof normalizedChoice.matchMeta === "object" ? normalizedChoice.matchMeta : null,
   };
 }
 
@@ -2199,6 +2386,7 @@ function buildMatchedChoiceFromProduct(store, item, product, badge = "Gevonden")
     labels: Array.isArray(product.labels) ? product.labels : [],
     isBonus: Boolean(product.isBonus),
     promotionLabel: sanitizeText(product.promotionLabel || ""),
+    matchMeta: product.matchMeta && typeof product.matchMeta === "object" ? product.matchMeta : null,
   };
 
   choice.url = buildStoreChoiceUrl(store, choice);
@@ -6210,6 +6398,10 @@ function parseAHProduct(product) {
     labels: [...new Set([...labels.map((l) => sanitizeText(l)).filter(Boolean), ...canonical])],
     isBonus,
     promotionLabel,
+    matchMeta:
+      product && typeof product === "object" && product._platelyMatchMeta && typeof product._platelyMatchMeta === "object"
+        ? product._platelyMatchMeta
+        : null,
   };
 }
 
@@ -6304,9 +6496,11 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       ? ["parmezaan", "parmezaanse", "parmigiano", "reggiano", "grana", "padano"]
       : [];
 
-    const scoreForIngredient = (productTitle) => {
+    const scoreForIngredientDetailed = (productTitle) => {
       const title = sanitizeText(productTitle).toLowerCase();
       let score = 0;
+      const matchedTokens = [];
+      const adjustments = [];
 
       const titleTokens = tokenizeForMatch(title);
       const tokenSet = new Set(titleTokens);
@@ -6314,15 +6508,23 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       // Token overlap bonus: more shared tokens means a better match.
       let overlap = 0;
       for (const tok of ingredientTokens) {
-        if (tokenSet.has(tok)) overlap += 1;
+        if (tokenSet.has(tok)) {
+          overlap += 1;
+          matchedTokens.push(tok);
+        }
       }
-      score -= overlap * 18;
+      if (overlap > 0) {
+        const delta = -overlap * 18;
+        score += delta;
+        adjustments.push({ kind: "bonus", label: `Token overlap (${overlap})`, delta });
+      }
 
       // Cheese equivalents: if ingredient is parmesan-like, accept Italian names too.
       if (cheeseEquivTokens.length) {
         for (const tok of cheeseEquivTokens) {
           if (tokenSet.has(tok)) {
             score -= 8;
+            adjustments.push({ kind: "bonus", label: "Kaas-equivalent", delta: -8 });
             break;
           }
         }
@@ -6330,49 +6532,100 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
 
       // If the ingredient is plain garlic, avoid "knoflook kruidenboter" style matches.
       if (baseLower === "knoflook" && !wantsButter && !wantsGarlicButter) {
-        if (/\b(kruidenboter|knoflookboter)\b/.test(title)) score += 70;
-        if (/\bboter\b/.test(title)) score += 45;
+        if (/\b(kruidenboter|knoflookboter)\b/.test(title)) {
+          score += 70;
+          adjustments.push({ kind: "penalty", label: "Knoflook ≠ kruidenboter", delta: 70 });
+        }
+        if (/\bboter\b/.test(title)) {
+          score += 45;
+          adjustments.push({ kind: "penalty", label: "Knoflook ≠ boter", delta: 45 });
+        }
       }
 
       // General: don't auto-pick butter-containing products unless the ingredient mentions butter.
-      if (!wantsButter && /\bboter\b/.test(title)) score += 25;
+      if (!wantsButter && /\bboter\b/.test(title)) {
+        score += 25;
+        adjustments.push({ kind: "penalty", label: "Bevat boter (niet gevraagd)", delta: 25 });
+      }
 
       // Prefer "net" / "bol" garlic over processed variants when searching for knoflook.
       if (baseLower === "knoflook") {
         // Prefer titles that are basically "knoflook" (fresh garlic) over
         // products that merely *contain* garlic.
-        if (!/^(?:ah\\s+)?(?:biologisch\\s+)?knoflook\\b/.test(title)) score += 45;
-        if (/\b(net|bol)\b/.test(title)) score -= 6;
+        if (!/^(?:ah\\s+)?(?:biologisch\\s+)?knoflook\\b/.test(title)) {
+          score += 45;
+          adjustments.push({ kind: "penalty", label: "Niet puur knoflook", delta: 45 });
+        }
+        if (/\b(net|bol)\b/.test(title)) {
+          score -= 6;
+          adjustments.push({ kind: "bonus", label: "Vers (net/bol)", delta: -6 });
+        }
         // Avoid "knoflook"-flavoured products when the ingredient is plain garlic.
-        if (/\b(roomkaas|kaas|kruidenmix|mix|saus)\b/.test(title)) score += 35;
+        if (/\b(roomkaas|kaas|kruidenmix|mix|saus)\b/.test(title)) {
+          score += 35;
+          adjustments.push({ kind: "penalty", label: "Knoflook als smaak (mix/saus/kaas)", delta: 35 });
+        }
         // Avoid "knoflook as flavour" in unrelated products.
-        if (/\b(tomatenpuree|tomatenpasta)\b/.test(title)) score += 75;
-        if (/\b(aardappel|partjes|wok|smaakmaker|woksmaakmaker)\b/.test(title)) score += 55;
-        if (/\b(pasta|puree|poeder|granulaat|zout)\b/.test(title)) score += 15;
+        if (/\b(tomatenpuree|tomatenpasta)\b/.test(title)) {
+          score += 75;
+          adjustments.push({ kind: "penalty", label: "Irrelevant (tomatenpuree/pasta)", delta: 75 });
+        }
+        if (/\b(aardappel|partjes|wok|smaakmaker|woksmaakmaker)\b/.test(title)) {
+          score += 55;
+          adjustments.push({ kind: "penalty", label: "Irrelevant (aardappel/wok/smaakmaker)", delta: 55 });
+        }
+        if (/\b(pasta|puree|poeder|granulaat|zout)\b/.test(title)) {
+          score += 15;
+          adjustments.push({ kind: "penalty", label: "Verwerkt (poeder/pasta/zout)", delta: 15 });
+        }
       }
 
       // Pantry: salt ("zout") should match cooking salt, not snacks.
       if (isSaltQuery) {
-        if (/\b(keukenzout|tafelzout|zeezout)\b/.test(title)) score -= 35;
-        if (/\b(molen)\b/.test(title) && /\bzout\b/.test(title)) score -= 6;
+        if (/\b(keukenzout|tafelzout|zeezout)\b/.test(title)) {
+          score -= 35;
+          adjustments.push({ kind: "bonus", label: "Keukenzout match", delta: -35 });
+        }
+        if (/\b(molen)\b/.test(title) && /\bzout\b/.test(title)) {
+          score -= 6;
+          adjustments.push({ kind: "bonus", label: "Molen (zout)", delta: -6 });
+        }
         if (!wantsSaltSnackLike) {
-          if (/\b(zoutjes|sticks|chips)\b/.test(title)) score += 110;
-          if (/\bnoten\b/.test(title)) score += 65;
-          if (/\bgezouten\b/.test(title)) score += 55;
+          if (/\b(zoutjes|sticks|chips)\b/.test(title)) {
+            score += 110;
+            adjustments.push({ kind: "penalty", label: "Snack i.p.v. zout", delta: 110 });
+          }
+          if (/\bnoten\b/.test(title)) {
+            score += 65;
+            adjustments.push({ kind: "penalty", label: "Noten i.p.v. zout", delta: 65 });
+          }
+          if (/\bgezouten\b/.test(title)) {
+            score += 55;
+            adjustments.push({ kind: "penalty", label: "Gezouten (waarschijnlijk snack)", delta: 55 });
+          }
         }
       }
 
       // Pantry: pepper ("peper") should match black pepper, not pepernoten/peperoni/etc.
       if (isPepperQuery) {
-        if (/\b(zwarte\s+peper|peper\s*\(gemalen\)|gemalen\s+peper|peperkorrels?)\b/.test(title)) score -= 40;
-        if (/\b(molen)\b/.test(title) && /\bpeper\b/.test(title)) score -= 6;
-        if (/\bpepernoten\b/.test(title)) score += 170;
-        if (/\bpeperkoek\b/.test(title)) score += 150;
-        if (/\bpeperoni\b/.test(title)) score += 140;
-        if (/\bpaprika\b/.test(title)) score += 120;
-        if (/\bsambal\b/.test(title)) score += 120;
+        if (/\b(zwarte\s+peper|peper\s*\(gemalen\)|gemalen\s+peper|peperkorrels?)\b/.test(title)) {
+          score -= 40;
+          adjustments.push({ kind: "bonus", label: "Zwarte peper match", delta: -40 });
+        }
+        if (/\b(molen)\b/.test(title) && /\bpeper\b/.test(title)) {
+          score -= 6;
+          adjustments.push({ kind: "bonus", label: "Molen (peper)", delta: -6 });
+        }
+        if (/\bpepernoten\b/.test(title)) { score += 170; adjustments.push({ kind: "penalty", label: "Pepernoten (niet peper)", delta: 170 }); }
+        if (/\bpeperkoek\b/.test(title)) { score += 150; adjustments.push({ kind: "penalty", label: "Peperkoek (niet peper)", delta: 150 }); }
+        if (/\bpeperoni\b/.test(title)) { score += 140; adjustments.push({ kind: "penalty", label: "Peperoni (niet peper)", delta: 140 }); }
+        if (/\bpaprika\b/.test(title)) { score += 120; adjustments.push({ kind: "penalty", label: "Paprika (niet peper)", delta: 120 }); }
+        if (/\bsambal\b/.test(title)) { score += 120; adjustments.push({ kind: "penalty", label: "Sambal (niet peper)", delta: 120 }); }
         // Avoid mixes when user asked for plain pepper.
-        if (/\b(peper\s*(?:en|&)\s*zout|zout\s*(?:en|&)\s*peper)\b/.test(title)) score += 110;
+        if (/\b(peper\s*(?:en|&)\s*zout|zout\s*(?:en|&)\s*peper)\b/.test(title)) {
+          score += 110;
+          adjustments.push({ kind: "penalty", label: "Mix (peper en zout)", delta: 110 });
+        }
       }
 
       // Penalize processed / "extra" items unless explicitly asked for.
@@ -6386,18 +6639,43 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         { re: /\b(melbatoast|toastjes?|toast|crackers?|zadencrackers?|beschuit|croutons?)\b/, score: 80, okIf: wantsToastLike },
       ];
       for (const p of processedPenalty) {
-        if (!p.okIf && p.re.test(title)) score += p.score;
+        if (!p.okIf && p.re.test(title)) {
+          score += p.score;
+          adjustments.push({ kind: "penalty", label: `Verwerkt: ${p.re.source}`, delta: p.score });
+        }
       }
 
       // Extra guardrail: never auto-pick melbatoast unless the ingredient asked for toast/crackers.
-      if (!wantsToastLike && /\bmelbatoast\b/.test(title)) score += 200;
+      if (!wantsToastLike && /\bmelbatoast\b/.test(title)) {
+        score += 200;
+        adjustments.push({ kind: "penalty", label: "Melbatoast guardrail", delta: 200 });
+      }
 
       // Cheese-specific "avoid": parmesan is often matched to sauces/spreads; avoid those.
       if (baseLower === "parmezaanse kaas") {
-        if (/\b(saus|pesto|kruidenboter|spread)\b/.test(title)) score += 80;
+        if (/\b(saus|pesto|kruidenboter|spread)\b/.test(title)) {
+          score += 80;
+          adjustments.push({ kind: "penalty", label: "Parmezaan ≠ saus/spread", delta: 80 });
+        }
       }
 
-      return score;
+      const appliedPenalties = adjustments.filter((a) => a.kind === "penalty");
+      const appliedBonuses = adjustments.filter((a) => a.kind === "bonus");
+      return {
+        score,
+        matchedTokens: [...new Set(matchedTokens)].slice(0, 18),
+        appliedPenalties,
+        appliedBonuses,
+      };
+    };
+
+    const scoreCache = new Map();
+    const getDetailedScore = (productTitle) => {
+      const key = String(productTitle || "");
+      if (scoreCache.has(key)) return scoreCache.get(key);
+      const detail = scoreForIngredientDetailed(key);
+      scoreCache.set(key, detail);
+      return detail;
     };
 
     const products = (data.products || [])
@@ -6406,14 +6684,31 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       // Guardrail: avoid melbatoast unless explicitly asked for toast/crackers.
       .filter((p) => (wantsToastLike ? true : !/\bmelbatoast\b/i.test(String(p?.title || ""))))
       .sort((a, b) => {
-        const sa = scoreForIngredient(a.title);
-        const sb = scoreForIngredient(b.title);
-        if (sa !== sb) return sa - sb;
+        const sa = getDetailedScore(a.title || "");
+        const sb = getDetailedScore(b.title || "");
+        if (sa.score !== sb.score) return sa.score - sb.score;
         const pa = a.currentPrice ?? a.priceBeforeBonus ?? 9999;
         const pb = b.currentPrice ?? b.priceBeforeBonus ?? 9999;
         return pa - pb;
       })
       .slice(0, count);
+
+    // Attach match metadata for "Waarom?" explanations.
+    for (const p of products) {
+      try {
+        const detail = getDetailedScore(p?.title || "");
+        p._platelyMatchMeta = {
+          score: Number.isFinite(detail?.score) ? detail.score : null,
+          matchedTokens: Array.isArray(detail?.matchedTokens) ? detail.matchedTokens : [],
+          appliedPenalties: Array.isArray(detail?.appliedPenalties) ? detail.appliedPenalties : [],
+          appliedBonuses: Array.isArray(detail?.appliedBonuses) ? detail.appliedBonuses : [],
+          searchTerm: sanitizeText(searchTerm || ""),
+          baseTerm: sanitizeText(baseTerm || ""),
+        };
+      } catch {
+        // ignore
+      }
+    }
 
     return products.map(parseAHProduct);
   } catch {
@@ -8738,6 +9033,44 @@ async function buildStoreBasket(body) {
   };
 }
 
+async function researchAHChoices(body) {
+  const rawTitle = sanitizeText(body.ingredientTitle || body.title || "");
+  const ingredientTitle = canonicalizeIngredientForStoreSearch(rawTitle);
+  if (!ingredientTitle) {
+    throw new HttpError(400, "Geen ingrediënt opgegeven.");
+  }
+
+  const preferences = {
+    bio: Boolean(body.bio),
+    beterLeven1: Boolean(body.beterLeven1),
+    vegetarisch: Boolean(body.vegetarisch),
+    vegan: Boolean(body.vegan),
+    plantaardig: Boolean(body.plantaardig),
+  };
+
+  const exclude = new Set(
+    (Array.isArray(body.excludeProductIds) ? body.excludeProductIds : [])
+      .map((id) => sanitizeText(id))
+      .filter(Boolean)
+  );
+
+  let products = await findAHAlternativesGrouped(ingredientTitle, preferences, 30);
+  if (!products || products.length === 0) {
+    products = await findAHProducts(ingredientTitle, 30);
+  }
+
+  const filtered = (Array.isArray(products) ? products : []).filter((p) => !exclude.has(String(p?.id || "")));
+  const item = { title: ingredientTitle, amount: sanitizeText(body.amount || "1 verpakking") };
+  const choices = filtered
+    .map((product, i) => buildMatchedChoiceFromProduct("albert-heijn", item, product, i === 0 ? "Beste match" : "Alternatief"))
+    .filter(Boolean);
+
+  return {
+    ingredientTitle,
+    choices,
+  };
+}
+
 async function readRequestBody(request) {
   const chunks = [];
   for await (const chunk of request) {
@@ -8833,6 +9166,37 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/push/vapid-public-key" && request.method === "GET") {
+      sendJson(response, 200, { ok: true, publicKey: VAPID_PUBLIC_KEY || "" });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/push/subscribe" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const subscription = sanitizePushSubscription(body?.subscription || body);
+      const identity = await resolvePushIdentity(request, response);
+      if (isPostgresEnabled()) {
+        await upsertPostgresPushSubscription(identity, subscription);
+      } else {
+        await upsertJsonPushSubscription(identity, subscription);
+      }
+      sendJson(response, 200, { ok: true });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/push/unsubscribe" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const endpoint = String(body?.endpoint || body?.subscription?.endpoint || "").trim();
+      if (!endpoint) {
+        throw new HttpError(400, "endpoint is verplicht.");
+      }
+      const removed = isPostgresEnabled()
+        ? await removePostgresPushSubscriptionByEndpoint(endpoint)
+        : await removeJsonPushSubscriptionByEndpoint(endpoint);
+      sendJson(response, 200, { ok: true, removed });
+      return;
+    }
+
     if (requestUrl.pathname === "/api/session" && request.method === "GET") {
       try {
         const cookies = parseCookies(request.headers.cookie);
@@ -8923,6 +9287,62 @@ const server = http.createServer(async (request, response) => {
         }
         return;
       }
+    }
+
+    if (requestUrl.pathname === "/api/admin/push/announce" && request.method === "POST") {
+      await requireAdmin(request);
+      const body = await readRequestBody(request);
+      const title = sanitizeText(body?.title || "").slice(0, 120);
+      const message = sanitizeText(body?.body || "").slice(0, 280);
+      const url = sanitizeText(body?.url || "").slice(0, 500);
+      if (!title || !message) {
+        throw new HttpError(400, "title en body zijn verplicht.");
+      }
+
+      const webPush = ensureWebPushConfigured();
+      const payload = JSON.stringify({ title, body: message, url: url || "/" });
+      const subscriptions = await listAllPushSubscriptions();
+
+      const endpointsToRemove = new Set();
+      let sent = 0;
+      let failed = 0;
+
+      const concurrency = 10;
+      const queue = subscriptions.slice();
+      const workers = Array.from({ length: Math.min(concurrency, queue.length || 1) }).map(async () => {
+        while (queue.length) {
+          const sub = queue.shift();
+          if (!sub) return;
+          try {
+            await webPush.sendNotification(sub, payload, { TTL: 60 * 60 * 24 });
+            sent += 1;
+          } catch (err) {
+            failed += 1;
+            const status = Number(err?.statusCode || err?.status || 0);
+            if (status === 404 || status === 410) {
+              endpointsToRemove.add(String(sub.endpoint || ""));
+            }
+          }
+        }
+      });
+      await Promise.all(workers);
+
+      if (endpointsToRemove.size) {
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          await pool.query(`DELETE FROM plately_push_subscriptions WHERE endpoint = ANY($1::text[])`, [
+            Array.from(endpointsToRemove),
+          ]);
+        } else {
+          for (const endpoint of endpointsToRemove) {
+            await removeJsonPushSubscriptionByEndpoint(endpoint);
+          }
+        }
+      }
+
+      sendJson(response, 200, { ok: true, sent, failed, removed: endpointsToRemove.size });
+      return;
     }
 
     if (requestUrl.pathname === "/api/app-state" && request.method === "PUT") {
@@ -9473,6 +9893,13 @@ const server = http.createServer(async (request, response) => {
       const body = await readRequestBody(request);
       const basket = await buildStoreBasket(body);
       sendJson(response, 200, { ok: true, ...basket });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/ah-research" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const result = await researchAHChoices(body);
+      sendJson(response, 200, { ok: true, ...result });
       return;
     }
 
