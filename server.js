@@ -6503,6 +6503,30 @@ function sanitizeCulySearchTitle(raw) {
   return s;
 }
 
+function normalizeCulyThumbnailUrl(raw, baseUrl = "https://www.culy.nl") {
+  let s = cleanImageUrl(String(raw || "").trim());
+  if (!s) return "";
+  s = decodeHtmlEntities(s).replace(/[)\]]+$/g, "").trim();
+
+  // Protocol-relative URLs: //img.culy.nl/...
+  if (s.startsWith("//")) s = `https:${s}`;
+  // Prefer https always.
+  if (/^http:\/\//i.test(s)) s = s.replace(/^http:/i, "https:");
+
+  // Relative URLs: /wp-content/... or wp-content/...
+  if (!/^https:\/\//i.test(s)) {
+    try {
+      s = new URL(s, baseUrl).toString();
+    } catch {
+      return "";
+    }
+  }
+
+  if (!/^https:\/\//i.test(s)) return "";
+  if (/\.svg(?:\?|$)/i.test(s) || isDecorativeImageUrl(s)) return "";
+  return s;
+}
+
 function pickCulyResultTitle(headingRaw, anchorRaw) {
   const h = sanitizeCulySearchTitle(headingRaw);
   const a = sanitizeCulySearchTitle(anchorRaw);
@@ -6575,13 +6599,34 @@ function parseCulySearchHtml(html, baseUrl, channelName, channelId, count) {
     }
 
     let thumbnail = "";
-    const imgSlice = before.slice(Math.max(0, before.length - 1000));
-    const imgMatch =
-      imgSlice.match(/data-src\s*=\s*["'](https?:\/\/[^"']+\.(?:jpe?g|png|webp)[^"']*)["']/i) ||
-      imgSlice.match(/src\s*=\s*["'](https?:\/\/[^"']+\.(?:jpe?g|png|webp)[^"']*)["']/i);
-    thumbnail = cleanImageUrl(imgMatch?.[1] || "");
-    if (thumbnail && (isDecorativeImageUrl(thumbnail) || /\.svg(?:\?|$)/i.test(thumbnail))) {
-      thumbnail = "";
+    // Prefer an image inside the anchor itself (common for card markup).
+    const innerImgMatch =
+      inner.match(/srcset\s*=\s*["']([^"']+)["']/i) ||
+      inner.match(/data-srcset\s*=\s*["']([^"']+)["']/i) ||
+      inner.match(/data-src\s*=\s*["']([^"']+)["']/i) ||
+      inner.match(/src\s*=\s*["']([^"']+)["']/i);
+
+    if (innerImgMatch?.[1]) {
+      const raw = innerImgMatch[0].toLowerCase().includes("srcset")
+        ? (String(innerImgMatch[1]).split(",").pop() || "").trim().split(/\s+/)[0]
+        : innerImgMatch[1];
+      thumbnail = normalizeCulyThumbnailUrl(raw, base);
+    }
+
+    // Otherwise, look just before the link (some themes place the image ahead of the anchor text).
+    if (!thumbnail) {
+      const imgSlice = before.slice(Math.max(0, before.length - 1400));
+      const imgMatch =
+        imgSlice.match(/srcset\s*=\s*["']([^"']+)["']/i) ||
+        imgSlice.match(/data-srcset\s*=\s*["']([^"']+)["']/i) ||
+        imgSlice.match(/data-src\s*=\s*["']([^"']+)["']/i) ||
+        imgSlice.match(/src\s*=\s*["']([^"']+)["']/i);
+      if (imgMatch?.[1]) {
+        const raw = imgMatch[0].toLowerCase().includes("srcset")
+          ? (String(imgMatch[1]).split(",").pop() || "").trim().split(/\s+/)[0]
+          : imgMatch[1];
+        thumbnail = normalizeCulyThumbnailUrl(raw, base);
+      }
     }
 
     seen.add(dedupeKey);
@@ -6646,6 +6691,51 @@ async function searchCulyRecipes(query, count = 12, opts = {}) {
   const httpOrigin = `http://www.culy.nl/?s=${qEnc}&category=Recepten`;
   const cap = Math.min(Math.max(Number(count) || 12, 1), 24);
 
+  async function fetchCulyOgImage(recipeUrl) {
+    const target = sanitizeText(recipeUrl || "");
+    if (!target) return "";
+    try {
+      const response = await fetch(target, {
+        headers: {
+          ...FETCH_HEADERS,
+          accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "accept-language": "nl-NL,nl;q=0.9,en;q=0.8",
+          referer: "https://www.culy.nl/",
+        },
+        redirect: "follow",
+        signal: AbortSignal.timeout(2200),
+      });
+      if (!response.ok) return "";
+      const html = await response.text();
+      if (!html || html.length < 200) return "";
+      const og = parseMetaTag(html, "og:image") || parseMetaTag(html, "twitter:image", "name") || "";
+      return normalizeCulyThumbnailUrl(og, "https://www.culy.nl");
+    } catch {
+      return "";
+    }
+  }
+
+  async function maybeHydrateMissingThumbnails(results) {
+    const rows = Array.isArray(results) ? results : [];
+    const missing = rows.filter((r) => r && r.url && !r.thumbnail);
+    if (!missing.length) return rows;
+
+    // Avoid lots of requests: cap to first few missing thumbnails.
+    const capN = Math.min(3, missing.length);
+    const settle = await Promise.allSettled(missing.slice(0, capN).map((r) => fetchCulyOgImage(r.url)));
+    const byUrl = new Map();
+    settle.forEach((s, i) => {
+      if (s.status === "fulfilled" && s.value) byUrl.set(missing[i].url, s.value);
+    });
+    if (!byUrl.size) return rows;
+
+    return rows.map((r) => {
+      if (!r || r.thumbnail) return r;
+      const thumb = byUrl.get(r.url) || "";
+      return thumb ? { ...r, thumbnail: thumb } : r;
+    });
+  }
+
   async function fetchDirectHtml() {
     try {
       const response = await fetch(searchUrl, {
@@ -6708,18 +6798,19 @@ async function searchCulyRecipes(query, count = 12, opts = {}) {
       : [];
 
   const needJina = direct.blocked || parsed.length === 0;
-  if (!needJina) return parsed;
+  if (!needJina) return await maybeHydrateMissingThumbnails(parsed);
 
   const jinaHttps = `https://r.jina.ai/${httpsOrigin}`;
   const jinaHttp = `https://r.jina.ai/${httpOrigin}`;
 
   let body = await fetchJinaMarkdown(jinaHttps, 9500);
   let jinaParsed = body ? await parseJinaBody(body) : [];
-  if (jinaParsed.length) return jinaParsed;
+  if (jinaParsed.length) return await maybeHydrateMissingThumbnails(jinaParsed);
 
   body = await fetchJinaMarkdown(jinaHttp, 7500);
   jinaParsed = body ? await parseJinaBody(body) : [];
-  return jinaParsed.length ? jinaParsed : parsed;
+  if (jinaParsed.length) return await maybeHydrateMissingThumbnails(jinaParsed);
+  return await maybeHydrateMissingThumbnails(parsed);
 }
 
 
@@ -6768,10 +6859,18 @@ function parseCulyReaderSearchResults(markdown, channelName, channelId, count, q
   const findNearestThumbnail = (idx) => {
     const start = Math.max(0, idx - 1600);
     const block = text.slice(start, idx + 100);
-    const imgs = [...block.matchAll(/https?:\/\/[^\s\)]+?\.(?:jpe?g|png|webp)(?:\?[^\s\)]*)?/gi)];
-    // Prefer the most recent image-like URL; Jina cards include one per result.
+
+    // Prefer markdown image syntax: ![alt](url) — common in Jina reader cards.
+    const mdImgs = [...block.matchAll(/!\[[^\]]*\]\(([^)\s]+)[^\)]*\)/g)];
+    if (mdImgs.length) {
+      const raw = mdImgs[mdImgs.length - 1][1] || "";
+      return normalizeCulyThumbnailUrl(raw, "https://www.culy.nl");
+    }
+
+    // Fallback: any nearby image-like URL (including protocol-relative //...).
+    const imgs = [...block.matchAll(/(?:https?:\/\/|\/\/)[^\s\)]+?\.(?:jpe?g|png|webp)(?:\?[^\s\)]*)?/gi)];
     const last = imgs.length ? imgs[imgs.length - 1][0] : "";
-    return cleanImageUrl(String(last || "").replace(/[)\]]+$/g, "").replace(/\s+/g, ""));
+    return normalizeCulyThumbnailUrl(last, "https://www.culy.nl");
   };
 
   for (const u of urls) {
