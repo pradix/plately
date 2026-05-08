@@ -1250,8 +1250,6 @@ function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
     return;
   }
 
-  const isSingle = state.cookbooks.length === 1;
-
   cookbookSaveList.innerHTML = state.cookbooks
     .map((cookbook) => {
       const recipeCount = cookbook.recipeIds.length;
@@ -1266,27 +1264,25 @@ function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
 
       return `
         <button
-          class="cookbook-save-option ${isSingle ? "is-compact" : ""} ${isDefaultCookbook ? "is-default" : ""} ${isSelected ? "is-selected" : ""}"
+          class="cookbook-save-option ${isDefaultCookbook ? "is-default" : ""} ${isSelected ? "is-selected" : ""}"
           type="button"
           data-save-cookbook-id="${cookbook.id}"
           data-save-recipe-id="${escapeHtml(recipeId)}"
           role="option"
           aria-selected="${isSelected ? "true" : "false"}"
         >
-          ${getCookbookCoverMarkup(cookbook, "cookbook-save-option__cover", isSingle ? "cookbook-save-option__cover--compact" : "")}
+          ${getCookbookCoverMarkup(cookbook, "cookbook-save-option__cover", "")}
           <span class="cookbook-save-option__copy">
             <strong>${escapeHtml(cookbook.name)}</strong>
             <span>${escapeHtml(meta)}</span>
           </span>
           <span class="cookbook-save-option__indicator" aria-hidden="true">
-            ${containsRecipe ? "✓" : isDefaultCookbook ? "★" : "+"}
+            ${isSelected ? "✓" : containsRecipe ? "✓" : isDefaultCookbook ? "★" : "+"}
           </span>
         </button>
       `;
     })
     .join("");
-
-  cookbookSaveList.classList.toggle("is-single", isSingle);
 }
 
 const COOKBOOK_NAME_SUGGESTION_POOL = [
