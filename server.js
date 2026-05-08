@@ -967,6 +967,22 @@ async function getAuthenticatedUser(request) {
   }
 }
 
+const ADMIN_EMAIL = sanitizeText(process.env.ADMIN_EMAIL || "pradix@me.com");
+
+async function requireAdmin(request) {
+  // Keep in sync with frontend email-based `isAdmin()`.
+  let authUser = await getAuthenticatedUser(request).catch(() => null);
+  // Dev-only fallback: allow json-file mode sessions when present.
+  if (!authUser && !isPostgresEnabled()) {
+    authUser = await getDevAuthenticatedUser(request).catch(() => null);
+  }
+  const email = sanitizeText(authUser?.email || "");
+  if (!email || email !== ADMIN_EMAIL) {
+    throw new HttpError(403, "Niet geautoriseerd.");
+  }
+  return authUser;
+}
+
 async function createPostgresUser(email, password, currentState) {
   try {
     await ensurePostgresSchema();
@@ -7741,6 +7757,7 @@ const server = http.createServer(async (request, response) => {
       console.log("📊 /api/admin/stats called");
 
       try {
+        await requireAdmin(request);
         let users = [];
         let sessions = [];
 
@@ -7900,6 +7917,7 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/admin/overview" && request.method === "GET") {
       console.log("🧾 /api/admin/overview called");
       try {
+        await requireAdmin(request);
         const nowIso = new Date().toISOString();
 
         if (isPostgresEnabled()) {
@@ -8100,6 +8118,7 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/admin/search-terms" && request.method === "GET") {
       console.log("🔎 /api/admin/search-terms called");
       try {
+        await requireAdmin(request);
         const limitRaw = Number.parseInt(String(requestUrl.searchParams.get("limit") || ""), 10);
         const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 50) : 20;
 
@@ -8159,6 +8178,7 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/admin/inventory" && request.method === "GET") {
       console.log("📚 /api/admin/inventory called");
       try {
+        await requireAdmin(request);
         const typeRaw = sanitizeText(requestUrl.searchParams.get("type") || "cookbooks");
         const type = typeRaw === "recipes" ? "recipes" : "cookbooks";
         const q = sanitizeText(requestUrl.searchParams.get("q") || "");
@@ -8326,6 +8346,7 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/admin/analytics" && request.method === "GET") {
       console.log("📈 /api/admin/analytics called");
       try {
+        await requireAdmin(request);
         if (!isPostgresEnabled()) {
           return sendJson(response, 200, { ok: true, analytics: { imports: { last30Days: [], total30d: 0, total7d: 0, topSources: [], topPlatforms: [] } } });
         }
@@ -8403,6 +8424,7 @@ const server = http.createServer(async (request, response) => {
       console.log("🗑️ /api/admin/delete-user called");
 
       try {
+        await requireAdmin(request);
         let body = "";
         for await (const chunk of request) body += chunk.toString();
         const { userId } = JSON.parse(body);
@@ -8445,6 +8467,7 @@ const server = http.createServer(async (request, response) => {
       console.log("🗑️ /api/admin/delete-users called");
 
       try {
+        await requireAdmin(request);
         let body = "";
         for await (const chunk of request) body += chunk.toString();
         const payload = JSON.parse(body || "{}");
@@ -8497,6 +8520,7 @@ const server = http.createServer(async (request, response) => {
       console.log("⏳ /api/admin/pending-channels called");
 
       try {
+        await requireAdmin(request);
 
         if (isPostgresEnabled()) {
           await ensurePostgresSchema();
@@ -8504,6 +8528,7 @@ const server = http.createServer(async (request, response) => {
           const result = await pool.query("SELECT id, email, app_state FROM plately_users");
 
           const pendingChannels = [];
+          const rejectedChannels = [];
           for (const row of result.rows) {
             const appState = typeof row.app_state === 'object' ? row.app_state : JSON.parse(row.app_state || '{}');
             const customChannels = Array.isArray(appState.customChannels) ? appState.customChannels : [];
@@ -8515,18 +8540,30 @@ const server = http.createServer(async (request, response) => {
                   url: ch.url,
                   createdAt: ch.createdAt || new Date().toISOString(),
                   createdById: ch.createdBy,
-                  createdByEmail: row.email || "unknown"
+                  createdByEmail: row.email || "unknown",
+                });
+              } else if (ch.status === "rejected") {
+                rejectedChannels.push({
+                  id: ch.id,
+                  name: ch.name,
+                  url: ch.url,
+                  createdAt: ch.createdAt || "",
+                  rejectedAt: ch.rejectedAt || ch.updatedAt || "",
+                  rejectedReason: ch.rejectedReason || "",
+                  createdById: ch.createdBy,
+                  createdByEmail: row.email || "unknown",
                 });
               }
             }
           }
 
-          return sendJson(response, 200, { ok: true, channels: pendingChannels });
+          return sendJson(response, 200, { ok: true, channels: pendingChannels, rejectedChannels });
         } else {
           // JSON file
           const rawFile = await fsp.readFile(DATA_FILE, "utf8");
           const parsed = JSON.parse(rawFile);
           const pendingChannels = [];
+          const rejectedChannels = [];
 
           for (const [userId, user] of Object.entries(parsed.users || {})) {
             const customChannels = Array.isArray(user.customChannels) ? user.customChannels : [];
@@ -8538,16 +8575,91 @@ const server = http.createServer(async (request, response) => {
                   url: ch.url,
                   createdAt: ch.createdAt || new Date().toISOString(),
                   createdById: ch.createdBy,
-                  createdByEmail: user.email || "unknown"
+                  createdByEmail: user.email || "unknown",
+                });
+              } else if (ch.status === "rejected") {
+                rejectedChannels.push({
+                  id: ch.id,
+                  name: ch.name,
+                  url: ch.url,
+                  createdAt: ch.createdAt || "",
+                  rejectedAt: ch.rejectedAt || ch.updatedAt || "",
+                  rejectedReason: ch.rejectedReason || "",
+                  createdById: ch.createdBy,
+                  createdByEmail: user.email || "unknown",
                 });
               }
             }
           }
 
-          return sendJson(response, 200, { ok: true, channels: pendingChannels });
+          return sendJson(response, 200, { ok: true, channels: pendingChannels, rejectedChannels });
         }
       } catch (error) {
         console.error("❌ Error in /api/admin/pending-channels:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/channels" && request.method === "GET") {
+      console.log("🧩 /api/admin/channels called");
+      try {
+        await requireAdmin(request);
+
+        const seedChannels = Array.isArray(SEED_CHANNELS)
+          ? SEED_CHANNELS.map((ch) => ({
+              id: sanitizeText(ch?.id || ""),
+              name: sanitizeText(ch?.name || ""),
+              url: sanitizeText(ch?.url || ""),
+              kind: "seed",
+            })).filter((ch) => ch.id && ch.name)
+          : [];
+
+        const customChannels = { approved: [], pending: [], rejected: [] };
+        const seen = new Set();
+
+        const pushCustom = (ch, ownerEmail) => {
+          const id = sanitizeText(ch?.id || "");
+          if (!id || seen.has(id)) return;
+          seen.add(id);
+          const status = sanitizeText(ch?.status || "approved") || "approved";
+          const entry = {
+            id,
+            name: sanitizeText(ch?.name || ""),
+            url: sanitizeText(ch?.url || ""),
+            status,
+            createdAt: sanitizeText(ch?.createdAt || ""),
+            updatedAt: sanitizeText(ch?.updatedAt || ""),
+            rejectedAt: sanitizeText(ch?.rejectedAt || ""),
+            rejectedReason: sanitizeText(ch?.rejectedReason || ""),
+            ownerEmail: sanitizeText(ownerEmail || ""),
+            kind: "custom",
+          };
+          if (status === "pending") customChannels.pending.push(entry);
+          else if (status === "rejected") customChannels.rejected.push(entry);
+          else customChannels.approved.push(entry);
+        };
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const result = await pool.query("SELECT email, app_state FROM plately_users");
+          for (const row of result.rows) {
+            const appState = typeof row.app_state === "object" ? row.app_state : JSON.parse(row.app_state || "{}");
+            const list = Array.isArray(appState.customChannels) ? appState.customChannels : [];
+            for (const ch of list) pushCustom(ch, row.email || "");
+          }
+        } else {
+          const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+          const parsed = JSON.parse(rawFile);
+          for (const u of Object.values(parsed.users || {})) {
+            const list = Array.isArray(u.customChannels) ? u.customChannels : [];
+            for (const ch of list) pushCustom(ch, u.email || "");
+          }
+        }
+
+        return sendJson(response, 200, { ok: true, seedChannels, customChannels });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/channels:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
       }
     }
@@ -8556,14 +8668,19 @@ const server = http.createServer(async (request, response) => {
       console.log("✅ /api/admin/approve-channel called");
 
       try {
+        await requireAdmin(request);
 
         let body = "";
         for await (const chunk of request) body += chunk.toString();
-        const { channelId, status } = JSON.parse(body);
+        const { channelId, status, reason } = JSON.parse(body);
 
         if (!channelId || !status) {
           return sendJson(response, 400, { ok: false, error: "channelId and status required" });
         }
+
+        const nextStatus = sanitizeText(status);
+        const reasonText = sanitizeText(reason || "").slice(0, 240);
+        const nowIso = new Date().toISOString();
 
         if (isPostgresEnabled()) {
           await ensurePostgresSchema();
@@ -8576,7 +8693,14 @@ const server = http.createServer(async (request, response) => {
             const customChannels = Array.isArray(appState.customChannels) ? appState.customChannels : [];
             const channelIndex = customChannels.findIndex(ch => ch.id === channelId);
             if (channelIndex !== -1) {
-              customChannels[channelIndex].status = status;
+              customChannels[channelIndex].status = nextStatus;
+              customChannels[channelIndex].updatedAt = nowIso;
+              if (nextStatus === "rejected") {
+                customChannels[channelIndex].rejectedAt = nowIso;
+                if (reasonText) customChannels[channelIndex].rejectedReason = reasonText;
+              } else if (nextStatus === "approved") {
+                customChannels[channelIndex].approvedAt = nowIso;
+              }
               appState.customChannels = customChannels;
               await pool.query(
                 "UPDATE plately_users SET app_state = $1 WHERE id = $2",
@@ -8588,7 +8712,7 @@ const server = http.createServer(async (request, response) => {
           }
 
           if (found) {
-            return sendJson(response, 200, { ok: true, message: `Channel ${status}` });
+            return sendJson(response, 200, { ok: true, message: `Channel ${nextStatus}` });
           }
           return sendJson(response, 404, { ok: false, error: "Channel not found" });
         } else {
@@ -8601,7 +8725,14 @@ const server = http.createServer(async (request, response) => {
             const customChannels = Array.isArray(user.customChannels) ? user.customChannels : [];
             const channelIndex = customChannels.findIndex(ch => ch.id === channelId);
             if (channelIndex !== -1) {
-              customChannels[channelIndex].status = status;
+              customChannels[channelIndex].status = nextStatus;
+              customChannels[channelIndex].updatedAt = nowIso;
+              if (nextStatus === "rejected") {
+                customChannels[channelIndex].rejectedAt = nowIso;
+                if (reasonText) customChannels[channelIndex].rejectedReason = reasonText;
+              } else if (nextStatus === "approved") {
+                customChannels[channelIndex].approvedAt = nowIso;
+              }
               user.customChannels = customChannels;
               found = true;
               break;
@@ -8610,12 +8741,77 @@ const server = http.createServer(async (request, response) => {
 
           if (found) {
             await fsp.writeFile(DATA_FILE, JSON.stringify(parsed, null, 2));
-            return sendJson(response, 200, { ok: true, message: `Channel ${status}` });
+            return sendJson(response, 200, { ok: true, message: `Channel ${nextStatus}` });
           }
           return sendJson(response, 404, { ok: false, error: "Channel not found" });
         }
       } catch (error) {
         console.error("❌ Error in /api/admin/approve-channel:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/channel-test/search" && request.method === "POST") {
+      console.log("🧪 /api/admin/channel-test/search called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const query = sanitizeText(body.query || "");
+        const channelKind = sanitizeText(body.channelKind || "seed"); // seed | custom
+        const limitRaw = Number.parseInt(String(body.limit || ""), 10);
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 30) : 10;
+
+        if (!query || query.length < 2) {
+          return sendJson(response, 200, { ok: true, results: [] });
+        }
+
+        if (channelKind === "custom") {
+          const customChannel = body.customChannel && typeof body.customChannel === "object" ? body.customChannel : {};
+          const id = sanitizeText(customChannel.id || "");
+          const name = sanitizeText(customChannel.name || "");
+          const url = sanitizeText(customChannel.url || "");
+          if (!id || !name || !url) {
+            return sendJson(response, 400, { ok: false, error: "customChannel (id,name,url) required" });
+          }
+          const q = encodeURIComponent(query);
+          const results = await scrapeOrRestPublic(url, name, id, `${url}/?s=${q}`, parseWPStandard, Math.min(limit, 15), query);
+          return sendJson(response, 200, { ok: true, results: (results || []).slice(0, limit) });
+        }
+
+        const channelId = sanitizeText(body.channelId || "");
+        if (!channelId) {
+          return sendJson(response, 400, { ok: false, error: "channelId required" });
+        }
+        const results = await searchChannelRecipes(query, [channelId]);
+        return sendJson(response, 200, { ok: true, results: (results || []).slice(0, limit) });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/channel-test/search:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/channel-test/import" && request.method === "POST") {
+      console.log("🧪 /api/admin/channel-test/import called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const rawInput = sanitizeText(body.url || "");
+        const urlMatch = rawInput.match(/https?:\/\/[^\s]+/);
+        const cleanUrl = urlMatch ? urlMatch[0] : rawInput;
+        if (!cleanUrl) {
+          return sendJson(response, 400, { ok: false, error: "url required" });
+        }
+        const recipe = await importRecipe(cleanUrl, "", "");
+        const title = sanitizeText(recipe?.title || "");
+        const intro = sanitizeText(recipe?.description || recipe?.intro || "");
+        const ingredientsCount = Array.isArray(recipe?.ingredients) ? recipe.ingredients.filter(Boolean).length : 0;
+        const stepsCount = Array.isArray(recipe?.instructions) ? recipe.instructions.filter(Boolean).length : 0;
+        return sendJson(response, 200, {
+          ok: true,
+          recipe: { title, intro, ingredientsCount, stepsCount },
+        });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/channel-test/import:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
       }
     }

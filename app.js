@@ -6374,6 +6374,228 @@ async function fetchAdminSearchTerms() {
   }
 }
 
+async function fetchAdminPendingChannels() {
+  try {
+    const payload = await fetchJson(`${state.apiBase}/api/admin/pending-channels`);
+    return {
+      pending: Array.isArray(payload?.channels) ? payload.channels : [],
+      rejected: Array.isArray(payload?.rejectedChannels) ? payload.rejectedChannels : [],
+    };
+  } catch (err) {
+    console.error("Failed to fetch admin pending channels:", err);
+    return { pending: [], rejected: [] };
+  }
+}
+
+async function fetchAdminChannelCatalog() {
+  try {
+    const payload = await fetchJson(`${state.apiBase}/api/admin/channels`);
+    return {
+      seed: Array.isArray(payload?.seedChannels) ? payload.seedChannels : [],
+      custom: payload?.customChannels && typeof payload.customChannels === "object"
+        ? payload.customChannels
+        : { approved: [], pending: [], rejected: [] },
+    };
+  } catch (err) {
+    console.error("Failed to fetch admin channels catalog:", err);
+    return { seed: [], custom: { approved: [], pending: [], rejected: [] } };
+  }
+}
+
+async function setAdminChannelStatus(channelId, status, reason = "") {
+  await fetchJson(`${state.apiBase}/api/admin/approve-channel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ channelId, status, reason }),
+  });
+}
+
+function renderAdminChannelsModeration({ pending, rejected }) {
+  const statusEl = document.getElementById("adminChannelsStatus");
+  const pendingEl = document.getElementById("adminPendingChannels");
+  const rejectedEl = document.getElementById("adminRejectedChannels");
+  if (!pendingEl || !rejectedEl) return;
+
+  if (statusEl) {
+    const p = Array.isArray(pending) ? pending.length : 0;
+    const r = Array.isArray(rejected) ? rejected.length : 0;
+    statusEl.textContent = `Pending: ${p}${r ? ` · Afgewezen: ${r}` : ""}`;
+  }
+
+  if (!pending?.length) {
+    pendingEl.innerHTML = `<p style="color:#989188;font-size:0.9rem;margin:0">Geen wachtende kanalen.</p>`;
+  } else {
+    pendingEl.innerHTML = `
+      <div style="display:grid;gap:8px">
+        ${pending.map((ch) => {
+          const id = escapeHtml(ch?.id || "");
+          const name = escapeHtml(ch?.name || "");
+          const url = escapeHtml(ch?.url || "");
+          const by = escapeHtml(ch?.createdByEmail || "Onbekend");
+          return `
+            <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #f3f5ef;border-radius:12px;background:#fff">
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:650;color:#3d3d3b">${name || id}</div>
+                <div style="font-size:0.85rem;color:#989188;margin-top:4px;word-break:break-all">
+                  <a href="${url}" target="_blank" rel="noopener" style="color:#6b6258;text-decoration:underline">${url}</a>
+                </div>
+                <div style="font-size:0.8rem;color:#b9ada0;margin-top:4px">Indiener: ${by}</div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+                <button class="secondary-button" type="button" data-admin-approve-channel="${id}" style="white-space:nowrap">Goedkeuren</button>
+                <button class="secondary-button" type="button" data-admin-reject-channel="${id}" style="white-space:nowrap;border-color:rgba(220,53,69,0.25);color:rgba(140,23,35,0.95)">Afwijzen</button>
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  if (!rejected?.length) {
+    rejectedEl.innerHTML = "";
+  } else {
+    rejectedEl.innerHTML = `
+      <div style="margin-top:4px;color:#989188;font-size:0.85rem;font-weight:700;letter-spacing:0.06em">AFGEWEZEN</div>
+      <div style="display:grid;gap:8px;margin-top:10px">
+        ${rejected.map((ch) => {
+          const name = escapeHtml(ch?.name || ch?.id || "");
+          const url = escapeHtml(ch?.url || "");
+          const reason = escapeHtml(ch?.rejectedReason || "—");
+          const rejectedAt = ch?.rejectedAt ? new Date(ch.rejectedAt).toLocaleString("nl-NL") : "—";
+          return `
+            <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #f3f5ef;border-radius:12px;background:#fff">
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:650;color:#3d3d3b">${name} <span style="margin-left:6px;padding:2px 8px;border-radius:999px;background:rgba(220,53,69,0.10);border:1px solid rgba(220,53,69,0.16);color:rgba(140,23,35,0.95);font-size:0.72rem">AFGEWEZEN</span></div>
+                <div style="font-size:0.85rem;color:#989188;margin-top:4px;word-break:break-all">
+                  <a href="${url}" target="_blank" rel="noopener" style="color:#6b6258;text-decoration:underline">${url}</a>
+                </div>
+                <div style="font-size:0.8rem;color:#b9ada0;margin-top:4px">Reden: ${reason}</div>
+                <div style="font-size:0.8rem;color:#b9ada0;margin-top:2px">Afgewezen: ${escapeHtml(rejectedAt)}</div>
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+}
+
+function setAdminChannelTestError(message) {
+  const el = document.getElementById("adminChannelTestError");
+  if (!el) return;
+  if (!message) {
+    el.style.display = "none";
+    el.textContent = "";
+    return;
+  }
+  el.style.display = "block";
+  el.textContent = "❌ " + message;
+}
+
+function getAdminSelectedChannel() {
+  const sel = document.getElementById("adminChannelTestSelect");
+  const raw = (sel?.value || "").trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function renderAdminChannelTestResults(results) {
+  const wrap = document.getElementById("adminChannelTestResults");
+  if (!wrap) return;
+  const list = Array.isArray(results) ? results : [];
+  if (!list.length) {
+    wrap.innerHTML = `<div style="color:#989188;font-size:0.9rem">Geen resultaten.</div>`;
+    return;
+  }
+  wrap.innerHTML = list.slice(0, 10).map((r) => {
+    const title = escapeHtml(r?.title || "—");
+    const url = escapeHtml(r?.url || "");
+    const src = escapeHtml(r?.channelName || r?.channelId || "");
+    const thumb = escapeHtml(r?.imageUrl || r?.thumbnail || r?.image || "");
+    const thumbHtml = thumb
+      ? `<img src="${thumb}" alt="" loading="lazy" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex:0 0 auto;background:#f3f5ef" />`
+      : `<div aria-hidden="true" style="width:44px;height:44px;border-radius:10px;background:#f3f5ef;flex:0 0 auto"></div>`;
+    return `
+      <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #f3f5ef;border-radius:12px;background:#fff">
+        ${thumbHtml}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:650;color:#3d3d3b">${title}</div>
+          <div style="font-size:0.85rem;color:#989188;margin-top:4px;word-break:break-all">${src} · <a href="${url}" target="_blank" rel="noopener" style="color:#6b6258;text-decoration:underline">${url}</a></div>
+        </div>
+        <button class="secondary-button" type="button" data-admin-channel-test-import="${url}" style="white-space:nowrap">Import</button>
+      </div>
+    `;
+  }).join("");
+}
+
+async function runAdminChannelTestSearch() {
+  setAdminChannelTestError("");
+  const channel = getAdminSelectedChannel();
+  const query = String(document.getElementById("adminChannelTestQuery")?.value || "").trim();
+  const statusEl = document.getElementById("adminChannelTestSearchStatus");
+  if (statusEl) statusEl.textContent = "Zoeken…";
+  if (!channel) {
+    setAdminChannelTestError("Kies eerst een kanaal.");
+    if (statusEl) statusEl.textContent = "";
+    return;
+  }
+  if (!query || query.length < 2) {
+    setAdminChannelTestError("Vul een query in (min 2 tekens).");
+    if (statusEl) statusEl.textContent = "";
+    return;
+  }
+  try {
+    const payload = channel.kind === "custom"
+      ? { channelKind: "custom", customChannel: channel.customChannel, query, limit: 10 }
+      : { channelKind: "seed", channelId: channel.channelId, query, limit: 10 };
+    const res = await fetchJson(`${state.apiBase}/api/admin/channel-test/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const results = Array.isArray(res?.results) ? res.results : [];
+    if (statusEl) statusEl.textContent = results.length ? `Top ${results.length} resultaten` : "Geen resultaten";
+    renderAdminChannelTestResults(results);
+  } catch (err) {
+    if (statusEl) statusEl.textContent = "";
+    setAdminChannelTestError(err.message);
+  }
+}
+
+async function runAdminChannelTestImport(urlOverride = "") {
+  setAdminChannelTestError("");
+  const input = document.getElementById("adminChannelTestImportUrl");
+  const url = String(urlOverride || input?.value || "").trim();
+  const statusEl = document.getElementById("adminChannelTestImportStatus");
+  if (!url) {
+    setAdminChannelTestError("Vul een URL in om te importeren.");
+    if (statusEl) statusEl.textContent = "";
+    return;
+  }
+  if (statusEl) statusEl.textContent = "Importeren…";
+  try {
+    const res = await fetchJson(`${state.apiBase}/api/admin/channel-test/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const r = res?.recipe || {};
+    const title = r.title || "—";
+    const ing = Number(r.ingredientsCount || 0);
+    const steps = Number(r.stepsCount || 0);
+    if (statusEl) statusEl.textContent = `✅ ${title} · ingrediënten: ${ing} · stappen: ${steps}`;
+  } catch (err) {
+    if (statusEl) statusEl.textContent = "";
+    setAdminChannelTestError(err.message);
+  }
+}
+
 function renderAdminSearchTerms(searchTerms) {
   const statusEl = document.getElementById("adminSearchTermsStatus");
   const wrapEl = document.getElementById("adminSearchTermsTableWrap");
@@ -6448,6 +6670,8 @@ async function renderAdminScreen() {
   // Fetch admin stats
   const stats = await fetchAdminStats();
   const searchTerms = await fetchAdminSearchTerms();
+  const channels = await fetchAdminPendingChannels();
+  const catalog = await fetchAdminChannelCatalog();
 
   // Update analytics cards
   const userCountEl = document.getElementById("adminUserCount");
@@ -6512,6 +6736,79 @@ async function renderAdminScreen() {
   }
 
   renderAdminSearchTerms(searchTerms);
+
+  renderAdminChannelsModeration(channels);
+
+  // Bind moderation actions
+  document.querySelectorAll("[data-admin-approve-channel]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute("data-admin-approve-channel") || "";
+      if (!id) return;
+      if (!confirm("Kanaal goedkeuren?")) return;
+      try {
+        await setAdminChannelStatus(id, "approved", "");
+        showToast("Kanaal goedgekeurd");
+        renderAdminScreen();
+      } catch (err) {
+        showToast("Mislukt: " + err.message);
+      }
+    }, { once: true });
+  });
+  document.querySelectorAll("[data-admin-reject-channel]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute("data-admin-reject-channel") || "";
+      if (!id) return;
+      if (!confirm("Kanaal afwijzen?")) return;
+      const reason = prompt("Reden (optioneel):") || "";
+      try {
+        await setAdminChannelStatus(id, "rejected", reason);
+        showToast("Kanaal afgewezen");
+        renderAdminScreen();
+      } catch (err) {
+        showToast("Mislukt: " + err.message);
+      }
+    }, { once: true });
+  });
+
+  // Populate channel test select
+  const select = document.getElementById("adminChannelTestSelect");
+  if (select) {
+    const seed = Array.isArray(catalog?.seed) ? catalog.seed : [];
+    const custom = catalog?.custom || { approved: [], pending: [], rejected: [] };
+    const opt = (label, valueObj) => `<option value="${escapeHtml(JSON.stringify(valueObj))}">${escapeHtml(label)}</option>`;
+    const groups = [];
+    if (seed.length) {
+      groups.push(`<optgroup label="Seed kanalen">${seed.map((ch) => opt(ch.name, { kind: "seed", channelId: ch.id, label: ch.name })).join("")}</optgroup>`);
+    }
+    const makeCustomGroup = (label, list) => {
+      const arr = Array.isArray(list) ? list : [];
+      if (!arr.length) return "";
+      return `<optgroup label="${escapeHtml(label)}">${arr.map((ch) => opt(`${ch.name}${ch.url ? ` — ${ch.url}` : ""}`, { kind: "custom", customChannel: { id: ch.id, name: ch.name, url: ch.url }, label: ch.name })).join("")}</optgroup>`;
+    };
+    groups.push(makeCustomGroup("Custom (approved)", custom.approved));
+    groups.push(makeCustomGroup("Custom (pending)", custom.pending));
+    groups.push(makeCustomGroup("Custom (rejected)", custom.rejected));
+    if (groups.filter(Boolean).length) {
+      select.innerHTML = `<option value="">Kanaal kiezen…</option>` + groups.filter(Boolean).join("");
+    }
+  }
+
+  const searchBtn = document.getElementById("adminChannelTestSearchBtn");
+  if (searchBtn) searchBtn.onclick = () => runAdminChannelTestSearch();
+  const importBtn = document.getElementById("adminChannelTestImportBtn");
+  if (importBtn) importBtn.onclick = () => runAdminChannelTestImport("");
+
+  document.querySelectorAll("[data-admin-channel-test-import]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const url = btn.getAttribute("data-admin-channel-test-import") || "";
+      const input = document.getElementById("adminChannelTestImportUrl");
+      if (input) input.value = url;
+      runAdminChannelTestImport(url);
+    }, { once: true });
+  });
 }
 
 function renderAll() {

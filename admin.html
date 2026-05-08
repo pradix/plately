@@ -231,6 +231,61 @@
       box-shadow: 0 0 0 3px rgba(120, 147, 111, 0.12);
     }
 
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(0,0,0,0.18);
+      border-top-color: rgba(120, 147, 111, 0.95);
+      border-radius: 999px;
+      animation: spin 0.8s linear infinite;
+      vertical-align: -2px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .spinner { animation: none; }
+      .detail-panel { transition: none; }
+      .btn { transition: none; }
+    }
+
+    .admin-test__row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+    .admin-test__row > * { flex: 1; min-width: 220px; }
+    .admin-test__row .btn { flex: 0 0 auto; }
+    .admin-test__select, .admin-test__input {
+      padding: 10px 12px;
+      border: 1px solid rgba(0,0,0,0.14);
+      border-radius: 10px;
+      font-size: 13px;
+      background: #fff;
+    }
+    .admin-test__select:focus, .admin-test__input:focus {
+      outline: none;
+      border-color: rgba(120, 147, 111, 0.55);
+      box-shadow: 0 0 0 3px rgba(120, 147, 111, 0.12);
+    }
+    .admin-test__results { margin-top: 10px; display: grid; gap: 8px; }
+    .admin-test__result {
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      padding:10px;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 12px;
+      background: rgba(0,0,0,0.015);
+    }
+    .admin-test__thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      object-fit: cover;
+      background: rgba(0,0,0,0.06);
+      flex: 0 0 auto;
+    }
+    .admin-test__title { font-weight: 800; font-size: 12px; color: rgba(0,0,0,0.82); margin-bottom: 2px; }
+    .admin-test__meta { color: rgba(0,0,0,0.55); font-size: 11px; }
+
     /* ── Tables (compact) ─────────────────────────────────────────────────── */
     .users-table {
       width: 100%;
@@ -605,6 +660,31 @@
         <div id="pendingChannelsContainer" style="min-height: 40px;">
           <p class="muted" style="text-align:center;padding:14px">Laden...</p>
         </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <h2>Kanaal test (search + import)</h2>
+          <div class="muted">Kies 1 kanaal en test</div>
+        </div>
+        <div id="channelTestError" class="error" style="display:none"></div>
+        <div class="admin-test__row">
+          <select id="channelTestSelect" class="admin-test__select" aria-label="Kanaal kiezen">
+            <option value="">Kanaal kiezen…</option>
+          </select>
+          <input id="channelTestQuery" class="admin-test__input" type="text" placeholder="Search query" />
+          <button class="btn btn-primary" type="button" onclick="runChannelTestSearch()">Test search</button>
+        </div>
+        <div id="channelTestSearchStatus" class="muted" style="margin-top:8px"></div>
+        <div id="channelTestSearchResults" class="admin-test__results"></div>
+
+        <hr class="divider" />
+
+        <div class="admin-test__row">
+          <input id="channelTestImportUrl" class="admin-test__input" type="text" placeholder="Import URL" />
+          <button class="btn" type="button" onclick="runChannelTestImport()">Test import</button>
+        </div>
+        <div id="channelTestImportStatus" class="muted" style="margin-top:8px"></div>
       </div>
 
       <div class="section">
@@ -1170,14 +1250,13 @@
         }
 
         const pendingChannels = data.channels || [];
+        const rejectedChannels = data.rejectedChannels || [];
         const container = document.getElementById("pendingChannelsContainer");
 
-        if (!pendingChannels || pendingChannels.length === 0) {
-          container.innerHTML = '<p class="muted" style="text-align:center;padding:14px">Geen wachtende kanalen</p>';
-          return;
-        }
+        const pendingEmpty = !pendingChannels || pendingChannels.length === 0;
+        const rejectedEmpty = !rejectedChannels || rejectedChannels.length === 0;
 
-        const html = `
+        const pendingHtml = pendingEmpty ? '<p class="muted" style="text-align:center;padding:14px">Geen wachtende kanalen</p>' : `
           <table class="users-table" style="margin-top: 0;">
             <thead>
               <tr>
@@ -1205,7 +1284,32 @@
           </table>
         `;
 
-        container.innerHTML = html;
+        const rejectedHtml = rejectedEmpty ? "" : `
+          <hr class="divider" />
+          <h3 class="subhead" style="margin-top:0">Afgewezen kanalen</h3>
+          <table class="users-table" style="margin-top: 0;">
+            <thead>
+              <tr>
+                <th>Kanaal</th>
+                <th>URL</th>
+                <th>Reden</th>
+                <th>Afgewezen</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rejectedChannels.map(ch => `
+                <tr>
+                  <td><strong>${escapeHtml(ch.name)}</strong> <span class="badge" style="margin-left:6px;background:rgba(220,53,69,0.10);border-color:rgba(220,53,69,0.16);color:rgba(140,23,35,0.95)">AFGEWEZEN</span></td>
+                  <td class="mono" style="font-size: 11px; color: rgba(0,0,0,0.58);"><a class="admin-inventory__link" href="${escapeHtml(ch.url)}" target="_blank" rel="noopener">${escapeHtml(ch.url)}</a></td>
+                  <td>${escapeHtml(ch.rejectedReason || "—")}</td>
+                  <td class="timestamp">${ch.rejectedAt ? formatDate(new Date(ch.rejectedAt)) : "—"}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+
+        container.innerHTML = pendingHtml + rejectedHtml;
       } catch (error) {
         const container = document.getElementById("pendingChannelsContainer");
         container.innerHTML = '<p class="muted" style="color: rgba(140, 23, 35, 0.95);">Fout bij laden: ' + escapeHtml(error.message) + '</p>';
@@ -1243,10 +1347,11 @@
       }
 
       try {
+        const reason = prompt("Reden (optioneel):") || "";
         const response = await fetch("/api/admin/approve-channel", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ channelId, status: "rejected" })
+          body: JSON.stringify({ channelId, status: "rejected", reason })
         });
 
         const data = await response.json();
@@ -1537,7 +1642,158 @@
       return String(text).replace(/[&<>"']/g, m => map[m]);
     }
 
+    function showChannelTestError(message) {
+      const el = document.getElementById("channelTestError");
+      if (!el) return;
+      if (!message) {
+        el.style.display = "none";
+        el.textContent = "";
+        return;
+      }
+      el.style.display = "block";
+      el.textContent = "❌ " + message;
+    }
+
+    function getSelectedChannelFromUi() {
+      const sel = document.getElementById("channelTestSelect");
+      const raw = (sel?.value || "").trim();
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+
+    async function loadChannelCatalog() {
+      try {
+        const response = await fetch("/api/admin/channels");
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Failed to load channels");
+
+        const seed = Array.isArray(data.seedChannels) ? data.seedChannels : [];
+        const custom = data.customChannels || { approved: [], pending: [], rejected: [] };
+        const approved = Array.isArray(custom.approved) ? custom.approved : [];
+        const pending = Array.isArray(custom.pending) ? custom.pending : [];
+        const rejected = Array.isArray(custom.rejected) ? custom.rejected : [];
+
+        const sel = document.getElementById("channelTestSelect");
+        if (!sel) return;
+
+        const opt = (label, valueObj) => `<option value="${escapeHtml(JSON.stringify(valueObj))}">${escapeHtml(label)}</option>`;
+        const groups = [];
+        if (seed.length) {
+          groups.push(`<optgroup label="Approved/existing (seed)">${seed.map((ch) => opt(ch.name, { kind: "seed", channelId: ch.id, label: ch.name })).join("")}</optgroup>`);
+        }
+        const makeCustomGroup = (label, list) => {
+          if (!list.length) return "";
+          return `<optgroup label="${escapeHtml(label)}">${list.map((ch) => opt(`${ch.name}${ch.url ? ` — ${ch.url}` : ""}`, { kind: "custom", customChannel: { id: ch.id, name: ch.name, url: ch.url }, label: ch.name })).join("")}</optgroup>`;
+        };
+        groups.push(makeCustomGroup("Custom (approved)", approved));
+        groups.push(makeCustomGroup("Custom (pending)", pending));
+        groups.push(makeCustomGroup("Custom (rejected)", rejected));
+        sel.innerHTML = `<option value="">Kanaal kiezen…</option>` + groups.filter(Boolean).join("");
+      } catch (error) {
+        showChannelTestError(error.message);
+      }
+    }
+
+    function renderChannelTestSearchResults(results) {
+      const wrap = document.getElementById("channelTestSearchResults");
+      if (!wrap) return;
+      const list = Array.isArray(results) ? results : [];
+      if (!list.length) {
+        wrap.innerHTML = `<p class="muted">Geen resultaten</p>`;
+        return;
+      }
+      wrap.innerHTML = list.map((r) => {
+        const title = r?.title || "";
+        const url = r?.url || "";
+        const src = r?.channelName || r?.channelId || "";
+        const thumb = r?.imageUrl || r?.thumbnail || r?.image || "";
+        const thumbHtml = thumb ? `<img class="admin-test__thumb" src="${escapeHtml(thumb)}" alt="" loading="lazy" />` : `<div class="admin-test__thumb" aria-hidden="true"></div>`;
+        return `
+          <div class="admin-test__result">
+            ${thumbHtml}
+            <div style="min-width:0">
+              <div class="admin-test__title">${escapeHtml(title || "—")}</div>
+              <div class="admin-test__meta">${escapeHtml(src)} · <a class="admin-inventory__link" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></div>
+            </div>
+            <div style="margin-left:auto;flex:0 0 auto">
+              <button class="btn btn-sm" type="button" onclick="setImportUrlFromResult('${escapeHtml(url)}')">Import</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function setImportUrlFromResult(url) {
+      const input = document.getElementById("channelTestImportUrl");
+      if (input) input.value = url || "";
+      runChannelTestImport();
+    }
+
+    async function runChannelTestSearch() {
+      showChannelTestError("");
+      const channel = getSelectedChannelFromUi();
+      const query = (document.getElementById("channelTestQuery")?.value || "").trim();
+      const statusEl = document.getElementById("channelTestSearchStatus");
+      const resultsWrap = document.getElementById("channelTestSearchResults");
+      if (resultsWrap) resultsWrap.innerHTML = "";
+
+      if (!channel) return showChannelTestError("Kies eerst een kanaal.");
+      if (!query || query.length < 2) return showChannelTestError("Vul een query in (min 2 tekens).");
+
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> Zoeken…`;
+      try {
+        const payload = channel.kind === "custom"
+          ? { channelKind: "custom", customChannel: channel.customChannel, query, limit: 10 }
+          : { channelKind: "seed", channelId: channel.channelId, query, limit: 10 };
+
+        const response = await fetch("/api/admin/channel-test/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Search test failed");
+        const results = data.results || [];
+        if (statusEl) statusEl.textContent = results.length ? `Top ${results.length} resultaten` : "Geen resultaten";
+        renderChannelTestSearchResults(results);
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "";
+        showChannelTestError(error.message);
+      }
+    }
+
+    async function runChannelTestImport() {
+      showChannelTestError("");
+      const url = (document.getElementById("channelTestImportUrl")?.value || "").trim();
+      const statusEl = document.getElementById("channelTestImportStatus");
+      if (!url) return showChannelTestError("Vul een URL in om te importeren.");
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> Importeren…`;
+      try {
+        const response = await fetch("/api/admin/channel-test/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Import test failed");
+        const r = data.recipe || {};
+        const title = r.title || "—";
+        const ing = Number(r.ingredientsCount || 0);
+        const steps = Number(r.stepsCount || 0);
+        if (statusEl) statusEl.textContent = `✅ ${title} · ingrediënten: ${ing} · stappen: ${steps}`;
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "";
+        showChannelTestError(error.message);
+      }
+    }
+
     refreshAll();
+    loadChannelCatalog();
   </script>
 </body>
 </html>
