@@ -616,6 +616,16 @@ function getAllChannels() {
   return [...SEED_CHANNELS, ...state.customChannels];
 }
 
+function compareChannelDisplayName(a, b) {
+  const an = (a?.name || "").trim();
+  const bn = (b?.name || "").trim();
+  return an.localeCompare(bn, undefined, { sensitivity: "base" });
+}
+
+function getSeedChannelsSortedByName() {
+  return [...SEED_CHANNELS].sort(compareChannelDisplayName);
+}
+
 const homeScreen = document.getElementById("homeScreen");
 const detailScreen = document.getElementById("detailScreen");
 const groceryScreen = document.getElementById("groceryScreen");
@@ -3448,10 +3458,13 @@ function renderChannelRow() {
   const row = document.getElementById("channelRow");
   if (!row) return;
   // Only show followed channels that are approved (not pending)
-  const followed = getAllChannels().filter((ch) =>
-    state.followedChannelIds.includes(ch.id) &&
-    (ch.status || "approved") === "approved"
-  );
+  const followed = getAllChannels()
+    .filter(
+      (ch) =>
+        state.followedChannelIds.includes(ch.id) &&
+        (ch.status || "approved") === "approved"
+    )
+    .sort(compareChannelDisplayName);
   row.innerHTML = followed.map((ch) => {
     const faviconUrl = getSourceIconUrl(ch.url);
     return `
@@ -3562,7 +3575,7 @@ function renderChannelSettings() {
   const container = document.getElementById("channelSettingsList");
   if (!container) return;
 
-  const seedRows = SEED_CHANNELS.map((ch) => {
+  const seedRows = getSeedChannelsSortedByName().map((ch) => {
     const followed = state.followedChannelIds.includes(ch.id);
     const faviconUrl = getSourceIconUrl(ch.url);
     return `
@@ -9674,8 +9687,9 @@ let onboardingData = {
 };
 
 function resetOnboardingData() {
+  const sortedSeed = getSeedChannelsSortedByName();
   onboardingData = {
-    channels: SEED_CHANNELS.map((ch) => ch.id),
+    channels: sortedSeed.map((ch) => ch.id),
     cookbook: "",
     name: "",
     photoData: null,
@@ -9768,7 +9782,12 @@ function renderOnboardingChannels() {
   const list = document.getElementById("onboardingChannelsList");
   if (!list) return;
 
-  list.innerHTML = SEED_CHANNELS.map((ch) => {
+  const sortedSeed = getSeedChannelsSortedByName();
+
+  // Default: all channels are checked (deduped).
+  onboardingData.channels = [...new Set(onboardingData.channels)];
+
+  list.innerHTML = sortedSeed.map((ch) => {
     const followed = onboardingData.channels.includes(ch.id);
     const faviconUrl = getSourceIconUrl(ch.url);
     return `
@@ -9783,7 +9802,7 @@ function renderOnboardingChannels() {
 
   function setOnboardingChannelFollowed(channelId, shouldFollow) {
     if (shouldFollow) {
-      if (!onboardingData.channels.includes(channelId)) onboardingData.channels.push(channelId);
+      onboardingData.channels = [...new Set([...onboardingData.channels, channelId])];
     } else {
       onboardingData.channels = onboardingData.channels.filter((id) => id !== channelId);
     }
@@ -9952,7 +9971,7 @@ bindEvent(document.getElementById("onboardingSuggestBtn"), "click", () => {
   });
 
   // Add to followed channels
-  onboardingData.channels.push(newChannelId);
+  onboardingData.channels = [...new Set([...onboardingData.channels, newChannelId])];
 
   // Re-render with the new channel
   renderOnboardingChannels();
