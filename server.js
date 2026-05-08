@@ -5718,22 +5718,31 @@ async function importWebsite(sourceUrl) {
         ahReaderDescription,
         primaryRecipe.description,
       ]);
+      const pickBestList = (lists, minUseful = 2) => {
+        const normalized = lists
+          .map((list) => (Array.isArray(list) ? list.filter(Boolean) : []))
+          .filter((list) => list.length > 0);
+        if (!normalized.length) return [];
+        const usable = normalized.filter((list) => list.length >= minUseful);
+        const pool = usable.length ? usable : normalized;
+        pool.sort((a, b) => b.length - a.length);
+        return pool[0] || [];
+      };
+      const bestIngredients = pickBestList([readerIngredients, readerRecipe.ingredients, primaryRecipe.ingredients], 3);
+      const bestInstructions = pickBestList([readerInstructions, readerRecipe.instructions, primaryRecipe.instructions], 3);
       return {
         ...primaryRecipe,
         image: imageUrl || primaryRecipe.image,
-        ingredients: readerIngredients.length ? readerIngredients : readerRecipe.ingredients.length ? readerRecipe.ingredients : primaryRecipe.ingredients,
-        instructions:
-          readerInstructions.length ? readerInstructions : readerRecipe.instructions.length ? readerRecipe.instructions : primaryRecipe.instructions,
+        ingredients: bestIngredients.length ? bestIngredients : primaryRecipe.ingredients,
+        instructions: bestInstructions.length ? bestInstructions : primaryRecipe.instructions,
         title: finalAhTitle || mergedAhTitle || primaryRecipe.title,
         description: ahDescription || primaryRecipe.description,
         time: ahJsonLdTime || primaryRecipe.time,
         servings: ahJsonLdServings || readerServings || readerRecipe.servings || primaryRecipe.servings,
         kcal: ahJsonLdCalories || primaryRecipe.kcal,
         needsReview:
-          !(readerIngredients.length || readerRecipe.ingredients.length) ||
-          !(readerInstructions.length || readerRecipe.instructions.length) ||
-          (readerIngredients.length || readerRecipe.ingredients.length) < 4 ||
-          (readerInstructions.length || readerRecipe.instructions.length) < 3,
+          bestIngredients.length < 4 ||
+          bestInstructions.length < 3,
       };
     }
 
