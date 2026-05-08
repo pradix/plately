@@ -484,6 +484,9 @@ const state = {
   basketServings: 2, // current persons
   basketBaseServings: 2, // base when basket was opened
   basketFilter: { bio: false, beterLeven1: false, vegetarisch: false, vegan: false, plantaardig: false },
+  // Track optional pantry items the user explicitly added from the basket sheet.
+  // Keyed by selected recipe id so the behavior is per-recipe.
+  basketOptionalAddedByRecipe: {},
   altSheetItemIndex: null,
   altSheetFilter: null, // null = grouped view, otherwise one of: beterLeven1|vegetarisch|vegan|plantaardig|more
   cookbooks: [],
@@ -1723,17 +1726,23 @@ function renderBasketPreview() {
   // Optional/pantry items ("in huis"): informational only and do not include them
   // in the store basket URL/payload.
   const basketRecipe = state.selectedRecipeId ? getRecipeById(state.selectedRecipeId) : null;
+  const pantryAddedForRecipe = new Set(
+    (state.basketOptionalAddedByRecipe?.[state.selectedRecipeId] || [])
+      .map((t) => normalizeIngredientKey(String(t || "")))
+      .filter(Boolean)
+  );
   const existingPantryKeys = new Set(
     (Array.isArray(preview.items) ? preview.items : [])
       .map((i) => normalizeIngredientKey(i?.ingredientTitle || ""))
       .filter(Boolean)
   );
+  pantryAddedForRecipe.forEach((k) => existingPantryKeys.add(k));
   const pantryOptional = getPantryOptionalSuggestionsForRecipe(basketRecipe, existingPantryKeys);
   const pantryOptionalHtml = pantryOptional.length
     ? `
         <section class="grocery-group grocery-group--smart">
           <div class="grocery-group__header grocery-group__header--shared">
-            <h2>IN HUIS (OPTIONEEL)</h2>
+            <h2>Dit heb je waarschijnlijk in huis</h2>
           </div>
           ${pantryOptional
             .map((s) => `
@@ -1749,7 +1758,9 @@ function renderBasketPreview() {
                   </p>
                   <p class="basket-product__for">Niet toegevoegd aan AH</p>
                 </div>
-                <div class="basket-product__right"></div>
+                <div class="basket-product__right">
+                  <button class="basket-product__add" type="button" data-basket-pantry-add="${escapeHtml(s.title)}">Toevoegen</button>
+                </div>
               </div>
             `)
             .join("")}
@@ -1844,6 +1855,16 @@ function renderBasketPreview() {
   const productsHtml = rendered || `<p style="text-align:center;padding:26px 18px;color:#888;font-size:0.95rem">Geen producten gevonden.</p>`;
   listEl.innerHTML = `${productsHtml}${pantryOptionalHtml}`;
 
+  // Bind pantry "Toevoegen" actions (promote optional item into real basket items)
+  listEl
+    .querySelectorAll("[data-basket-pantry-add]")
+    .forEach((btn) => {
+      bindEvent(btn, "click", () => {
+        const title = String(btn.dataset.basketPantryAdd || "").trim();
+        addOptionalToBasket(title);
+      });
+    });
+
   // Calculate total
   const totalEur = (totalCents / 100).toFixed(2).replace(".", ",");
   if (totalEl) totalEl.textContent = `€ ${totalEur}`;
@@ -1855,6 +1876,62 @@ function renderBasketPreview() {
       if (url) window.open(url, "_blank", "noreferrer");
     };
   }
+}
+
+function addOptionalToBasket(title) {
+  const cleanTitle = String(title || "").trim();
+  if (!cleanTitle) {
+    return;
+  }
+  const recipe = state.selectedRecipeId ? getRecipeById(state.selectedRecipeId) : null;
+  if (!recipe) {
+    showToast("Kies eerst een recept.");
+    return;
+  }
+
+  const key = normalizeIngredientKey(cleanTitle);
+  if (!key) {
+    return;
+  }
+
+  const existingUnchecked = state.groceryItems.find(
+    (it) => !it.checked && normalizeIngredientKey(it.title) === key
+  );
+  if (!existingUnchecked) {
+    state.groceryItems.push({
+      id: `${recipe.id}-pantry-${cleanTitle}-${Date.now()}`,
+      title: cleanTitle,
+      amount: "1",
+      recipeId: recipe.id,
+      recipeTitle: recipe.title,
+      recipeSourceUrl: recipe.sourceUrl || "",
+      recipePlatform: recipe.platform || "website",
+      group: getIngredientGroup(cleanTitle),
+      checked: false,
+    });
+    renderGroceryGroups();
+    schedulePersistAppState();
+  }
+
+  // Mark as added for the selected recipe so it disappears from the optional section immediately.
+  const current = Array.isArray(state.basketOptionalAddedByRecipe?.[recipe.id])
+    ? state.basketOptionalAddedByRecipe[recipe.id]
+    : [];
+  if (!current.some((t) => normalizeIngredientKey(t) === key)) {
+    state.basketOptionalAddedByRecipe = {
+      ...(state.basketOptionalAddedByRecipe || {}),
+      [recipe.id]: [...current, cleanTitle],
+    };
+  }
+
+  // Refetch basket suggestions (reuses existing picks where possible)
+  if (state.basketPreview?.store === "albert-heijn") {
+    refetchBasketWithPreferences({ ...(state.basketFilter || {}) });
+  } else {
+    renderBasketPreview();
+  }
+
+  showToast(existingUnchecked ? `${cleanTitle} staat al op je lijst.` : `${cleanTitle} toegevoegd.`);
 }
 
 function openBasketModal(preview) {

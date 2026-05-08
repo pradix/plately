@@ -9373,6 +9373,23 @@ body {
   flex-shrink: 0;
 }
 
+.basket-product__add {
+  appearance: none;
+  border: 1px solid #d6e4d8;
+  background: #f3f8f3;
+  color: #2d4a2e;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  line-height: 1;
+  min-height: 40px;
+}
+
+.basket-product__add:hover { background: #e8f4e9; border-color: #6b9e72; }
+.basket-product__add:active { background: #dceadd; }
+.basket-product__add:disabled { opacity: 0.6; cursor: not-allowed; }
+
 .basket-product__delete {
   background: rgba(192, 184, 176, 0.12);
   border: 1px solid rgba(192, 184, 176, 0.2);
