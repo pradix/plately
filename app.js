@@ -1720,8 +1720,8 @@ function renderBasketPreview() {
 
   if (nameEl) nameEl.textContent = preview.recipeTitle || "Boodschappenlijst";
 
-  // Optional/pantry items ("in huis"): show as informational section and do not
-  // include them in the store basket URL/payload.
+  // Optional/pantry items ("in huis"): informational only and do not include them
+  // in the store basket URL/payload.
   const basketRecipe = state.selectedRecipeId ? getRecipeById(state.selectedRecipeId) : null;
   const existingPantryKeys = new Set(
     (Array.isArray(preview.items) ? preview.items : [])
@@ -1737,15 +1737,19 @@ function renderBasketPreview() {
           </div>
           ${pantryOptional
             .map((s) => `
-              <div class="grocery-entry-wrapper">
-                <button class="grocery-entry" type="button" aria-label="In huis: ${escapeHtml(s.title)}">
-                  <span class="grocery-check" aria-hidden="true">${escapeHtml(s.icon)}</span>
-                  <span class="grocery-entry__content">
-                    <p class="grocery-entry__title">${escapeHtml(s.title)}</p>
-                  </span>
-                  <span class="grocery-entry__amount"></span>
-                  <span class="grocery-entry__img" aria-hidden="true">${getIngredientVisualMarkup(s.title)}</span>
-                </button>
+              <div class="basket-product" data-basket-pantry="1">
+                <div class="basket-product__img-wrap">
+                  <span class="basket-product__img basket-product__img--placeholder" aria-hidden="true">${escapeHtml(s.icon || "🏠")}</span>
+                </div>
+                <div class="basket-product__info">
+                  <p class="basket-product__name">${escapeHtml(s.title)}</p>
+                  <p class="basket-product__meta">
+                    <span class="basket-product__partner">IN HUIS</span>
+                    <span>optioneel</span>
+                  </p>
+                  <p class="basket-product__for">Niet toegevoegd aan AH</p>
+                </div>
+                <div class="basket-product__right"></div>
               </div>
             `)
             .join("")}
@@ -1838,7 +1842,7 @@ function renderBasketPreview() {
   }).join("");
 
   const productsHtml = rendered || `<p style="text-align:center;padding:26px 18px;color:#888;font-size:0.95rem">Geen producten gevonden.</p>`;
-  listEl.innerHTML = `${pantryOptionalHtml}${productsHtml}`;
+  listEl.innerHTML = `${productsHtml}${pantryOptionalHtml}`;
 
   // Calculate total
   const totalEur = (totalCents / 100).toFixed(2).replace(".", ",");
