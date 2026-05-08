@@ -516,6 +516,47 @@ const state = {
   cookbooksSelectedIds: [],
 };
 
+function getInitials(name, email) {
+  const n = String(name || "").trim();
+  if (n) {
+    const parts = n.split(/\s+/).filter(Boolean);
+    const first = (parts[0]?.[0] || "").toUpperCase();
+    const second = (parts.length > 1 ? parts[1]?.[0] : parts[0]?.[1]) || "";
+    const out = (first + String(second).toUpperCase()).trim();
+    return out || "?";
+  }
+  const e = String(email || "").trim();
+  if (e) {
+    const local = e.split("@")[0] || "";
+    const a = (local[0] || "").toUpperCase();
+    const b = (local[1] || "").toUpperCase();
+    return (a + b).trim() || "?";
+  }
+  return "?";
+}
+
+function resetOnboardingPhotoCircle() {
+  try {
+    const circle = document.getElementById("onboardingPhotoCircle");
+    const icon = circle?.querySelector?.(".onboarding-photo-icon");
+    if (circle) {
+      circle.style.backgroundImage = "";
+      circle.style.backgroundSize = "";
+      circle.style.backgroundPosition = "";
+    }
+    if (icon instanceof HTMLElement) {
+      icon.style.display = "";
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function clearTransientProfilePhoto() {
+  state.profile.photo = "";
+  resetOnboardingPhotoCircle();
+}
+
 const SEED_RECIPE_IDS = new Set(initialRecipes.map((recipe) => recipe.id));
 
 const SEED_CHANNELS = [
@@ -1041,6 +1082,11 @@ function openAuthModal(mode = "login") {
   if (!authModal) {
     console.error("❌ authModal element not found!");
     return;
+  }
+
+  if (isRegister) {
+    // Ensure registration never shows a previous user's transient photo.
+    clearTransientProfilePhoto();
   }
 
   authModal.classList.remove("hidden");
@@ -5133,9 +5179,10 @@ function renderAvatars() {
       img.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:999px;";
       btn.appendChild(img);
     } else {
-      // Show first initial
-      const initial = (state.profile.name || "?")[0].toUpperCase();
-      btn.textContent = initial;
+      const bubble = document.createElement("div");
+      bubble.className = "avatar-initials";
+      bubble.textContent = getInitials(state.profile.name, state.auth.email || state.profile.email);
+      btn.appendChild(bubble);
     }
   });
 
@@ -5143,13 +5190,17 @@ function renderAvatars() {
   ["profileAvatarDisplay", "profileSubAvatarDisplay", "profileHeroAvatar"].forEach((id) => {
     const p2avatar = document.getElementById(id);
     if (!p2avatar) return;
-    const img = p2avatar.querySelector(".profile2-avatar__img");
     if (photo) {
-      if (img) { img.src = photo; img.alt = state.profile.name || ""; }
-      p2avatar.style.fontSize = "";
+      p2avatar.innerHTML = "";
+      const img = document.createElement("img");
+      img.src = photo;
+      img.alt = state.profile.name || "";
+      img.className = "profile2-avatar__img";
+      img.setAttribute("aria-hidden", "true");
+      p2avatar.appendChild(img);
     } else {
-      if (img) { img.src = "assets/profile-avatar.svg"; img.alt = ""; }
-      p2avatar.style.fontSize = "";
+      p2avatar.innerHTML = "";
+      p2avatar.textContent = getInitials(state.profile.name, state.auth.email || state.profile.email);
     }
   });
 }
@@ -6162,6 +6213,14 @@ function applyPersistedAppState(user) {
     state.selectedRecipeId = "";
     state.featuredRecipeId = "";
     state.session.userId = "";
+    state.profile = {
+      name: "",
+      handle: "",
+      email: "",
+      photo: "",
+      favoriteSupermarket: "ah",
+      onboardingSeenAt: null,
+    };
     return;
   }
 
@@ -6177,13 +6236,16 @@ function applyPersistedAppState(user) {
       user.onboardingSeenAtIso ??
       null;
     state.profile = {
-      name: user.profile.name || state.profile.name,
-      handle: user.profile.handle || state.profile.handle,
-      email: user.profile.email || state.profile.email || "",
-      photo: user.profile.photo || state.profile.photo || "",
-      favoriteSupermarket: user.profile.favoriteSupermarket || state.profile.favoriteSupermarket || "ah",
+      name: user.profile.name || "",
+      handle: user.profile.handle || "",
+      email: user.profile.email || "",
+      photo: typeof user.profile.photo === "string" ? user.profile.photo : "",
+      favoriteSupermarket: user.profile.favoriteSupermarket || "ah",
       onboardingSeenAt: onboardingSeenAt || null,
     };
+  } else {
+    // Defensive: never keep a previous user's photo around.
+    state.profile.photo = "";
   }
   if (typeof user.language === "string" && user.language) {
     state.language = user.language;
@@ -6752,6 +6814,7 @@ async function logoutAccount() {
 
   // Clear token immediately
   storeAuthToken("");
+  clearTransientProfilePhoto();
 
   // Clear session flags so user will see tooltips and install modal again on next login
   try { sessionStorage.removeItem(ONBOARDING_SESSION_KEY); } catch {}
@@ -9698,6 +9761,7 @@ function resetOnboardingData() {
 
 function showOnboarding() {
   resetOnboardingData();
+  resetOnboardingPhotoCircle();
   authModal.classList.add("hidden");
   authModal.setAttribute("aria-hidden", "true");
   onboardingScreen.classList.remove("hidden");
@@ -9891,6 +9955,8 @@ function finishOnboarding() {
 
   if (onboardingData.photoData) {
     state.profile.photo = onboardingData.photoData;
+  } else {
+    state.profile.photo = "";
   }
   if (onboardingData.gender) {
     state.profile.gender = onboardingData.gender;

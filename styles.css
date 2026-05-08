@@ -6346,6 +6346,20 @@ body {
   border-radius: 999px;
 }
 
+.avatar-initials {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(120, 147, 111, 0.14);
+  color: #243c2b;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  user-select: none;
+}
+
 .search-card {
   display: grid;
   grid-template-columns: 1fr auto;
