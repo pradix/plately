@@ -890,6 +890,76 @@ async function setChannelOverrides(nextOverrides) {
   await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2));
 }
 
+async function getChannelEnabledState() {
+  const fallback = { seed: {}, custom: {} };
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const row = await pool.query("SELECT value FROM plately_admin_state WHERE key = $1 LIMIT 1", ["channelEnabledState"]);
+    const value = row.rows?.[0]?.value;
+    let st = value && typeof value === "object" ? value : {};
+    if (value && typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        st = parsed && typeof parsed === "object" ? parsed : {};
+      } catch {
+        st = {};
+      }
+    }
+    return {
+      seed: st.seed && typeof st.seed === "object" ? st.seed : {},
+      custom: st.custom && typeof st.custom === "object" ? st.custom : {},
+    };
+  }
+  try {
+    const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+    const db = JSON.parse(rawFile);
+    const st = db?.adminState?.channelEnabledState;
+    return {
+      seed: st?.seed && typeof st.seed === "object" ? st.seed : {},
+      custom: st?.custom && typeof st.custom === "object" ? st.custom : {},
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+async function setChannelEnabledState(nextState) {
+  const st = nextState && typeof nextState === "object" ? nextState : {};
+  const clean = {
+    seed: st.seed && typeof st.seed === "object" ? st.seed : {},
+    custom: st.custom && typeof st.custom === "object" ? st.custom : {},
+  };
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    await pool.query(
+      `
+        INSERT INTO plately_admin_state (key, value, updated_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+      `,
+      ["channelEnabledState", JSON.stringify(clean)]
+    );
+    return;
+  }
+  const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+  const db = JSON.parse(rawFile);
+  if (!db.adminState || typeof db.adminState !== "object") db.adminState = {};
+  db.adminState.channelEnabledState = clean;
+  await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2));
+}
+
+function isChannelEnabled(channelKind, channelId, enabledState) {
+  const kind = sanitizeText(channelKind || "");
+  const id = sanitizeText(channelId || "");
+  if (!id) return true;
+  if (kind !== "seed" && kind !== "custom") return true;
+  const st = enabledState && typeof enabledState === "object" ? enabledState : {};
+  const map = st[kind] && typeof st[kind] === "object" ? st[kind] : {};
+  return map[id] === false ? false : true;
+}
+
 function getEffectiveSeedChannelConfig(channelId, overrides) {
   const id = sanitizeText(channelId || "");
   const base = SEED_CHANNEL_DEFAULTS[id] || {};
@@ -10921,5 +10991,9 @@ module.exports = {
     getChannelOverrides,
     finalizeInstructionSteps,
     mergeInstructionLines,
+    importWebsite,
+    importRecipe,
+    parseWebsiteRecipe,
+    findRecipeJsonLd,
   },
 };
