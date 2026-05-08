@@ -2497,10 +2497,28 @@ function mergeInstructionLines(lines) {
   const expanded = lines.flatMap((line) => splitIntoSentenceSteps(line));
 
   const merged = [];
+  let pendingListNumber = "";
   for (const rawLine of expanded) {
     const clean = cleanListLine(rawLine);
     if (!clean) {
       continue;
+    }
+    // Some sites (e.g. Uit Paulines Keuken) render ordered lists as:
+    // "1" on its own line, followed by the instruction line. Treat the
+    // standalone number as a prefix for the next line, not as its own step.
+    const numberOnlyMatch = clean.match(/^(\d{1,3})\s*[.)-]?\s*$/);
+    if (numberOnlyMatch) {
+      pendingListNumber = numberOnlyMatch[1] || "";
+      continue;
+    }
+
+    let effectiveClean = clean;
+    if (pendingListNumber) {
+      const alreadyNumbered = new RegExp(`^${pendingListNumber}\\s*[.)-]\\s+`).test(effectiveClean);
+      if (!alreadyNumbered) {
+        effectiveClean = `${pendingListNumber}. ${effectiveClean}`;
+      }
+      pendingListNumber = "";
     }
     const shouldStartNew =
       /^\d+\s*[.)-]\s*/.test(String(rawLine || "")) ||
@@ -2508,11 +2526,11 @@ function mergeInstructionLines(lines) {
       merged.length === 0;
 
     if (shouldStartNew) {
-      merged.push(clean);
+      merged.push(effectiveClean);
       continue;
     }
 
-    merged[merged.length - 1] = `${merged[merged.length - 1]} ${clean}`.trim();
+    merged[merged.length - 1] = `${merged[merged.length - 1]} ${effectiveClean}`.trim();
   }
   return [...new Set(merged)].map((step) => sanitizeText(step)).filter(Boolean);
 }
@@ -3254,6 +3272,32 @@ function expandInstructionSteps(rawSteps) {
 }
 
 function finalizeInstructionSteps(steps) {
+  const mergeStandaloneListNumbers = (list) => {
+    const source = Array.isArray(list) ? list.map((s) => sanitizeText(String(s || ""))).filter(Boolean) : [];
+    if (source.length < 2) return source;
+
+    const merged = [];
+    for (let i = 0; i < source.length; i += 1) {
+      const cur = source[i];
+      const next = source[i + 1];
+      const numberOnlyMatch = cur.match(/^(\d{1,3})\s*[.)-]?\s*$/);
+      if (numberOnlyMatch && next) {
+        const num = numberOnlyMatch[1] || "";
+        const trimmedNext = String(next || "").trim();
+        const alreadyNumbered = new RegExp(`^${num}\\s*[.)-]\\s+`).test(trimmedNext);
+        merged.push(alreadyNumbered ? trimmedNext : `${num}. ${trimmedNext}`);
+        i += 1;
+        continue;
+      }
+      if (numberOnlyMatch && !next) {
+        // Drop trailing number-only tokens.
+        continue;
+      }
+      merged.push(cur);
+    }
+    return merged;
+  };
+
   const mergeDanglingConjunctions = (list) => {
     const source = Array.isArray(list) ? list.map((s) => sanitizeText(String(s || ""))).filter(Boolean) : [];
     if (source.length < 2) return source;
@@ -3291,7 +3335,7 @@ function finalizeInstructionSteps(steps) {
   };
 
   const expandedRaw = expandInstructionSteps(steps);
-  const expanded = mergeDanglingConjunctions(expandedRaw);
+  const expanded = mergeDanglingConjunctions(mergeStandaloneListNumbers(expandedRaw));
   const unique = [...new Set(expanded.map((step) => sanitizeInstructionStep(step)).filter(Boolean))];
   const normalized = unique
     .map((step) =>
@@ -10295,5 +10339,7 @@ module.exports = {
     getEffectiveCustomChannelConfig,
     getSeedChannelOverrides,
     getChannelOverrides,
+    finalizeInstructionSteps,
+    mergeInstructionLines,
   },
 };

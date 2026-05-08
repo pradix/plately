@@ -1,0 +1,13 @@
+{
+  "description": "Regression fixture: number-only lines should not become standalone instruction steps (Uit Paulines Keuken style).",
+  "rawSteps": [
+    "1",
+    "Verwarm de oven voor op 180 graden.",
+    "2.",
+    "Meng bloem en suiker in een kom.",
+    "3)",
+    "Bak 25 minuten goudbruin."
+  ],
+  "expectedNoNumberOnlySteps": true
+}
+
