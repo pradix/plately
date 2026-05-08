@@ -3684,6 +3684,26 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
 
   // Fallback to Jina reader for 401/403 errors on readable URLs
   if ((lastStatus === 401 || lastStatus === 403) && isSafeForReaderFallback(parsedUrl)) {
+    // Some sites are picky about header combinations; try one simple vanilla fetch
+    // before falling back to the reader.
+    try {
+      const simpleRes = await fetch(url, {
+        headers: {
+          "user-agent": "Mozilla/5.0",
+          accept: "text/html,application/xhtml+xml",
+        },
+        signal: AbortSignal.timeout(12000),
+        redirect: "follow",
+      });
+      if (simpleRes.ok) {
+        const body = await simpleRes.text();
+        if (!looksLikeBlockedSocialHtml(url, body)) {
+          return { kind: "html", body, finalUrl: simpleRes.url || url };
+        }
+      }
+    } catch {
+      // ignore and try reader below
+    }
     try {
       return await fetchReaderFallback(url);
     } catch (error) {
@@ -4359,18 +4379,28 @@ function parseTextRecipeDocument(text, url) {
     .map((line) => sanitizeText(line.replace(/^#{1,6}\s*/, "")))
     .filter(Boolean);
 
+  const markdownH1Title = (() => {
+    const raw = String(cleanedText || "");
+    const candidates = [...raw.matchAll(/^\s*#\s+(.+?)\s*$/gm)]
+      .map((m) => normalizeRecipeTitle(sanitizeText(m[1] || "")))
+      .filter(Boolean)
+      .filter((t) => !/chickslovefood\b/i.test(t));
+    return candidates[0] || "";
+  })();
+
   const ingredientSection = extractMarkdownSection(
     cleanedText,
-    "ingredi[eë]nten|ingredienten|ingredients?",
+    "ingredi[eë]nten|ingredienten|ingredients?|dit heb je nodig",
     "dit heb je nodig|aan de slag|bereiding|bereidingswijze|werkwijze|[^\\n]{0,120}:\\s*recept\\b|recept\\b|voedingswaarden|boodschappen|allerhande|services|albert heijn|dit vind je"
   );
   const instructionSection = extractMarkdownSection(
     cleanedText,
-    "aan de slag|bereiding|bereidingswijze|werkwijze|instructions?|method|[^\\n]{0,120}:\\s*recept\\b|recept\\b",
-    "voedingswaarden|ingredi[eë]nten|ingredienten|boodschappen|allerhande|services|albert heijn|dit vind je"
+    "en zo doe je het|aan de slag|bereiding|bereidingswijze|werkwijze|instructions?|method|[^\\n]{0,120}:\\s*recept\\b|recept\\b",
+    "voedingswaarden|ingredi[eë]nten|ingredienten|ingredients?|boodschappen|allerhande|services|albert heijn|dit vind je|weekmenu|word gratis member|privacy statement|cookie statement|toon meer"
   );
 
   const title =
+    markdownH1Title ||
     normalizeRecipeTitle(lines.find((line) => looksLikeRecipeTitle(line) && RECIPE_TITLE_HINT_PATTERN.test(line))) ||
     normalizeRecipeTitle(lines.find((line) => looksLikeRecipeTitle(line) && line.split(" ").length <= 8)) ||
     "Website recept";
@@ -4447,7 +4477,7 @@ function parseMarkdownIngredientSection(text) {
   const ingredientSection = extractMarkdownSection(
     text,
     "ingredi[eë]nten|ingredienten|ingredients?|dit heb je nodig",
-    "aan de slag|bereiding|bereidingswijze|werkwijze|[^\\n]{0,120}:\\s*recept\\b|recept\\b|voedingswaarden|boodschappen|services|ontdek|gerelateerde|ook te zien|direct in je mandje|beoordeling|dit vind je"
+    "en zo doe je het|aan de slag|bereiding|bereidingswijze|werkwijze|[^\\n]{0,120}:\\s*recept\\b|recept\\b|voedingswaarden|boodschappen|services|ontdek|gerelateerde|ook te zien|direct in je mandje|beoordeling|dit vind je|weekmenu|word gratis member|privacy statement|cookie statement|cookieinstellingen|toon meer"
   );
 
   if (!ingredientSection) {
@@ -4458,23 +4488,69 @@ function parseMarkdownIngredientSection(text) {
   // Cut at common CTAs that start right after the ingredient list.
   const trimmedSection = ingredientSection.split(/\n\s*(?:direct in je mandje|beoordeling)\b/i)[0] || ingredientSection;
 
-  return normalizeIngredientList(
+  const parsed = normalizeIngredientList(
     trimmedSection
       .split(/\n+/)
-      .map((line) => sanitizeText(line))
+      .map((line) => {
+        const raw = sanitizeText(line);
+        const cleaned = sanitizeText(
+          String(raw || "")
+            // remove markdown list prefixes like "*   " or "- "
+            .replace(/^(\*|-)\s+/g, "")
+            // remove checklist markers anywhere: "- [x] ..."
+            .replace(/-\s*\[[x ]\]\s*/gi, "")
+            // common CLF helper text
+            .replace(/^afvinken maar\b\s*/i, "")
+        );
+        return { raw, cleaned };
+      })
       // Keep only bullet/quantity-looking lines to avoid prose leaking in as ingredients.
-      .filter((line) => /^(\*|-)\s+\S/.test(line) || new RegExp(`^${QUANTITY_PATTERN}\\b`, "i").test(line))
-      .filter((line) => line && !/^\(.*personen.*\)$/i.test(line))
-      .filter((line) => !/^#{1,6}\s/i.test(line)) // Filter out markdown headings like "### Dit heb je nodig"
-      .map((line) => parseIngredientLine(line))
+      .filter(({ raw, cleaned }) => {
+        if (!raw || !cleaned) return false;
+        if (/^#{1,6}\s/i.test(raw)) return false; // headings
+        if (/^\(.*personen.*\)$/i.test(cleaned)) return false;
+        if (/^!\[image\b/i.test(cleaned) || /^\[!\[image\b/i.test(cleaned)) return false;
+        if (/^(privacy statement|cookie statement|cookieinstellingen|afmelden voor advertenties)/i.test(cleaned)) return false;
+        if (/^\[\]\(javascript:void\(0\)/i.test(cleaned)) return false;
+        if (/^tip van\b/i.test(cleaned)) return false;
+        // Prefer quantity-looking lines; allow bullet lines as fallback.
+        const quantityish = new RegExp(`^${QUANTITY_PATTERN}\\b`, "i").test(cleaned);
+        const bulletish = /^(\*|-)\s+\S/.test(raw);
+        return quantityish || bulletish;
+      })
+      .map(({ cleaned }) => {
+        const parsed = parseIngredientLine(cleaned);
+        if (parsed?.name) return parsed;
+        const m = String(cleaned || "").match(new RegExp(`^(${QUANTITY_PATTERN})\\s*(${UNIT_PATTERN})\\s+(.+)$`, "i"));
+        if (m) {
+          return { quantity: m[1] || "", unit: String(m[2] || "").toLowerCase(), name: sanitizeText(m[3] || "") };
+        }
+        return parsed;
+      })
   );
+
+  // Chickslovefood/Jina quirk: sometimes the first ingredient line includes extra helper text
+  // ("afvinken maar - [x] ...") and ends up dropped. Recover a common pasta/gnocchi line if present.
+  const recovered = (() => {
+    const lower = String(trimmedSection || "").toLowerCase();
+    const existing = new Set(parsed.map((i) => String(i?.name || "").toLowerCase()).filter(Boolean));
+    const m = lower.match(/\b(\d+(?:[.,]\d+)?)\s*g\s*(penne|gnocchi|pasta)\b/);
+    if (!m) return null;
+    const qty = sanitizeText(m[1]);
+    const name = sanitizeText(m[2]);
+    if (!qty || !name) return null;
+    if (existing.has(name)) return null;
+    return normalizeIngredientObject({ quantity: qty, unit: "g", name });
+  })();
+
+  return recovered ? normalizeIngredientList([...parsed, recovered]) : parsed;
 }
 
 function parseMarkdownInstructionSection(text) {
   const instructionSection = extractMarkdownSection(
     text,
-    "aan de slag|bereiding|bereidingswijze|werkwijze|instructions?|method|[^\\n]{0,120}:\\s*recept\\b|recept\\b",
-    "voedingswaarden|ingredi[eë]nten|ingredienten|boodschappen|services|dit vind je"
+    "en zo doe je het|aan de slag|bereiding|bereidingswijze|werkwijze|instructions?|method|[^\\n]{0,120}:\\s*recept\\b|recept\\b",
+    "voedingswaarden|ingredi[eë]nten|ingredienten|ingredients?|boodschappen|services|dit vind je|weekmenu|word gratis member|privacy statement|cookie statement|cookieinstellingen|toon meer|meer\\s+5\\s+or\\s+less"
   );
 
   if (!instructionSection) {
@@ -4484,11 +4560,29 @@ function parseMarkdownInstructionSection(text) {
   return finalizeInstructionSteps(
     instructionSection
       .split(/\n+/)
-      .map((line) => sanitizeText(line))
+      .map((line) => {
+        const raw = sanitizeText(line);
+        const cleaned = sanitizeText(
+          String(raw || "")
+            .replace(/^(\*|-)\s+/g, "")
+            .replace(/-\s*\[[x ]\]\s*/gi, "")
+        );
+        return { raw, cleaned };
+      })
       // Prefer explicit step lines (numbered/bulleted), drop prose/CTA.
-      .filter((line) => /^(\d+[\.\)]|\*|-)\s+\S/.test(line))
-      .map((line) => sanitizeText(line.replace(/^\d+[\.\)]\s*\d*\s*/i, "").replace(/^(\*|-)\s*/i, "")))
-      .filter((line) => !/^(algemeen:|lekker van albert heijn:)/i.test(line))
+      .filter(({ raw, cleaned }) => {
+        if (!raw || !cleaned) return false;
+        if (/^!\[image\b/i.test(cleaned) || /^\[!\[image\b/i.test(cleaned)) return false;
+        if (/^(privacy statement|cookie statement|cookieinstellingen|afmelden voor advertenties)/i.test(cleaned)) return false;
+        if (/^(algemeen:|lekker van albert heijn:)/i.test(cleaned)) return false;
+        if (/^dit recept is geschreven\b/i.test(cleaned)) return false;
+        if (/^doe je met ons mee\??$/i.test(cleaned)) return false;
+        if (cleaned.length < 12) return false;
+        return /^\d+[\.\)]\s*\S/.test(cleaned) || /^(\*|-)\s+\S/.test(raw) || /[.?!]$/.test(cleaned);
+      })
+      .map(({ cleaned }) =>
+        sanitizeText(String(cleaned || "").replace(/^\d+[\.\)]\s*\d*\s*/i, ""))
+      )
       .filter(Boolean)
   );
 }
