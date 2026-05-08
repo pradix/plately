@@ -256,6 +256,7 @@ function normalizeIngredientForSearch(raw) {
   if (/^sinaasappels?$/.test(t)) return "handsinaasappel";
   if (/^gelatine$/.test(t)) return "gelatine blaadjes";
   if (/\bespresso\b/.test(t) && !/\bcapsules?\b/.test(t)) return "espresso";
+  if (/\b(ongeklopte|ongeklopt)\s+(slagroom|room)\b/.test(t)) return "slagroom";
 
   // 3. Pasta-type normalisation (the big one)
   if (/\bspaghetti\b/.test(t)) return "spaghetti";
@@ -1937,7 +1938,8 @@ function buildStoreProductChoices(store, item) {
       { title: `${prefix} Paprikamix`, subtitle: "3 stuks", price: "€2,59", emoji: "🫑", searchTerm: `${prefix} paprika mix` }
     );
   }
-  if (/sla|ijsbergsla|rucola|spinazie/.test(value)) {
+  // Use word boundaries: avoid matching "slagroom" as "sla".
+  if (/\b(?:sla|ijsbergsla|rucola|spinazie)\b/.test(value)) {
     return choiceSet(
       { title: `${prefix} ${/rucola/.test(value) ? "Rucola" : "IJsbergsla"}`, subtitle: amount, price: "€1,49", emoji: "🥬", searchTerm: `${prefix} ${/rucola/.test(value) ? "rucola" : "ijsbergsla"}` },
       { title: `${bioPrefix} Sla mix`, subtitle: "1 zak", price: "€2,29", emoji: "🥬", searchTerm: `${bioPrefix} sla` }
@@ -5918,10 +5920,48 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
     // Use the original ingredient term for the relevance filter so label-specific
     // queries like "biologisch tomaat" still match plain "tomaat" results.
     const matchTerm = baseTerm;
+    const baseLower = sanitizeText(baseTerm).toLowerCase();
+    const rawLower = sanitizeText(ingredient).toLowerCase();
+    const wantsButter = /\bboter\b/.test(baseLower) || /\bboter\b/.test(rawLower);
+    const wantsGarlicButter = /\b(kruidenboter|knoflookboter)\b/.test(baseLower) || /\b(kruidenboter|knoflookboter)\b/.test(rawLower);
+
+    const scoreForIngredient = (productTitle) => {
+      const title = sanitizeText(productTitle).toLowerCase();
+      let penalty = 0;
+
+      // If the ingredient is plain garlic, avoid "knoflook kruidenboter" style matches.
+      if (baseLower === "knoflook" && !wantsButter && !wantsGarlicButter) {
+        if (/\b(kruidenboter|knoflookboter)\b/.test(title)) penalty += 50;
+        if (/\bboter\b/.test(title)) penalty += 30;
+      }
+
+      // General: don't auto-pick butter-containing products unless the ingredient mentions butter.
+      if (!wantsButter && /\bboter\b/.test(title)) penalty += 20;
+
+      // Prefer "net" / "bol" garlic over processed variants when searching for knoflook.
+      if (baseLower === "knoflook") {
+        // Prefer titles that are basically "knoflook" (fresh garlic) over
+        // products that merely *contain* garlic.
+        if (!/^(?:ah\\s+)?(?:biologisch\\s+)?knoflook\\b/.test(title)) penalty += 35;
+        if (/\b(net|bol)\b/.test(title)) penalty -= 5;
+        // Avoid "knoflook"-flavoured products when the ingredient is plain garlic.
+        if (/\b(roomkaas|kaas|kruidenmix|mix|saus)\b/.test(title)) penalty += 25;
+        // Avoid "knoflook as flavour" in unrelated products.
+        if (/\b(tomatenpuree|tomatenpasta)\b/.test(title)) penalty += 55;
+        if (/\b(aardappel|partjes|wok|smaakmaker|woksmaakmaker)\b/.test(title)) penalty += 45;
+        if (/\b(pasta|puree|poeder|granulaat|zout)\b/.test(title)) penalty += 12;
+      }
+
+      return penalty;
+    };
+
     const products = (data.products || [])
       .filter((p) => !NON_FOOD_INGREDIENT_PATTERN.test(sanitizeText(p.title)))
       .filter((p) => ingredientMatchesProduct(matchTerm, sanitizeText(p.title)))
       .sort((a, b) => {
+        const sa = scoreForIngredient(a.title);
+        const sb = scoreForIngredient(b.title);
+        if (sa !== sb) return sa - sb;
         const pa = a.currentPrice ?? a.priceBeforeBonus ?? 9999;
         const pb = b.currentPrice ?? b.priceBeforeBonus ?? 9999;
         return pa - pb;
