@@ -1281,6 +1281,8 @@ function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
       `;
     })
     .join("");
+
+  cookbookSaveList.classList.toggle("is-single", state.cookbooks.length === 1);
 }
 
 function syncCookbookSaveConfirmButton() {
@@ -8647,39 +8649,34 @@ bindEvent(cookbookSaveModal, "click", (event) => {
   }
 });
 
-bindEvent(cookbookSaveList, "click", (event) => {
-  const target = event.target;
-  if (!(target instanceof Element)) {
-    return;
-  }
+if (cookbookSaveList) {
+  cookbookSaveList.addEventListener(
+    "click",
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
 
-  const cookbookButton = target.closest("[data-save-cookbook-id]");
-  if (!(cookbookButton instanceof HTMLElement)) {
-    return;
-  }
+      const cookbookButton = target.closest("[data-save-cookbook-id]");
+      if (!(cookbookButton instanceof HTMLElement)) return;
 
-  // Read recipeId from the button itself — most reliable, no state timing issues
-  const selectedRecipe = getSelectedRecipe();
-  const recipeId = cookbookButton.dataset.saveRecipeId || state.pendingCookbookSaveRecipeId || selectedRecipe?.id;
-  const cookbookId = cookbookButton.dataset.saveCookbookId;
-  if (!recipeId || !cookbookId) {
-    return;
-  }
+      event.preventDefault();
 
-  // First tap selects, second tap (on same selection) saves.
-  if (state.pendingCookbookSaveCookbookId !== cookbookId) {
-    state.pendingCookbookSaveCookbookId = cookbookId;
-    renderCookbookSaveList(recipeId);
-    syncCookbookSaveConfirmButton();
-    return;
-  }
+      // Read recipeId from the button itself — most reliable, no state timing issues
+      const selectedRecipe = getSelectedRecipe();
+      const recipeId =
+        cookbookButton.dataset.saveRecipeId || state.pendingCookbookSaveRecipeId || selectedRecipe?.id;
+      const cookbookId = cookbookButton.dataset.saveCookbookId;
+      if (!recipeId || !cookbookId) return;
 
-  state.selectedRecipeId = recipeId;
-  saveRecipeToCookbook(recipeId, cookbookId);
-  closeCookbookSaveModal();
-  renderDetailRecipe(true);
-  switchView("detail");
-});
+      if (state.pendingCookbookSaveCookbookId !== cookbookId) {
+        state.pendingCookbookSaveCookbookId = cookbookId;
+        renderCookbookSaveList(recipeId);
+        syncCookbookSaveConfirmButton();
+      }
+    },
+    { capture: true }
+  );
+}
 
 bindEvent(cookbookSaveCreateButton, "click", () => {
   openCookbookNameModal("create");
