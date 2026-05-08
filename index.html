@@ -1446,11 +1446,15 @@
 
     <!-- ══ Onboarding screen (after registration) ══ -->
     <div class="onboarding-screen hidden" id="onboardingScreen">
-      <button class="onboarding-screen__close" type="button" id="onboardingClose" aria-label="Sluiten">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-      </button>
+      <header class="topbar--sub">
+        <button class="topbar-back-btn" type="button" id="onboardingClose" aria-label="Sluiten">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+        <h1 class="topbar-title">Welkom</h1>
+        <span class="topbar-spacer"></span>
+      </header>
 
-      <div class="onboarding-container">
+      <div class="profile-subpanel__body onboarding-container">
         <!-- Visual progress dots (shared across steps) -->
         <div class="onboarding-progress-dots" aria-hidden="true">
           <span class="onboarding-progress-dot" data-step="1"></span>
@@ -1471,7 +1475,7 @@
             <h2 class="onboarding-title">Volg kanalen</h2>
             <p class="onboarding-subtitle">Kies de receptbronnen die jou inspireren.</p>
           </div>
-          <div id="onboardingChannelsList" class="onboarding-channels"></div>
+          <div id="onboardingChannelsList" class="channel-settings-list"></div>
           <div class="onboarding-suggest-section">
             <button class="onboarding-suggest-btn" id="onboardingSuggestBtn" type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -1496,11 +1500,12 @@
             <h2 class="onboarding-title">Je eerste kookboek</h2>
             <p class="onboarding-subtitle">Maak een kookboek aan om recepten in te bewaren.</p>
           </div>
-          <div class="onboarding-form">
-            <div class="auth-field">
-              <label class="auth-field__label" for="onboardingCookbookName">Naam kookboek</label>
-              <input class="auth-field__input" id="onboardingCookbookName" type="text" placeholder="Bijv. Makkelijk & snel" />
+          <div class="profile2-card profile-subpanel__form-card">
+            <div class="profile-subpanel__field">
+              <label class="profile-subpanel__label" for="onboardingCookbookName">Naam kookboek</label>
+              <input class="profile-subpanel__input" id="onboardingCookbookName" type="text" placeholder="Bijv. Makkelijk & snel" />
             </div>
+            <div class="profile2-row-divider"></div>
             <div class="onboarding-suggestions">
               <p class="onboarding-suggestions__label">Inspiratie</p>
               <div class="onboarding-suggestion-pills">
@@ -1558,7 +1563,7 @@
             <h2 class="onboarding-title">Maak je profiel compleet</h2>
             <p class="onboarding-subtitle">Een gezicht en je naam helpen je herkennen.</p>
           </div>
-          <div class="onboarding-form">
+          <div class="profile2-card profile-subpanel__form-card">
             <div class="onboarding-photo-upload">
               <button class="onboarding-photo-btn" id="onboardingPhotoBtn" type="button" aria-label="Profielfoto kiezen">
                 <span class="onboarding-photo-circle" id="onboardingPhotoCircle">
@@ -1578,12 +1583,14 @@
               <input class="hidden" id="onboardingPhotoInput" type="file" accept="image/*" />
               <p class="onboarding-photo-hint" id="onboardingPhotoHint">Tik om een foto te kiezen</p>
             </div>
-            <div class="auth-field">
-              <label class="auth-field__label" for="onboardingProfileName">Naam</label>
-              <input class="auth-field__input" id="onboardingProfileName" type="text" placeholder="Je naam" autocomplete="name" />
+            <div class="profile2-row-divider"></div>
+            <div class="profile-subpanel__field">
+              <label class="profile-subpanel__label" for="onboardingProfileName">Naam</label>
+              <input class="profile-subpanel__input" id="onboardingProfileName" type="text" placeholder="Je naam" autocomplete="name" />
             </div>
-            <div class="auth-field">
-              <label class="auth-field__label" id="onboardingGenderLabel">Geslacht</label>
+            <div class="profile2-row-divider"></div>
+            <div class="profile-subpanel__field">
+              <label class="profile-subpanel__label" id="onboardingGenderLabel">Geslacht</label>
               <input id="onboardingGender" type="hidden" value="" />
               <div class="onboarding-tiles" role="group" aria-labelledby="onboardingGenderLabel">
                 <button class="onboarding-tile" type="button" data-onboarding-gender="male" aria-pressed="false">Man</button>
@@ -1592,9 +1599,10 @@
                 <button class="onboarding-tile" type="button" data-onboarding-gender="prefer_not" aria-pressed="false">Zeg ik liever niet</button>
               </div>
             </div>
-            <div class="auth-field">
-              <label class="auth-field__label" for="onboardingBirthDate">Geboortedatum</label>
-              <input class="auth-field__input" id="onboardingBirthDate" type="date" />
+            <div class="profile2-row-divider"></div>
+            <div class="profile-subpanel__field">
+              <label class="profile-subpanel__label" for="onboardingBirthDate">Geboortedatum</label>
+              <input class="profile-subpanel__input" id="onboardingBirthDate" type="date" />
             </div>
           </div>
           <div class="onboarding-actions">

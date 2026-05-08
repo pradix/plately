@@ -9766,37 +9766,65 @@ function updateOnboardingProgress(step) {
 
 function renderOnboardingChannels() {
   const list = document.getElementById("onboardingChannelsList");
+  if (!list) return;
+
   list.innerHTML = SEED_CHANNELS.map((ch) => {
+    const followed = onboardingData.channels.includes(ch.id);
     const faviconUrl = getSourceIconUrl(ch.url);
-    const isChecked = onboardingData.channels.includes(ch.id);
     return `
-      <label class="onboarding-channel-item" data-channel-id="${escapeHtml(ch.id)}">
-        <input type="checkbox" data-channel-check="${escapeHtml(ch.id)}" ${isChecked ? "checked" : ""} />
-        <span class="onboarding-channel-avatar">
-          ${faviconUrl ? `<img class="onboarding-channel-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
+      <label class="channel-toggle-row" data-onboarding-channel-id="${escapeHtml(ch.id)}">
+        <span class="channel-toggle-avatar">
+          ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
         </span>
-        <span>${escapeHtml(ch.name)}</span>
-      </label>
-    `;
+        <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
+        <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-onboarding-toggle-channel="${escapeHtml(ch.id)}"></span>
+      </label>`;
   }).join("");
 
-  list.querySelectorAll(".onboarding-channel-item").forEach((label) => {
-    const id = label.dataset.channelId;
-    label.classList.toggle("selected", Boolean(id && onboardingData.channels.includes(id)));
+  function setOnboardingChannelFollowed(channelId, shouldFollow) {
+    if (shouldFollow) {
+      if (!onboardingData.channels.includes(channelId)) onboardingData.channels.push(channelId);
+    } else {
+      onboardingData.channels = onboardingData.channels.filter((id) => id !== channelId);
+    }
+    const row = list.querySelector(`[data-onboarding-channel-id="${CSS.escape(channelId)}"]`);
+    if (!row) return;
+    const sw = row.querySelector("[data-onboarding-toggle-channel]");
+    if (!(sw instanceof HTMLElement)) return;
+    sw.classList.toggle("toggle-switch--on", shouldFollow);
+    sw.setAttribute("aria-checked", shouldFollow ? "true" : "false");
+  }
+
+  list.querySelectorAll("[data-onboarding-toggle-channel]").forEach((sw) => {
+    if (!(sw instanceof HTMLElement)) return;
+    const channelId = sw.dataset.onboardingToggleChannel || "";
+    const toggle = () => {
+      if (!channelId) return;
+      const currentlyOn = onboardingData.channels.includes(channelId);
+      setOnboardingChannelFollowed(channelId, !currentlyOn);
+    };
+    sw.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggle();
+    });
+    sw.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
+      }
+    });
   });
 
-  // Event listeners for checkboxes
-  list.querySelectorAll("input[type=checkbox]").forEach((checkbox) => {
-    checkbox.addEventListener("change", (e) => {
-      const channelId = e.target.dataset.channelCheck;
-      const label = e.target.closest(".onboarding-channel-item");
-      if (e.target.checked) {
-        if (!onboardingData.channels.includes(channelId)) onboardingData.channels.push(channelId);
-        label.classList.add("selected");
-      } else {
-        onboardingData.channels = onboardingData.channels.filter((id) => id !== channelId);
-        label.classList.remove("selected");
-      }
+  list.querySelectorAll("[data-onboarding-channel-id]").forEach((row) => {
+    if (!(row instanceof HTMLElement)) return;
+    row.addEventListener("click", (e) => {
+      // allow switch handler to do its own work
+      if ((e.target instanceof HTMLElement) && e.target.closest("[data-onboarding-toggle-channel]")) return;
+      const channelId = row.dataset.onboardingChannelId || "";
+      if (!channelId) return;
+      const currentlyOn = onboardingData.channels.includes(channelId);
+      setOnboardingChannelFollowed(channelId, !currentlyOn);
     });
   });
 }
