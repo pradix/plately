@@ -495,6 +495,8 @@ const state = {
   // Track optional pantry items quantities added directly in the basket sheet.
   // Shape: { [recipeId]: { [normalizedIngredientKey]: number } }
   basketOptionalQtyByRecipe: {},
+  // UI-only: expanded "Waarom?" panels per basket item id.
+  basketWhyOpenByItemId: {},
   altSheetItemIndex: null,
   altSheetFilter: null, // null = grouped view, otherwise one of: beterLeven1|vegetarisch|vegan|plantaardig|more
   cookbooks: [],
@@ -1749,6 +1751,34 @@ function getChoicePromotionLabel(choice) {
   return choice?.isBonus ? "BONUS" : "";
 }
 
+function formatMatchMetaCompact(meta) {
+  if (!meta || typeof meta !== "object") return "";
+  const score = Number.isFinite(meta.score) ? meta.score : null;
+  const tokens = Array.isArray(meta.matchedTokens) ? meta.matchedTokens : [];
+  const penalties = Array.isArray(meta.appliedPenalties) ? meta.appliedPenalties : [];
+  const bonuses = Array.isArray(meta.appliedBonuses) ? meta.appliedBonuses : [];
+  const lines = [];
+  if (tokens.length) lines.push(`<p><strong>Tokens</strong>: ${escapeHtml(tokens.join(", "))}</p>`);
+  if (bonuses.length) {
+    lines.push(
+      `<p><strong>Bonussen</strong>:</p><ul>${bonuses
+        .slice(0, 6)
+        .map((b) => `<li>${escapeHtml(b.label)} (${escapeHtml(String(b.delta))})</li>`)
+        .join("")}</ul>`
+    );
+  }
+  if (penalties.length) {
+    lines.push(
+      `<p><strong>Penalties</strong>:</p><ul>${penalties
+        .slice(0, 6)
+        .map((p) => `<li>${escapeHtml(p.label)} (+${escapeHtml(String(p.delta))})</li>`)
+        .join("")}</ul>`
+    );
+  }
+  const header = score !== null ? `<p class="basket-why__score">Score: <strong>${escapeHtml(String(score))}</strong></p>` : "";
+  return header + lines.join("");
+}
+
 function choiceMatchesBasketFilters(choice, filter, item) {
   const labels = extractBasketLabelsFromChoice(choice, item);
   if (filter?.beterLeven1 && !labels.beterLeven1) return false;
@@ -1880,6 +1910,28 @@ function renderBasketPreview() {
       : "";
 
     const ingredientTitle = splitCompoundIngredientWords(item.ingredientTitle || "");
+    const itemId = String(item.id || `basket-item-${itemIndex}`);
+    const whyOpen = Boolean(state.basketWhyOpenByItemId?.[itemId]);
+    const canExplain = preview.store === "albert-heijn" && choice?.matchMeta;
+    const whyHtml = canExplain
+      ? `
+          <div class="basket-why">
+            <div class="basket-why__row">
+              <button class="basket-why__btn" type="button" data-basket-why="${escapeHtml(itemId)}" aria-expanded="${whyOpen ? "true" : "false"}">Waarom?</button>
+              <button class="basket-why__btn basket-why__btn--secondary" type="button" data-basket-research="${itemIndex}">Herzoek</button>
+            </div>
+            ${whyOpen ? `<div class="basket-why__body">${formatMatchMetaCompact(choice.matchMeta)}</div>` : ""}
+          </div>
+        `
+      : preview.store === "albert-heijn"
+        ? `
+          <div class="basket-why">
+            <div class="basket-why__row">
+              <button class="basket-why__btn basket-why__btn--secondary" type="button" data-basket-research="${itemIndex}">Herzoek</button>
+            </div>
+          </div>
+        `
+        : "";
 
     return `
       <div class="basket-product" data-basket-item="${itemIndex}">
@@ -1898,6 +1950,7 @@ function renderBasketPreview() {
             ${WISSEL_SVG}
             Wissel
           </button>` : ""}
+          ${whyHtml}
         </div>
         <div class="basket-product__right">
           <button class="basket-product__delete" type="button" aria-label="Verwijder" data-basket-delete="${itemIndex}">
@@ -1927,6 +1980,86 @@ function renderBasketPreview() {
       if (url) window.open(url, "_blank", "noreferrer");
     };
   }
+}
+
+async function researchBasketItem(itemIndex, { excludeCurrent = true } = {}) {
+  const preview = state.basketPreview;
+  if (!preview || preview.store !== "albert-heijn") return;
+  const item = preview.items?.[itemIndex];
+  if (!item) return;
+  const currentChoice = item.choices?.[item.selectedChoiceIndex || 0];
+  const exclude = [];
+  if (excludeCurrent && currentChoice?.productId) exclude.push(currentChoice.productId);
+  try {
+    const payload = await fetchJson(`${state.apiBase}/api/ah-research`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ingredientTitle: item.ingredientTitle,
+        amount: item.ingredientAmount,
+        bio: Boolean(state.basketFilter?.bio),
+        beterLeven1: Boolean(state.basketFilter?.beterLeven1),
+        vegetarisch: Boolean(state.basketFilter?.vegetarisch),
+        vegan: Boolean(state.basketFilter?.vegan),
+        plantaardig: Boolean(state.basketFilter?.plantaardig),
+        excludeProductIds: exclude,
+      }),
+    });
+    if (payload?.choices?.length) {
+      item.choices = payload.choices;
+      item.selectedChoiceIndex = 0;
+      const itemId = String(item.id || `basket-item-${itemIndex}`);
+      if (state.basketWhyOpenByItemId?.[itemId]) {
+        state.basketWhyOpenByItemId = { ...(state.basketWhyOpenByItemId || {}) };
+        delete state.basketWhyOpenByItemId[itemId];
+      }
+      renderBasketPreview();
+    } else {
+      showToast("Geen betere match gevonden.");
+    }
+  } catch {
+    showToast("Herzoeken lukte niet.");
+  }
+}
+
+function pickBestChoiceIndexByScore(item) {
+  const choices = Array.isArray(item?.choices) ? item.choices : [];
+  if (!choices.length) return 0;
+  let bestIdx = 0;
+  let bestScore = Infinity;
+  for (let i = 0; i < choices.length; i++) {
+    const s = choices[i]?.matchMeta?.score;
+    if (!Number.isFinite(s)) continue;
+    if (s < bestScore) {
+      bestScore = s;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+async function smartPickLowConfidence() {
+  const preview = state.basketPreview;
+  if (!preview || preview.store !== "albert-heijn") return;
+  const items = Array.isArray(preview.items) ? preview.items : [];
+  let changed = 0;
+  for (let idx = 0; idx < items.length; idx++) {
+    const item = items[idx];
+    const current = item?.choices?.[item.selectedChoiceIndex || 0];
+    const currentScore = current?.matchMeta?.score;
+    const isLow = !Number.isFinite(currentScore) || Number(currentScore) > 45;
+    if (!isLow) continue;
+    const bestIdx = pickBestChoiceIndexByScore(item);
+    if (bestIdx !== (item.selectedChoiceIndex || 0)) {
+      item.selectedChoiceIndex = bestIdx;
+      changed += 1;
+      continue;
+    }
+    await researchBasketItem(idx, { excludeCurrent: true });
+    changed += 1;
+  }
+  renderBasketPreview();
+  showToast(changed ? "Slimmer gekozen voor lastige items." : "Alles ziet er al goed uit.");
 }
 
 async function fetchSingleBasketItemMatch(store, title, preferences) {
@@ -2031,6 +2164,8 @@ function openBasketModal(preview) {
   state.basketBaseServings = base;
   state.basketServings = base;
   state.basketFilter = { bio: false, beterLeven1: false, vegetarisch: false, vegan: false, plantaardig: false };
+  const smartBtn = document.getElementById("basketSmartPickButton");
+  if (smartBtn) smartBtn.style.display = preview?.store === "albert-heijn" ? "" : "none";
   renderBasketPreview();
   const overlay = document.getElementById("basketOverlay");
   if (overlay) {
@@ -5590,10 +5725,8 @@ function saveImportReview() {
   const nextIngredients = parseReviewLines(reviewIngredientsInput.value).map((line) => parseIngredientInput(line));
   const nextInstructions = parseReviewLines(reviewInstructionsInput.value);
 
-  if (!reviewTitleInput.value.trim()) {
-    reviewFeedback.textContent = "Geef het gerecht eerst een duidelijke titel.";
-    return;
-  }
+  const titleInput = reviewTitleInput?.value?.trim() || "";
+  const nextTitle = normalizeImportedTitle(titleInput || recipe.title || "Geïmporteerd recept");
   if (!nextIngredients.length) {
     reviewFeedback.textContent = "Voeg minimaal één ingrediënt toe.";
     return;
@@ -5616,12 +5749,12 @@ function saveImportReview() {
   }
 
   Object.assign(recipe, {
-    title: normalizeImportedTitle(reviewTitleInput.value.trim()),
-    description: normalizeDescription(reviewDescriptionInput.value.trim(), reviewTitleInput.value.trim()),
+    title: nextTitle,
+    description: normalizeDescription(reviewDescriptionInput.value.trim(), nextTitle),
     time: reviewTimeInput.value.trim() || recipe.time || "30 min",
     servings: parseServingsValue(reviewServingsInput.value.trim() || recipe.servings),
     mealTag: toDutchMealTag(reviewMealTagInput.value.trim() || recipe.mealTag || "Avond"),
-    alt: normalizeImportedTitle(reviewTitleInput.value.trim()),
+    alt: nextTitle,
     ingredients: nextIngredients,
     instructions: nextInstructions,
     needsReview: nextIngredients.length < 4 || nextInstructions.length < 3,
@@ -5635,6 +5768,75 @@ function saveImportReview() {
   reviewFeedback.textContent = "Recept bijgewerkt.";
   showToast(`${recipe.title} is opgeslagen.`);
   openCookbookSaveModal(recipe.id);
+}
+
+function removeEmptyReviewLines(text) {
+  return String(text || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function splitReviewLinesOnSemicolon(text) {
+  const lines = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((l) => l.trim());
+  const out = [];
+  for (const line of lines) {
+    if (!line) continue;
+    const parts = line
+      .split(/\s*;\s*/g)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length <= 1) {
+      out.push(line);
+      continue;
+    }
+    out.push(...parts);
+  }
+  return out.join("\n");
+}
+
+function combineReviewNumberLines(text) {
+  const rawLines = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n");
+  const out = [];
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = String(rawLines[i] || "").trim();
+    if (!line) continue;
+    if (/^\d+\s*[\.)]?$/.test(line)) {
+      const next = String(rawLines[i + 1] || "").trim();
+      if (next) {
+        out.push(`${line.replace(/\s+/g, "")} ${next}`.trim());
+        i += 1;
+        continue;
+      }
+    }
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
+function getReviewTextareaByTarget(target) {
+  return target === "instructions" ? reviewInstructionsInput : reviewIngredientsInput;
+}
+
+function applyReviewQuickAction(action, target) {
+  const textarea = getReviewTextareaByTarget(target);
+  if (!textarea) return;
+  const current = textarea.value || "";
+  let next = current;
+  if (action === "remove-empty") next = removeEmptyReviewLines(current);
+  if (action === "split-semicolon") next = splitReviewLinesOnSemicolon(current);
+  if (action === "combine-number-lines") next = combineReviewNumberLines(current);
+  textarea.value = next;
+  renderReviewAnalysis();
+  reviewFeedback.textContent = "Snelle actie toegepast.";
+  textarea.focus?.();
 }
 
 function applyReviewSuggestion(field, value) {
@@ -9109,15 +9311,37 @@ bindEvent(document.getElementById("basketOverlay"), "click", (e) => {
   if (e.target === document.getElementById("basketOverlay")) closeBasketModal();
 });
 
+bindEvent(document.getElementById("basketSmartPickButton"), "click", () => {
+  smartPickLowConfidence().catch(() => {
+    showToast("Slimmer kiezen lukte niet.");
+  });
+});
+
 // Basket product interactions (delete, qty, swap)
 bindEvent(document.getElementById("basketSheetList"), "click", async (e) => {
   const target = e.target;
   if (!(target instanceof Element) || !state.basketPreview) return;
 
   const btn = target.closest(
-    "[data-basket-delete],[data-basket-qty-minus],[data-basket-qty-plus],[data-basket-wissel],[data-basket-pantry-qty-minus],[data-basket-pantry-qty-plus]"
+    "[data-basket-delete],[data-basket-qty-minus],[data-basket-qty-plus],[data-basket-wissel],[data-basket-pantry-qty-minus],[data-basket-pantry-qty-plus],[data-basket-why],[data-basket-research]"
   );
   if (!btn) return;
+
+  if (btn instanceof HTMLElement && btn.dataset.basketWhy !== undefined) {
+    const id = String(btn.dataset.basketWhy || "").trim();
+    if (!id) return;
+    const map = state.basketWhyOpenByItemId && typeof state.basketWhyOpenByItemId === "object" ? state.basketWhyOpenByItemId : {};
+    state.basketWhyOpenByItemId = { ...map, [id]: !map[id] };
+    renderBasketPreview();
+    return;
+  }
+
+  if (btn instanceof HTMLElement && btn.dataset.basketResearch !== undefined) {
+    const idx = parseInt(btn.dataset.basketResearch, 10);
+    if (!Number.isFinite(idx)) return;
+    await researchBasketItem(idx, { excludeCurrent: true });
+    return;
+  }
 
   // Optional pantry qty controls (0 -> optional, 1+ -> promote to main list)
   if (btn instanceof HTMLElement && btn.dataset.basketPantryQtyPlus !== undefined) {
@@ -10118,7 +10342,15 @@ bindEvent(skipReviewButton, "click", () => {
   }
   state.selectedRecipeId = recipe.id;
   renderDetailRecipe(true);
-  switchView("detail");
+  openCookbookSaveModal(recipe.id);
+});
+
+bindEvent(reviewForm, "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const btn = target.closest("[data-review-quickaction]");
+  if (!(btn instanceof HTMLElement)) return;
+  applyReviewQuickAction(btn.dataset.reviewQuickaction || "", btn.dataset.reviewTarget || "");
 });
 
 bindEvent(mealPlanGrid, "click", (event) => {

@@ -5,10 +5,13 @@
     "node": ">=20"
   },
   "dependencies": {
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "web-push": "^3.6.7"
   },
   "scripts": {
+    "gen:vapid": "node scripts/generate-vapid-keys.js",
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "smoke": "node -c app.js && node -c server.js"
   }
 }
