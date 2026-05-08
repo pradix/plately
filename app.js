@@ -7063,13 +7063,21 @@ function renderAll() {
   }
 }
 
-function normalizeUiErrorMessage(message) {
+function normalizeUiErrorMessage(message, code = "") {
   const text = String(message || "").trim();
+  const errorCode = String(code || "").trim();
   if (!text) {
     return "Importeren mislukt.";
   }
 
-  if (text === "not_recipe" || /jsdom is not defined/i.test(text) || /JSDOM is not defined/i.test(text)) {
+  if (
+    text === "not_recipe" ||
+    text === "not_receipe" ||
+    errorCode === "not_recipe" ||
+    errorCode === "not_receipe" ||
+    /jsdom is not defined/i.test(text) ||
+    /JSDOM is not defined/i.test(text)
+  ) {
     return "Je probeert een blog te importeren, geen recept.";
   }
 
@@ -7113,7 +7121,7 @@ async function fetchJson(url, options = {}) {
   if (!response.ok) {
     const backendCode = payload?.error;
     const backendMessage = payload?.message || payload?.error || "Importeren mislukt.";
-    const error = new Error(normalizeUiErrorMessage(backendMessage));
+    const error = new Error(normalizeUiErrorMessage(backendMessage, backendCode));
     if (typeof backendCode === "string" && /^[a-z0-9_]+$/i.test(backendCode)) {
       error.code = backendCode;
     }

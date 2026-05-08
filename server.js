@@ -5436,6 +5436,74 @@ async function importWebsite(sourceUrl) {
 
   const htmlRecipe = parseWebsiteRecipe(document.body, document.finalUrl || sourceUrl);
 
+  // If the HTML is "thin" (JS-rendered / consent / WAF-ish) and we couldn't extract a recipe,
+  // try the reader fallback before we declare it "not_recipe" at the API layer.
+  if (htmlRecipe.needsReview) {
+    const finalUrl = document.finalUrl || sourceUrl;
+    let finalParsedUrl = null;
+    try {
+      finalParsedUrl = new URL(finalUrl);
+    } catch {
+      try { finalParsedUrl = new URL(sourceUrl); } catch { finalParsedUrl = null; }
+    }
+
+    const html = String(document.body || "");
+    const lower = html.toLowerCase();
+    const looksThin = html.length < 2500;
+    const looksJsRequired =
+      lower.includes("enable javascript") ||
+      lower.includes("javascript required") ||
+      lower.includes("checking your browser") ||
+      lower.includes("attention required") ||
+      lower.includes("verify you are human");
+    const looksConsentWall =
+      (lower.includes("cookie") || lower.includes("cookies")) &&
+      (lower.includes("consent") || lower.includes("voorkeur") || lower.includes("privacy")) &&
+      !lower.includes("ingrediënten") &&
+      !lower.includes("ingredients");
+
+    const shouldTryReader =
+      Boolean(finalParsedUrl) &&
+      isSafeForReaderFallback(finalParsedUrl) &&
+      (looksThin || looksJsRequired || looksConsentWall);
+
+    if (shouldTryReader) {
+      try {
+        const readerDocument = await fetchReaderFallback(finalUrl);
+        if (readerDocument?.kind === "text") {
+          const readerRecipe = parseTextRecipeDocument(readerDocument.body, readerDocument.finalUrl || finalUrl);
+          const mdIngredients = parseMarkdownIngredientSection(readerDocument.body);
+          const mdInstructions = parseMarkdownInstructionSection(readerDocument.body);
+          const mdServings = parseMarkdownServings(readerDocument.body);
+          const mdImage = extractFirstImageUrlFromMarkdown(readerDocument.body);
+
+          const mergedReaderRecipe = {
+            ...readerRecipe,
+            image: mdImage || readerRecipe.image || htmlRecipe.image,
+            ingredients: mdIngredients.length ? mdIngredients : readerRecipe.ingredients,
+            instructions: mdInstructions.length ? mdInstructions : readerRecipe.instructions,
+            servings: mdServings || readerRecipe.servings,
+            needsReview:
+              (mdIngredients.length ? mdIngredients.length : readerRecipe.ingredients.length) < 2 ||
+              (mdInstructions.length ? mdInstructions.length : readerRecipe.instructions.length) < 1,
+          };
+
+          const betterThanHtml =
+            (Array.isArray(mergedReaderRecipe.ingredients) ? mergedReaderRecipe.ingredients.length : 0) >
+              (Array.isArray(htmlRecipe.ingredients) ? htmlRecipe.ingredients.length : 0) ||
+            (Array.isArray(mergedReaderRecipe.instructions) ? mergedReaderRecipe.instructions.length : 0) >
+              (Array.isArray(htmlRecipe.instructions) ? htmlRecipe.instructions.length : 0);
+
+          if (betterThanHtml) {
+            return mergedReaderRecipe;
+          }
+        }
+      } catch {
+        // ignore and continue with HTML/Claude fallbacks
+      }
+    }
+  }
+
   // Claude fallback for HTML pages missing ingredients or instructions
   if (htmlRecipe.needsReview && ANTHROPIC_API_KEY) {
     // Extract more content for better AI analysis (up to 8000 chars instead of 5000)
@@ -8839,7 +8907,7 @@ const server = http.createServer(async (request, response) => {
         }
 
         const errorMessage = rawMessage || "Import mislukt. Controleer de link en probeer opnieuw.";
-        sendJson(response, statusCode, { ok: false, error: errorMessage });
+        sendJson(response, statusCode, { ok: false, error: "import_failed", message: errorMessage });
       }
       return;
     }
