@@ -221,6 +221,7 @@
               </div>
             </div>
             <div class="cook-tools">
+              <button class="cook-toggle cook-toggle--kookstand" id="kookstandButton" type="button">Kookstand</button>
               <button class="cook-toggle" id="cookModeButton" type="button" aria-pressed="false">Kookmodus: uit</button>
               <button class="cook-toggle" id="wakeLockButton" type="button" aria-pressed="false">Scherm tijdens koken: uit</button>
             </div>
@@ -1339,6 +1340,48 @@
             <span id="feedbackWebsite" class="hidden">De app zoekt receptinformatie op de website.</span>
           </p>
         </form>
+      </section>
+    </div>
+
+    <!-- Kookstand overlay (cooking mode) -->
+    <div class="kookstand-overlay hidden" id="kookstandOverlay" role="dialog" aria-modal="true" aria-labelledby="kookstandTitle" hidden>
+      <div class="kookstand-backdrop" id="kookstandBackdrop" data-kookstand-close="true"></div>
+      <section class="kookstand-sheet" aria-describedby="kookstandProgress">
+        <header class="kookstand-head">
+          <p class="section-kicker">KOOKSTAND</p>
+          <button class="icon-button kookstand-close" id="kookstandClose" type="button" aria-label="Sluiten">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6.7 5.3L12 10.58l5.3-5.29l1.4 1.41L13.42 12l5.29 5.3l-1.41 1.4L12 13.42l-5.3 5.29l-1.4-1.41L10.58 12l-5.29-5.3l1.41-1.4Z"/>
+            </svg>
+          </button>
+        </header>
+
+        <div class="kookstand-title-row">
+          <h2 class="kookstand-title" id="kookstandTitle">Recept</h2>
+          <span class="kookstand-servings" id="kookstandServings">2 pers.</span>
+        </div>
+
+        <div class="kookstand-body" id="kookstandBody">
+          <p class="kookstand-progress" id="kookstandProgress">Stap 1 van 1</p>
+          <article class="kookstand-step">
+            <p class="kookstand-step__index" id="kookstandStepIndex">1</p>
+            <p class="kookstand-step__text" id="kookstandStepText">Bereidingsstap</p>
+          </article>
+
+          <section class="kookstand-ingredients hidden" id="kookstandIngredients" aria-label="Ingrediënten checklist">
+            <div class="kookstand-ingredients__head">
+              <h3>Ingrediënten</h3>
+              <button class="soft-action soft-action--pill" id="kookstandHideIngredients" type="button">Verberg</button>
+            </div>
+            <ul class="kookstand-ingredients__list" id="kookstandIngredientList"></ul>
+          </section>
+        </div>
+
+        <footer class="kookstand-controls" aria-label="Kookstand bediening">
+          <button class="soft-action" id="kookstandPrev" type="button">Vorige</button>
+          <button class="soft-action soft-action--pill" id="kookstandToggleIngredients" type="button">Ingrediënten</button>
+          <button class="soft-action soft-action--dark" id="kookstandNext" type="button">Volgende</button>
+        </footer>
       </section>
     </div>
 

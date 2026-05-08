@@ -459,6 +459,11 @@ const state = {
   recipeProgress: {},
   keepAwake: false,
   wakeLockSentinel: null,
+  kookstandOpen: false,
+  kookstandRecipeId: "",
+  kookstandStepIndex: 0,
+  kookstandShowIngredients: false,
+  kookstandWakeLockOwned: false,
   session: {
     ready: false,
     saving: false,
@@ -732,6 +737,7 @@ const shareRecipeButton = document.getElementById("shareRecipeButton");
 const favoriteRecipeButton = document.getElementById("favoriteRecipeButton");
 const topbarFavoriteButton = document.getElementById("topbarFavoriteButton");
 const saveRecipeButton = document.getElementById("saveRecipeButton");
+const kookstandButton = document.getElementById("kookstandButton");
 const cookModeButton = document.getElementById("cookModeButton");
 const wakeLockButton = document.getElementById("wakeLockButton");
 const detailAssist = document.getElementById("detailAssist");
@@ -742,6 +748,20 @@ const cookModeStepText = document.getElementById("cookModeStepText");
 const cookModePrevButton = document.getElementById("cookModePrevButton");
 const cookModeResetButton = document.getElementById("cookModeResetButton");
 const cookModeNextButton = document.getElementById("cookModeNextButton");
+const kookstandOverlay = document.getElementById("kookstandOverlay");
+const kookstandBackdrop = document.getElementById("kookstandBackdrop");
+const kookstandCloseButton = document.getElementById("kookstandClose");
+const kookstandTitle = document.getElementById("kookstandTitle");
+const kookstandServings = document.getElementById("kookstandServings");
+const kookstandProgress = document.getElementById("kookstandProgress");
+const kookstandStepIndex = document.getElementById("kookstandStepIndex");
+const kookstandStepText = document.getElementById("kookstandStepText");
+const kookstandPrevButton = document.getElementById("kookstandPrev");
+const kookstandNextButton = document.getElementById("kookstandNext");
+const kookstandToggleIngredientsButton = document.getElementById("kookstandToggleIngredients");
+const kookstandIngredientsSection = document.getElementById("kookstandIngredients");
+const kookstandIngredientList = document.getElementById("kookstandIngredientList");
+const kookstandHideIngredientsButton = document.getElementById("kookstandHideIngredients");
 const detailStepCount = document.getElementById("detailStepCount");
 const detailIngredientCount = document.getElementById("detailIngredientCount");
 const servingsDisplay = document.getElementById("servingsDisplay");
@@ -2722,6 +2742,10 @@ function switchView(view) {
     item.classList.toggle("nav-item--active", isRecipesNav || item.dataset.view === view);
   });
 
+  if (view !== "detail" && state.kookstandOpen) {
+    closeKookstand();
+  }
+
   if (view !== "detail" && state.keepAwake) {
     releaseWakeLock();
   } else if (view === "detail" && state.keepAwake) {
@@ -4501,6 +4525,9 @@ function renderDetailRecipe(resetServings = false) {
     deleteRecipeButton.classList.toggle("hidden", !isDeletable);
   }
   renderCookMode(recipe, recipeProgress);
+  if (state.kookstandOpen && state.kookstandRecipeId === recipe.id) {
+    renderKookstand();
+  }
   updateWakeLockUI();
   renderMealPlanCurrentRecipe();
 
@@ -4538,6 +4565,184 @@ function renderCookMode(recipe, recipeProgress = getRecipeProgress(recipe.id)) {
   if (cookModeResetButton) {
     cookModeResetButton.disabled = !hasSteps;
   }
+}
+
+let kookstandLastFocusedEl = null;
+let kookstandBodyOverflowBefore = "";
+
+function getKookstandFocusableElements() {
+  if (!kookstandOverlay) return [];
+  const root = kookstandOverlay.querySelector(".kookstand-sheet") || kookstandOverlay;
+  return [...root.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter((el) => el instanceof HTMLElement && !el.hasAttribute("disabled") && !el.getAttribute("aria-hidden"));
+}
+
+function onKookstandKeydown(event) {
+  if (!state.kookstandOpen) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeKookstand();
+    return;
+  }
+  if (event.key !== "Tab") return;
+
+  const focusables = getKookstandFocusableElements();
+  if (!focusables.length) return;
+
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement)) return;
+
+  if (event.shiftKey) {
+    if (active === first || !kookstandOverlay.contains(active)) {
+      event.preventDefault();
+      last.focus();
+    }
+    return;
+  }
+
+  if (active === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function renderKookstand() {
+  if (!kookstandOverlay || !kookstandTitle || !kookstandServings || !kookstandProgress || !kookstandStepIndex || !kookstandStepText) {
+    return;
+  }
+  if (!state.kookstandOpen) {
+    kookstandOverlay.classList.add("hidden");
+    kookstandOverlay.hidden = true;
+    return;
+  }
+
+  const recipe = getRecipeById(state.kookstandRecipeId) || getSelectedRecipe();
+  if (!recipe) {
+    closeKookstand();
+    return;
+  }
+
+  const instructions = Array.isArray(recipe.instructions) ? recipe.instructions : [];
+  const hasSteps = instructions.length > 0;
+  const progress = getRecipeProgress(recipe.id);
+  const boundedIndex = hasSteps
+    ? Math.min(Math.max(0, state.kookstandStepIndex), instructions.length - 1)
+    : 0;
+
+  state.kookstandStepIndex = boundedIndex;
+  progress.currentStep = boundedIndex;
+
+  kookstandTitle.textContent = recipe.title || "Recept";
+  kookstandServings.textContent = `${Math.max(1, state.currentServings || parseBaseServings(recipe.servings) || 2)} pers.`;
+  kookstandProgress.textContent = hasSteps ? `Stap ${boundedIndex + 1} van ${instructions.length}` : "Nog geen stappen";
+  kookstandStepIndex.textContent = hasSteps ? String(boundedIndex + 1) : "—";
+  kookstandStepText.textContent = hasSteps ? instructions[boundedIndex] : "Voeg eerst bereidingsstappen toe in Recept bewerken.";
+
+  if (kookstandPrevButton) kookstandPrevButton.disabled = !hasSteps || boundedIndex <= 0;
+  if (kookstandNextButton) kookstandNextButton.disabled = !hasSteps || boundedIndex >= instructions.length - 1;
+
+  if (kookstandIngredientsSection) {
+    kookstandIngredientsSection.classList.toggle("hidden", !state.kookstandShowIngredients);
+  }
+  if (kookstandToggleIngredientsButton) {
+    kookstandToggleIngredientsButton.classList.toggle("is-active", state.kookstandShowIngredients);
+  }
+
+  if (state.kookstandShowIngredients && kookstandIngredientList) {
+    const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+    kookstandIngredientList.innerHTML = ingredients
+      .map((ingredient, index) => {
+        const checked = isIngredientChecked(recipe.id, ingredient, index);
+        const title = splitCompoundIngredientWords(ingredient?.name || "");
+        const amount = ingredient?.amount ? String(ingredient.amount) : "";
+        return `
+          <li>
+            <button
+              class="kookstand-ingredients__item ${checked ? "is-checked" : ""}"
+              type="button"
+              data-kookstand-ingredient-index="${index}"
+              aria-pressed="${checked ? "true" : "false"}"
+            >
+              <span class="kookstand-ingredients__title">${escapeHtml(title)}</span>
+              <span class="kookstand-ingredients__amount">${escapeHtml(amount)}</span>
+            </button>
+          </li>
+        `;
+      })
+      .join("");
+  }
+}
+
+async function openKookstand(recipeId) {
+  const id = String(recipeId || state.selectedRecipeId || "").trim();
+  const recipe = getRecipeById(id);
+  if (!recipe || !kookstandOverlay) {
+    return;
+  }
+
+  if (!recipe.instructions?.length) {
+    showToast("Voeg eerst bereidingsstappen toe bij Recept bewerken.");
+    return;
+  }
+
+  kookstandLastFocusedEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  kookstandBodyOverflowBefore = document.body.style.overflow || "";
+  document.body.style.overflow = "hidden";
+
+  state.kookstandOpen = true;
+  state.kookstandRecipeId = recipe.id;
+  state.kookstandShowIngredients = false;
+  state.kookstandStepIndex = Math.max(0, Math.floor(getRecipeProgress(recipe.id).currentStep || 0));
+
+  kookstandOverlay.hidden = false;
+  kookstandOverlay.classList.remove("hidden");
+
+  document.addEventListener("keydown", onKookstandKeydown, true);
+  kookstandCloseButton?.focus?.();
+
+  if (!state.wakeLockSentinel) {
+    state.kookstandWakeLockOwned = true;
+    state.keepAwake = true;
+    await requestWakeLock();
+  } else {
+    state.kookstandWakeLockOwned = false;
+  }
+
+  renderKookstand();
+}
+
+async function closeKookstand() {
+  if (!kookstandOverlay) {
+    state.kookstandOpen = false;
+    return;
+  }
+
+  state.kookstandOpen = false;
+  state.kookstandShowIngredients = false;
+  kookstandOverlay.classList.add("hidden");
+  kookstandOverlay.hidden = true;
+
+  document.removeEventListener("keydown", onKookstandKeydown, true);
+  document.body.style.overflow = kookstandBodyOverflowBefore;
+
+  if (state.kookstandWakeLockOwned) {
+    state.kookstandWakeLockOwned = false;
+    state.keepAwake = false;
+    await releaseWakeLock();
+  }
+
+  if (kookstandLastFocusedEl) {
+    kookstandLastFocusedEl.focus();
+  }
+}
+
+function setKookstandStep(nextIndex) {
+  if (!state.kookstandOpen) return;
+  state.kookstandStepIndex = Math.max(0, Math.floor(nextIndex || 0));
+  renderKookstand();
+  schedulePersistAppState();
 }
 
 function renderGrocerySummary() {
@@ -8088,6 +8293,10 @@ bindEvent(clearGroceryToolbarButton, "click", () => {
 });
 bindEvent(closeImportSecondaryButton, "click", () => closeModal());
 bindEvent(orderAHButton, "click", () => openStoreBasket("albert-heijn"));
+bindEvent(kookstandButton, "click", () => {
+  const recipe = getSelectedRecipe();
+  if (recipe) openKookstand(recipe.id);
+});
 bindEvent(wakeLockButton, "click", toggleWakeLock);
 bindEvent(cookModeButton, "click", toggleCookMode);
 bindEvent(cookModePrevButton, "click", () => {
@@ -8102,6 +8311,35 @@ bindEvent(cookModeNextButton, "click", () => {
 });
 bindEvent(cookModeResetButton, "click", () => {
   setCookModeStep(0);
+});
+
+bindEvent(kookstandCloseButton, "click", () => {
+  closeKookstand();
+});
+bindEvent(kookstandBackdrop, "click", () => {
+  closeKookstand();
+});
+bindEvent(kookstandPrevButton, "click", () => {
+  setKookstandStep(state.kookstandStepIndex - 1);
+});
+bindEvent(kookstandNextButton, "click", () => {
+  setKookstandStep(state.kookstandStepIndex + 1);
+});
+bindEvent(kookstandToggleIngredientsButton, "click", () => {
+  state.kookstandShowIngredients = !state.kookstandShowIngredients;
+  renderKookstand();
+});
+bindEvent(kookstandHideIngredientsButton, "click", () => {
+  state.kookstandShowIngredients = false;
+  renderKookstand();
+});
+bindEvent(kookstandIngredientList, "click", (event) => {
+  const btn = event.target.closest("[data-kookstand-ingredient-index]");
+  if (!(btn instanceof HTMLElement)) return;
+  const index = Number(btn.dataset.kookstandIngredientIndex);
+  if (!Number.isFinite(index)) return;
+  toggleIngredientChecked(index);
+  renderKookstand();
 });
 brandHomeButtons.forEach((button) => {
   button.addEventListener("click", goHome);
