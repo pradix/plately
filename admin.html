@@ -492,6 +492,32 @@
     </div>
 
     <div id="content" style="display: none;">
+      <div class="section" id="channelTestSection">
+        <div class="section-header">
+          <h2>Kanaal test (search + import)</h2>
+          <div class="muted">Kies 1 kanaal en test</div>
+        </div>
+        <div id="channelTestError" class="error" style="display:none"></div>
+        <div class="admin-test__row">
+          <select id="channelTestSelect" class="admin-test__select" aria-label="Kanaal kiezen">
+            <option value="">Kanaal kiezen…</option>
+          </select>
+          <input id="channelTestQuery" class="admin-test__input" type="text" placeholder="Search query" />
+          <button class="btn btn-primary" type="button" onclick="runChannelTestSearch()">Test search</button>
+        </div>
+        <div id="channelTestSearchMeta" class="muted mono" style="margin-top:8px;display:none;gap:8px;align-items:center;flex-wrap:wrap"></div>
+        <div id="channelTestSearchStatus" class="muted" style="margin-top:8px"></div>
+        <div id="channelTestSearchResults" class="admin-test__results"></div>
+
+        <hr class="divider" />
+
+        <div class="admin-test__row">
+          <input id="channelTestImportUrl" class="admin-test__input" type="text" placeholder="Import URL" />
+          <button class="btn" type="button" onclick="runChannelTestImport()">Test import</button>
+        </div>
+        <div id="channelTestImportStatus" class="muted" style="margin-top:8px"></div>
+      </div>
+
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-value" id="totalUsers">-</div>
@@ -521,32 +547,6 @@
           <div class="stat-value" id="pendingCustomChannels">-</div>
           <div class="stat-label">In behandeling</div>
         </div>
-      </div>
-
-      <div class="section" id="channelTestSection">
-        <div class="section-header">
-          <h2>Kanaal test (search + import)</h2>
-          <div class="muted">Kies 1 kanaal en test</div>
-        </div>
-        <div id="channelTestError" class="error" style="display:none"></div>
-        <div class="admin-test__row">
-          <select id="channelTestSelect" class="admin-test__select" aria-label="Kanaal kiezen">
-            <option value="">Kanaal kiezen…</option>
-          </select>
-          <input id="channelTestQuery" class="admin-test__input" type="text" placeholder="Search query" />
-          <button class="btn btn-primary" type="button" onclick="runChannelTestSearch()">Test search</button>
-        </div>
-        <div id="channelTestSearchMeta" class="muted mono" style="margin-top:8px;display:none;gap:8px;align-items:center;flex-wrap:wrap"></div>
-        <div id="channelTestSearchStatus" class="muted" style="margin-top:8px"></div>
-        <div id="channelTestSearchResults" class="admin-test__results"></div>
-
-        <hr class="divider" />
-
-        <div class="admin-test__row">
-          <input id="channelTestImportUrl" class="admin-test__input" type="text" placeholder="Import URL" />
-          <button class="btn" type="button" onclick="runChannelTestImport()">Test import</button>
-        </div>
-        <div id="channelTestImportStatus" class="muted" style="margin-top:8px"></div>
       </div>
 
       <div class="section" id="overviewSection">
@@ -1766,7 +1766,8 @@
           <thead>
             <tr>
               <th>Kanaal</th>
-              <th>URL</th>
+              <th>Base URL</th>
+              <th>Search URL template</th>
               <th>Status</th>
               <th style="text-align:right">Acties</th>
             </tr>
@@ -1776,15 +1777,29 @@
               const id = escapeHtml(ch?.id || "");
               const name = escapeHtml(ch?.name || ch?.id || "");
               const url = escapeHtml(ch?.url || "");
+              const baseUrl = escapeHtml(ch?.baseUrl || ch?.url || "");
+              const tpl = escapeHtml(ch?.searchUrlTemplate || (baseUrl ? `${baseUrl.replace(/\/+$/, "")}/?s={q}` : ""));
+              const defBase = escapeHtml(ch?.defaultBaseUrl || ch?.url || "");
+              const defTpl = escapeHtml(ch?.defaultSearchUrlTemplate || (defBase ? `${defBase.replace(/\/+$/, "")}/?s={q}` : ""));
+              const isOverridden = Boolean((ch?.overrideBaseUrl || "").trim() || (ch?.overrideSearchUrlTemplate || "").trim());
               const g = ch?._group || (ch?.status || "approved");
               return `
                 <tr>
                   <td><strong>${name}</strong><div class="muted mono" style="margin-top:2px;font-size:11px">${id}</div></td>
                   <td class="mono" style="font-size: 11px; color: rgba(0,0,0,0.58);">
-                    <a class="admin-inventory__link" href="${url}" target="_blank" rel="noopener">${url}</a>
+                    ${baseUrl ? `<a class="admin-inventory__link" href="${baseUrl}" target="_blank" rel="noopener">${baseUrl}</a>` : `<span class="muted">—</span>`}
+                    ${isOverridden ? `<div class="badge" style="margin-top:6px;display:inline-block">OVERRIDE</div>` : ""}
+                    ${defBase && (defBase !== baseUrl) ? `<div class="muted" style="margin-top:6px">Default: <span class="mono">${defBase}</span></div>` : ""}
+                    ${url && url !== baseUrl ? `<div class="muted" style="margin-top:6px">Original: <span class="mono">${url}</span></div>` : ""}
+                  </td>
+                  <td class="mono" style="font-size: 11px; color: rgba(0,0,0,0.58);">
+                    ${tpl ? `<div style="word-break:break-all">${tpl}</div>` : `<span class="muted">—</span>`}
+                    ${defTpl && (defTpl !== tpl) ? `<div class="muted" style="margin-top:6px">Default: <span class="mono" style="word-break:break-all">${defTpl}</span></div>` : ""}
                   </td>
                   <td>${badge(g)}</td>
                   <td style="text-align:right">
+                    <button class="btn btn-sm" type="button" onclick="editCustomChannelOverride('${id}', '${baseUrl}', '${tpl}', '${defBase}', '${defTpl}')">Edit</button>
+                    ${isOverridden ? `<button class="btn btn-sm" type="button" onclick="revertCustomChannelOverride('${id}')">Revert</button>` : ""}
                     <button class="btn btn-sm" type="button" onclick="editCustomChannelUrl('${id}', '${url}')">Edit URL</button>
                   </td>
                 </tr>
@@ -1872,6 +1887,69 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ channelId, url: trimmed }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "Update failed");
+        }
+        await loadChannelCatalog();
+      } catch (error) {
+        alert("Fout: " + error.message);
+      }
+    }
+
+    async function revertCustomChannelOverride(channelId) {
+      showChannelTestError("");
+      if (!confirm("Revert custom kanaal override naar default?")) return;
+      try {
+        const response = await fetch("/api/admin/channel-override", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channelId, clear: true }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "Revert failed");
+        }
+        await loadChannelCatalog();
+      } catch (error) {
+        alert("Fout: " + error.message);
+      }
+    }
+
+    async function editCustomChannelOverride(channelId, currentBaseUrl, currentTemplate, defaultBaseUrl, defaultTemplate) {
+      showChannelTestError("");
+      const mode = prompt(
+        "Wat wil je aanpassen?\n\n1 = baseUrl\n2 = searchUrlTemplate\n3 = beide\n\n(Leeg = annuleren)",
+        "1"
+      );
+      if (!mode) return;
+      const m = String(mode || "").trim();
+      let baseUrl = "";
+      let searchUrlTemplate = "";
+
+      if (m === "1" || m === "3") {
+        baseUrl = prompt(
+          "Nieuwe baseUrl (http/https)\n\nTip: laat leeg om niet te wijzigen.",
+          currentBaseUrl || defaultBaseUrl || ""
+        ) || "";
+      }
+      if (m === "2" || m === "3") {
+        searchUrlTemplate = prompt(
+          "Nieuwe searchUrlTemplate (http/https) met {q}\n\nVoorbeeld: https://example.com/?s={q}\n\nTip: laat leeg om niet te wijzigen.",
+          currentTemplate || defaultTemplate || ""
+        ) || "";
+      }
+
+      baseUrl = String(baseUrl || "").trim();
+      searchUrlTemplate = String(searchUrlTemplate || "").trim();
+      if (!baseUrl && !searchUrlTemplate) return;
+
+      try {
+        const response = await fetch("/api/admin/channel-override", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channelId, baseUrl, searchUrlTemplate }),
         }));
         const data = await response.json();
         if (!response.ok || !data.ok) {

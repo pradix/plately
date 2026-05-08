@@ -679,6 +679,46 @@ async function setSeedChannelOverrides(nextOverrides) {
   await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2));
 }
 
+async function getChannelOverrides() {
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const row = await pool.query("SELECT value FROM plately_admin_state WHERE key = $1 LIMIT 1", ["channelOverrides"]);
+    const value = row.rows?.[0]?.value;
+    return value && typeof value === "object" ? value : {};
+  }
+  try {
+    const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+    const db = JSON.parse(rawFile);
+    const overrides = db?.adminState?.channelOverrides;
+    return overrides && typeof overrides === "object" ? overrides : {};
+  } catch {
+    return {};
+  }
+}
+
+async function setChannelOverrides(nextOverrides) {
+  const clean = nextOverrides && typeof nextOverrides === "object" ? nextOverrides : {};
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    await pool.query(
+      `
+        INSERT INTO plately_admin_state (key, value, updated_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+      `,
+      ["channelOverrides", JSON.stringify(clean)]
+    );
+    return;
+  }
+  const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+  const db = JSON.parse(rawFile);
+  if (!db.adminState || typeof db.adminState !== "object") db.adminState = {};
+  db.adminState.channelOverrides = clean;
+  await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2));
+}
+
 function getEffectiveSeedChannelConfig(channelId, overrides) {
   const id = sanitizeText(channelId || "");
   const base = SEED_CHANNEL_DEFAULTS[id] || {};
@@ -696,6 +736,34 @@ function getEffectiveSeedChannelConfig(channelId, overrides) {
       baseUrl: sanitizeText(next.baseUrl || ""),
       searchUrlTemplate: sanitizeText(next.searchUrlTemplate || ""),
     },
+  };
+}
+
+function getEffectiveChannelOverride(channelId, overrides) {
+  const id = sanitizeText(channelId || "");
+  const over = overrides && typeof overrides === "object" ? overrides[id] : null;
+  return over && typeof over === "object"
+    ? {
+        baseUrl: sanitizeText(over.baseUrl || ""),
+        searchUrlTemplate: sanitizeText(over.searchUrlTemplate || ""),
+      }
+    : { baseUrl: "", searchUrlTemplate: "" };
+}
+
+function getEffectiveCustomChannelConfig({ channelId, url }, channelOverrides) {
+  const id = sanitizeText(channelId || "");
+  const baseUrlDefault = sanitizeText(url || "").replace(/\/+$/, "");
+  const templateDefault = baseUrlDefault ? `${baseUrlDefault}/?s={q}` : "";
+  const over = getEffectiveChannelOverride(id, channelOverrides);
+  const baseUrl = sanitizeText(over.baseUrl || baseUrlDefault);
+  const searchUrlTemplate = sanitizeText(over.searchUrlTemplate || templateDefault);
+  return {
+    channelId: id,
+    defaultBaseUrl: baseUrlDefault,
+    defaultSearchUrlTemplate: templateDefault,
+    baseUrl,
+    searchUrlTemplate,
+    override: over,
   };
 }
 
@@ -7797,6 +7865,7 @@ const server = http.createServer(async (request, response) => {
         : null;
       // Handle custom channels
       const customChannelsParam = requestUrl.searchParams.get("customChannels") || "";
+      const channelOverrides = await getChannelOverrides();
 
       // Analytics: record channel search (best-effort, avoids PII beyond user id)
       if (normalizedForAnalytics) {
@@ -7823,10 +7892,13 @@ const server = http.createServer(async (request, response) => {
           .filter((ch) => ch && ch.id && ch.name && ch.url);
 
         if (customChannelEntries.length) {
-          const q = encodeURIComponent(query);
           const customSearches = await Promise.allSettled(
             customChannelEntries.map((ch) =>
-              scrapeOrRestPublic(ch.url, ch.name, ch.id, `${ch.url}/?s=${q}`, parseWPStandard, 4, query)
+              (() => {
+                const eff = getEffectiveCustomChannelConfig({ channelId: ch.id, url: ch.url }, channelOverrides);
+                const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+                return scrapeOrRestPublic(eff.baseUrl, ch.name, ch.id, usedUrl, parseWPStandard, 4, query);
+              })()
             )
           );
           for (const s of customSearches) {
@@ -8851,6 +8923,7 @@ const server = http.createServer(async (request, response) => {
         await requireAdmin(request);
 
         const seedOverrides = await getSeedChannelOverrides();
+        const channelOverrides = await getChannelOverrides();
         const seedChannels = Array.isArray(SEED_CHANNELS)
           ? SEED_CHANNELS.map((ch) => ({
               id: sanitizeText(ch?.id || ""),
@@ -8873,10 +8946,17 @@ const server = http.createServer(async (request, response) => {
           if (!id || seen.has(id)) return;
           seen.add(id);
           const status = sanitizeText(ch?.status || "approved") || "approved";
+          const effective = getEffectiveCustomChannelConfig({ channelId: id, url: sanitizeText(ch?.url || "") }, channelOverrides);
           const entry = {
             id,
             name: sanitizeText(ch?.name || ""),
             url: sanitizeText(ch?.url || ""),
+            baseUrl: sanitizeText(effective.baseUrl || ""),
+            searchUrlTemplate: sanitizeText(effective.searchUrlTemplate || ""),
+            defaultBaseUrl: sanitizeText(effective.defaultBaseUrl || ""),
+            defaultSearchUrlTemplate: sanitizeText(effective.defaultSearchUrlTemplate || ""),
+            overrideBaseUrl: sanitizeText(effective.override.baseUrl || ""),
+            overrideSearchUrlTemplate: sanitizeText(effective.override.searchUrlTemplate || ""),
             status,
             createdAt: sanitizeText(ch?.createdAt || ""),
             updatedAt: sanitizeText(ch?.updatedAt || ""),
@@ -9084,6 +9164,73 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/channel-override" && request.method === "POST") {
+      console.log("🔧 /api/admin/channel-override called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+
+        const channelId = sanitizeText(body.channelId || "");
+        const nextBaseUrlRaw = sanitizeText(body.baseUrl || "");
+        const nextTemplateRaw = sanitizeText(body.searchUrlTemplate || "");
+        const clear = Boolean(body.clear);
+
+        if (!channelId) {
+          return sendJson(response, 400, { ok: false, error: "channelId required" });
+        }
+
+        const overrides = await getChannelOverrides();
+        if (clear) {
+          if (overrides && typeof overrides === "object") {
+            delete overrides[channelId];
+            await setChannelOverrides(overrides);
+          }
+          return sendJson(response, 200, { ok: true, channelId, overrides: null });
+        }
+
+        const next = {};
+        if (nextBaseUrlRaw) {
+          try {
+            const parsed = new URL(nextBaseUrlRaw);
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+              return sendJson(response, 400, { ok: false, error: "baseUrl must be http(s)" });
+            }
+            next.baseUrl = parsed.toString().replace(/\/+$/, "");
+          } catch {
+            return sendJson(response, 400, { ok: false, error: "Invalid baseUrl" });
+          }
+        }
+        if (nextTemplateRaw) {
+          try {
+            const parsed = new URL(nextTemplateRaw.replaceAll("{q}", "test"));
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+              return sendJson(response, 400, { ok: false, error: "searchUrlTemplate must be http(s)" });
+            }
+            if (!nextTemplateRaw.includes("{q}")) {
+              return sendJson(response, 400, { ok: false, error: "searchUrlTemplate must include {q}" });
+            }
+            next.searchUrlTemplate = nextTemplateRaw;
+          } catch {
+            return sendJson(response, 400, { ok: false, error: "Invalid searchUrlTemplate" });
+          }
+        }
+
+        if (!next.baseUrl && !next.searchUrlTemplate) {
+          return sendJson(response, 400, { ok: false, error: "baseUrl or searchUrlTemplate required (or clear=true)" });
+        }
+
+        overrides[channelId] = {
+          ...(overrides[channelId] && typeof overrides[channelId] === "object" ? overrides[channelId] : {}),
+          ...next,
+        };
+        await setChannelOverrides(overrides);
+        return sendJson(response, 200, { ok: true, channelId, overrides: overrides[channelId] });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/channel-override:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/approve-channel" && request.method === "POST") {
       console.log("✅ /api/admin/approve-channel called");
 
@@ -9193,13 +9340,17 @@ const server = http.createServer(async (request, response) => {
           if (!id || !name || !url) {
             return sendJson(response, 400, { ok: false, error: "customChannel (id,name,url) required" });
           }
-          const usedUrl = buildSeedSearchUrlFromTemplate(`${url.replace(/\/+$/, "")}/?s={q}`, query);
-          const results = await scrapeOrRestPublic(url, name, id, usedUrl, parseWPStandard, Math.min(limit, 15), query);
+          const channelOverrides = await getChannelOverrides();
+          const eff = getEffectiveCustomChannelConfig({ channelId: id, url }, channelOverrides);
+          const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          const results = await scrapeOrRestPublic(eff.baseUrl, name, id, usedUrl, parseWPStandard, Math.min(limit, 15), query);
           return sendJson(response, 200, {
             ok: true,
             results: (results || []).slice(0, limit),
             usedQuery: query,
             usedUrl,
+            usedSearchUrlTemplate: sanitizeText(eff.searchUrlTemplate || ""),
+            usedBaseUrl: sanitizeText(eff.baseUrl || ""),
             channelId: id,
           });
         }
@@ -9258,6 +9409,8 @@ const server = http.createServer(async (request, response) => {
           results: (results || []).slice(0, limit),
           usedQuery: query,
           usedUrl,
+          usedSearchUrlTemplate: sanitizeText(eff.searchUrlTemplate || ""),
+          usedBaseUrl: sanitizeText(eff.baseUrl || ""),
           channelId,
         });
       } catch (error) {
