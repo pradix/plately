@@ -518,6 +518,7 @@ const state = {
   homeRecipeLimit: getSessionNumber(HOME_RECIPE_LIMIT_SESSION_KEY, HOME_RECIPE_INITIAL),
   followedChannelIds: ["ch-ah"], // Start with only Allerhande (primary Dutch recipe source)
   customChannels: [],
+  channelEnabled: { seed: {}, custom: {} },
   channelSearchFilter: null,
   channelSearchAllResults: [],
   openCookbookId: null,
@@ -677,6 +678,20 @@ function compareChannelDisplayName(a, b) {
 
 function getSeedChannelsSortedByName() {
   return [...SEED_CHANNELS].sort(compareChannelDisplayName);
+}
+
+function isSeedChannelEnabled(channelId) {
+  const id = String(channelId || "").trim();
+  if (!id) return false;
+  const map = state.channelEnabled?.seed && typeof state.channelEnabled.seed === "object" ? state.channelEnabled.seed : {};
+  return map[id] === false ? false : true;
+}
+
+function isCustomChannelEnabled(channelId) {
+  const id = String(channelId || "").trim();
+  if (!id) return false;
+  const map = state.channelEnabled?.custom && typeof state.channelEnabled.custom === "object" ? state.channelEnabled.custom : {};
+  return map[id] === false ? false : true;
 }
 
 const homeScreen = document.getElementById("homeScreen");
@@ -3360,13 +3375,18 @@ let channelSearchTimeout = null;
 function getActiveFollowedSeedChannelIds() {
   // Only seed channels can be toggled; custom channels are passed separately via customChannels param.
   // Pending/rejected custom channels should never block seed searching.
-  return state.followedChannelIds.filter((id) => SEED_CHANNELS.some((ch) => ch.id === id));
+  return state.followedChannelIds
+    .filter((id) => SEED_CHANNELS.some((ch) => ch.id === id))
+    .filter((id) => isSeedChannelEnabled(id));
 }
 
 function countActiveFollowedChannels() {
   const seedActive = getActiveFollowedSeedChannelIds().length;
   const approvedCustomActive = state.customChannels.filter(
-    (ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved"
+    (ch) =>
+      state.followedChannelIds.includes(ch.id) &&
+      (ch.status || "approved") === "approved" &&
+      isCustomChannelEnabled(ch.id)
   ).length;
   return seedActive + approvedCustomActive;
 }
@@ -3610,7 +3630,10 @@ async function searchChannels(query) {
     const channels = getActiveFollowedSeedChannelIds().join(",");
     // Only include approved custom channels in search
     const followedCustomChannels = state.customChannels.filter(
-      (ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved"
+      (ch) =>
+        state.followedChannelIds.includes(ch.id) &&
+        (ch.status || "approved") === "approved" &&
+        isCustomChannelEnabled(ch.id)
     );
     const dedupedCustomChannels = followedCustomChannels.filter((ch) => {
       const seed = findMatchingSeedChannelForUrl(ch.url);
@@ -3664,7 +3687,10 @@ async function searchChannelsOnImportScreen(query) {
     const channels = getActiveFollowedSeedChannelIds().join(",");
     // Only include approved custom channels in search
     const followedCustomChannels = state.customChannels.filter(
-      (ch) => state.followedChannelIds.includes(ch.id) && (ch.status || "approved") === "approved"
+      (ch) =>
+        state.followedChannelIds.includes(ch.id) &&
+        (ch.status || "approved") === "approved" &&
+        isCustomChannelEnabled(ch.id)
     );
     const dedupedCustomChannels = followedCustomChannels.filter((ch) => {
       const seed = findMatchingSeedChannelForUrl(ch.url);
@@ -3932,7 +3958,8 @@ function renderChannelRow() {
     .filter(
       (ch) =>
         state.followedChannelIds.includes(ch.id) &&
-        (ch.status || "approved") === "approved"
+        (ch.status || "approved") === "approved" &&
+        (SEED_CHANNELS.some((s) => s.id === ch.id) ? isSeedChannelEnabled(ch.id) : isCustomChannelEnabled(ch.id))
     )
     .sort(compareChannelDisplayName);
   row.innerHTML = followed.map((ch) => {
@@ -4045,16 +4072,21 @@ function renderChannelSettings() {
   const container = document.getElementById("channelSettingsList");
   if (!container) return;
 
-  const seedRows = getSeedChannelsSortedByName().map((ch) => {
+  const seedRows = getSeedChannelsSortedByName()
+    .filter((ch) => isSeedChannelEnabled(ch.id) || state.followedChannelIds.includes(ch.id))
+    .map((ch) => {
     const followed = state.followedChannelIds.includes(ch.id);
+    const enabled = isSeedChannelEnabled(ch.id);
     const faviconUrl = getSourceIconUrl(ch.url);
+    const disabledBadge = enabled ? "" : ` <span class="channel-status-badge channel-status-badge--rejected">Uitgeschakeld</span>`;
+    const toggleDisabled = enabled ? "" : "disabled";
     return `
       <label class="channel-toggle-row" data-channel-id="${escapeHtml(ch.id)}">
         <span class="channel-toggle-avatar">
           ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
         </span>
-        <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
-        <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>
+        <span class="channel-toggle-name">${escapeHtml(ch.name)}${disabledBadge}</span>
+        <span class="toggle-switch ${followed ? "toggle-switch--on" : ""} ${toggleDisabled}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}" ${toggleDisabled}></span>
       </label>`;
   }).join("");
 
@@ -4095,9 +4127,14 @@ function renderChannelSettings() {
         "Goedgekeurd";
       const isPending = status === "pending";
       const isRejected = status === "rejected";
-      const toggleDisabled = (isPending || isRejected) ? "disabled" : "";
-      const rowDisabledClass = (isPending || isRejected) ? "channel-toggle-row--disabled" : "";
-      const toggleHtml = isRejected
+      const enabled = isCustomChannelEnabled(ch.id);
+      const isAdminDisabled = status === "approved" && !enabled;
+      const shouldHide = status === "approved" && !enabled && !followed;
+      if (shouldHide) return "";
+      const toggleDisabled = (isPending || isRejected || isAdminDisabled) ? "disabled" : "";
+      const rowDisabledClass = (isPending || isRejected || isAdminDisabled) ? "channel-toggle-row--disabled" : "";
+      const adminDisabledBadge = isAdminDisabled ? ` <span class="channel-status-badge channel-status-badge--rejected">Uitgeschakeld</span>` : "";
+      const toggleHtml = (isRejected || isAdminDisabled)
         ? `<span class="toggle-switch disabled" role="switch" aria-checked="${followed}" aria-disabled="true" tabindex="-1"></span>`
         : `<span class="toggle-switch ${followed ? "toggle-switch--on" : ""} ${toggleDisabled}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${ch.id}" ${toggleDisabled}></span>`;
 
@@ -4107,7 +4144,7 @@ function renderChannelSettings() {
             ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
           </span>
           <div class="channel-toggle-info">
-            <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
+            <span class="channel-toggle-name">${escapeHtml(ch.name)}${adminDisabledBadge}</span>
             <span class="channel-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
             ${dupeBadgeHtml}
           </div>
@@ -6892,6 +6929,12 @@ function applyPersistedAppState(user) {
   }
   if (typeof user.language === "string" && user.language) {
     state.language = user.language;
+  }
+
+  if (user.channelEnabled && typeof user.channelEnabled === "object") {
+    const seed = user.channelEnabled.seed && typeof user.channelEnabled.seed === "object" ? user.channelEnabled.seed : {};
+    const custom = user.channelEnabled.custom && typeof user.channelEnabled.custom === "object" ? user.channelEnabled.custom : {};
+    state.channelEnabled = { seed: { ...seed }, custom: { ...custom } };
   }
 
   const importedRecipes = Array.isArray(user.importedRecipes)
@@ -9861,10 +9904,21 @@ bindEvent(document.getElementById("channelSettingsList"), "click", (event) => {
     return;
   }
 
+  const isSeed = SEED_CHANNELS.some((ch) => ch.id === id);
+  if (!state.followedChannelIds.includes(id)) {
+    if (isSeed && !isSeedChannelEnabled(id)) {
+      showToast("Dit kanaal is uitgeschakeld en kan niet worden ingeschakeld.");
+      return;
+    }
+    if (!isSeed && !isCustomChannelEnabled(id)) {
+      showToast("Dit kanaal is uitgeschakeld en kan niet worden ingeschakeld.");
+      return;
+    }
+  }
+
   if (state.followedChannelIds.includes(id)) {
     // Prevent ending up with zero *active* channels (pending/rejected custom channels don't count)
     const activeCount = countActiveFollowedChannels();
-    const isSeed = SEED_CHANNELS.some((ch) => ch.id === id);
     const isApprovedCustom =
       Boolean(customChannel) && (customChannel.status || "approved") === "approved";
     const removingActive = isSeed || isApprovedCustom;
@@ -10913,10 +10967,11 @@ function renderOnboardingChannels() {
   const list = document.getElementById("onboardingChannelsList");
   if (!list) return;
 
-  const sortedSeed = getSeedChannelsSortedByName();
+  const sortedSeed = getSeedChannelsSortedByName().filter((ch) => isSeedChannelEnabled(ch.id));
 
   // Default: all channels are checked (deduped).
   onboardingData.channels = [...new Set(onboardingData.channels)];
+  onboardingData.channels = onboardingData.channels.filter((id) => isSeedChannelEnabled(id));
 
   list.innerHTML = sortedSeed.map((ch) => {
     const followed = onboardingData.channels.includes(ch.id);
@@ -11019,7 +11074,7 @@ function finishOnboarding() {
   }
 
   // Apply channels
-  state.followedChannelIds = [...new Set(onboardingData.channels)];
+  state.followedChannelIds = [...new Set(onboardingData.channels.filter((id) => isSeedChannelEnabled(id)))];
 
   // Persist suggested channels if any
   if (onboardingData.suggestedChannels && onboardingData.suggestedChannels.length > 0) {

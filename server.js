@@ -8694,6 +8694,8 @@ const server = http.createServer(async (request, response) => {
 
       console.log(`🔐 /api/session - authUser resolved: ${authUser ? authUser.email : "NULL"}`);
 
+      const channelEnabled = await getChannelEnabledState().catch(() => ({ seed: {}, custom: {} }));
+
       if (authUser) {
         const appState = isPostgresEnabled() ? buildAppStateFromUser(authUser) : (await ensureUserSession(request, response));
         console.log(`🔐 /api/session - RESPONSE: authenticated=true, email=${authUser.email}`);
@@ -8703,6 +8705,7 @@ const server = http.createServer(async (request, response) => {
             ...appState,
             authenticated: true,
             email: authUser.email,
+            channelEnabled,
           },
           auth: {
             enabled: isPostgresEnabled(),
@@ -8721,6 +8724,7 @@ const server = http.createServer(async (request, response) => {
             ...user,
             authenticated: false,
             email: "",
+            channelEnabled,
           },
           auth: {
             enabled: isPostgresEnabled(),
@@ -8733,6 +8737,7 @@ const server = http.createServer(async (request, response) => {
         console.error(`❌ /api/session error: ${error.message}`);
         // Return guest session even if auth check fails
         try {
+          const channelEnabled = await getChannelEnabledState().catch(() => ({ seed: {}, custom: {} }));
           const user = await ensureUserSession(request, response);
           sendJson(response, 200, {
             ok: true,
@@ -8740,6 +8745,7 @@ const server = http.createServer(async (request, response) => {
               ...user,
               authenticated: false,
               email: "",
+              channelEnabled,
             },
             auth: {
               enabled: false,
@@ -8764,9 +8770,10 @@ const server = http.createServer(async (request, response) => {
       const authUser = await getAuthenticatedUser(request);
       if (authUser) {
         const updatedUser = await updateAuthenticatedUserState(authUser.id, body);
+        const channelEnabled = await getChannelEnabledState().catch(() => ({ seed: {}, custom: {} }));
         sendJson(response, 200, {
           ok: true,
-          user: buildAppStateFromUser(updatedUser),
+          user: { ...buildAppStateFromUser(updatedUser), channelEnabled },
           auth: {
             enabled: isPostgresEnabled(),
             authenticated: true,
@@ -10227,6 +10234,7 @@ const server = http.createServer(async (request, response) => {
 
         const seedOverrides = await getSeedChannelOverrides();
         const channelOverrides = await getChannelOverrides();
+        const enabledState = await getChannelEnabledState().catch(() => ({ seed: {}, custom: {} }));
         const seedChannels = Array.isArray(SEED_CHANNELS)
           ? SEED_CHANNELS.map((ch) => ({
               id: sanitizeText(ch?.id || ""),
@@ -10238,6 +10246,7 @@ const server = http.createServer(async (request, response) => {
               overrideUrl: sanitizeText(getEffectiveSeedChannelConfig(ch?.id || "", seedOverrides).override.baseUrl || ""),
               overrideSearchUrlTemplate: sanitizeText(getEffectiveSeedChannelConfig(ch?.id || "", seedOverrides).override.searchUrlTemplate || ""),
               kind: "seed",
+              enabled: isChannelEnabled("seed", ch?.id || "", enabledState),
             })).filter((ch) => ch.id && ch.name)
           : [];
 
@@ -10267,6 +10276,7 @@ const server = http.createServer(async (request, response) => {
             rejectedReason: sanitizeText(ch?.rejectedReason || ""),
             ownerEmail: sanitizeText(ownerEmail || ""),
             kind: "custom",
+            enabled: isChannelEnabled("custom", id, enabledState),
           };
           if (status === "pending") customChannels.pending.push(entry);
           else if (status === "rejected") customChannels.rejected.push(entry);
@@ -10530,6 +10540,37 @@ const server = http.createServer(async (request, response) => {
         return sendJson(response, 200, { ok: true, channelId, overrides: overrides[channelId] });
       } catch (error) {
         console.error("❌ Error in /api/admin/channel-override:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/channel-enabled" && request.method === "POST") {
+      console.log("🔧 /api/admin/channel-enabled called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+
+        const channelKind = sanitizeText(body.channelKind || "");
+        const channelId = sanitizeText(body.channelId || "");
+        const enabled = Boolean(body.enabled);
+
+        if (!channelKind || !channelId) {
+          return sendJson(response, 400, { ok: false, error: "channelKind and channelId required" });
+        }
+        if (channelKind !== "seed" && channelKind !== "custom") {
+          return sendJson(response, 400, { ok: false, error: "channelKind must be seed|custom" });
+        }
+        if (channelKind === "seed" && !SEED_CHANNELS.some((ch) => ch.id === channelId)) {
+          return sendJson(response, 400, { ok: false, error: "Unknown seed channel" });
+        }
+
+        const st = await getChannelEnabledState();
+        if (channelKind === "seed") st.seed[channelId] = enabled;
+        else st.custom[channelId] = enabled;
+        await setChannelEnabledState(st);
+        return sendJson(response, 200, { ok: true, channelKind, channelId, enabled });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/channel-enabled:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
       }
     }

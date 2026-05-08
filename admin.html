@@ -1781,9 +1781,16 @@
         const defBase = escapeHtml(ch?.defaultUrl || "");
         const defTpl = escapeHtml(ch?.defaultSearchUrlTemplate || "");
         const isOverridden = Boolean((ch?.overrideUrl || "").trim() || (ch?.overrideSearchUrlTemplate || "").trim());
+        const enabled = ch?.enabled !== false;
         return `
           <tr>
             <td><strong>${name}</strong><div class="muted mono" style="margin-top:2px;font-size:11px">${id}</div></td>
+            <td style="text-align:center">
+              <label class="pill" style="cursor:pointer">
+                <input type="checkbox" ${enabled ? "checked" : ""} onchange="setAdminChannelEnabled('seed','${id}', this.checked)" />
+                Enabled
+              </label>
+            </td>
             <td class="mono" style="font-size: 11px; color: rgba(0,0,0,0.58);">
               ${baseUrl ? `<a class="admin-inventory__link" href="${baseUrl}" target="_blank" rel="noopener">${baseUrl}</a>` : `<span class="muted">—</span>`}
               ${isOverridden ? `<div class="badge" style="margin-top:6px;display:inline-block">OVERRIDE</div>` : ""}
@@ -1807,6 +1814,7 @@
           <thead>
             <tr>
               <th>Kanaal</th>
+              <th style="text-align:center">Enabled</th>
               <th>Base URL</th>
               <th>Search URL template</th>
               <th style="text-align:right">Acties</th>
@@ -1823,6 +1831,7 @@
           <thead>
             <tr>
               <th>Kanaal</th>
+              <th style="text-align:center">Enabled</th>
               <th>Base URL</th>
               <th>Search URL template</th>
               <th>Status</th>
@@ -1839,10 +1848,17 @@
               const defBase = escapeHtml(ch?.defaultBaseUrl || ch?.url || "");
               const defTpl = escapeHtml(ch?.defaultSearchUrlTemplate || (defBase ? `${defBase.replace(/\/+$/, "")}/?s={q}` : ""));
               const isOverridden = Boolean((ch?.overrideBaseUrl || "").trim() || (ch?.overrideSearchUrlTemplate || "").trim());
+              const enabled = ch?.enabled !== false;
               const g = ch?._group || (ch?.status || "approved");
               return `
                 <tr>
                   <td><strong>${name}</strong><div class="muted mono" style="margin-top:2px;font-size:11px">${id}</div></td>
+                  <td style="text-align:center">
+                    <label class="pill" style="cursor:pointer">
+                      <input type="checkbox" ${enabled ? "checked" : ""} onchange="setAdminChannelEnabled('custom','${id}', this.checked)" />
+                      Enabled
+                    </label>
+                  </td>
                   <td class="mono" style="font-size: 11px; color: rgba(0,0,0,0.58);">
                     ${baseUrl ? `<a class="admin-inventory__link" href="${baseUrl}" target="_blank" rel="noopener">${baseUrl}</a>` : `<span class="muted">—</span>`}
                     ${isOverridden ? `<div class="badge" style="margin-top:6px;display:inline-block">OVERRIDE</div>` : ""}
@@ -2051,6 +2067,23 @@
         renderCustomChannelsCatalog(seed, custom);
       } catch (error) {
         showChannelTestError(error.message);
+      }
+    }
+
+    async function setAdminChannelEnabled(channelKind, channelId, enabled) {
+      showChannelTestError("");
+      try {
+        const response = await fetch("/api/admin/channel-enabled", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channelKind, channelId, enabled: Boolean(enabled) }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Update failed");
+        await loadChannelCatalog();
+      } catch (error) {
+        alert("Fout: " + error.message);
+        await loadChannelCatalog().catch(() => {});
       }
     }
 
