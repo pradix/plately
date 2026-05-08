@@ -3389,6 +3389,18 @@ function expandInstructionSteps(rawSteps) {
   return expanded.filter(Boolean);
 }
 
+function stripInstructionStepPrefix(step) {
+  const value = sanitizeText(String(step || ""));
+  if (!value) return "";
+
+  // Strip ordered-list style numbering like "1. " / "2) " but keep decimals like "2.5"
+  // (requires whitespace after punctuation to match).
+  const noNumber = value.replace(/^\s*\d+\s*[.)]\s+/, "");
+
+  // Strip "stap 3: ..." / "step 3 - ..." style prefixes.
+  return sanitizeText(noNumber.replace(/^\s*(?:stap|step)\s*\d+\s*[:\-]\s*/i, ""));
+}
+
 function finalizeInstructionSteps(steps) {
   const mergeStandaloneListNumbers = (list) => {
     const source = Array.isArray(list) ? list.map((s) => sanitizeText(String(s || ""))).filter(Boolean) : [];
@@ -3454,7 +3466,13 @@ function finalizeInstructionSteps(steps) {
 
   const expandedRaw = expandInstructionSteps(steps);
   const expanded = mergeDanglingConjunctions(mergeStandaloneListNumbers(expandedRaw));
-  const unique = [...new Set(expanded.map((step) => sanitizeInstructionStep(step)).filter(Boolean))];
+  const unique = [
+    ...new Set(
+      expanded
+        .map((step) => stripInstructionStepPrefix(sanitizeInstructionStep(step)))
+        .filter(Boolean)
+    ),
+  ];
   const normalized = unique
     .map((step) =>
       sanitizeText(

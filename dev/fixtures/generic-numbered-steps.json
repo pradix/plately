@@ -1,0 +1,16 @@
+{
+  "description": "Regression fixture: strip list numbering prefixes from instruction steps (1. / 2) / Stap 3:), while preserving decimals like 2.5 inside steps.",
+  "rawSteps": [
+    "1. Meng 2.5 el olijfolie met zout.",
+    "2) Bak de ui 5 minuten.",
+    "  3. Voeg de tomaten toe.",
+    "Stap 4: Serveer direct."
+  ],
+  "expectedSteps": [
+    "Meng 2.5 el olijfolie met zout.",
+    "Bak de ui 5 minuten.",
+    "Voeg de tomaten toe.",
+    "Serveer direct."
+  ]
+}
+
