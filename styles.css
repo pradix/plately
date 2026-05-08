@@ -69,6 +69,83 @@ img { display: block; max-width: 100%; }
   .bottom-nav { max-width: 1200px; }
 }
 
+/* ── Tablet polish (keep mobile unchanged) ───────────────────────────────── */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* Consistent tablet gutters */
+  .topbar,
+  .channel-row,
+  .cookbook-filter-bar,
+  .section-heading,
+  .recipe-grid,
+  .grocery-groups,
+  .grocery-order,
+  .kookboek-heading {
+    padding-inline: 24px;
+  }
+
+  /* Home: search hero + chips spacing */
+  .home-search-hero.search-card {
+    margin-bottom: 22px;
+    padding: 14px 24px 18px;
+    border-radius: 0 0 34px 34px;
+    box-shadow: 0 16px 36px rgba(36, 60, 43, 0.1);
+  }
+
+  .home-search-chips-row { gap: 10px; }
+  .home-search-chips { gap: 10px; }
+  .home-chip-row { gap: 16px; margin-bottom: 28px; }
+
+  /* Cards/grids: more breathing room on tablet */
+  .recipe-grid { gap: 18px; }
+  .recipe-card { border-radius: 28px; }
+  .recipe-card__body { padding: 14px 14px 16px; }
+  .recipe-card h3 {
+    font-size: 1.15rem;
+    margin-bottom: 8px;
+    min-height: 2.3rem;
+  }
+  .recipe-card__meta { font-size: 0.9rem; }
+
+  /* Recipe detail: better column balance + headings */
+  .detail-content-grid {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 22px;
+  }
+
+  .detail-screen .topbar--home { padding: 14px 24px; }
+  .detail-hero__actions { right: 24px; }
+
+  .detail-sheet {
+    padding: 30px 24px 38px;
+    border-radius: 34px 34px 0 0;
+  }
+
+  .detail-sheet h1 {
+    font-size: clamp(2.0rem, 4vw, 2.65rem);
+    max-width: 16ch;
+  }
+
+  /* Cookbooks: align grid with app gutters */
+  .cb-detail__grid {
+    gap: 20px;
+    padding-inline: 24px;
+  }
+
+  /* Bottom nav: align with shell, avoid “floating” look */
+  .bottom-nav {
+    width: min(calc(100vw - 48px), 960px);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid rgba(120, 147, 111, 0.1);
+    border-left: 1px solid rgba(120, 147, 111, 0.08);
+    border-right: 1px solid rgba(120, 147, 111, 0.08);
+  }
+
+  .nav-item { min-height: 64px; gap: 7px; }
+  .nav-label { font-size: 0.76rem; }
+}
+
 #homeScreen {
   position: relative;
   padding-bottom: 28px;
