@@ -76,6 +76,9 @@ function isAllowedImageProxyUrl(rawUrl) {
       "chickslovefood.com",
       "www.laurasbakery.nl",
       "laurasbakery.nl",
+      "www.culy.nl",
+      "culy.nl",
+      "img.culy.nl",
       // Common WordPress image CDN used by many recipe blogs
       "i0.wp.com",
       "i1.wp.com",
@@ -391,6 +394,40 @@ const SEED_CHANNEL_DEFAULTS = {
     searchUrlTemplate: "https://uitpaulineskeuken.nl/zoeken?_search_keyword=<zoekwoord>&_search_posttypes=pauline_recepten",
   },
 };
+
+function normalizeChannelUrlForCompare(url) {
+  const raw = sanitizeText(url || "").trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    const host = u.hostname.replace(/^www\./, "").toLowerCase();
+    const path = (u.pathname || "/").replace(/\/+$/, "") || "/";
+    return { host, path };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeChannelBase(url) {
+  const norm = normalizeChannelUrlForCompare(url);
+  if (!norm) return "";
+  const seg = norm.path.split("/").filter(Boolean)[0] || "";
+  return seg ? `${norm.host}/${seg}` : norm.host;
+}
+
+function channelUrlsMatchByBaseOrPrefix(aUrl, bUrl) {
+  const a = normalizeChannelUrlForCompare(aUrl);
+  const b = normalizeChannelUrlForCompare(bUrl);
+  if (!a || !b) return false;
+  if (a.host !== b.host) return false;
+  if (a.path === b.path) return true;
+  const aBase = normalizeChannelBase(aUrl);
+  const bBase = normalizeChannelBase(bUrl);
+  if (aBase && bBase && aBase === bBase) return true;
+  const aPath = a.path.endsWith("/") ? a.path : `${a.path}/`;
+  const bPath = b.path.endsWith("/") ? b.path : `${b.path}/`;
+  return aPath.startsWith(bPath) || bPath.startsWith(aPath);
+}
 
 const DEFAULT_MEAL_PLAN = {
   maandag: "recipe-1",
@@ -6455,6 +6492,237 @@ function parseReaderSearchResults(markdown, channelName, channelId, count, query
     .slice(0, count);
 }
 
+
+function sanitizeCulySearchTitle(raw) {
+  let s = sanitizeText(decodeHtmlEntities(stripHtmlTags(String(raw || "")))).trim();
+  // Strip leading editorial/category + Dutch-style dates like "8 mrt 2026 , 16:00"
+  s = s.replace(/^(?:recepten|homemade|culy kids|culy)\b[^\n]{0,120}?\n?/i, "").trim();
+  s = s.replace(/^(?:[^\n]{0,60}?\s+)?\d{1,2}\s+[a-zà-ž]{3,15}\s+\d{4}\s*,?\s*\d{1,2}:\d{2}\s*/i, "").trim();
+  s = s.replace(/^(?:\d{1,2}\s+[a-zà-ž]{3,15}\s+\d{4}\s*,?\s*)?(?:\d{1,2}:\d{2}\s*)?/i, "").trim();
+  s = s.replace(/^[,;:\s]+/, "").trim();
+  return s;
+}
+
+function pickCulyResultTitle(headingRaw, anchorRaw) {
+  const h = sanitizeCulySearchTitle(headingRaw);
+  const a = sanitizeCulySearchTitle(anchorRaw);
+  if (/^recepten\b/i.test(String(headingRaw || "")) && /\d{4}/.test(String(headingRaw || "")) && a.length > 6) return a;
+  if (h.length >= 8) return h;
+  return a || h;
+}
+
+/**
+ * Parse Culy.nl HTML search results: anchors to `/recepten/<slug>/`, deduped by URL.
+ * Title: nearest preceding h1–h4 text, else anchor text, else slug words.
+ */
+function parseCulySearchHtml(html, baseUrl, channelName, channelId, count) {
+  const results = [];
+  const seen = new Set();
+  const base = sanitizeText(baseUrl || "").replace(/\/$/, "") || "https://www.culy.nl";
+  const max = Math.min(Math.max(Number(count) || 12, 1), 48);
+  const re = /<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    if (results.length >= max) break;
+    const hrefRaw = m[1];
+    const inner = m[2] || "";
+    if (!/\/recepten\//i.test(hrefRaw)) continue;
+
+    let abs;
+    try {
+      abs = new URL(hrefRaw, base).href.split("#")[0];
+    } catch {
+      continue;
+    }
+
+    let host;
+    try {
+      host = new URL(abs).hostname.toLowerCase().replace(/^www\./, "");
+    } catch {
+      continue;
+    }
+    if (host !== "culy.nl") continue;
+
+    try {
+      const u = new URL(abs);
+      const pathname = u.pathname.replace(/\/+$/, "") || "/";
+      if (pathname === "/" || pathname === "") continue;
+      const segments = pathname.split("/").filter(Boolean);
+      const ri = segments.indexOf("recepten");
+      if (ri === -1 || segments.length < ri + 2) continue;
+    } catch {
+      continue;
+    }
+
+    const dedupeKey = abs.replace(/^http:/i, "https:").replace(/\/+$/, "").toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+
+    const idx = m.index || 0;
+    const before = html.slice(Math.max(0, idx - 1400), idx);
+    let headingRaw = "";
+    const headings = [...before.matchAll(/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/gi)];
+    if (headings.length) {
+      headingRaw = headings[headings.length - 1][1];
+    }
+    let title = pickCulyResultTitle(headingRaw, inner);
+    if (!title || title.length < 3) {
+      try {
+        const slug = new URL(abs).pathname.split("/").filter(Boolean).pop() || "";
+        title = sanitizeText(decodeURIComponent(slug).replace(/[-_]+/g, " ")).trim();
+      } catch {
+        title = "";
+      }
+    }
+
+    let thumbnail = "";
+    const imgSlice = before.slice(Math.max(0, before.length - 1000));
+    const imgMatch =
+      imgSlice.match(/data-src\s*=\s*["'](https?:\/\/[^"']+\.(?:jpe?g|png|webp)[^"']*)["']/i) ||
+      imgSlice.match(/src\s*=\s*["'](https?:\/\/[^"']+\.(?:jpe?g|png|webp)[^"']*)["']/i);
+    thumbnail = cleanImageUrl(imgMatch?.[1] || "");
+    if (thumbnail && (isDecorativeImageUrl(thumbnail) || /\.svg(?:\?|$)/i.test(thumbnail))) {
+      thumbnail = "";
+    }
+
+    seen.add(dedupeKey);
+    results.push({
+      title,
+      url: abs,
+      thumbnail,
+      channel: channelName,
+      channelId,
+      description: "",
+      time: "",
+    });
+  }
+  return results;
+}
+
+function finalizeCulySearchResults(rows, query, cap) {
+  const limit = Math.min(Math.max(Number(cap) || 12, 1), 24);
+  const deduped = [];
+  const byKey = new Map();
+  for (const r of rows || []) {
+    if (!r?.url) continue;
+    let key;
+    try {
+      const u = new URL(r.url);
+      key = `${u.hostname.replace(/^www\./i, "")}${u.pathname.replace(/\/$/, "")}`.toLowerCase();
+    } catch {
+      key = String(r.url);
+    }
+    if (byKey.has(key)) continue;
+    byKey.set(key, true);
+    deduped.push(r);
+  }
+
+  return deduped
+    .filter((r) => r.title && r.url)
+    .filter((r) => urlLooksLikeRecipe(r.url))
+    .filter((r) => titleLooksLikeRecipe(r.title))
+    .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
+    .filter((r) => titleMatchesQuery(r.title, query))
+    .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
+    .slice(0, limit);
+}
+
+/**
+ * Culy channel search: direct HTML, then r.jina.ai passthrough (https origin preferred) when blocked or empty parse.
+ */
+async function searchCulyRecipes(query, count = 12, opts = {}) {
+  const channelName = "Culy";
+  const channelId = "ch-culy";
+  const eff = opts && typeof opts === "object" ? opts : {};
+  const template =
+    sanitizeText(eff.searchUrlTemplate || "") ||
+    SEED_CHANNEL_DEFAULTS["ch-culy"]?.searchUrlTemplate ||
+    "https://www.culy.nl/?s={q}&category=Recepten";
+  const baseUrl = sanitizeText(eff.baseUrl || "") || "https://www.culy.nl";
+  const searchUrl = buildSeedSearchUrlFromTemplate(template, query);
+  if (!searchUrl) return [];
+
+  const qEnc = encodeURIComponent(query || "");
+  const httpsOrigin = `https://www.culy.nl/?s=${qEnc}&category=Recepten`;
+  const httpOrigin = `http://www.culy.nl/?s=${qEnc}&category=Recepten`;
+  const cap = Math.min(Math.max(Number(count) || 12, 1), 24);
+
+  async function fetchDirectHtml() {
+    try {
+      const response = await fetch(searchUrl, {
+        headers: {
+          ...FETCH_HEADERS,
+          accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "accept-language": "nl-NL,nl;q=0.9,en;q=0.8",
+          referer: `${baseUrl.replace(/\/$/, "")}/`,
+        },
+        redirect: "follow",
+        signal: AbortSignal.timeout(4500),
+      });
+      if (!response.ok) return { html: "", blocked: true };
+      const html = await response.text();
+      if (!html || html.length < 400) return { html: "", blocked: true };
+      if (looksLikeBlockedSocialHtml(searchUrl, html)) return { html: "", blocked: true };
+      return { html, blocked: false };
+    } catch {
+      return { html: "", blocked: true };
+    }
+  }
+
+  async function fetchJinaMarkdown(readerUrl, timeoutMs) {
+    try {
+      const response = await fetch(readerUrl, {
+        headers: FETCH_HEADERS,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) return "";
+      const body = await response.text();
+      return body && body.length > 40 ? body : "";
+    } catch {
+      return "";
+    }
+  }
+
+  async function parseJinaBody(body) {
+    const htmlTry = finalizeCulySearchResults(
+      parseCulySearchHtml(body, baseUrl, channelName, channelId, cap * 2),
+      query,
+      cap
+    );
+    if (htmlTry.length) return htmlTry;
+    const mdTry = finalizeCulySearchResults(
+      parseCulyReaderSearchResults(body, channelName, channelId, cap * 2, query),
+      query,
+      cap
+    );
+    return mdTry.length ? mdTry : [];
+  }
+
+  const direct = await fetchDirectHtml();
+  let parsed =
+    direct.html && direct.html.length > 500
+      ? finalizeCulySearchResults(
+          parseCulySearchHtml(direct.html, baseUrl, channelName, channelId, cap * 2),
+          query,
+          cap
+        )
+      : [];
+
+  const needJina = direct.blocked || parsed.length === 0;
+  if (!needJina) return parsed;
+
+  const jinaHttps = `https://r.jina.ai/${httpsOrigin}`;
+  const jinaHttp = `https://r.jina.ai/${httpOrigin}`;
+
+  let body = await fetchJinaMarkdown(jinaHttps, 9500);
+  let jinaParsed = body ? await parseJinaBody(body) : [];
+  if (jinaParsed.length) return jinaParsed;
+
+  body = await fetchJinaMarkdown(jinaHttp, 7500);
+  jinaParsed = body ? await parseJinaBody(body) : [];
+  return jinaParsed.length ? jinaParsed : parsed;
+}
+
+
 function parseCulyReaderSearchResults(markdown, channelName, channelId, count, query) {
   const text = String(markdown || "");
   const results = [];
@@ -7468,9 +7736,7 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     maybeSearch("ch-clf", () => scrapeOrRest(cfg("ch-clf").baseUrl || "https://www.chickslovefood.com", "Chicks Love Food", "ch-clf",
       buildSeedChannelSearchUrl("ch-clf", cfg("ch-clf"), query),
       parseChicksLoveFood, 3)),
-    maybeSearch("ch-culy", () => scrapeOrRest(cfg("ch-culy").baseUrl || "https://www.culy.nl", "Culy", "ch-culy",
-      buildSeedChannelSearchUrl("ch-culy", cfg("ch-culy"), query),
-      parseWPStandard, 4)),
+    maybeSearch("ch-culy", () => searchCulyRecipes(query, 12, cfg("ch-culy"))),
 
     // SLOW: Include but expect timeouts
     maybeSearch("ch-mj", () => scrapeOrRest(cfg("ch-mj").baseUrl || "https://miljuschka.nl", "Miljuschka", "ch-mj",
@@ -7496,7 +7762,7 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   // for multi-channel variety. Otherwise Promise.race timeouts return [] before the
   // only requested channel finishes.
   const singleChannelMode = Boolean(allow && allow.size === 1);
-  const GLOBAL_DEADLINE_MS = singleChannelMode ? 15_000 : 1400;
+  const GLOBAL_DEADLINE_MS = singleChannelMode ? 20_000 : 1400;
   await Promise.race([Promise.allSettled(instrumented), waitMs(GLOBAL_DEADLINE_MS)]);
 
   const countDistinctChannels = (lists) => {
@@ -9833,7 +10099,7 @@ const server = http.createServer(async (request, response) => {
           results = await scrapeOrRestPublic(eff.baseUrl || "https://www.chickslovefood.com", "Chicks Love Food", "ch-clf", usedUrl, parseChicksLoveFood, count, query);
         } else if (channelId === "ch-culy") {
           usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
-          results = await scrapeOrRestPublic(eff.baseUrl || "https://www.culy.nl", "Culy", "ch-culy", usedUrl, parseWPStandard, count, query);
+          results = await searchCulyRecipes(query, count, eff);
         } else if (channelId === "ch-mj") {
           usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
           results = await scrapeOrRestPublic(eff.baseUrl || "https://miljuschka.nl", "Miljuschka", "ch-mj", usedUrl, parseWPStandard, count, query);
