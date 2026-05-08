@@ -2569,7 +2569,7 @@ function formatUnitForQuantity(unit, quantity) {
 function parseIngredientInput(value) {
   const cleanValue = String(value || "").trim();
   const match = cleanValue.match(
-    /^(\d+(?:[.,]\d+)?)\s*(gr|gram|grams|g|kg|mg|ml|cl|dl|l|liter|el|eetlepels?|tl|theelepels?|tbsp|tsp|cup|cups|oz|lb|stuks?|stuk(?:ken)?|krop|kroppen|bosje|bosjes|zakje|zakjes|pot(?:je|jes)?|blik(?:je|jes)?|snuf(?:je|jes)?|teen|teentjes|plak(?:je|jes)?|handje|handjes|scheut(?:je)?|bakje|bakjes|pak(?:ken)?|rol(?:len)?|verpakking(?:en)?|takje|takjes|blokje|blokjes|reepje|reepjes|schijfje|schijfjes)?\s*(.+)$/i
+    /^(\d+(?:[.,]\d+)?)\s*(gr|gram|grams|g|kg|mg|ml|cl|dl|l|liter|el|eetlepels?|tl|theelepels?|tbsp|tsp|cup|cups|oz|lb|stuks?|stuk(?:ken)?|krop|kroppen|bosje|bosjes|zakje|zakjes|pot(?:je|jes)?|blik(?:je|jes)?|snuf(?:je|jes)?|teen|teentjes|plak(?:je|jes)?|handje(?:s)?|scheut(?:je)?|bakje|bakjes|pak(?:ken)?|rol(?:len)?|verpakking(?:en)?|takje|takjes|blokje|blokjes|reepje|reepjes|schijfje|schijfjes)?\s*(.+)$/i
   );
   if (match) {
     // Normalize units to a canonical singular form (e.g. plakjes → plakje)
@@ -2613,6 +2613,7 @@ function normalizeUnit(unit) {
   if (value === "reepjes") return "reepje";
   if (value === "blokjes") return "blokje";
   if (value === "schijfjes") return "schijfje";
+  if (value === "handjes") return "handje";
   if (value === "gr" || value === "gram" || value === "grams") return "g";
   if (value === "liter") return "l";
   if (value === "milliliter") return "ml";

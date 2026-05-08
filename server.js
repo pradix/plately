@@ -249,6 +249,11 @@ function normalizeIngredientForSearch(raw) {
     /^(vers(?:e|en)?|biologisch(?:e)?|bio|extra\s+vierge?|extra\s+vergine|extra|groot(?:e)?|klein(?:e)?|fijn(?:gesneden)?|grof(?:gesneden)?|gesneden|gehakt(?:e)?|geraspte?|gedroogde?|gezouten?|gepeld(?:e)?|ongepeld(?:e)?|gewassen?|rood(?:e)?|groen(?:e)?|geel(?:e)?|wit(?:te)?|zwart(?:e)?|halve?|half\s+een|volle?|magere?|licht(?:e)?|geroosterd(?:e)?|gebakken|gekookt(?:e)?|rauw(?:e)?|zacht(?:e)?|koud(?:e)?|warm(?:e)?|in\s+reepjes|in\s+blokjes)\s+/i;
   t = t.replace(DESC, "").replace(DESC, "").trim();
 
+  // 2b. A few high-impact Dutch webshop normalizations
+  if (/^sinaasappels?$/.test(t)) return "handsinaasappel";
+  if (/^gelatine$/.test(t)) return "gelatine blaadjes";
+  if (/\bespresso\b/.test(t) && !/\bcapsules?\b/.test(t)) return "espresso";
+
   // 3. Pasta-type normalisation (the big one)
   if (/\bspaghetti\b/.test(t)) return "spaghetti";
   if (/\bpenne\b/.test(t))      return "penne";
@@ -2954,12 +2959,17 @@ function finalizeInstructionSteps(steps) {
         continue;
       }
 
+      const trimmedCur = cur.trim();
+      const lastWord = trimmedCur.split(/\s+/).pop() || "";
       const endsDangling =
-        /\b(?:en|of|maar|tot|om)\s*$/i.test(cur) ||
-        /,\s*$/i.test(cur);
+        ["en", "of", "maar", "tot", "om"].includes(lastWord.toLowerCase()) ||
+        /,\s*$/.test(trimmedCur);
 
-      // Merge only when the next step looks like a continuation (starts with lowercase).
-      const nextLooksContinuation = /^[a-zà-ÿ]/.test(next);
+      // Merge only when the next step looks like a continuation.
+      // (Some sites capitalize the first verb of a continuation step.)
+      const nextLooksContinuation =
+        /^[a-zà-ÿ]/.test(next) ||
+        /^(?:roer|laat|giet|verdeel|voeg|meng|klop|doe|zet|bak|kook|serveer|verwarm|haal|breng|strooi)\b/i.test(next);
 
       if (endsDangling && nextLooksContinuation) {
         merged.push(sanitizeText(`${cur} ${next}`));
@@ -2972,7 +2982,8 @@ function finalizeInstructionSteps(steps) {
     return merged;
   };
 
-  const expanded = expandInstructionSteps(mergeDanglingConjunctions(steps));
+  const expandedRaw = expandInstructionSteps(steps);
+  const expanded = mergeDanglingConjunctions(expandedRaw);
   const unique = [...new Set(expanded.map((step) => sanitizeInstructionStep(step)).filter(Boolean))];
   const normalized = unique
     .map((step) =>
@@ -2985,8 +2996,9 @@ function finalizeInstructionSteps(steps) {
     )
     .filter(Boolean);
 
-  const shouldTrimOptional = normalized.length >= 5;
-  return normalized.filter((step) => !shouldTrimOptional || !isLikelyOptionalInstructionStep(step));
+  const mergedNormalized = mergeDanglingConjunctions(normalized);
+  const shouldTrimOptional = mergedNormalized.length >= 5;
+  return mergedNormalized.filter((step) => !shouldTrimOptional || !isLikelyOptionalInstructionStep(step));
 }
 
 function estimateTime(text) {
