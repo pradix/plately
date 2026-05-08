@@ -9537,8 +9537,10 @@ const server = http.createServer(async (request, response) => {
           usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
           results = await scrapeOrRestPublic(eff.baseUrl || "https://miljuschka.nl", "Miljuschka", "ch-mj", usedUrl, parseWPStandard, count, query);
         } else {
-          results = await searchChannelRecipes(query, [channelId]);
-          usedUrl = "";
+          const seed = SEED_CHANNELS.find((ch) => ch && ch.id === channelId) || {};
+          const name = sanitizeText(seed.name || channelId);
+          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          results = await scrapeOrRestPublic(eff.baseUrl, name, channelId, usedUrl, parseWPStandard, count, query);
         }
 
         return sendJson(response, 200, {
@@ -9572,9 +9574,11 @@ const server = http.createServer(async (request, response) => {
         const intro = sanitizeText(recipe?.description || recipe?.intro || "");
         const ingredientsCount = Array.isArray(recipe?.ingredients) ? recipe.ingredients.filter(Boolean).length : 0;
         const stepsCount = Array.isArray(recipe?.instructions) ? recipe.instructions.filter(Boolean).length : 0;
+        const platform = sanitizeText(recipe?.platform || "");
+        const channelId = sanitizeText(recipe?.channelId || "");
         return sendJson(response, 200, {
           ok: true,
-          recipe: { title, intro, ingredientsCount, stepsCount },
+          recipe: { title, intro, ingredientsCount, stepsCount, platform, channelId },
         });
       } catch (error) {
         console.error("❌ Error in /api/admin/channel-test/import:", error.message);

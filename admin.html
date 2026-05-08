@@ -286,6 +286,39 @@
     .admin-test__title { font-weight: 800; font-size: 12px; color: rgba(0,0,0,0.82); margin-bottom: 2px; }
     .admin-test__meta { color: rgba(0,0,0,0.55); font-size: 11px; }
 
+    .admin-test__all-controls {
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      margin-top:10px;
+    }
+    .admin-test__all-controls .pill { background: rgba(120, 147, 111, 0.10); border-color: rgba(120, 147, 111, 0.18); }
+    .admin-test__all-results {
+      margin-top: 10px;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    @media (max-width: 980px) { .admin-test__all-results { grid-template-columns: 1fr; } }
+    .admin-test__channel-card {
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 14px;
+      background: rgba(0,0,0,0.015);
+      padding: 12px;
+    }
+    .admin-test__channel-head { display:flex; gap:10px; align-items:flex-start; justify-content:space-between; }
+    .admin-test__channel-name { font-weight: 900; font-size: 12px; color: rgba(0,0,0,0.84); }
+    .admin-test__channel-sub { color: rgba(0,0,0,0.55); font-size: 11px; margin-top: 2px; word-break: break-all; }
+    .admin-test__channel-kpis { display:flex; gap:8px; flex-wrap:wrap; margin-top: 10px; }
+    .admin-test__channel-kpis .pill { padding: 5px 9px; font-size: 11px; }
+    .admin-test__channel-list { margin-top: 10px; display:grid; gap: 6px; }
+    .admin-test__channel-item { display:flex; gap:8px; align-items:flex-start; }
+    .admin-test__channel-item a { color: rgba(45, 74, 46, 0.92); }
+    .admin-test__channel-item-title { font-weight: 800; font-size: 12px; color: rgba(0,0,0,0.82); }
+    .admin-test__channel-item-meta { color: rgba(0,0,0,0.55); font-size: 11px; word-break: break-all; }
+    .admin-test__channel-error { margin-top: 10px; padding: 10px; border-radius: 12px; background: rgba(220,53,69,0.08); border:1px solid rgba(220,53,69,0.14); color: rgba(140,23,35,0.95); font-size: 12px; }
+
     /* ── Tables (compact) ─────────────────────────────────────────────────── */
     .users-table {
       width: 100%;
@@ -495,7 +528,7 @@
       <div class="section" id="channelTestSection">
         <div class="section-header">
           <h2>Kanaal test (search + import)</h2>
-          <div class="muted">Kies 1 kanaal en test</div>
+          <div class="muted">Test 1 kanaal óf alle kanalen</div>
         </div>
         <div id="channelTestError" class="error" style="display:none"></div>
         <div class="admin-test__row">
@@ -505,15 +538,38 @@
           <input id="channelTestQuery" class="admin-test__input" type="text" placeholder="Search query" />
           <button class="btn btn-primary" type="button" onclick="runChannelTestSearch()">Test search</button>
         </div>
+        <div class="admin-test__all-controls">
+          <span class="pill"><strong>Scope</strong>
+            <select id="channelTestAllScope" class="admin-test__select" style="padding:6px 10px;border-radius:999px;min-width:240px">
+              <option value="approved" selected>Approved seed + approved custom</option>
+              <option value="seed_only">Alleen seed (approved)</option>
+              <option value="custom_approved_only">Alleen custom (approved)</option>
+            </select>
+          </span>
+          <label class="pill" style="cursor:pointer">
+            <input id="channelTestAllIncludePendingRejected" type="checkbox" style="margin-right:8px" />
+            Include pending/rejected
+          </label>
+          <span class="pill"><strong>Parallel</strong>
+            <select id="channelTestAllConcurrency" class="admin-test__select" style="padding:6px 10px;border-radius:999px;min-width:84px">
+              <option value="4">4</option>
+              <option value="5" selected>5</option>
+              <option value="6">6</option>
+            </select>
+          </span>
+          <button class="btn btn-primary" type="button" id="channelTestAllBtn" onclick="runChannelTestSearchAll()">Test alle kanalen</button>
+        </div>
         <div id="channelTestSearchMeta" class="muted mono" style="margin-top:8px;display:none;gap:8px;align-items:center;flex-wrap:wrap"></div>
         <div id="channelTestSearchStatus" class="muted" style="margin-top:8px"></div>
         <div id="channelTestSearchResults" class="admin-test__results"></div>
+        <div id="channelTestAllStatus" class="muted" style="margin-top:10px"></div>
+        <div id="channelTestAllResults" class="admin-test__all-results"></div>
 
         <hr class="divider" />
 
         <div class="admin-test__row">
           <input id="channelTestImportUrl" class="admin-test__input" type="text" placeholder="Import URL" />
-          <button class="btn" type="button" onclick="runChannelTestImport()">Test import</button>
+          <button class="btn" type="button" onclick="runChannelTestImport()">Test import (auto-detect)</button>
         </div>
         <div id="channelTestImportStatus" class="muted" style="margin-top:8px"></div>
       </div>
@@ -749,6 +805,7 @@
       loading: false,
     };
     let inventorySearchTimer = null;
+    let channelCatalogState = { seedChannels: [], customChannels: { approved: [], pending: [], rejected: [] } };
 
     const PLATELY_AUTH_TOKEN_KEY = "plately-auth-token";
 
@@ -1969,6 +2026,7 @@
 
         const seed = Array.isArray(data.seedChannels) ? data.seedChannels : [];
         const custom = data.customChannels || { approved: [], pending: [], rejected: [] };
+        channelCatalogState = { seedChannels: seed, customChannels: custom };
         const approved = Array.isArray(custom.approved) ? custom.approved : [];
         const pending = Array.isArray(custom.pending) ? custom.pending : [];
         const rejected = Array.isArray(custom.rejected) ? custom.rejected : [];
@@ -2038,7 +2096,11 @@
       const statusEl = document.getElementById("channelTestSearchStatus");
       const metaEl = document.getElementById("channelTestSearchMeta");
       const resultsWrap = document.getElementById("channelTestSearchResults");
+      const allStatusEl = document.getElementById("channelTestAllStatus");
+      const allResultsWrap = document.getElementById("channelTestAllResults");
       if (resultsWrap) resultsWrap.innerHTML = "";
+      if (allStatusEl) allStatusEl.textContent = "";
+      if (allResultsWrap) allResultsWrap.innerHTML = "";
       if (metaEl) { metaEl.style.display = "none"; metaEl.innerHTML = ""; }
 
       if (!channel) return showChannelTestError("Kies eerst een kanaal.");
@@ -2112,10 +2174,208 @@
         const title = r.title || "—";
         const ing = Number(r.ingredientsCount || 0);
         const steps = Number(r.stepsCount || 0);
-        if (statusEl) statusEl.textContent = `✅ ${title} · ingrediënten: ${ing} · stappen: ${steps}`;
+        const platform = r.platform ? ` · ${r.platform}` : "";
+        const channelId = r.channelId ? ` · ${r.channelId}` : "";
+        if (statusEl) statusEl.textContent = `✅ ${title}${platform}${channelId} · ingrediënten: ${ing} · stappen: ${steps}`;
       } catch (error) {
         if (statusEl) statusEl.textContent = "";
         showChannelTestError(error.message);
+      }
+    }
+
+    function getAllChannelsForTest() {
+      const scopeSel = document.getElementById("channelTestAllScope");
+      const includeAll = Boolean(document.getElementById("channelTestAllIncludePendingRejected")?.checked);
+      const scope = String(scopeSel?.value || "approved");
+
+      const seed = Array.isArray(channelCatalogState.seedChannels) ? channelCatalogState.seedChannels : [];
+      const custom = channelCatalogState.customChannels || { approved: [], pending: [], rejected: [] };
+      const approved = Array.isArray(custom.approved) ? custom.approved : [];
+      const pending = Array.isArray(custom.pending) ? custom.pending : [];
+      const rejected = Array.isArray(custom.rejected) ? custom.rejected : [];
+
+      const out = [];
+      const pushSeed = () => seed.forEach((ch) => out.push({ kind: "seed", channelId: ch.id, label: ch.name }));
+      const pushCustom = (list) => (list || []).forEach((ch) => out.push({ kind: "custom", customChannel: { id: ch.id, name: ch.name, url: ch.url }, label: ch.name, status: ch.status || "" }));
+
+      if (scope === "seed_only") pushSeed();
+      else if (scope === "custom_approved_only") pushCustom(approved);
+      else { // approved default
+        pushSeed();
+        pushCustom(approved);
+      }
+
+      if (includeAll) {
+        pushCustom(pending);
+        pushCustom(rejected);
+      }
+
+      // Deduplicate by channel key
+      const seen = new Set();
+      const deduped = [];
+      for (const ch of out) {
+        const key = ch.kind === "seed" ? `seed:${ch.channelId}` : `custom:${ch.customChannel?.id || ""}`;
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(ch);
+      }
+      deduped.sort((a, b) => String(a.label || "").localeCompare(String(b.label || "")));
+      return deduped;
+    }
+
+    async function runWithConcurrency(items, concurrency, worker, onProgress) {
+      const q = Array.isArray(items) ? items.slice() : [];
+      const max = Math.max(1, Number(concurrency) || 5);
+      let done = 0;
+      const results = [];
+
+      async function runOne(item) {
+        const res = await worker(item);
+        results.push(res);
+        done += 1;
+        if (typeof onProgress === "function") onProgress(done, q.length, res);
+      }
+
+      const runners = Array.from({ length: Math.min(max, q.length) }).map(async () => {
+        while (q.length) {
+          const next = q.shift();
+          if (!next) break;
+          await runOne(next);
+        }
+      });
+      await Promise.all(runners);
+      return results;
+    }
+
+    function renderChannelTestAllCard(entry) {
+      const usedUrl = String(entry.usedUrl || "").trim();
+      const top = Array.isArray(entry.topResults) ? entry.topResults : [];
+      const error = String(entry.error || "").trim();
+      const label = escapeHtml(entry.channelName || entry.label || "—");
+      const sub = entry.kind === "custom"
+        ? `${escapeHtml(entry.customUrl || "")}${entry.status ? ` · ${escapeHtml(entry.status)}` : ""}`
+        : `${escapeHtml(entry.channelId || "")}`;
+      const usedUrlHtml = usedUrl ? `<div class="admin-test__channel-sub"><strong>usedUrl</strong> <a class="admin-inventory__link" href="${escapeHtml(usedUrl)}" target="_blank" rel="noopener">${escapeHtml(usedUrl)}</a></div>` : `<div class="admin-test__channel-sub muted">usedUrl —</div>`;
+      const kpis = `<div class="admin-test__channel-kpis">
+        <span class="pill"><strong>count</strong> ${escapeHtml(String(entry.resultCount ?? top.length ?? 0))}</span>
+        <span class="pill"><strong>top</strong> ${escapeHtml(String(top.length))}</span>
+      </div>`;
+      const listHtml = top.length ? `
+        <div class="admin-test__channel-list">
+          ${top.slice(0, 3).map((r) => `
+            <div class="admin-test__channel-item">
+              <div style="min-width:0">
+                <div class="admin-test__channel-item-title">${escapeHtml(r?.title || "—")}</div>
+                <div class="admin-test__channel-item-meta"><a class="admin-inventory__link" href="${escapeHtml(r?.url || "")}" target="_blank" rel="noopener">${escapeHtml(r?.url || "")}</a></div>
+              </div>
+              <div style="margin-left:auto;flex:0 0 auto">
+                <button class="btn btn-sm" type="button" onclick="setImportUrlFromResult('${escapeHtml(String(r?.url || ""))}')">Test import</button>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      ` : `<p class="muted" style="margin-top:10px">Geen resultaten</p>`;
+      const errHtml = error ? `<div class="admin-test__channel-error">❌ ${escapeHtml(error)}</div>` : "";
+
+      return `
+        <div class="admin-test__channel-card">
+          <div class="admin-test__channel-head">
+            <div style="min-width:0">
+              <div class="admin-test__channel-name">${label}</div>
+              <div class="admin-test__channel-sub">${sub}</div>
+              ${usedUrlHtml}
+            </div>
+          </div>
+          ${kpis}
+          ${listHtml}
+          ${errHtml}
+        </div>
+      `;
+    }
+
+    async function runChannelTestSearchAll() {
+      showChannelTestError("");
+      const query = (document.getElementById("channelTestQuery")?.value || "").trim();
+      const statusEl = document.getElementById("channelTestAllStatus");
+      const wrap = document.getElementById("channelTestAllResults");
+      const btn = document.getElementById("channelTestAllBtn");
+      const concurrencySel = document.getElementById("channelTestAllConcurrency");
+      const concurrency = Number.parseInt(String(concurrencySel?.value || "5"), 10);
+
+      // Clear single-channel UI bits
+      const metaEl = document.getElementById("channelTestSearchMeta");
+      const singleStatusEl = document.getElementById("channelTestSearchStatus");
+      const singleWrap = document.getElementById("channelTestSearchResults");
+      if (metaEl) { metaEl.style.display = "none"; metaEl.innerHTML = ""; }
+      if (singleStatusEl) singleStatusEl.textContent = "";
+      if (singleWrap) singleWrap.innerHTML = "";
+
+      if (wrap) wrap.innerHTML = "";
+      if (!query || query.length < 2) return showChannelTestError("Vul een query in (min 2 tekens).");
+
+      const channels = getAllChannelsForTest();
+      if (!channels.length) return showChannelTestError("Geen kanalen gevonden in deze scope.");
+
+      if (btn) btn.disabled = true;
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> Start… (0/${channels.length})`;
+
+      const cards = new Map(); // key -> html
+      const render = () => {
+        if (!wrap) return;
+        wrap.innerHTML = Array.from(cards.values()).join("");
+      };
+
+      const worker = async (ch) => {
+        const payload = ch.kind === "custom"
+          ? { channelKind: "custom", customChannel: ch.customChannel, query, limit: 3 }
+          : { channelKind: "seed", channelId: ch.channelId, query, limit: 3 };
+        const key = ch.kind === "custom" ? `custom:${ch.customChannel?.id || ""}` : `seed:${ch.channelId || ""}`;
+        try {
+          const res = await fetch("/api/admin/channel-test/search", adminFetchInit({
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          }));
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || "Search failed");
+          const topResults = Array.isArray(data.results) ? data.results.slice(0, 3) : [];
+          const entry = {
+            ...ch,
+            usedUrl: data.usedUrl || "",
+            resultCount: topResults.length,
+            topResults,
+            error: "",
+            channelName: ch.label || (ch.kind === "custom" ? ch.customChannel?.name : ch.channelId),
+            channelId: ch.channelId || "",
+            customUrl: ch.customChannel?.url || "",
+          };
+          cards.set(key, renderChannelTestAllCard(entry));
+          return entry;
+        } catch (error) {
+          const entry = {
+            ...ch,
+            usedUrl: "",
+            resultCount: 0,
+            topResults: [],
+            error: error.message || String(error),
+            channelName: ch.label || (ch.kind === "custom" ? ch.customChannel?.name : ch.channelId),
+            channelId: ch.channelId || "",
+            customUrl: ch.customChannel?.url || "",
+          };
+          cards.set(key, renderChannelTestAllCard(entry));
+          return entry;
+        } finally {
+          render();
+        }
+      };
+
+      try {
+        await runWithConcurrency(channels, Number.isFinite(concurrency) ? Math.min(Math.max(concurrency, 1), 6) : 5, worker, (done, total) => {
+          if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> Bezig… (${done}/${total})`;
+        });
+        if (statusEl) statusEl.textContent = `✅ Klaar (${channels.length}/${channels.length})`;
+      } finally {
+        if (btn) btn.disabled = false;
       }
     }
 
