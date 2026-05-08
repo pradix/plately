@@ -6505,6 +6505,50 @@ body {
   fill: none;
 }
 
+.home-search-chips-more-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+
+.home-search-chips-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 10px 12px;
+  border: 1px solid rgba(120, 147, 111, 0.22);
+  background: #f3f8f3;
+  color: #2d4a2e;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 750;
+  font-family: inherit;
+  cursor: pointer;
+  line-height: 1;
+  min-height: 44px;
+  box-shadow: 0 8px 18px rgba(36, 60, 43, 0.08);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.home-search-chips-more:hover {
+  background: #e8f4e9;
+  border-color: rgba(107, 158, 114, 0.65);
+}
+
+.home-search-chips-more:active {
+  background: #dceadd;
+  transform: scale(0.99);
+}
+
+.home-search-chips-more svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  flex: none;
+}
+
 .home-search-chip {
   flex: 0 0 auto;
   border: 1px solid rgba(120, 147, 111, 0.22);
