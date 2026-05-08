@@ -6877,7 +6877,14 @@ async function buildStoreBasket(body) {
             products = await findAHProducts(ingredientName, 3);
           }
         }
-        return { ingredient: ingredientName, product: products[0] ?? null, products };
+        const isBio = (p) =>
+          Array.isArray(p?.labels) &&
+          p.labels.some((l) => /\b(biologisch|bio)\b/i.test(String(l || "")));
+        const picked =
+          preferences?.bio
+            ? (products.find(isBio) || products[0] || null)
+            : (products[0] || null);
+        return { ingredient: ingredientName, product: picked, products };
       })
     ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
   } else {

@@ -1721,7 +1721,8 @@ function renderBasketPreview() {
     const altCount = (item.choices || []).length;
 
     const bioActive = state.basketFilter.bio;
-    const displayTitle = bioActive
+    const isBioChoice = Boolean(extractBasketLabelsFromChoice(choice, item).bio);
+    const displayTitle = bioActive && isBioChoice
       ? `🌱 Biologisch ${choice.title}`
       : choice.title;
 
