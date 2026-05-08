@@ -2205,17 +2205,35 @@ function closeAlternativesSheet() {
   state.altSheetItemIndex = null;
 }
 
-function scrollToTopSoon() {
-  const apply = () => {
-    try {
-      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    } catch {
-      window.scrollTo(0, 0);
-    }
-    // iOS/Safari fallback paths
-    try { document.documentElement.scrollTop = 0; } catch {}
-    try { document.body.scrollTop = 0; } catch {}
-  };
+function scrollToTopNow(extraContainers = []) {
+  const containers = Array.isArray(extraContainers) ? extraContainers : [extraContainers];
+
+  // Window scroll (most views)
+  try {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  } catch {
+    window.scrollTo(0, 0);
+  }
+
+  // iOS/Safari fallback paths for document scrolling
+  try { document.documentElement.scrollTop = 0; } catch {}
+  try { document.body.scrollTop = 0; } catch {}
+
+  // Some screens are internally scrollable (e.g. cookbooks detail in a grid/list container)
+  containers
+    .filter(Boolean)
+    .forEach((el) => {
+      if (!(el instanceof HTMLElement)) return;
+      try {
+        el.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      } catch {
+        try { el.scrollTop = 0; } catch {}
+      }
+    });
+}
+
+function scrollToTopSoon(extraContainers = []) {
+  const apply = () => scrollToTopNow(extraContainers);
 
   apply();
   requestAnimationFrame(() => {
@@ -5525,6 +5543,10 @@ function renderCookbookDetail(cookbookId) {
       el.addEventListener("click", (event) => handleCookbookGridClick(event), { capture: true });
     });
   });
+
+  // Always start the cookbook detail view at the top (some views scroll within containers
+  // rather than the window; iOS/Safari can also apply scroll after layout).
+  scrollToTopSoon([cookbooksScreen, cookbookList, _cbScreenGrid]);
 }
 
 function renderCookbookList() {
