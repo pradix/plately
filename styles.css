@@ -6512,7 +6512,7 @@ body {
   justify-content: center;
   gap: 8px;
   margin: 0;
-  padding: 10px 14px 10px 12px;
+  padding: 10px 12px;
   border: 1px solid #d6e4d8;
   background: #f3f8f3;
   color: #2d4a2e;
@@ -6523,6 +6523,7 @@ body {
   cursor: pointer;
   line-height: 1;
   min-height: 44px; /* tap target */
+  min-width: 44px; /* icon-only tap target */
   -webkit-tap-highlight-color: transparent;
   transition: background 0.15s, border-color 0.15s, transform 0.08s;
   flex: none;
