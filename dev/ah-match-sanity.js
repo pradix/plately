@@ -46,6 +46,8 @@ async function main() {
     "pecorino romano",
     "mozzarella",
     "burrata",
+    "basilicum",
+    "tomaat basilicum",
   ];
 
   const basket = await postJson(`${base}/api/store-basket`, {

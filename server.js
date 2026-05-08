@@ -2535,7 +2535,8 @@ function cleanListLine(line) {
     String(line || "")
       .replace(/^[\-\u2022\u2023\u25E6\u2043\u2219•●▪◦]+\s*/, "")
       .replace(/^(step|stap)\s*\d+\s*[:.)-]?\s*/i, "")
-      .replace(/^\d+\s*[.)-]\s*/, "")
+      // Only strip actual list numbering like "1. " / "2) " — not decimals like "2.5".
+      .replace(/^\d+\s*[.)-]\s+/, "")
       .replace(/^[-–]\s*/, "")
   );
 }
@@ -2578,7 +2579,7 @@ function isLikelyInstructionLine(line) {
     return true;
   }
   // Numbered list detection: 1. , 2) , 3- , etc
-  if (/^\d+\s*[.)-]\s*/.test(String(line || ""))) {
+  if (/^\d+\s*[.)-]\s+/.test(String(line || ""))) {
     return true;
   }
   if (INSTRUCTION_START_PATTERN.test(clean)) {
@@ -6028,6 +6029,9 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
     const matchTerms = buildIngredientMatchTerms(ingredient, baseTerm);
     const wantsButter = /\bboter\b/.test(baseLower) || /\bboter\b/.test(rawLower);
     const wantsGarlicButter = /\b(kruidenboter|knoflookboter)\b/.test(baseLower) || /\b(kruidenboter|knoflookboter)\b/.test(rawLower);
+    const wantsToastLike =
+      /\b(toast|toastjes|melba|melbatoast|cracker|crackers|zadencracker|zadencrackers|beschuit|crouton|croutons)\b/.test(baseLower) ||
+      /\b(toast|toastjes|melba|melbatoast|cracker|crackers|zadencracker|zadencrackers|beschuit|crouton|croutons)\b/.test(rawLower);
 
     const ingredientTokens = tokenizeForMatch(baseLower);
     const allowCheeseEquivs =
@@ -6090,10 +6094,15 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         { re: /\b(saus|dressing|marinade)\b/, score: 55, okIf: /\b(saus|dressing|marinade)\b/.test(baseLower) },
         { re: /\b(mix|kruidenmix|kruiden)\b/, score: 35, okIf: /\b(mix|kruiden)\b/.test(baseLower) },
         { re: /\b(pasta|poeder|granulaat|puree)\b/, score: 28, okIf: /\b(pasta|poeder|granulaat|puree)\b/.test(baseLower) },
+        // Guard: herbs/veg terms like "basilicum" can accidentally match snack products (e.g. melbatoast).
+        { re: /\b(melbatoast|toastjes?|toast|crackers?|zadencrackers?|beschuit|croutons?)\b/, score: 80, okIf: wantsToastLike },
       ];
       for (const p of processedPenalty) {
         if (!p.okIf && p.re.test(title)) score += p.score;
       }
+
+      // Extra guardrail: never auto-pick melbatoast unless the ingredient asked for toast/crackers.
+      if (!wantsToastLike && /\bmelbatoast\b/.test(title)) score += 200;
 
       // Cheese-specific "avoid": parmesan is often matched to sauces/spreads; avoid those.
       if (baseLower === "parmezaanse kaas") {
@@ -6106,6 +6115,8 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
     const products = (data.products || [])
       .filter((p) => !NON_FOOD_INGREDIENT_PATTERN.test(sanitizeText(p.title)))
       .filter((p) => ingredientMatchesAnyProductTerm(matchTerms, sanitizeText(p.title)))
+      // Guardrail: avoid melbatoast unless explicitly asked for toast/crackers.
+      .filter((p) => (wantsToastLike ? true : !/\bmelbatoast\b/i.test(String(p?.title || ""))))
       .sort((a, b) => {
         const sa = scoreForIngredient(a.title);
         const sb = scoreForIngredient(b.title);
