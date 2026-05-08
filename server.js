@@ -977,8 +977,17 @@ async function requireAdmin(request) {
     authUser = await getDevAuthenticatedUser(request).catch(() => null);
   }
   const email = sanitizeText(authUser?.email || "");
-  if (!email || email !== ADMIN_EMAIL) {
-    throw new HttpError(403, "Niet geautoriseerd.");
+  if (!email) {
+    throw new HttpError(
+      403,
+      "Geen geldige sessie voor admin. Log opnieuw in op dit domein en open het admin-paneel hier (zelfde origin). Gebruik fetch met credentials en/of Authorization zoals de hoofd-app."
+    );
+  }
+  if (email !== ADMIN_EMAIL) {
+    throw new HttpError(
+      403,
+      `Geen admin-rechten voor dit account (${email}). Alleen het beheerdersaccount (ADMIN_EMAIL) heeft toegang.`
+    );
   }
   return authUser;
 }

@@ -739,6 +739,21 @@
     };
     let inventorySearchTimer = null;
 
+    const PLATELY_AUTH_TOKEN_KEY = "plately-auth-token";
+
+    /** Match app.js fetchJson: send cookies + Bearer token from localStorage when present. */
+    function adminFetchInit(extra = {}) {
+      const { headers: extraHeaders, ...rest } = extra;
+      const headers = { ...(extraHeaders || {}) };
+      try {
+        const t = localStorage.getItem(PLATELY_AUTH_TOKEN_KEY);
+        if (t && !headers.Authorization && !headers.authorization) {
+          headers.Authorization = `Bearer ${t}`;
+        }
+      } catch (_) {}
+      return { credentials: "include", ...rest, headers };
+    }
+
     function setText(id, value) {
       const el = document.getElementById(id);
       if (el) el.textContent = value;
@@ -794,11 +809,11 @@
         return;
       }
       try {
-        const response = await fetch("/api/admin/delete-users", {
+        const response = await fetch("/api/admin/delete-users", adminFetchInit({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userIds: ids })
-        });
+        }));
         const data = await response.json();
         if (!response.ok || !data.ok) {
           alert("Fout bij verwijderen: " + (data.error || "Onbekende fout"));
@@ -821,7 +836,7 @@
         document.getElementById("content").style.display = "none";
         document.getElementById("loading").style.display = "block";
 
-        const response = await fetch("/api/admin/stats");
+        const response = await fetch("/api/admin/stats", adminFetchInit());
         const data = await response.json();
 
         if (!response.ok || !data.ok) {
@@ -879,7 +894,7 @@
       if (metaEl) metaEl.textContent = "⏳ Laden...";
 
       try {
-        const response = await fetch("/api/admin/overview");
+        const response = await fetch("/api/admin/overview", adminFetchInit());
         const data = await response.json();
         if (!response.ok || !data.ok) {
           throw new Error(data.error || "Failed to load overview");
@@ -1170,7 +1185,7 @@
         if (inventoryState.q) params.set("q", inventoryState.q);
         if (inventoryState.userId) params.set("user_id", inventoryState.userId);
 
-        const response = await fetch(`/api/admin/inventory?${params.toString()}`);
+        const response = await fetch(`/api/admin/inventory?${params.toString()}`, adminFetchInit());
         const data = await response.json();
         if (!response.ok || !data.ok) {
           throw new Error(data.error || "Failed to load inventory");
@@ -1199,7 +1214,7 @@
 
     async function loadAnalytics() {
       try {
-        const response = await fetch("/api/admin/analytics");
+        const response = await fetch("/api/admin/analytics", adminFetchInit());
         const data = await response.json();
         if (!response.ok || !data.ok) {
           throw new Error(data.error || "Failed to load analytics");
@@ -1242,7 +1257,7 @@
 
     async function loadPendingChannels() {
       try {
-        const response = await fetch("/api/admin/pending-channels");
+        const response = await fetch("/api/admin/pending-channels", adminFetchInit());
         const data = await response.json();
 
         if (!response.ok || !data.ok) {
@@ -1322,11 +1337,11 @@
       }
 
       try {
-        const response = await fetch("/api/admin/approve-channel", {
+        const response = await fetch("/api/admin/approve-channel", adminFetchInit({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ channelId, status: "approved" })
-        });
+        }));
 
         const data = await response.json();
         if (!response.ok || !data.ok) {
@@ -1348,11 +1363,11 @@
 
       try {
         const reason = prompt("Reden (optioneel):") || "";
-        const response = await fetch("/api/admin/approve-channel", {
+        const response = await fetch("/api/admin/approve-channel", adminFetchInit({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ channelId, status: "rejected", reason })
-        });
+        }));
 
         const data = await response.json();
         if (!response.ok || !data.ok) {
@@ -1591,11 +1606,11 @@
       }
 
       try {
-        const response = await fetch("/api/admin/delete-user", {
+        const response = await fetch("/api/admin/delete-user", adminFetchInit({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId })
-        });
+        }));
 
         const data = await response.json();
         if (!response.ok || !data.ok) {
@@ -1668,7 +1683,7 @@
 
     async function loadChannelCatalog() {
       try {
-        const response = await fetch("/api/admin/channels");
+        const response = await fetch("/api/admin/channels", adminFetchInit());
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || "Failed to load channels");
 
@@ -1751,11 +1766,11 @@
           ? { channelKind: "custom", customChannel: channel.customChannel, query, limit: 10 }
           : { channelKind: "seed", channelId: channel.channelId, query, limit: 10 };
 
-        const response = await fetch("/api/admin/channel-test/search", {
+        const response = await fetch("/api/admin/channel-test/search", adminFetchInit({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        });
+        }));
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || "Search test failed");
         const results = data.results || [];
@@ -1774,11 +1789,11 @@
       if (!url) return showChannelTestError("Vul een URL in om te importeren.");
       if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> Importeren…`;
       try {
-        const response = await fetch("/api/admin/channel-test/import", {
+        const response = await fetch("/api/admin/channel-test/import", adminFetchInit({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url }),
-        });
+        }));
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || "Import test failed");
         const r = data.recipe || {};

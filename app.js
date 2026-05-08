@@ -6929,7 +6929,7 @@ async function fetchJson(url, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
   const response = await fetch(url, {
-    credentials: "same-origin",
+    credentials: "include",
     ...options,
     headers,
   });
