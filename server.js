@@ -6134,6 +6134,9 @@ function parse24Kitchen(html, baseUrl, channelName, channelId, count) {
     if (results.length >= count) return;
     const url = abs(urlRaw);
     if (!url || seenUrls.has(url)) return;
+    // 24Kitchen search sometimes surfaces image assets as "results".
+    // Exclude URLs that point directly to JPEGs.
+    if (/\.jpeg/i.test(url)) return;
     if (/\/recepten\/(?:zoeken|search)(?:\/|$)/i.test(url)) return;
     if (!urlLooksLikeRecipe(url)) return;
 
@@ -6252,6 +6255,7 @@ async function search24KitchenFac(query, count, effectiveSeedConfig) {
       const thumbnail = cleanImageUrl(String(item.thumbnail || "").replace(/\s+/g, ""));
       const absUrl = rel && rel.startsWith("http") ? rel : (rel.startsWith("/") ? `${baseUrl}${rel}` : "");
       if (!title || !absUrl || seen.has(absUrl)) continue;
+      if (/\.jpeg/i.test(absUrl)) continue;
       if (!urlLooksLikeRecipe(absUrl) || !titleLooksLikeRecipe(title) || !titleMatchesQuery(title, q)) continue;
       if (thumbnail && (/\.svg(?:\?|$)/i.test(thumbnail) || isDecorativeImageUrl(thumbnail))) continue;
       seen.add(absUrl);
@@ -6451,6 +6455,81 @@ function parseReaderSearchResults(markdown, channelName, channelId, count, query
     .slice(0, count);
 }
 
+function parseCulyReaderSearchResults(markdown, channelName, channelId, count, query) {
+  const text = String(markdown || "");
+  const results = [];
+  const seen = new Set();
+  const q = sanitizeText(query || "");
+
+  // Extract distinct recipe URLs in-order (keep indices so we can look around).
+  const urlMatches = [...text.matchAll(/https?:\/\/(?:www\.)?culy\.nl\/recepten\/[^\s\)]+/gi)];
+  const urls = [];
+  for (const m of urlMatches) {
+    const url = sanitizeText(m[0] || "");
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    urls.push({ url, index: m.index || 0 });
+    if (urls.length >= Math.max(12, count * 4)) break;
+  }
+
+  const decodeTitle = (raw) => {
+    const cleaned = String(raw || "")
+      // Common Jina pattern: `Title](https://...)`
+      .replace(/\]\(\s*https?:\/\/[^\)]+\s*\)\s*$/i, "")
+      .replace(/\]\(\s*https?:\/\/[^\)]+\s*\)/gi, "")
+      .replace(/^\[+/, "")
+      .replace(/\]+$/, "");
+    return sanitizeText(decodeHtmlEntities(stripHtmlTags(cleaned))).trim();
+  };
+
+  const findNearestTitle = (idx) => {
+    const start = Math.max(0, idx - 1200);
+    const block = text.slice(start, idx + 200);
+
+    // Culy Jina pages frequently contain `### <title>` near the recipe card.
+    const headings = [...block.matchAll(/###\s+([^\n#][^\n]{3,180})/g)];
+    if (headings.length) return decodeTitle(headings[headings.length - 1][1]);
+
+    // Or a markdown image alt: `![Image 1: <title>](...)`
+    const alts = [...block.matchAll(/!\[Image\s+\d+:\s*([^\]]{3,220})\]/gi)];
+    if (alts.length) return decodeTitle(alts[alts.length - 1][1]);
+
+    return "";
+  };
+
+  const findNearestThumbnail = (idx) => {
+    const start = Math.max(0, idx - 1600);
+    const block = text.slice(start, idx + 100);
+    const imgs = [...block.matchAll(/https?:\/\/[^\s\)]+?\.(?:jpe?g|png|webp)(?:\?[^\s\)]*)?/gi)];
+    // Prefer the most recent image-like URL; Jina cards include one per result.
+    const last = imgs.length ? imgs[imgs.length - 1][0] : "";
+    return cleanImageUrl(String(last || "").replace(/[)\]]+$/g, "").replace(/\s+/g, ""));
+  };
+
+  for (const u of urls) {
+    if (results.length >= count) break;
+    const url = u.url;
+    const title = findNearestTitle(u.index) || (() => {
+      try {
+        const slug = new URL(url).pathname.split("/").filter(Boolean).pop() || "";
+        return decodeTitle(decodeURIComponent(slug).replace(/[-_]+/g, " "));
+      } catch {
+        return "";
+      }
+    })();
+
+    if (!title) continue;
+    if (!urlLooksLikeRecipe(url) || !titleLooksLikeRecipe(title) || !titleMatchesQuery(title, q)) continue;
+    const thumbnail = findNearestThumbnail(u.index);
+
+    results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
+  }
+
+  return results
+    .sort((a, b) => titleQueryScore(b.title, q) - titleQueryScore(a.title, q))
+    .slice(0, count);
+}
+
 async function readerSearchFallback(searchUrl, channelName, channelId, count, query) {
   try {
     const target = String(searchUrl || "").trim();
@@ -6463,6 +6542,10 @@ async function readerSearchFallback(searchUrl, channelName, channelId, count, qu
     if (!response.ok) return [];
 
     const markdown = await response.text();
+    if (channelId === "ch-culy") {
+      const parsed = parseCulyReaderSearchResults(markdown, channelName, channelId, count, query || "");
+      if (parsed.length) return parsed;
+    }
     return parseReaderSearchResults(markdown, channelName, channelId, count, query || "");
   } catch {
     return [];
@@ -7359,8 +7442,17 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     maybeSearch("ch-24k", () => scrapeOrRest(cfg("ch-24k").baseUrl || "https://www.24kitchen.nl", "24 Kitchen", "ch-24k",
       buildSeedChannelSearchUrl("ch-24k", cfg("ch-24k"), query),
       parse24Kitchen, 4).then(async (items) => {
-        if (Array.isArray(items) && items.length) return items;
-        return search24KitchenFac(query, 4, cfg("ch-24k"));
+        const cleaned = (Array.isArray(items) ? items : []).filter((r) => r && r.url && !/\.jpeg/i.test(String(r.url)));
+        if (process.env.NODE_ENV !== "production" && Array.isArray(items) && cleaned.length !== items.length) {
+          console.warn("🧹 Filtered 24Kitchen .jpeg search result(s)");
+        }
+        if (cleaned.length) return cleaned;
+        const fac = await search24KitchenFac(query, 4, cfg("ch-24k"));
+        const facCleaned = (Array.isArray(fac) ? fac : []).filter((r) => r && r.url && !/\.jpeg/i.test(String(r.url)));
+        if (process.env.NODE_ENV !== "production" && Array.isArray(fac) && facCleaned.length !== fac.length) {
+          console.warn("🧹 Filtered 24Kitchen FAC .jpeg result(s)");
+        }
+        return facCleaned;
       })),
 
     // MEDIUM: May be slower, but try anyway
