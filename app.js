@@ -2792,6 +2792,7 @@ function mergeAmountLabels(existing, incoming) {
 
 // Optional manual sanity checks in browser console:
 //   window.__platelyIngredientSanity?.()
+//   window.__platelyPantrySanity?.()
 if (typeof window !== "undefined") {
   window.__platelyIngredientSanity = () => {
     const cases = [
@@ -2822,6 +2823,59 @@ if (typeof window !== "undefined") {
       console.log("Ingredient sanity OK", ok.map((x) => `${x.input} → ${x.amount} ${x.parsed.name}`));
     }
     return { ok, bad };
+  };
+}
+
+if (typeof window !== "undefined") {
+  window.__platelyPantrySanity = () => {
+    const normalize = (v) => normalizeIngredientKey(String(v || ""));
+
+    const recipe = {
+      id: "pantry-sanity",
+      title: "Pantry sanity",
+      servings: "2",
+      ingredients: [
+        { name: "zout (optioneel)" },
+        { name: "peper naar smaak" },
+        { name: "olijfolie" },
+      ],
+    };
+
+    const pantryPool = [
+      "Olie",
+      "Olijfolie",
+      "Boter",
+      "Bloem",
+      "Suiker",
+      "Azijn",
+      "Sojasaus",
+      "Bouillonblokje",
+      "Zout",
+      "Peper",
+      "Zout en peper",
+    ].map((title) => ({ title }));
+
+    const existingKeys = new Set(); // emulate: not in grocery list
+    const recipeHas = (r, title) => {
+      const key = normalize(title);
+      return (r.ingredients || []).some((ing) => normalize(ing?.name).includes(key));
+    };
+
+    const suggestions = pantryPool
+      .filter((p) => recipeHas(recipe, p.title))
+      .filter((p) => !existingKeys.has(normalize(p.title)))
+      .map((p) => p.title);
+
+    const pass = suggestions.includes("Zout") && suggestions.includes("Peper") && suggestions.includes("Olijfolie");
+
+    if (!pass) {
+      // eslint-disable-next-line no-console
+      console.warn("Pantry sanity FAILED", { suggestions });
+    } else {
+      // eslint-disable-next-line no-console
+      console.log("Pantry sanity OK", { suggestions });
+    }
+    return { pass, suggestions };
   };
 }
 
@@ -4374,6 +4428,10 @@ function renderGroceryGroups() {
     { title: "Azijn", icon: "🍶" },
     { title: "Sojasaus", icon: "🍶" },
     { title: "Bouillonblokje", icon: "🧊" },
+    // Common “optional” seasonings: excluded from auto grocery, but should show in pantry.
+    { title: "Zout", icon: "🧂" },
+    { title: "Peper", icon: "🌶️" },
+    { title: "Zout en peper", icon: "🧂" },
   ];
 
   const existingKeys = new Set(state.groceryItems.map((i) => normalizeIngredientKey(i.title)));
@@ -4381,6 +4439,14 @@ function renderGroceryGroups() {
     if (!recipe?.ingredients?.length) return false;
     const key = normalizeIngredientKey(pantryTitle);
     return recipe.ingredients.some((ing) => normalizeIngredientKey(ing?.name || "").includes(key));
+  };
+
+  const getPantrySuggestionsForRecipe = (recipe, existingKeySet) => {
+    if (!recipe) return [];
+    const existing = existingKeySet || new Set();
+    return pantryItems
+      .filter((p) => recipeHasPantryItem(recipe, p.title))
+      .filter((p) => !existing.has(normalizeIngredientKey(p.title)));
   };
 
   const renderPantryEntry = (s, meta) => `
@@ -4409,9 +4475,7 @@ function renderGroceryGroups() {
     if (!recipeId || !recipeTitle) return;
     const recipe = getRecipeById(recipeId);
     if (!recipe) return;
-    const suggestions = pantryItems
-      .filter((p) => recipeHasPantryItem(recipe, p.title))
-      .filter((p) => !existingKeys.has(normalizeIngredientKey(p.title)));
+    const suggestions = getPantrySuggestionsForRecipe(recipe, existingKeys);
     if (!suggestions.length) return;
 
     const section = document.createElement("section");
