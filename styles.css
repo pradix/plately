@@ -9955,6 +9955,22 @@ body {
   line-height: 1.2;
 }
 
+.price-new {
+  font-weight: 800;
+  color: #2a2825;
+}
+
+.price-old {
+  text-decoration: line-through;
+  color: rgba(122, 116, 110, 0.85);
+  font-weight: 650;
+  margin-left: 6px;
+}
+
+.meta-sep {
+  opacity: 0.75;
+}
+
 .basket-product__for {
   font-size: 0.77rem;
   color: #9a9390;
