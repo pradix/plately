@@ -384,11 +384,11 @@ const SEED_CHANNEL_DEFAULTS = {
   },
   "ch-24k": {
     baseUrl: "https://www.24kitchen.nl",
-    searchUrlTemplate: "https://www.24kitchen.nl/?s={q}",
+    searchUrlTemplate: "https://www.24kitchen.nl/recepten/zoeken?q=<zoekwoord>&size=n_12_n",
   },
   "ch-up": {
     baseUrl: "https://uitpaulineskeuken.nl",
-    searchUrlTemplate: "https://uitpaulineskeuken.nl/?s={q}",
+    searchUrlTemplate: "https://uitpaulineskeuken.nl/zoeken?_search_keyword=<zoekwoord>&_search_posttypes=pauline_recepten",
   },
 };
 
@@ -636,7 +636,19 @@ function buildSeedSearchUrlFromTemplate(template, query) {
   const t = sanitizeText(template || "").trim();
   if (!t) return "";
   const q = encodeURIComponent(query || "");
-  return t.replaceAll("{q}", q);
+  // Support both legacy `{q}` and the explicit `<zoekwoord>` placeholder.
+  // (Admin overrides may use either; seed defaults can evolve over time.)
+  return t.replaceAll("{q}", q).replaceAll("<zoekwoord>", q);
+}
+
+function seedSearchTemplateHasPlaceholder(template) {
+  const t = sanitizeText(template || "");
+  return t.includes("{q}") || t.includes("<zoekwoord>");
+}
+
+function seedSearchTemplateForValidation(template) {
+  // Replace placeholders so URL parsing doesn't choke on `{` or `<`.
+  return String(template || "").replaceAll("{q}", "test").replaceAll("<zoekwoord>", "test");
 }
 
 async function getSeedChannelOverrides() {
@@ -9037,12 +9049,12 @@ const server = http.createServer(async (request, response) => {
         }
         if (nextTemplateRaw) {
           try {
-            const parsed = new URL(nextTemplateRaw.replaceAll("{q}", "test"));
+            const parsed = new URL(seedSearchTemplateForValidation(nextTemplateRaw));
             if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
               return sendJson(response, 400, { ok: false, error: "searchUrlTemplate must be http(s)" });
             }
-            if (!nextTemplateRaw.includes("{q}")) {
-              return sendJson(response, 400, { ok: false, error: "searchUrlTemplate must include {q}" });
+            if (!seedSearchTemplateHasPlaceholder(nextTemplateRaw)) {
+              return sendJson(response, 400, { ok: false, error: "searchUrlTemplate must include {q} or <zoekwoord>" });
             }
             next.searchUrlTemplate = nextTemplateRaw;
           } catch {
@@ -9202,12 +9214,12 @@ const server = http.createServer(async (request, response) => {
         }
         if (nextTemplateRaw) {
           try {
-            const parsed = new URL(nextTemplateRaw.replaceAll("{q}", "test"));
+            const parsed = new URL(seedSearchTemplateForValidation(nextTemplateRaw));
             if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
               return sendJson(response, 400, { ok: false, error: "searchUrlTemplate must be http(s)" });
             }
-            if (!nextTemplateRaw.includes("{q}")) {
-              return sendJson(response, 400, { ok: false, error: "searchUrlTemplate must include {q}" });
+            if (!seedSearchTemplateHasPlaceholder(nextTemplateRaw)) {
+              return sendJson(response, 400, { ok: false, error: "searchUrlTemplate must include {q} or <zoekwoord>" });
             }
             next.searchUrlTemplate = nextTemplateRaw;
           } catch {
