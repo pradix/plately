@@ -8992,6 +8992,19 @@ bindEvent(cookbookSaveModal, "click", (event) => {
   }
 });
 
+function confirmCookbookSave({ recipeId, cookbookId } = {}) {
+  const resolvedCookbookId = cookbookId || state.pendingCookbookSaveCookbookId;
+  const selectedRecipe = getSelectedRecipe();
+  const resolvedRecipeId = recipeId || state.pendingCookbookSaveRecipeId || selectedRecipe?.id;
+  if (!resolvedRecipeId || !resolvedCookbookId) return;
+
+  state.selectedRecipeId = resolvedRecipeId;
+  saveRecipeToCookbook(resolvedRecipeId, resolvedCookbookId);
+  closeCookbookSaveModal();
+  renderDetailRecipe(true);
+  switchView("detail");
+}
+
 if (cookbookSaveList) {
   cookbookSaveList.addEventListener(
     "click",
@@ -9016,6 +9029,9 @@ if (cookbookSaveList) {
         renderCookbookSaveList(recipeId);
         syncCookbookSaveConfirmButton();
       }
+
+      // After importing, users expect a single tap here to save & continue.
+      confirmCookbookSave({ recipeId, cookbookId });
     },
     { capture: true }
   );
@@ -9026,15 +9042,7 @@ bindEvent(cookbookSaveCreateButton, "click", () => {
 });
 
 bindEvent(cookbookSaveConfirmButton, "click", () => {
-  const cookbookId = state.pendingCookbookSaveCookbookId;
-  const selectedRecipe = getSelectedRecipe();
-  const recipeId = state.pendingCookbookSaveRecipeId || selectedRecipe?.id;
-  if (!recipeId || !cookbookId) return;
-  state.selectedRecipeId = recipeId;
-  saveRecipeToCookbook(recipeId, cookbookId);
-  closeCookbookSaveModal();
-  renderDetailRecipe(true);
-  switchView("detail");
+  confirmCookbookSave();
 });
 
 // Cookbook name modal confirm/cancel
