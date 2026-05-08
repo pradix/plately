@@ -6884,7 +6884,15 @@ async function buildStoreBasket(body) {
           preferences?.bio
             ? (products.find(isBio) || products[0] || null)
             : (products[0] || null);
-        return { ingredient: ingredientName, product: picked, products };
+
+        // Ensure the selected product is also the first choice shown in the UI.
+        // The basket UI assumes `choices[0]` is the current pick (selectedChoiceIndex = 0).
+        const ordered =
+          picked && Array.isArray(products) && products.length > 1
+            ? [picked, ...products.filter((p) => (p?.id || p?.name) !== (picked?.id || picked?.name))]
+            : products;
+
+        return { ingredient: ingredientName, product: picked, products: ordered };
       })
     ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
   } else {
