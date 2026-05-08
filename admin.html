@@ -664,6 +664,16 @@
 
       <div class="section">
         <div class="section-header">
+          <h2>Custom kanalen</h2>
+          <div class="muted">Bewerk URL (alleen http/https)</div>
+        </div>
+        <div id="customChannelsContainer" style="min-height: 40px;">
+          <p class="muted" style="text-align:center;padding:14px">Laden...</p>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
           <h2>Kanaal test (search + import)</h2>
           <div class="muted">Kies 1 kanaal en test</div>
         </div>
@@ -1681,6 +1691,86 @@
       }
     }
 
+    function renderCustomChannelsCatalog(custom) {
+      const wrap = document.getElementById("customChannelsContainer");
+      if (!wrap) return;
+      const approved = Array.isArray(custom?.approved) ? custom.approved : [];
+      const pending = Array.isArray(custom?.pending) ? custom.pending : [];
+      const rejected = Array.isArray(custom?.rejected) ? custom.rejected : [];
+      const all = [
+        ...approved.map((c) => ({ ...c, _group: "approved" })),
+        ...pending.map((c) => ({ ...c, _group: "pending" })),
+        ...rejected.map((c) => ({ ...c, _group: "rejected" })),
+      ];
+
+      if (!all.length) {
+        wrap.innerHTML = `<p class="muted" style="text-align:center;padding:14px">Geen custom kanalen</p>`;
+        return;
+      }
+
+      const badge = (g) => {
+        if (g === "pending") return `<span class="badge">PENDING</span>`;
+        if (g === "rejected") return `<span class="badge" style="background:rgba(220,53,69,0.10);border-color:rgba(220,53,69,0.16);color:rgba(140,23,35,0.95)">REJECTED</span>`;
+        return `<span class="badge" style="background:rgba(40,167,69,0.10);border-color:rgba(40,167,69,0.16);color:rgba(20,110,43,0.95)">APPROVED</span>`;
+      };
+
+      wrap.innerHTML = `
+        <table class="users-table" style="margin-top:0">
+          <thead>
+            <tr>
+              <th>Kanaal</th>
+              <th>URL</th>
+              <th>Status</th>
+              <th style="text-align:right">Acties</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${all.map((ch) => {
+              const id = escapeHtml(ch?.id || "");
+              const name = escapeHtml(ch?.name || ch?.id || "");
+              const url = escapeHtml(ch?.url || "");
+              const g = ch?._group || (ch?.status || "approved");
+              return `
+                <tr>
+                  <td><strong>${name}</strong><div class="muted mono" style="margin-top:2px;font-size:11px">${id}</div></td>
+                  <td class="mono" style="font-size: 11px; color: rgba(0,0,0,0.58);">
+                    <a class="admin-inventory__link" href="${url}" target="_blank" rel="noopener">${url}</a>
+                  </td>
+                  <td>${badge(g)}</td>
+                  <td style="text-align:right">
+                    <button class="btn btn-sm" type="button" onclick="editCustomChannelUrl('${id}', '${url}')">Edit URL</button>
+                  </td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function editCustomChannelUrl(channelId, currentUrl) {
+      showChannelTestError("");
+      const nextUrl = prompt("Nieuwe URL (http/https):", currentUrl || "");
+      if (nextUrl == null) return;
+      const trimmed = String(nextUrl).trim();
+      if (!trimmed) return alert("URL is verplicht.");
+
+      try {
+        const response = await fetch("/api/admin/custom-channel-url", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channelId, url: trimmed }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "Update failed");
+        }
+        await loadChannelCatalog();
+      } catch (error) {
+        alert("Fout: " + error.message);
+      }
+    }
+
     async function loadChannelCatalog() {
       try {
         const response = await fetch("/api/admin/channels", adminFetchInit());
@@ -1709,6 +1799,8 @@
         groups.push(makeCustomGroup("Custom (pending)", pending));
         groups.push(makeCustomGroup("Custom (rejected)", rejected));
         sel.innerHTML = `<option value="">Kanaal kiezen…</option>` + groups.filter(Boolean).join("");
+
+        renderCustomChannelsCatalog(custom);
       } catch (error) {
         showChannelTestError(error.message);
       }

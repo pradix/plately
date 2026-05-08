@@ -343,6 +343,7 @@ const SEED_CHANNELS = [
   { id: "ch-les", name: "Lekker & Simpel" },
   { id: "ch-lb", name: "Laura's Bakery" },
   { id: "ch-jumbo", name: "Jumbo" },
+  { id: "ch-culy", name: "Culy" },
 ];
 
 const DEFAULT_MEAL_PLAN = {
@@ -3093,6 +3094,20 @@ function looksLikeBlockedSocialHtml(url, html) {
     h.includes("recipe") ||
     h.includes("ingrediënten");
 
+  // Generic bot / WAF pages (Cloudflare, captchas, JS-required)
+  // Many recipe sites (e.g. Culy) return 200 OK but serve a challenge page.
+  const looksLikeWaf =
+    h.includes("attention required") ||
+    h.includes("cloudflare") ||
+    h.includes("cf-challenge") ||
+    h.includes("captcha") ||
+    h.includes("verify you are human") ||
+    h.includes("enable javascript") ||
+    h.includes("enable cookies") ||
+    h.includes("checking your browser before accessing") ||
+    h.includes("ddos protection");
+  if (looksLikeWaf && !hasRecipeSignals) return true;
+
   if (u.includes("instagram.com")) {
     if (h.includes("instagram") && (h.includes("log in") || h.includes("aanmelden"))) {
       if (!hasRecipeSignals) return true;
@@ -3842,9 +3857,38 @@ function parseParagraphsAfterHeading(html, headingPattern) {
 }
 
 function extractMarkdownSection(text, headingPattern, stopPattern) {
-  const regex = new RegExp(`(?:^|\\n)#{2,3}\\s*(?:${headingPattern})\\s*\\n([\\s\\S]*?)(?=\\n#{2,3}\\s*(?:${stopPattern})\\b|$)`, "gi");
+  // Headings can include extra trailing text, e.g. "## Bereidingswijze Surinaamse soep".
+  const regex = new RegExp(
+    `(?:^|\\n)#{2,3}\\s*(?:${headingPattern})(?:\\s+[^\\n]*)?\\s*\\n([\\s\\S]*?)(?=\\n#{2,3}\\s*(?:${stopPattern})(?:\\s+[^\\n]*)?$|$)`,
+    "gi"
+  );
   const matches = [...String(text || "").matchAll(regex)];
-  return matches.length ? matches[matches.length - 1][1].trim() : "";
+  if (!matches.length) return "";
+
+  // Some pages repeat headings in footers/menus. Pick the most "list-like" section.
+  const scoreSection = (body) => {
+    const lines = String(body || "")
+      .split(/\n+/)
+      .map((l) => sanitizeText(l))
+      .filter(Boolean);
+    if (!lines.length) return 0;
+    const bulletish = lines.filter((l) => /^(\*|-|\d+\.)\s+\S/.test(l)).length;
+    const hasNumbers = lines.filter((l) => /\d/.test(l)).length;
+    const lengthPenalty = Math.max(0, lines.length - 70) * 6;
+    return bulletish * 3 + hasNumbers + Math.min(lines.length, 40) - lengthPenalty;
+  };
+
+  let best = matches[0][1] || "";
+  let bestScore = scoreSection(best);
+  for (const m of matches.slice(1)) {
+    const body = m[1] || "";
+    const s = scoreSection(body);
+    if (s > bestScore) {
+      best = body;
+      bestScore = s;
+    }
+  }
+  return String(best || "").trim();
 }
 
 function parseTextRecipeDocument(text, url) {
@@ -3917,17 +3961,23 @@ function parseMarkdownIngredientSection(text) {
   const ingredientSection = extractMarkdownSection(
     text,
     "ingredi[eë]nten|ingredienten|ingredients?|dit heb je nodig",
-    "aan de slag|bereiding|voedingswaarden|boodschappen|services|ontdek|gerelateerde|ook te zien"
+    "aan de slag|bereiding|bereidingswijze|voedingswaarden|boodschappen|services|ontdek|gerelateerde|ook te zien|direct in je mandje|beoordeling"
   );
 
   if (!ingredientSection) {
     return [];
   }
 
+  // Some pages embed CTAs and prose between ingredients and instructions.
+  // Cut at common CTAs that start right after the ingredient list.
+  const trimmedSection = ingredientSection.split(/\n\s*(?:direct in je mandje|beoordeling)\b/i)[0] || ingredientSection;
+
   return normalizeIngredientList(
-    ingredientSection
+    trimmedSection
       .split(/\n+/)
       .map((line) => sanitizeText(line))
+      // Keep only bullet/quantity-looking lines to avoid prose leaking in as ingredients.
+      .filter((line) => /^(\*|-)\s+\S/.test(line) || new RegExp(`^${QUANTITY_PATTERN}\\b`, "i").test(line))
       .filter((line) => line && !/^\(.*personen.*\)$/i.test(line))
       .filter((line) => !/^#{1,6}\s/i.test(line)) // Filter out markdown headings like "### Dit heb je nodig"
       .map((line) => parseIngredientLine(line))
@@ -3948,7 +3998,10 @@ function parseMarkdownInstructionSection(text) {
   return finalizeInstructionSteps(
     instructionSection
       .split(/\n+/)
-      .map((line) => sanitizeText(line.replace(/^\d+\.\s*\d*\s*/i, "").replace(/^\*\s*/i, "")))
+      .map((line) => sanitizeText(line))
+      // Prefer explicit step lines (numbered/bulleted), drop prose/CTA.
+      .filter((line) => /^(\d+[\.\)]|\*|-)\s+\S/.test(line))
+      .map((line) => sanitizeText(line.replace(/^\d+[\.\)]\s*\d*\s*/i, "").replace(/^(\*|-)\s*/i, "")))
       .filter((line) => !/^(algemeen:|lekker van albert heijn:)/i.test(line))
       .filter(Boolean)
   );
@@ -3957,6 +4010,44 @@ function parseMarkdownInstructionSection(text) {
 function parseMarkdownServings(text) {
   const match = String(text || "").match(/\(Op basis van\s+(\d+)\s+personen?\)/i);
   return match ? match[1] : "";
+}
+
+function extractFirstImageUrlFromMarkdown(markdown) {
+  const text = String(markdown || "");
+  if (!text) return "";
+  const candidates = [...text.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)]
+    .map((m) => String(m[1] || "").trim())
+    .filter(Boolean)
+    .map((raw) => {
+      const encodedIdx = raw.indexOf("https%3A%2F%2F");
+      if (encodedIdx >= 0) {
+        const encoded = raw.slice(encodedIdx);
+        try {
+          return decodeURIComponent(encoded);
+        } catch {
+          return raw;
+        }
+      }
+      return raw;
+    })
+    .filter((u) => /^https?:\/\/.+\.(?:jpg|jpeg|png|webp)(?:\?.*)?$/i.test(u))
+    .filter((u) => !/\.svg(\?|$)/i.test(u));
+
+  if (!candidates.length) return "";
+
+  const score = (u) => {
+    const lower = u.toLowerCase();
+    let s = 0;
+    if (lower.includes("wp-content/uploads")) s += 8;
+    if (/\.(jpg|jpeg|webp)(\?|$)/i.test(lower)) s += 5;
+    if (/cropped|logo|icon|avatar/.test(lower)) s -= 10;
+    if (/\b\d{2,3}x\d{2,3}\b/.test(lower)) s -= 2; // likely thumbnail
+    if (lower.includes("culy")) s += 1;
+    return s;
+  };
+
+  candidates.sort((a, b) => score(b) - score(a));
+  return candidates[0] || "";
 }
 
 function parseWebsiteRecipe(html, url) {
@@ -4972,11 +5063,26 @@ async function importWebsite(sourceUrl) {
   const document = await fetchWebsiteDocument(sourceUrl);
   if (document.kind === "text") {
     const textRecipe = parseTextRecipeDocument(document.body, document.finalUrl || sourceUrl);
+    const mdIngredients = parseMarkdownIngredientSection(document.body);
+    const mdInstructions = parseMarkdownInstructionSection(document.body);
+    const mdServings = parseMarkdownServings(document.body);
+    const mdImage = extractFirstImageUrlFromMarkdown(document.body);
+
+    const mergedTextRecipe = {
+      ...textRecipe,
+      image: mdImage || textRecipe.image,
+      ingredients: mdIngredients.length ? mdIngredients : textRecipe.ingredients,
+      instructions: mdInstructions.length ? mdInstructions : textRecipe.instructions,
+      servings: mdServings || textRecipe.servings,
+      needsReview:
+        (mdIngredients.length ? mdIngredients.length : textRecipe.ingredients.length) < 2 ||
+        (mdInstructions.length ? mdInstructions.length : textRecipe.instructions.length) < 1,
+    };
     // Claude fallback for text documents missing ingredients or instructions
-    if (textRecipe.needsReview && ANTHROPIC_API_KEY) {
+    if (mergedTextRecipe.needsReview && ANTHROPIC_API_KEY) {
       const claudeResult = await extractWithClaudeFromWebPage(
         document.body.slice(0, 8000),
-        textRecipe.title,
+        mergedTextRecipe.title,
         sourceUrl,
         ""
       );
@@ -4988,18 +5094,18 @@ async function importWebsite(sourceUrl) {
         );
         const parsedInstructions = finalizeInstructionSteps(claudeResult.instructions || []);
         return {
-          ...textRecipe,
-          title: claudeResult.title || textRecipe.title,
-          description: claudeResult.description || textRecipe.description,
-          ingredients: parsedIngredients.length ? parsedIngredients : textRecipe.ingredients,
-          instructions: parsedInstructions.length ? parsedInstructions : textRecipe.instructions,
-          time: claudeResult.time || textRecipe.time,
-          servings: claudeResult.servings || textRecipe.servings,
+          ...mergedTextRecipe,
+          title: claudeResult.title || mergedTextRecipe.title,
+          description: claudeResult.description || mergedTextRecipe.description,
+          ingredients: parsedIngredients.length ? parsedIngredients : mergedTextRecipe.ingredients,
+          instructions: parsedInstructions.length ? parsedInstructions : mergedTextRecipe.instructions,
+          time: claudeResult.time || mergedTextRecipe.time,
+          servings: claudeResult.servings || mergedTextRecipe.servings,
           needsReview: parsedIngredients.length < 2 || parsedInstructions.length < 1,
         };
       }
     }
-    return textRecipe;
+    return mergedTextRecipe;
   }
 
   const htmlRecipe = parseWebsiteRecipe(document.body, document.finalUrl || sourceUrl);
@@ -6745,6 +6851,9 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     maybeSearch("ch-clf", () => scrapeOrRest("https://www.chickslovefood.com", "Chicks Love Food", "ch-clf",
       `https://www.chickslovefood.com/?s=${q}`,
       parseChicksLoveFood, 3)),
+    maybeSearch("ch-culy", () => scrapeOrRest("https://www.culy.nl", "Culy", "ch-culy",
+      `https://www.culy.nl/?s=${q}&category=Recepten`,
+      parseWPStandard, 4)),
 
     // SLOW: Include but expect timeouts
     maybeSearch("ch-mj", () => scrapeOrRest("https://miljuschka.nl", "Miljuschka", "ch-mj",
@@ -8669,6 +8778,103 @@ const server = http.createServer(async (request, response) => {
         return sendJson(response, 200, { ok: true, seedChannels, customChannels });
       } catch (error) {
         console.error("❌ Error in /api/admin/channels:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/custom-channel-url" && request.method === "POST") {
+      console.log("🔧 /api/admin/custom-channel-url called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+
+        const channelId = sanitizeText(body.channelId || "");
+        const nextUrlRaw = sanitizeText(body.url || "");
+
+        if (!channelId || !nextUrlRaw) {
+          return sendJson(response, 400, { ok: false, error: "channelId and url required" });
+        }
+        if (SEED_CHANNELS.some((ch) => ch.id === channelId)) {
+          return sendJson(response, 400, { ok: false, error: "Cannot edit seed channels" });
+        }
+
+        let normalizedUrl = "";
+        try {
+          const parsed = new URL(nextUrlRaw);
+          if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+            return sendJson(response, 400, { ok: false, error: "URL must be http(s)" });
+          }
+          // Store origin+pathname without trailing slash noise, keep query if present
+          normalizedUrl = parsed.toString();
+        } catch {
+          return sendJson(response, 400, { ok: false, error: "Invalid URL" });
+        }
+
+        const nowIso = new Date().toISOString();
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const result = await pool.query("SELECT id, app_state FROM plately_users");
+
+          for (const row of result.rows) {
+            const appState = typeof row.app_state === "object" ? row.app_state : JSON.parse(row.app_state || "{}");
+            const customChannels = Array.isArray(appState.customChannels) ? appState.customChannels : [];
+            const idx = customChannels.findIndex((ch) => ch && ch.id === channelId);
+            if (idx === -1) continue;
+
+            customChannels[idx].url = normalizedUrl;
+            customChannels[idx].updatedAt = nowIso;
+            appState.customChannels = customChannels;
+
+            await pool.query("UPDATE plately_users SET app_state = $1 WHERE id = $2", [
+              JSON.stringify(appState),
+              row.id,
+            ]);
+
+            return sendJson(response, 200, {
+              ok: true,
+              channel: {
+                id: sanitizeText(customChannels[idx].id || ""),
+                name: sanitizeText(customChannels[idx].name || ""),
+                url: sanitizeText(customChannels[idx].url || ""),
+                status: sanitizeText(customChannels[idx].status || "approved") || "approved",
+                updatedAt: sanitizeText(customChannels[idx].updatedAt || ""),
+              },
+            });
+          }
+
+          return sendJson(response, 404, { ok: false, error: "Channel not found" });
+        }
+
+        // JSON file
+        const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+        const parsed = JSON.parse(rawFile);
+        for (const user of Object.values(parsed.users || {})) {
+          const customChannels = Array.isArray(user.customChannels) ? user.customChannels : [];
+          const idx = customChannels.findIndex((ch) => ch && ch.id === channelId);
+          if (idx === -1) continue;
+
+          customChannels[idx].url = normalizedUrl;
+          customChannels[idx].updatedAt = nowIso;
+          user.customChannels = customChannels;
+
+          await fsp.writeFile(DATA_FILE, JSON.stringify(parsed, null, 2));
+          return sendJson(response, 200, {
+            ok: true,
+            channel: {
+              id: sanitizeText(customChannels[idx].id || ""),
+              name: sanitizeText(customChannels[idx].name || ""),
+              url: sanitizeText(customChannels[idx].url || ""),
+              status: sanitizeText(customChannels[idx].status || "approved") || "approved",
+              updatedAt: sanitizeText(customChannels[idx].updatedAt || ""),
+            },
+          });
+        }
+
+        return sendJson(response, 404, { ok: false, error: "Channel not found" });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/custom-channel-url:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
       }
     }
