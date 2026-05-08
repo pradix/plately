@@ -1,23 +1,68 @@
-// Self-destructing service worker.
-// Previous versions intercepted and cached same-origin GET requests including
-// /api/session, which caused stale auth state to be served after login.
-// This SW unregisters itself, deletes all caches, and reloads any open clients
-// so the page reverts to direct network fetches with no SW in between.
+// Push-only service worker.
+//
+// Important: do NOT intercept fetches or cache /api/*.
+// Previous SW versions caused stale auth state.
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("message", (event) => {
+  if (event?.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
+self.addEventListener("push", (event) => {
+  const fallback = { title: "Plately", body: "", url: "/" };
+  let data = fallback;
+  try {
+    if (event?.data) {
+      data = { ...fallback, ...(event.data.json() || {}) };
+    }
+  } catch {
+    data = fallback;
+  }
+
+  const title = String(data.title || fallback.title);
+  const body = String(data.body || "");
+  const url = String(data.url || "/");
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: "/assets/icon-192.png",
+      badge: "/assets/icon-192.png",
+      data: { url },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification?.close?.();
+  const url = event?.notification?.data?.url || "/";
+
   event.waitUntil(
     (async () => {
-      const cacheKeys = await caches.keys();
-      await Promise.all(cacheKeys.map((key) => caches.delete(key)));
-      await self.registration.unregister();
-      const clients = await self.clients.matchAll({ type: "window" });
-      for (const client of clients) {
-        client.navigate(client.url).catch(() => {});
+      const windowClients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of windowClients) {
+        try {
+          if ("focus" in client) {
+            await client.focus();
+          }
+          if ("navigate" in client) {
+            await client.navigate(url);
+          }
+          return;
+        } catch {
+          // keep searching
+        }
       }
+      await self.clients.openWindow(url);
     })()
   );
 });

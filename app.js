@@ -528,6 +528,12 @@ const state = {
   cookbookSelectedRecipeIds: [],
   cookbooksSelectMode: false,
   cookbooksSelectedIds: [],
+  push: {
+    supported: false,
+    permission: "default",
+    subscribed: false,
+    refreshing: false,
+  },
 };
 
 function getInitials(name, email) {
@@ -826,6 +832,9 @@ const accountCopy = document.getElementById("accountCopy");
 const openRegisterButton = document.getElementById("openRegisterButton");
 const openLoginButton = document.getElementById("openLoginButton");
 const logoutButton = document.getElementById("logoutButton");
+const featurePushRow = document.getElementById("featurePushRow");
+const featurePushToggle = document.getElementById("featurePushToggle");
+const featurePushMeta = document.getElementById("featurePushMeta");
 const brandHomeButtons = [...document.querySelectorAll("[data-home-link]")];
 const importScreenForm = document.getElementById("importScreenForm");
 const importScreenUrl = document.getElementById("importScreenUrl");
@@ -6046,6 +6055,7 @@ function renderProfileSummary() {
   }
   updateLanguagePanel();
   renderAvatars();
+  refreshFeaturePushState().catch(() => {});
 }
 
 function renderAvatars() {
@@ -7582,6 +7592,40 @@ async function renderAdminScreen() {
     recipeCountEl.textContent = totalRecipes || 0;
   }
 
+  // Push announcement (Nieuwe functies)
+  const pushBtn = document.getElementById("adminPushAnnounceBtn");
+  const pushTitle = document.getElementById("adminPushAnnounceTitle");
+  const pushBody = document.getElementById("adminPushAnnounceBody");
+  const pushUrl = document.getElementById("adminPushAnnounceUrl");
+  const pushStatus = document.getElementById("adminPushAnnounceStatus");
+  if (pushBtn) {
+    pushBtn.onclick = async () => {
+      const title = String(pushTitle?.value || "").trim();
+      const body = String(pushBody?.value || "").trim();
+      const url = String(pushUrl?.value || "").trim();
+      if (!title || !body) {
+        if (pushStatus) pushStatus.textContent = "Titel en bericht zijn verplicht.";
+        return;
+      }
+      if (pushStatus) pushStatus.textContent = "Versturen…";
+      pushBtn.disabled = true;
+      try {
+        const res = await fetchJson(`${state.apiBase}/api/admin/push/announce`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, body, url: url || undefined }),
+        });
+        const sent = Number(res?.sent || 0);
+        const failed = Number(res?.failed || 0);
+        if (pushStatus) pushStatus.textContent = `✅ Verstuurd: ${sent} · Mislukt: ${failed}`;
+      } catch (err) {
+        if (pushStatus) pushStatus.textContent = `❌ Mislukt: ${err.message}`;
+      } finally {
+        pushBtn.disabled = false;
+      }
+    };
+  }
+
   // Render user list
   const usersList = document.getElementById("adminUsersList");
   if (usersList) {
@@ -8215,6 +8259,161 @@ async function registerServiceWorker() {
   } catch {
     // Keep the app silent if service worker registration fails.
   }
+}
+
+function isFeaturePushSupported() {
+  return Boolean("serviceWorker" in navigator && "PushManager" in window && "Notification" in window);
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function getFeaturePushRegistration() {
+  await registerServiceWorker();
+  const reg = await navigator.serviceWorker.ready;
+  return reg || null;
+}
+
+function renderFeaturePushUI() {
+  if (!featurePushRow || !featurePushToggle) return;
+
+  const supported = isFeaturePushSupported();
+  state.push.supported = supported;
+  state.push.permission = supported ? (Notification.permission || "default") : "default";
+
+  featurePushRow.style.opacity = supported ? "" : "0.6";
+  featurePushToggle.toggleAttribute("disabled", !supported);
+  featurePushToggle.setAttribute("aria-disabled", supported ? "false" : "true");
+
+  const on = Boolean(state.push.subscribed);
+  featurePushToggle.classList.toggle("toggle-switch--on", on);
+  featurePushToggle.setAttribute("aria-checked", String(on));
+
+  if (featurePushMeta) {
+    if (!supported) featurePushMeta.textContent = "Niet ondersteund";
+    else if (state.push.permission === "denied") featurePushMeta.textContent = "Geblokkeerd";
+    else featurePushMeta.textContent = on ? "Aan" : "Uit";
+  }
+}
+
+async function refreshFeaturePushState() {
+  if (!isFeaturePushSupported()) {
+    state.push.subscribed = false;
+    renderFeaturePushUI();
+    return;
+  }
+  if (state.push.refreshing) return;
+  state.push.refreshing = true;
+
+  try {
+    const reg = await getFeaturePushRegistration();
+    const sub = await reg?.pushManager?.getSubscription?.();
+    state.push.subscribed = Boolean(sub);
+    state.push.permission = Notification.permission || "default";
+  } catch {
+    state.push.subscribed = false;
+  } finally {
+    state.push.refreshing = false;
+    renderFeaturePushUI();
+  }
+}
+
+async function enableFeaturePush() {
+  if (!isFeaturePushSupported()) {
+    showToast("Push meldingen worden niet ondersteund op dit apparaat.");
+    return;
+  }
+
+  if (Notification.permission === "denied") {
+    showToast("Meldingen zijn geblokkeerd in je browser-instellingen.");
+    await refreshFeaturePushState();
+    return;
+  }
+
+  const permission = await Notification.requestPermission().catch(() => "default");
+  if (permission !== "granted") {
+    showToast("Geen toestemming voor meldingen.");
+    await refreshFeaturePushState();
+    return;
+  }
+
+  const reg = await getFeaturePushRegistration();
+  const publicKeyRes = await fetchJson(`${state.apiBase}/api/push/vapid-public-key`);
+  const publicKey = String(publicKeyRes?.publicKey || "");
+  if (!publicKey) {
+    showToast("Push is niet geconfigureerd (VAPID_PUBLIC_KEY ontbreekt).");
+    await refreshFeaturePushState();
+    return;
+  }
+
+  const existing = await reg.pushManager.getSubscription();
+  const subscription = existing || await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  });
+
+  await fetchJson(`${state.apiBase}/api/push/subscribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ subscription }),
+  });
+
+  state.push.subscribed = true;
+  renderFeaturePushUI();
+  showToast("Meldingen staan aan.");
+}
+
+async function disableFeaturePush() {
+  if (!isFeaturePushSupported()) {
+    state.push.subscribed = false;
+    renderFeaturePushUI();
+    return;
+  }
+
+  const reg = await getFeaturePushRegistration();
+  const subscription = await reg?.pushManager?.getSubscription?.();
+  if (subscription) {
+    try {
+      await fetchJson(`${state.apiBase}/api/push/unsubscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: subscription.endpoint }),
+      });
+    } catch {
+      // best-effort
+    }
+    try { await subscription.unsubscribe(); } catch { /* ignore */ }
+  }
+
+  state.push.subscribed = false;
+  renderFeaturePushUI();
+  showToast("Meldingen staan uit.");
+}
+
+function bindFeaturePushToggle() {
+  if (!featurePushToggle) return;
+
+  const act = async () => {
+    if (!isFeaturePushSupported() || featurePushToggle.hasAttribute("disabled")) return;
+    if (state.push.subscribed) await disableFeaturePush();
+    else await enableFeaturePush();
+  };
+
+  featurePushToggle.addEventListener("click", () => { act().catch(() => {}); });
+  featurePushToggle.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      act().catch(() => {});
+    }
+  });
 }
 
 async function toggleWakeLock() {
@@ -11057,6 +11256,8 @@ document.querySelectorAll(".brand-logo").forEach((logo) => {
 
 refreshBackendStatus();
 registerServiceWorker();
+bindFeaturePushToggle();
+refreshFeaturePushState().catch(() => {});
 
 // Prevent browser history navigation from restoring scroll position.
 try {
