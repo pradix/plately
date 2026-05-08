@@ -1720,6 +1720,39 @@ function renderBasketPreview() {
 
   if (nameEl) nameEl.textContent = preview.recipeTitle || "Boodschappenlijst";
 
+  // Optional/pantry items ("in huis"): show as informational section and do not
+  // include them in the store basket URL/payload.
+  const basketRecipe = state.selectedRecipeId ? getRecipeById(state.selectedRecipeId) : null;
+  const existingPantryKeys = new Set(
+    (Array.isArray(preview.items) ? preview.items : [])
+      .map((i) => normalizeIngredientKey(i?.ingredientTitle || ""))
+      .filter(Boolean)
+  );
+  const pantryOptional = getPantryOptionalSuggestionsForRecipe(basketRecipe, existingPantryKeys);
+  const pantryOptionalHtml = pantryOptional.length
+    ? `
+        <section class="grocery-group grocery-group--smart">
+          <div class="grocery-group__header grocery-group__header--shared">
+            <h2>IN HUIS (OPTIONEEL)</h2>
+          </div>
+          ${pantryOptional
+            .map((s) => `
+              <div class="grocery-entry-wrapper">
+                <button class="grocery-entry" type="button" aria-label="In huis: ${escapeHtml(s.title)}">
+                  <span class="grocery-check" aria-hidden="true">${escapeHtml(s.icon)}</span>
+                  <span class="grocery-entry__content">
+                    <p class="grocery-entry__title">${escapeHtml(s.title)}</p>
+                  </span>
+                  <span class="grocery-entry__amount"></span>
+                  <span class="grocery-entry__img" aria-hidden="true">${getIngredientVisualMarkup(s.title)}</span>
+                </button>
+              </div>
+            `)
+            .join("")}
+        </section>
+      `
+    : "";
+
   // Update servings label
   const servLabel = document.getElementById("basketServingsLabel");
   if (servLabel) {
@@ -1804,7 +1837,8 @@ function renderBasketPreview() {
     `;
   }).join("");
 
-  listEl.innerHTML = rendered || `<p style="text-align:center;padding:26px 18px;color:#888;font-size:0.95rem">Geen producten gevonden.</p>`;
+  const productsHtml = rendered || `<p style="text-align:center;padding:26px 18px;color:#888;font-size:0.95rem">Geen producten gevonden.</p>`;
+  listEl.innerHTML = `${pantryOptionalHtml}${productsHtml}`;
 
   // Calculate total
   const totalEur = (totalCents / 100).toFixed(2).replace(".", ",");
@@ -4358,6 +4392,37 @@ function renderGrocerySummary() {
   grocerySummaryChips.innerHTML = "";
 }
 
+// Pantry/optional items (informational): detect common "in huis" ingredients in a recipe
+// and show them as a separate section (not part of store basket matching).
+const PANTRY_OPTIONAL_POOL = [
+  { title: "Olie", icon: "🫒" },
+  { title: "Olijfolie", icon: "🫒" },
+  { title: "Boter", icon: "🧈" },
+  { title: "Bloem", icon: "🌾" },
+  { title: "Suiker", icon: "🍬" },
+  { title: "Azijn", icon: "🍶" },
+  { title: "Sojasaus", icon: "🍶" },
+  { title: "Bouillonblokje", icon: "🧊" },
+  // Common “optional” seasonings: excluded from auto grocery, but should show in pantry.
+  { title: "Zout", icon: "🧂" },
+  { title: "Peper", icon: "🌶️" },
+  { title: "Zout en peper", icon: "🧂" },
+];
+
+function recipeHasPantryOptionalItem(recipe, pantryTitle) {
+  if (!recipe?.ingredients?.length) return false;
+  const key = normalizeIngredientKey(pantryTitle);
+  return recipe.ingredients.some((ing) => normalizeIngredientKey(ing?.name || "").includes(key));
+}
+
+function getPantryOptionalSuggestionsForRecipe(recipe, existingKeySet) {
+  if (!recipe) return [];
+  const existing = existingKeySet || new Set();
+  return PANTRY_OPTIONAL_POOL
+    .filter((p) => recipeHasPantryOptionalItem(recipe, p.title))
+    .filter((p) => !existing.has(normalizeIngredientKey(p.title)));
+}
+
 function renderGroceryGroups() {
   persistGroceryItemsLocally();
   const uncheckedCount = state.groceryItems.filter((item) => !item.checked).length;
@@ -4509,35 +4574,7 @@ function renderGroceryGroups() {
 
   // Pantry suggestions should only show for the relevant recipe group(s),
   // and should match the rest of the grocery list look & feel.
-  const pantryItems = [
-    { title: "Olie", icon: "🫒" },
-    { title: "Olijfolie", icon: "🫒" },
-    { title: "Boter", icon: "🧈" },
-    { title: "Bloem", icon: "🌾" },
-    { title: "Suiker", icon: "🍬" },
-    { title: "Azijn", icon: "🍶" },
-    { title: "Sojasaus", icon: "🍶" },
-    { title: "Bouillonblokje", icon: "🧊" },
-    // Common “optional” seasonings: excluded from auto grocery, but should show in pantry.
-    { title: "Zout", icon: "🧂" },
-    { title: "Peper", icon: "🌶️" },
-    { title: "Zout en peper", icon: "🧂" },
-  ];
-
   const existingKeys = new Set(state.groceryItems.map((i) => normalizeIngredientKey(i.title)));
-  const recipeHasPantryItem = (recipe, pantryTitle) => {
-    if (!recipe?.ingredients?.length) return false;
-    const key = normalizeIngredientKey(pantryTitle);
-    return recipe.ingredients.some((ing) => normalizeIngredientKey(ing?.name || "").includes(key));
-  };
-
-  const getPantrySuggestionsForRecipe = (recipe, existingKeySet) => {
-    if (!recipe) return [];
-    const existing = existingKeySet || new Set();
-    return pantryItems
-      .filter((p) => recipeHasPantryItem(recipe, p.title))
-      .filter((p) => !existing.has(normalizeIngredientKey(p.title)));
-  };
 
   const renderPantryEntry = (s, meta) => `
     <div class="grocery-entry-wrapper">
@@ -4565,7 +4602,7 @@ function renderGroceryGroups() {
     if (!recipeId || !recipeTitle) return;
     const recipe = getRecipeById(recipeId);
     if (!recipe) return;
-    const suggestions = getPantrySuggestionsForRecipe(recipe, existingKeys);
+    const suggestions = getPantryOptionalSuggestionsForRecipe(recipe, existingKeys);
     if (!suggestions.length) return;
 
     const section = document.createElement("section");
