@@ -327,6 +327,19 @@ const DEFAULT_COOKBOOKS = [
   { id: "cookbook-4", name: "Ontbijt inspiratie", recipeIds: ["recipe-6", "recipe-8"] },
 ];
 
+// Keep in sync with frontend `SEED_CHANNELS` for admin display / resolving names.
+const SEED_CHANNELS = [
+  { id: "ch-ah", name: "Allerhande" },
+  { id: "ch-24k", name: "24 Kitchen" },
+  { id: "ch-ek", name: "Eef Kookt Zo" },
+  { id: "ch-mj", name: "Miljuschka" },
+  { id: "ch-up", name: "Uit Paulines Keuken" },
+  { id: "ch-clf", name: "Chicks Love Food" },
+  { id: "ch-les", name: "Lekker & Simpel" },
+  { id: "ch-lb", name: "Laura's Bakery" },
+  { id: "ch-jumbo", name: "Jumbo" },
+];
+
 const DEFAULT_MEAL_PLAN = {
   maandag: "recipe-1",
   dinsdag: null,
@@ -2928,7 +2941,38 @@ function expandInstructionSteps(rawSteps) {
 }
 
 function finalizeInstructionSteps(steps) {
-  const expanded = expandInstructionSteps(steps);
+  const mergeDanglingConjunctions = (list) => {
+    const source = Array.isArray(list) ? list.map((s) => sanitizeText(String(s || ""))).filter(Boolean) : [];
+    if (source.length < 2) return source;
+
+    const merged = [];
+    for (let i = 0; i < source.length; i += 1) {
+      const cur = source[i];
+      const next = source[i + 1];
+      if (!next) {
+        merged.push(cur);
+        continue;
+      }
+
+      const endsDangling =
+        /\b(?:en|of|maar|tot|om)\s*$/i.test(cur) ||
+        /,\s*$/i.test(cur);
+
+      // Merge only when the next step looks like a continuation (starts with lowercase).
+      const nextLooksContinuation = /^[a-zà-ÿ]/.test(next);
+
+      if (endsDangling && nextLooksContinuation) {
+        merged.push(sanitizeText(`${cur} ${next}`));
+        i += 1;
+        continue;
+      }
+
+      merged.push(cur);
+    }
+    return merged;
+  };
+
+  const expanded = expandInstructionSteps(mergeDanglingConjunctions(steps));
   const unique = [...new Set(expanded.map((step) => sanitizeInstructionStep(step)).filter(Boolean))];
   const normalized = unique
     .map((step) =>
@@ -7685,6 +7729,18 @@ const server = http.createServer(async (request, response) => {
             const importedRecipes = appState.importedRecipes || [];
             const cookbooksList = appState.cookbooks || [];
             const customChannelsList = Array.isArray(appState.customChannels) ? appState.customChannels : [];
+            const followedChannelIds = Array.isArray(appState.followedChannelIds)
+              ? appState.followedChannelIds.map((id) => sanitizeText(id)).filter(Boolean)
+              : [];
+            const channelNameById = new Map(
+              [
+                ...SEED_CHANNELS.map((ch) => ({ id: ch.id, name: ch.name })),
+                ...customChannelsList.map((ch) => ({ id: sanitizeText(ch?.id || ""), name: sanitizeText(ch?.name || "") })),
+              ]
+                .filter((ch) => ch.id)
+                .map((ch) => [ch.id, ch.name || ch.id])
+            );
+            const followedChannels = followedChannelIds.map((id) => ({ id, name: channelNameById.get(id) || id }));
             const customChannelsCounts = customChannelsList.reduce(
               (acc, ch) => {
                 const status = (ch?.status || "approved");
@@ -7716,6 +7772,8 @@ const server = http.createServer(async (request, response) => {
                 status: ch?.status || "approved",
                 createdAt: ch?.createdAt || "",
               })),
+              followedChannelIds,
+              followedChannels,
               customChannelsCounts,
             };
           });
@@ -7729,6 +7787,18 @@ const server = http.createServer(async (request, response) => {
             const importedRecipes = u.importedRecipes || [];
             const cookbooksList = u.cookbooks || [];
             const customChannelsList = Array.isArray(u.customChannels) ? u.customChannels : [];
+            const followedChannelIds = Array.isArray(u.followedChannelIds)
+              ? u.followedChannelIds.map((id) => sanitizeText(id)).filter(Boolean)
+              : [];
+            const channelNameById = new Map(
+              [
+                ...SEED_CHANNELS.map((ch) => ({ id: ch.id, name: ch.name })),
+                ...customChannelsList.map((ch) => ({ id: sanitizeText(ch?.id || ""), name: sanitizeText(ch?.name || "") })),
+              ]
+                .filter((ch) => ch.id)
+                .map((ch) => [ch.id, ch.name || ch.id])
+            );
+            const followedChannels = followedChannelIds.map((id) => ({ id, name: channelNameById.get(id) || id }));
             const customChannelsCounts = customChannelsList.reduce(
               (acc, ch) => {
                 const status = (ch?.status || "approved");
@@ -7760,6 +7830,8 @@ const server = http.createServer(async (request, response) => {
                 status: ch?.status || "approved",
                 createdAt: ch?.createdAt || "",
               })),
+              followedChannelIds,
+              followedChannels,
               customChannelsCounts,
             };
           });

@@ -6459,12 +6459,36 @@ async function renderAdminScreen() {
     if (!stats.users || stats.users.length === 0) {
       usersList.innerHTML = "<p style='padding:16px;color:#989188'>Geen gebruikers gevonden</p>";
     } else {
+      const renderFollowedChannels = (user) => {
+        const channels = Array.isArray(user?.followedChannels) ? user.followedChannels : [];
+        const names = channels
+          .map((ch) => String(ch?.name || "").trim())
+          .filter(Boolean);
+        if (!names.length) {
+          return `<span style="color:#b9ada0">—</span>`;
+        }
+
+        const maxShown = 4;
+        const shown = names.slice(0, maxShown);
+        const extra = Math.max(0, names.length - shown.length);
+        const chips = shown.map((name) => {
+          const initials = getInitialsFromNameOrEmail(name, "");
+          return `<span title="${escapeHtml(name)}" style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:18px;padding:0 6px;border-radius:999px;background:#f6f7f1;color:#6b6258;font-size:0.72rem;line-height:1;margin-right:6px;border:1px solid #eee9e2">${escapeHtml(initials)}</span>`;
+        }).join("");
+        const more = extra ? `<span style="color:#989188;font-size:0.75rem">+${extra}</span>` : "";
+        return `${chips}${more}`;
+      };
+
       usersList.innerHTML = stats.users.map((user) => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border-bottom:1px solid #f3f5ef">
           <div style="flex:1">
             <div style="font-weight:500;color:#3d3d3b">${escapeHtml(user.email || "Onbekend")}</div>
             <div style="font-size:0.85rem;color:#989188;margin-top:4px">
               ${user.recipes || 0} recepten • ${user.cookbooks || 0} kookboeken
+            </div>
+            <div style="font-size:0.78rem;color:#989188;margin-top:6px">
+              <span style="color:#b9ada0;margin-right:8px">Kanalen</span>
+              <span style="display:inline-flex;flex-wrap:wrap;gap:0;align-items:center">${renderFollowedChannels(user)}</span>
             </div>
             ${user.createdAt ? `<div style="font-size:0.8rem;color:#b9ada0;margin-top:2px">Aangemaakt: ${new Date(user.createdAt).toLocaleDateString('nl-NL')}</div>` : ''}
           </div>
