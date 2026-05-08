@@ -2633,7 +2633,8 @@ function pushRecentRecipeId(recipeId) {
 
 function renderHomeQuickChips() {
   if (!homeSearchChipsWrap) return;
-  const chipCount = Math.random() < 0.55 ? 4 : 5;
+  const isWide = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(min-width: 768px)").matches;
+  const chipCount = isWide ? 6 : Math.random() < 0.55 ? 4 : 5;
 
   let sessionSeed = 0;
   try {
