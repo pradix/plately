@@ -579,6 +579,7 @@
           <h2>📣 Push — Nieuwe functies</h2>
           <div class="muted">Verstuur naar alle abonnees</div>
         </div>
+        <div id="pushConfigStatus" class="muted" style="margin-top:-6px;margin-bottom:10px"></div>
         <div class="admin-test__row">
           <input id="pushAnnounceTitle" class="admin-test__input" type="text" placeholder="Titel" />
           <input id="pushAnnounceUrl" class="admin-test__input" type="text" placeholder="Deep link (optioneel, bijv. /?new=1)" />
@@ -2264,6 +2265,22 @@
       }
     }
 
+    async function refreshPushConfigStatus() {
+      const el = document.getElementById("pushConfigStatus");
+      const btn = document.getElementById("pushAnnounceBtn");
+      if (!el) return;
+      try {
+        const res = await fetch("/api/push/vapid-public-key", adminFetchInit());
+        const data = await res.json().catch(() => ({}));
+        const key = String(data?.publicKey || "").trim();
+        const ok = Boolean(key);
+        el.textContent = ok ? "✅ Push is geconfigureerd" : "❌ Push is niet geconfigureerd (VAPID keys ontbreken op de server).";
+        if (btn) btn.disabled = !ok;
+      } catch {
+        el.textContent = "⚠️ Kan push-configuratie niet ophalen.";
+      }
+    }
+
     function getAllChannelsForTest() {
       const scopeSel = document.getElementById("channelTestAllScope");
       const includeAll = Boolean(document.getElementById("channelTestAllIncludePendingRejected")?.checked);
@@ -2303,6 +2320,9 @@
       deduped.sort((a, b) => String(a.label || "").localeCompare(String(b.label || "")));
       return deduped;
     }
+
+    // Initial push config status
+    refreshPushConfigStatus();
 
     async function runWithConcurrency(items, concurrency, worker, onProgress) {
       const q = Array.isArray(items) ? items.slice() : [];

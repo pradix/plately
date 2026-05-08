@@ -7598,6 +7598,26 @@ async function renderAdminScreen() {
   const pushBody = document.getElementById("adminPushAnnounceBody");
   const pushUrl = document.getElementById("adminPushAnnounceUrl");
   const pushStatus = document.getElementById("adminPushAnnounceStatus");
+  let pushConfiguredOk = false;
+  if (pushStatus) pushStatus.textContent = "";
+  if (pushBtn) {
+    try {
+      const keyRes = await fetchJson(`${state.apiBase}/api/push/vapid-public-key`, { method: "GET" });
+      const key = String(keyRes?.publicKey || "").trim();
+      const ok = Boolean(key);
+      pushConfiguredOk = ok;
+      pushBtn.disabled = !ok;
+      if (pushStatus) {
+        pushStatus.textContent = ok
+          ? "✅ Push is geconfigureerd"
+          : "❌ Push is niet geconfigureerd (VAPID keys ontbreken op de server).";
+      }
+    } catch {
+      pushBtn.disabled = true;
+      pushConfiguredOk = false;
+      if (pushStatus) pushStatus.textContent = "⚠️ Kan push-configuratie niet ophalen.";
+    }
+  }
   if (pushBtn) {
     pushBtn.onclick = async () => {
       const title = String(pushTitle?.value || "").trim();
@@ -7621,7 +7641,8 @@ async function renderAdminScreen() {
       } catch (err) {
         if (pushStatus) pushStatus.textContent = `❌ Mislukt: ${err.message}`;
       } finally {
-        pushBtn.disabled = false;
+        // Preserve the config gate if keys are missing.
+        pushBtn.disabled = !pushConfiguredOk;
       }
     };
   }
