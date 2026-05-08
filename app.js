@@ -487,6 +487,9 @@ const state = {
   // Track optional pantry items the user explicitly added from the basket sheet.
   // Keyed by selected recipe id so the behavior is per-recipe.
   basketOptionalAddedByRecipe: {},
+  // Track optional pantry items quantities added directly in the basket sheet.
+  // Shape: { [recipeId]: { [normalizedIngredientKey]: number } }
+  basketOptionalQtyByRecipe: {},
   altSheetItemIndex: null,
   altSheetFilter: null, // null = grouped view, otherwise one of: beterLeven1|vegetarisch|vegan|plantaardig|more
   cookbooks: [],
@@ -1726,9 +1729,13 @@ function renderBasketPreview() {
   // Optional/pantry items ("in huis"): informational only and do not include them
   // in the store basket URL/payload.
   const basketRecipe = state.selectedRecipeId ? getRecipeById(state.selectedRecipeId) : null;
+  const pantryQtyMap = (state.selectedRecipeId && state.basketOptionalQtyByRecipe?.[state.selectedRecipeId])
+    ? state.basketOptionalQtyByRecipe[state.selectedRecipeId]
+    : {};
   const pantryAddedForRecipe = new Set(
-    (state.basketOptionalAddedByRecipe?.[state.selectedRecipeId] || [])
-      .map((t) => normalizeIngredientKey(String(t || "")))
+    Object.entries(pantryQtyMap || {})
+      .filter(([, qty]) => (Number(qty) || 0) > 0)
+      .map(([k]) => String(k || ""))
       .filter(Boolean)
   );
   const existingPantryKeys = new Set(
@@ -1759,7 +1766,11 @@ function renderBasketPreview() {
                   <p class="basket-product__for">Niet toegevoegd aan AH</p>
                 </div>
                 <div class="basket-product__right">
-                  <button class="basket-product__add" type="button" data-basket-pantry-add="${escapeHtml(s.title)}">Toevoegen</button>
+                  <div class="basket-product__qty">
+                    <button class="basket-qty-btn basket-qty-btn--minus" type="button" data-basket-pantry-qty-minus="${escapeHtml(s.title)}" aria-label="Minder" disabled>−</button>
+                    <span class="basket-product__qty-num">0</span>
+                    <button class="basket-qty-btn basket-qty-btn--plus" type="button" data-basket-pantry-qty-plus="${escapeHtml(s.title)}" aria-label="Meer">+</button>
+                  </div>
                 </div>
               </div>
             `)
@@ -1855,16 +1866,6 @@ function renderBasketPreview() {
   const productsHtml = rendered || `<p style="text-align:center;padding:26px 18px;color:#888;font-size:0.95rem">Geen producten gevonden.</p>`;
   listEl.innerHTML = `${productsHtml}${pantryOptionalHtml}`;
 
-  // Bind pantry "Toevoegen" actions (promote optional item into real basket items)
-  listEl
-    .querySelectorAll("[data-basket-pantry-add]")
-    .forEach((btn) => {
-      bindEvent(btn, "click", () => {
-        const title = String(btn.dataset.basketPantryAdd || "").trim();
-        addOptionalToBasket(title);
-      });
-    });
-
   // Calculate total
   const totalEur = (totalCents / 100).toFixed(2).replace(".", ",");
   if (totalEl) totalEl.textContent = `€ ${totalEur}`;
@@ -1878,60 +1879,98 @@ function renderBasketPreview() {
   }
 }
 
-function addOptionalToBasket(title) {
+async function fetchSingleBasketItemMatch(store, title, preferences) {
   const cleanTitle = String(title || "").trim();
-  if (!cleanTitle) {
-    return;
-  }
+  if (!cleanTitle) return null;
+  const payload = await fetchJson(`${state.apiBase}/api/store-basket`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      store,
+      recipeTitle: state.basketPreview?.recipeTitle || "Boodschappenlijst",
+      sourceUrl: state.basketPreview?.sourceUrl || "",
+      bio: Boolean(preferences?.bio),
+      beterLeven1: Boolean(preferences?.beterLeven1),
+      vegetarisch: Boolean(preferences?.vegetarisch),
+      vegan: Boolean(preferences?.vegan),
+      plantaardig: Boolean(preferences?.plantaardig),
+      items: [{ title: cleanTitle, amount: "1", recipeTitle: state.basketPreview?.recipeTitle || "" }],
+    }),
+  }).catch(() => null);
+  const item = payload?.items?.[0] || null;
+  return item && item.choices ? item : null;
+}
+
+async function setOptionalPantryQty(title, nextQty) {
+  const preview = state.basketPreview;
   const recipe = state.selectedRecipeId ? getRecipeById(state.selectedRecipeId) : null;
-  if (!recipe) {
+  if (!preview || !recipe) {
     showToast("Kies eerst een recept.");
     return;
   }
 
+  const cleanTitle = String(title || "").trim();
   const key = normalizeIngredientKey(cleanTitle);
-  if (!key) {
+  if (!key) return;
+
+  const clamped = Math.max(0, Number(nextQty) || 0);
+
+  const currentRecipeMap = (state.basketOptionalQtyByRecipe?.[recipe.id] && typeof state.basketOptionalQtyByRecipe[recipe.id] === "object")
+    ? state.basketOptionalQtyByRecipe[recipe.id]
+    : {};
+
+  state.basketOptionalQtyByRecipe = {
+    ...(state.basketOptionalQtyByRecipe || {}),
+    [recipe.id]: {
+      ...currentRecipeMap,
+      [key]: clamped,
+    },
+  };
+
+  // If qty is 0: remove from the main basket list (if present)
+  if (clamped === 0) {
+    const items = Array.isArray(preview.items) ? preview.items : [];
+    const idx = items.findIndex((it) => normalizeIngredientKey(it?.ingredientTitle || "") === key);
+    if (idx !== -1) {
+      items.splice(idx, 1);
+    }
+    schedulePersistAppState();
+    renderBasketPreview();
     return;
   }
 
-  const existingUnchecked = state.groceryItems.find(
-    (it) => !it.checked && normalizeIngredientKey(it.title) === key
-  );
-  if (!existingUnchecked) {
-    state.groceryItems.push({
-      id: `${recipe.id}-pantry-${cleanTitle}-${Date.now()}`,
-      title: cleanTitle,
-      amount: "1",
-      recipeId: recipe.id,
-      recipeTitle: recipe.title,
-      recipeSourceUrl: recipe.sourceUrl || "",
-      recipePlatform: recipe.platform || "website",
-      group: getIngredientGroup(cleanTitle),
-      checked: false,
-    });
-    renderGroceryGroups();
+  // Qty > 0: ensure it exists in main basket list with matching products.
+  const items = Array.isArray(preview.items) ? preview.items : (preview.items = []);
+  const existing = items.find((it) => normalizeIngredientKey(it?.ingredientTitle || "") === key) || null;
+  if (existing) {
+    existing.qty = clamped;
     schedulePersistAppState();
-  }
-
-  // Mark as added for the selected recipe so it disappears from the optional section immediately.
-  const current = Array.isArray(state.basketOptionalAddedByRecipe?.[recipe.id])
-    ? state.basketOptionalAddedByRecipe[recipe.id]
-    : [];
-  if (!current.some((t) => normalizeIngredientKey(t) === key)) {
-    state.basketOptionalAddedByRecipe = {
-      ...(state.basketOptionalAddedByRecipe || {}),
-      [recipe.id]: [...current, cleanTitle],
-    };
-  }
-
-  // Refetch basket suggestions (reuses existing picks where possible)
-  if (state.basketPreview?.store === "albert-heijn") {
-    refetchBasketWithPreferences({ ...(state.basketFilter || {}) });
-  } else {
     renderBasketPreview();
+    return;
   }
 
-  showToast(existingUnchecked ? `${cleanTitle} staat al op je lijst.` : `${cleanTitle} toegevoegd.`);
+  // Immediate single-ingredient match, no full basket refetch.
+  const match = await fetchSingleBasketItemMatch(preview.store, cleanTitle, state.basketFilter || {});
+  if (!match) {
+    showToast("Geen match gevonden voor dit item.");
+    // Roll back qty so it stays optional
+    state.basketOptionalQtyByRecipe = {
+      ...(state.basketOptionalQtyByRecipe || {}),
+      [recipe.id]: {
+        ...currentRecipeMap,
+        [key]: 0,
+      },
+    };
+    schedulePersistAppState();
+    renderBasketPreview();
+    return;
+  }
+
+  match.qty = clamped;
+  match.id = `basket-item-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  items.push(match);
+  schedulePersistAppState();
+  renderBasketPreview();
 }
 
 function openBasketModal(preview) {
@@ -8771,12 +8810,26 @@ bindEvent(document.getElementById("basketOverlay"), "click", (e) => {
 });
 
 // Basket product interactions (delete, qty, swap)
-bindEvent(document.getElementById("basketSheetList"), "click", (e) => {
+bindEvent(document.getElementById("basketSheetList"), "click", async (e) => {
   const target = e.target;
   if (!(target instanceof Element) || !state.basketPreview) return;
 
-  const btn = target.closest("[data-basket-delete],[data-basket-qty-minus],[data-basket-qty-plus],[data-basket-wissel]");
+  const btn = target.closest(
+    "[data-basket-delete],[data-basket-qty-minus],[data-basket-qty-plus],[data-basket-wissel],[data-basket-pantry-qty-minus],[data-basket-pantry-qty-plus]"
+  );
   if (!btn) return;
+
+  // Optional pantry qty controls (0 -> optional, 1+ -> promote to main list)
+  if (btn instanceof HTMLElement && btn.dataset.basketPantryQtyPlus !== undefined) {
+    const title = String(btn.dataset.basketPantryQtyPlus || "").trim();
+    await setOptionalPantryQty(title, 1);
+    return;
+  }
+  if (btn instanceof HTMLElement && btn.dataset.basketPantryQtyMinus !== undefined) {
+    const title = String(btn.dataset.basketPantryQtyMinus || "").trim();
+    await setOptionalPantryQty(title, 0);
+    return;
+  }
 
   // Delete item
   if (btn.dataset.basketDelete !== undefined) {
@@ -8792,10 +8845,19 @@ bindEvent(document.getElementById("basketSheetList"), "click", (e) => {
     const idx = parseInt(btn.dataset.basketQtyMinus, 10);
     const item = state.basketPreview.items[idx];
     if (item) {
-      item.qty = Math.max(1, (item.qty || 1) - 1);
-      const qtyEl = document.getElementById(`basket-qty-${idx}`);
-      if (qtyEl) qtyEl.textContent = item.qty;
-      renderBasketPreview();
+      const recipeId = state.selectedRecipeId || "";
+      const pantryMap = recipeId ? state.basketOptionalQtyByRecipe?.[recipeId] : null;
+      const key = normalizeIngredientKey(item.ingredientTitle || "");
+      const isPantryOptional = Boolean(pantryMap && key && (Number(pantryMap[key]) || 0) > 0);
+      if (isPantryOptional) {
+        const nextQty = Math.max(0, (item.qty || 1) - 1);
+        await setOptionalPantryQty(item.ingredientTitle || "", nextQty);
+      } else {
+        item.qty = Math.max(1, (item.qty || 1) - 1);
+        const qtyEl = document.getElementById(`basket-qty-${idx}`);
+        if (qtyEl) qtyEl.textContent = item.qty;
+        renderBasketPreview();
+      }
     }
     return;
   }
@@ -8805,10 +8867,19 @@ bindEvent(document.getElementById("basketSheetList"), "click", (e) => {
     const idx = parseInt(btn.dataset.basketQtyPlus, 10);
     const item = state.basketPreview.items[idx];
     if (item) {
-      item.qty = (item.qty || 1) + 1;
-      const qtyEl = document.getElementById(`basket-qty-${idx}`);
-      if (qtyEl) qtyEl.textContent = item.qty;
-      renderBasketPreview();
+      const recipeId = state.selectedRecipeId || "";
+      const pantryMap = recipeId ? state.basketOptionalQtyByRecipe?.[recipeId] : null;
+      const key = normalizeIngredientKey(item.ingredientTitle || "");
+      const isPantryOptional = Boolean(pantryMap && key && (Number(pantryMap[key]) || 0) > 0);
+      if (isPantryOptional) {
+        const nextQty = (item.qty || 1) + 1;
+        await setOptionalPantryQty(item.ingredientTitle || "", nextQty);
+      } else {
+        item.qty = (item.qty || 1) + 1;
+        const qtyEl = document.getElementById(`basket-qty-${idx}`);
+        if (qtyEl) qtyEl.textContent = item.qty;
+        renderBasketPreview();
+      }
     }
     return;
   }
