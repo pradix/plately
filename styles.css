@@ -6465,11 +6465,30 @@ body {
   color: #748a73;
 }
 
+.home-search-chips-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.home-search-chips-label {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #2d4a2e;
+  white-space: nowrap;
+}
+
 .home-search-chips-row {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  margin-top: 10px;
 }
 
 .home-search-chips {
@@ -6484,13 +6503,6 @@ body {
 
 .home-search-chips::-webkit-scrollbar {
   display: none;
-}
-
-.home-search-chips-more-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  margin-top: 10px;
 }
 
 /* "Meer suggesties" should match the basket "Wissel" pill */
@@ -6513,6 +6525,7 @@ body {
   min-height: 44px; /* tap target */
   -webkit-tap-highlight-color: transparent;
   transition: background 0.15s, border-color 0.15s, transform 0.08s;
+  flex: none;
 }
 
 .home-search-more-suggestions:hover { background: #e8f4e9; border-color: #6b9e72; }

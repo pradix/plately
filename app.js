@@ -1786,7 +1786,7 @@ function renderBasketPreview() {
           <p class="basket-product__meta">${escapeHtml(choice.price || "")}${choice.subtitle ? ` · ${escapeHtml(choice.subtitle)}` : ""}</p>
           <p class="basket-product__for">voor ${escapeHtml(item.ingredientAmount || "")} ${escapeHtml(ingredientTitle)}</p>
           ${altCount > 1 ? `<button class="basket-product__wissel" type="button" data-basket-wissel="${itemIndex}" onclick="openAlternativesSheet(${itemIndex}); return false;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+            ${WISSEL_SVG}
             Wissel
           </button>` : ""}
         </div>
@@ -2264,7 +2264,19 @@ function pickUniqueRandom(items, count, rng = Math.random) {
   return arr.slice(0, n);
 }
 
-const HOME_QUICK_CHIP_POOL = [
+const HOME_QUICK_CHIP_DISH_POOL = [
+  "Bami",
+  "Nasi",
+  "Lasagne",
+  "Pad thai",
+  "Pannenkoeken",
+  "Saté",
+  "Sushi bowl",
+  "Poké bowl",
+  "Ovenschotel",
+];
+
+const HOME_QUICK_CHIP_GENERAL_POOL = [
   "Pasta",
   "Kip",
   "Avocado",
@@ -2280,13 +2292,11 @@ const HOME_QUICK_CHIP_POOL = [
   "Wrap",
   "Taco",
   "Bowl",
-  "Ovenschotel",
   "Airfryer",
   "30 minuten",
   "Budget",
   "Mealprep",
   "Ontbijt",
-  "Pannenkoeken",
   "Smoothie",
   "Eieren",
   "Vis",
@@ -2306,17 +2316,25 @@ const HOME_QUICK_CHIP_POOL = [
   "Parmezaan",
   "Feta",
   "Burrata",
-  "Sushi bowl",
-  "Poké bowl",
-  "Nasi",
-  "Bami",
-  "Saté",
   "Stoof",
   "BBQ",
   "Dessert",
   "Chocolate chip",
   "Gezinsproof",
 ];
+
+function pickHomeQuickChips(count, rng) {
+  const n = Math.max(0, Math.min(count, HOME_QUICK_CHIP_DISH_POOL.length + HOME_QUICK_CHIP_GENERAL_POOL.length));
+  if (n === 0) return [];
+
+  const dishPick = pickUniqueRandom(HOME_QUICK_CHIP_DISH_POOL, 1, rng)[0];
+  const remainingCount = Math.max(0, n - 1);
+  const combined = [...HOME_QUICK_CHIP_DISH_POOL, ...HOME_QUICK_CHIP_GENERAL_POOL].filter((x) => x !== dishPick);
+  const rest = pickUniqueRandom(combined, remainingCount, rng);
+
+  // Preserve randomness of display order.
+  return pickUniqueRandom([dishPick, ...rest], n, rng);
+}
 
 // ── Focus-state helpers (recent searches, recent viewed recipes, intent chips) ─
 
@@ -2388,7 +2406,7 @@ function renderHomeQuickChips() {
 
   const reloadSalt = (Date.now() ^ ((Math.random() * 2 ** 32) >>> 0)) >>> 0;
   const rng = mulberry32((sessionSeed ^ reloadSalt) >>> 0);
-  const picks = pickUniqueRandom(HOME_QUICK_CHIP_POOL, chipCount, rng);
+  const picks = pickHomeQuickChips(chipCount, rng);
 
   homeSearchChipsWrap.innerHTML = picks
     .map(
@@ -3018,6 +3036,7 @@ function getImportStatusMeta(recipe) {
 }
 
 const CLOCK_SVG = `<svg class="recipe-time__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const WISSEL_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>`;
 
 function renderFeaturedRecipe() {
   const recipe = getHomeFeaturedRecipe();
@@ -8174,6 +8193,9 @@ bindEvent(homeSearchChipsWrap, "click", (event) => {
 });
 
 if (homeSearchChipsMore) {
+  const iconSlot = homeSearchChipsMore.querySelector(".home-search-more-suggestions__icon");
+  if (iconSlot) iconSlot.innerHTML = WISSEL_SVG;
+
   homeSearchChipsMore.addEventListener(
     "click",
     (event) => {
