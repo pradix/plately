@@ -5724,13 +5724,26 @@ function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId) {
   if (!cookbook) {
     return;
   }
-  if (!cookbook.recipeIds.includes(recipeId)) {
-    cookbook.recipeIds.unshift(recipeId);
+  if (id && !cookbook.recipeIds.includes(id)) {
+    cookbook.recipeIds.unshift(id);
   }
-  state.featuredRecipeId = recipeId;
+
+  // Keep the home screen in sync immediately after saving:
+  // "Mijn recepten" (slider + grid) is derived from saved imported recipes,
+  // and the focus panel "Onlangs bekeken" is derived from localStorage recents.
+  if (id) {
+    state.featuredRecipeId = id;
+    pushRecentRecipeId(id);
+  }
   renderCookbookList();
   renderCookbookFilterBar();
   renderDetailRecipe(false);
+  renderRecentImports();
+  renderRecipeSlider();
+  renderRecipeGrid();
+  if (state.view === "home") {
+    renderHomeFocusPanel();
+  }
   schedulePersistAppState();
   renderCookbookSaveList(recipeId);
   showToast(`Opgeslagen in ${cookbook.name}.`);
