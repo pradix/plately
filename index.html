@@ -48,7 +48,35 @@
               </svg>
               <input id="searchInput" type="search" placeholder="Waar heb je zin in? Zoek pasta, kip of avocado..." title="Zoek naar recepten in je gevolgde kanalen. Typ minimaal 2 letters om te zoeken." />
             </div>
-            <div class="home-search-chips" aria-label="Populaire zoekopdrachten"></div>
+            <div class="home-search-chips-row">
+              <div class="home-search-chips" aria-label="Populaire zoekopdrachten"></div>
+              <button
+                class="home-search-chips-refresh icon-button"
+                type="button"
+                id="homeSearchChipsRefresh"
+                aria-label="Andere suggesties"
+                title="Andere suggesties"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M20 12a8 8 0 1 1-2.34-5.66"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="M20 4v6h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
           </section>
 
           <!-- Focus-state suggestions panel (intent chips, recent searches, recent recipes) -->

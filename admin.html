@@ -523,6 +523,32 @@
         </div>
       </div>
 
+      <div class="section" id="channelTestSection">
+        <div class="section-header">
+          <h2>Kanaal test (search + import)</h2>
+          <div class="muted">Kies 1 kanaal en test</div>
+        </div>
+        <div id="channelTestError" class="error" style="display:none"></div>
+        <div class="admin-test__row">
+          <select id="channelTestSelect" class="admin-test__select" aria-label="Kanaal kiezen">
+            <option value="">Kanaal kiezen…</option>
+          </select>
+          <input id="channelTestQuery" class="admin-test__input" type="text" placeholder="Search query" />
+          <button class="btn btn-primary" type="button" onclick="runChannelTestSearch()">Test search</button>
+        </div>
+        <div id="channelTestSearchMeta" class="muted mono" style="margin-top:8px;display:none;gap:8px;align-items:center;flex-wrap:wrap"></div>
+        <div id="channelTestSearchStatus" class="muted" style="margin-top:8px"></div>
+        <div id="channelTestSearchResults" class="admin-test__results"></div>
+
+        <hr class="divider" />
+
+        <div class="admin-test__row">
+          <input id="channelTestImportUrl" class="admin-test__input" type="text" placeholder="Import URL" />
+          <button class="btn" type="button" onclick="runChannelTestImport()">Test import</button>
+        </div>
+        <div id="channelTestImportStatus" class="muted" style="margin-top:8px"></div>
+      </div>
+
       <div class="section" id="overviewSection">
         <div class="section-header">
           <h2>Overzicht</h2>
@@ -665,36 +691,11 @@
       <div class="section">
         <div class="section-header">
           <h2>Custom kanalen</h2>
-          <div class="muted">Bewerk URL (alleen http/https)</div>
+          <div class="muted">Bewerk URL (seed + custom · alleen http/https)</div>
         </div>
         <div id="customChannelsContainer" style="min-height: 40px;">
           <p class="muted" style="text-align:center;padding:14px">Laden...</p>
         </div>
-      </div>
-
-      <div class="section">
-        <div class="section-header">
-          <h2>Kanaal test (search + import)</h2>
-          <div class="muted">Kies 1 kanaal en test</div>
-        </div>
-        <div id="channelTestError" class="error" style="display:none"></div>
-        <div class="admin-test__row">
-          <select id="channelTestSelect" class="admin-test__select" aria-label="Kanaal kiezen">
-            <option value="">Kanaal kiezen…</option>
-          </select>
-          <input id="channelTestQuery" class="admin-test__input" type="text" placeholder="Search query" />
-          <button class="btn btn-primary" type="button" onclick="runChannelTestSearch()">Test search</button>
-        </div>
-        <div id="channelTestSearchStatus" class="muted" style="margin-top:8px"></div>
-        <div id="channelTestSearchResults" class="admin-test__results"></div>
-
-        <hr class="divider" />
-
-        <div class="admin-test__row">
-          <input id="channelTestImportUrl" class="admin-test__input" type="text" placeholder="Import URL" />
-          <button class="btn" type="button" onclick="runChannelTestImport()">Test import</button>
-        </div>
-        <div id="channelTestImportStatus" class="muted" style="margin-top:8px"></div>
       </div>
 
       <div class="section">
@@ -1691,9 +1692,10 @@
       }
     }
 
-    function renderCustomChannelsCatalog(custom) {
+    function renderCustomChannelsCatalog(seedChannels, custom) {
       const wrap = document.getElementById("customChannelsContainer");
       if (!wrap) return;
+      const seed = Array.isArray(seedChannels) ? seedChannels : [];
       const approved = Array.isArray(custom?.approved) ? custom.approved : [];
       const pending = Array.isArray(custom?.pending) ? custom.pending : [];
       const rejected = Array.isArray(custom?.rejected) ? custom.rejected : [];
@@ -1703,8 +1705,8 @@
         ...rejected.map((c) => ({ ...c, _group: "rejected" })),
       ];
 
-      if (!all.length) {
-        wrap.innerHTML = `<p class="muted" style="text-align:center;padding:14px">Geen custom kanalen</p>`;
+      if (!seed.length && !all.length) {
+        wrap.innerHTML = `<p class="muted" style="text-align:center;padding:14px">Geen kanalen</p>`;
         return;
       }
 
@@ -1714,7 +1716,52 @@
         return `<span class="badge" style="background:rgba(40,167,69,0.10);border-color:rgba(40,167,69,0.16);color:rgba(20,110,43,0.95)">APPROVED</span>`;
       };
 
-      wrap.innerHTML = `
+      const seedRows = seed.map((ch) => {
+        const id = escapeHtml(ch?.id || "");
+        const name = escapeHtml(ch?.name || ch?.id || "");
+        const baseUrl = escapeHtml(ch?.url || "");
+        const tpl = escapeHtml(ch?.searchUrlTemplate || "");
+        const defBase = escapeHtml(ch?.defaultUrl || "");
+        const defTpl = escapeHtml(ch?.defaultSearchUrlTemplate || "");
+        const isOverridden = Boolean((ch?.overrideUrl || "").trim() || (ch?.overrideSearchUrlTemplate || "").trim());
+        return `
+          <tr>
+            <td><strong>${name}</strong><div class="muted mono" style="margin-top:2px;font-size:11px">${id}</div></td>
+            <td class="mono" style="font-size: 11px; color: rgba(0,0,0,0.58);">
+              ${baseUrl ? `<a class="admin-inventory__link" href="${baseUrl}" target="_blank" rel="noopener">${baseUrl}</a>` : `<span class="muted">—</span>`}
+              ${isOverridden ? `<div class="badge" style="margin-top:6px;display:inline-block">OVERRIDE</div>` : ""}
+              ${defBase && (defBase !== baseUrl) ? `<div class="muted" style="margin-top:6px">Default: <span class="mono">${defBase}</span></div>` : ""}
+            </td>
+            <td class="mono" style="font-size: 11px; color: rgba(0,0,0,0.58);">
+              ${tpl ? `<div style="word-break:break-all">${tpl}</div>` : `<span class="muted">—</span>`}
+              ${defTpl && (defTpl !== tpl) ? `<div class="muted" style="margin-top:6px">Default: <span class="mono" style="word-break:break-all">${defTpl}</span></div>` : ""}
+            </td>
+            <td style="text-align:right">
+              <button class="btn btn-sm" type="button" onclick="editSeedChannelOverride('${id}', '${baseUrl}', '${tpl}', '${defBase}', '${defTpl}')">Edit</button>
+              ${isOverridden ? `<button class="btn btn-sm" type="button" onclick="revertSeedChannelOverride('${id}')">Revert</button>` : ""}
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      const seedTable = seed.length ? `
+        <h3 class="subhead" style="margin-top:0">Seed kanalen</h3>
+        <table class="users-table" style="margin-top:0">
+          <thead>
+            <tr>
+              <th>Kanaal</th>
+              <th>Base URL</th>
+              <th>Search URL template</th>
+              <th style="text-align:right">Acties</th>
+            </tr>
+          </thead>
+          <tbody>${seedRows}</tbody>
+        </table>
+        ${all.length ? `<hr class="divider" />` : ""}
+      ` : "";
+
+      const customTable = all.length ? `
+        <h3 class="subhead" style="margin-top:0">Custom kanalen</h3>
         <table class="users-table" style="margin-top:0">
           <thead>
             <tr>
@@ -1745,7 +1792,72 @@
             }).join("")}
           </tbody>
         </table>
-      `;
+      ` : `<p class="muted">Geen custom kanalen</p>`;
+
+      wrap.innerHTML = seedTable + customTable;
+    }
+
+    async function revertSeedChannelOverride(channelId) {
+      showChannelTestError("");
+      if (!confirm("Revert seed kanaal override naar default?")) return;
+      try {
+        const response = await fetch("/api/admin/seed-channel-override", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channelId, clear: true }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "Revert failed");
+        }
+        await loadChannelCatalog();
+      } catch (error) {
+        alert("Fout: " + error.message);
+      }
+    }
+
+    async function editSeedChannelOverride(channelId, currentBaseUrl, currentTemplate, defaultBaseUrl, defaultTemplate) {
+      showChannelTestError("");
+      const mode = prompt(
+        "Wat wil je aanpassen?\n\n1 = baseUrl\n2 = searchUrlTemplate\n3 = beide\n\n(Leeg = annuleren)",
+        "1"
+      );
+      if (!mode) return;
+      const m = String(mode || "").trim();
+      let baseUrl = "";
+      let searchUrlTemplate = "";
+
+      if (m === "1" || m === "3") {
+        baseUrl = prompt(
+          "Nieuwe baseUrl (http/https)\n\nTip: laat leeg om niet te wijzigen.",
+          currentBaseUrl || defaultBaseUrl || ""
+        ) || "";
+      }
+      if (m === "2" || m === "3") {
+        searchUrlTemplate = prompt(
+          "Nieuwe searchUrlTemplate (http/https) met {q}\n\nVoorbeeld: https://example.com/?s={q}\n\nTip: laat leeg om niet te wijzigen.",
+          currentTemplate || defaultTemplate || ""
+        ) || "";
+      }
+
+      baseUrl = String(baseUrl || "").trim();
+      searchUrlTemplate = String(searchUrlTemplate || "").trim();
+      if (!baseUrl && !searchUrlTemplate) return;
+
+      try {
+        const response = await fetch("/api/admin/seed-channel-override", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channelId, baseUrl, searchUrlTemplate }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "Update failed");
+        }
+        await loadChannelCatalog();
+      } catch (error) {
+        alert("Fout: " + error.message);
+      }
     }
 
     async function editCustomChannelUrl(channelId, currentUrl) {
@@ -1800,7 +1912,7 @@
         groups.push(makeCustomGroup("Custom (rejected)", rejected));
         sel.innerHTML = `<option value="">Kanaal kiezen…</option>` + groups.filter(Boolean).join("");
 
-        renderCustomChannelsCatalog(custom);
+        renderCustomChannelsCatalog(seed, custom);
       } catch (error) {
         showChannelTestError(error.message);
       }
@@ -1846,8 +1958,10 @@
       const channel = getSelectedChannelFromUi();
       const query = (document.getElementById("channelTestQuery")?.value || "").trim();
       const statusEl = document.getElementById("channelTestSearchStatus");
+      const metaEl = document.getElementById("channelTestSearchMeta");
       const resultsWrap = document.getElementById("channelTestSearchResults");
       if (resultsWrap) resultsWrap.innerHTML = "";
+      if (metaEl) { metaEl.style.display = "none"; metaEl.innerHTML = ""; }
 
       if (!channel) return showChannelTestError("Kies eerst een kanaal.");
       if (!query || query.length < 2) return showChannelTestError("Vul een query in (min 2 tekens).");
@@ -1866,11 +1980,39 @@
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || "Search test failed");
         const results = data.results || [];
+        const usedQuery = String(data.usedQuery || query || "").trim();
+        const usedUrl = String(data.usedUrl || "").trim();
+        if (metaEl && (usedUrl || usedQuery)) {
+          const parts = [];
+          if (usedQuery) parts.push(`<span class="pill"><strong>usedQuery</strong> <span class="mono">${escapeHtml(usedQuery)}</span></span>`);
+          if (usedUrl) parts.push(`<button class="btn btn-sm" type="button" data-copy-url="${escapeHtml(usedUrl)}">Copy URL</button><span class="pill mono" title="${escapeHtml(usedUrl)}" style="max-width:100%;overflow:hidden;text-overflow:ellipsis">${escapeHtml(usedUrl)}</span>`);
+          metaEl.innerHTML = parts.join(" ");
+          metaEl.style.display = "flex";
+          metaEl.querySelectorAll("[data-copy-url]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+              const url = btn.getAttribute("data-copy-url") || "";
+              await copyToClipboard(url);
+            }, { once: true });
+          });
+        }
         if (statusEl) statusEl.textContent = results.length ? `Top ${results.length} resultaten` : "Geen resultaten";
         renderChannelTestSearchResults(results);
       } catch (error) {
         if (statusEl) statusEl.textContent = "";
         showChannelTestError(error.message);
+      }
+    }
+
+    async function copyToClipboard(text) {
+      try {
+        await navigator.clipboard.writeText(String(text || ""));
+      } catch {
+        const t = document.createElement("textarea");
+        t.value = String(text || "");
+        document.body.appendChild(t);
+        t.select();
+        document.execCommand("copy");
+        document.body.removeChild(t);
       }
     }
 

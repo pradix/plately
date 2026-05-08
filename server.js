@@ -346,6 +346,52 @@ const SEED_CHANNELS = [
   { id: "ch-culy", name: "Culy" },
 ];
 
+// Seed channel search defaults (admin can override baseUrl / searchUrlTemplate).
+// - baseUrl: used for WP REST and for building absolute links in scrapers
+// - searchUrlTemplate: URL with `{q}` placeholder where q is encodeURIComponent(query)
+const SEED_CHANNEL_DEFAULTS = {
+  "ch-ah": {
+    baseUrl: "https://www.ah.nl/allerhande",
+    searchUrlTemplate: "https://www.ah.nl/allerhande/recepten-zoeken?query={q}",
+  },
+  "ch-jumbo": {
+    baseUrl: "https://www.jumbo.com",
+    searchUrlTemplate: "https://www.jumbo.com/recepten/zoeken?searchTerms={q}",
+  },
+  "ch-les": {
+    baseUrl: "https://www.lekkerensimpel.com",
+    searchUrlTemplate: "https://www.lekkerensimpel.com/?s={q}&maaltijd=all&gerecht=all",
+  },
+  "ch-lb": {
+    baseUrl: "https://www.laurasbakery.nl",
+    searchUrlTemplate: "https://www.laurasbakery.nl/zoeken/?_search={q}",
+  },
+  "ch-ek": {
+    baseUrl: "https://www.eefkooktzo.nl",
+    searchUrlTemplate: "https://www.eefkooktzo.nl/?s={q}",
+  },
+  "ch-clf": {
+    baseUrl: "https://www.chickslovefood.com",
+    searchUrlTemplate: "https://www.chickslovefood.com/?s={q}",
+  },
+  "ch-culy": {
+    baseUrl: "https://www.culy.nl",
+    searchUrlTemplate: "https://www.culy.nl/?s={q}&category=Recepten",
+  },
+  "ch-mj": {
+    baseUrl: "https://miljuschka.nl",
+    searchUrlTemplate: "https://miljuschka.nl/?s={q}",
+  },
+  "ch-24k": {
+    baseUrl: "https://www.24kitchen.nl",
+    searchUrlTemplate: "https://www.24kitchen.nl/?s={q}",
+  },
+  "ch-up": {
+    baseUrl: "https://uitpaulineskeuken.nl",
+    searchUrlTemplate: "https://uitpaulineskeuken.nl/?s={q}",
+  },
+};
+
 const DEFAULT_MEAL_PLAN = {
   maandag: "recipe-1",
   dinsdag: null,
@@ -566,6 +612,13 @@ async function ensurePostgresSchema() {
         );
       `);
       await pool.query(`
+        CREATE TABLE IF NOT EXISTS plately_admin_state (
+          key TEXT PRIMARY KEY,
+          value JSONB NOT NULL DEFAULT '{}'::jsonb,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await pool.query(`
         CREATE INDEX IF NOT EXISTS idx_plately_events_type_created_at
         ON plately_events (type, created_at DESC);
       `);
@@ -577,6 +630,73 @@ async function ensurePostgresSchema() {
   }
 
   await postgresReadyPromise;
+}
+
+function buildSeedSearchUrlFromTemplate(template, query) {
+  const t = sanitizeText(template || "").trim();
+  if (!t) return "";
+  const q = encodeURIComponent(query || "");
+  return t.replaceAll("{q}", q);
+}
+
+async function getSeedChannelOverrides() {
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const row = await pool.query("SELECT value FROM plately_admin_state WHERE key = $1 LIMIT 1", ["seedChannelOverrides"]);
+    const value = row.rows?.[0]?.value;
+    return value && typeof value === "object" ? value : {};
+  }
+  try {
+    const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+    const db = JSON.parse(rawFile);
+    const overrides = db?.adminState?.seedChannelOverrides;
+    return overrides && typeof overrides === "object" ? overrides : {};
+  } catch {
+    return {};
+  }
+}
+
+async function setSeedChannelOverrides(nextOverrides) {
+  const clean = nextOverrides && typeof nextOverrides === "object" ? nextOverrides : {};
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    await pool.query(
+      `
+        INSERT INTO plately_admin_state (key, value, updated_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+      `,
+      ["seedChannelOverrides", JSON.stringify(clean)]
+    );
+    return;
+  }
+  const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+  const db = JSON.parse(rawFile);
+  if (!db.adminState || typeof db.adminState !== "object") db.adminState = {};
+  db.adminState.seedChannelOverrides = clean;
+  await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2));
+}
+
+function getEffectiveSeedChannelConfig(channelId, overrides) {
+  const id = sanitizeText(channelId || "");
+  const base = SEED_CHANNEL_DEFAULTS[id] || {};
+  const over = overrides && typeof overrides === "object" ? overrides[id] : null;
+  const next = over && typeof over === "object" ? over : {};
+  const baseUrl = sanitizeText(next.baseUrl || base.baseUrl || "");
+  const searchUrlTemplate = sanitizeText(next.searchUrlTemplate || base.searchUrlTemplate || "");
+  return {
+    channelId: id,
+    defaultBaseUrl: sanitizeText(base.baseUrl || ""),
+    defaultSearchUrlTemplate: sanitizeText(base.searchUrlTemplate || ""),
+    baseUrl,
+    searchUrlTemplate,
+    override: {
+      baseUrl: sanitizeText(next.baseUrl || ""),
+      searchUrlTemplate: sanitizeText(next.searchUrlTemplate || ""),
+    },
+  };
 }
 
 function generateId(prefix) {
@@ -6128,7 +6248,7 @@ function titleMatchesQuery(title, query) {
   return titleQueryScore(title, query) >= 0.5;
 }
 
-async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
+async function wpRestSearch(baseUrl, channelName, channelId, query, count, meta = null) {
   const params = `search=${encodeURIComponent(query)}&per_page=${count}&_embed=wp:featuredmedia`;
   const headers = { ...FETCH_HEADERS, accept: "application/json" };
 
@@ -6149,7 +6269,9 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
 
   for (const type of ["recipe", "recepten", "recipes", "posts"]) {
     try {
-      const resp = await fetch(`${baseUrl}/wp-json/wp/v2/${type}?${params}`, {
+      const usedUrl = `${baseUrl}/wp-json/wp/v2/${type}?${params}`;
+      if (meta && typeof meta === "object" && !meta.usedUrl) meta.usedUrl = usedUrl;
+      const resp = await fetch(usedUrl, {
         headers,
         signal: AbortSignal.timeout(4000), // Aggressive timeout for quick results
       });
@@ -6178,7 +6300,7 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count) {
 /**
  * Search AH Allerhande — tries the API with anonymous token.
  */
-async function searchAHRecipes(query, count = 4) {
+async function searchAHRecipes(query, count = 4, opts = {}) {
   console.log(`🔍 AH recipe search for: "${query}"`);
 
   // Skip AH API - it requires authentication token we don't have
@@ -6187,7 +6309,9 @@ async function searchAHRecipes(query, count = 4) {
 
   // Fallback: Use Jina reader to get AH search results as markdown
   try {
-    const searchUrl = `https://www.ah.nl/allerhande/recepten-zoeken?query=${encodeURIComponent(query)}`;
+    const searchUrlTemplate = sanitizeText(opts?.searchUrlTemplate || SEED_CHANNEL_DEFAULTS["ch-ah"]?.searchUrlTemplate || "") ||
+      "https://www.ah.nl/allerhande/recepten-zoeken?query={q}";
+    const searchUrl = buildSeedSearchUrlFromTemplate(searchUrlTemplate, query);
     const readerUrl = `https://r.jina.ai/${encodeURIComponent(searchUrl)}`;
 
     console.log(`📖 Trying Jina reader for: ${searchUrl}`);
@@ -6644,11 +6768,12 @@ async function searchAHRecipes(query, count = 4) {
   return [];
 }
 
-async function searchJumboRecipes(query, count = 4) {
+async function searchJumboRecipes(query, count = 4, opts = {}) {
   const channelName = "Jumbo";
   const channelId = "ch-jumbo";
-  const q = encodeURIComponent(query || "");
-  const searchUrl = `https://www.jumbo.com/recepten/zoeken?searchTerms=${q}`;
+  const searchUrlTemplate = sanitizeText(opts?.searchUrlTemplate || SEED_CHANNEL_DEFAULTS["ch-jumbo"]?.searchUrlTemplate || "") ||
+    "https://www.jumbo.com/recepten/zoeken?searchTerms={q}";
+  const searchUrl = buildSeedSearchUrlFromTemplate(searchUrlTemplate, query || "");
 
   async function fetchJumboPage(url, timeoutMs = 12000) {
     try {
@@ -6797,6 +6922,8 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   const q = encodeURIComponent(query);
   // null = all channels; array = only those channel IDs
   const allow = allowedChannels && allowedChannels.length ? new Set(allowedChannels) : null;
+  const seedOverrides = await getSeedChannelOverrides();
+  const cfg = (id) => getEffectiveSeedChannelConfig(id, seedOverrides);
 
   async function scrapeOrRest(baseUrl, channelName, channelId, searchUrl, parser, count) {
     try {
@@ -6832,32 +6959,32 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   const collected = [];
   const searches = [
     // FAST: Reliable, quick-responding channels
-    maybeSearch("ch-ah", () => searchAHRecipes(query, 4)),
-    maybeSearch("ch-jumbo", () => searchJumboRecipes(query, 4)),
-    maybeSearch("ch-les", () => scrapeOrRest("https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les",
-      `https://www.lekkerensimpel.com/?s=${q}&maaltijd=all&gerecht=all`,
+    maybeSearch("ch-ah", () => searchAHRecipes(query, 4, { searchUrlTemplate: cfg("ch-ah").searchUrlTemplate })),
+    maybeSearch("ch-jumbo", () => searchJumboRecipes(query, 4, { searchUrlTemplate: cfg("ch-jumbo").searchUrlTemplate })),
+    maybeSearch("ch-les", () => scrapeOrRest(cfg("ch-les").baseUrl || "https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les",
+      buildSeedSearchUrlFromTemplate(cfg("ch-les").searchUrlTemplate || `https://www.lekkerensimpel.com/?s={q}&maaltijd=all&gerecht=all`, query),
       parseLekkerSimpel, 4)),
-    maybeSearch("ch-24k", () => wpRestSearch("https://www.24kitchen.nl", "24 Kitchen", "ch-24k", query, 4)),
+    maybeSearch("ch-24k", () => wpRestSearch(cfg("ch-24k").baseUrl || "https://www.24kitchen.nl", "24 Kitchen", "ch-24k", query, 4)),
 
     // MEDIUM: May be slower, but try anyway
-    maybeSearch("ch-lb", () => scrapeOrRest("https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb",
-      `https://www.laurasbakery.nl/zoeken/?_search=${q}`,
+    maybeSearch("ch-lb", () => scrapeOrRest(cfg("ch-lb").baseUrl || "https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb",
+      buildSeedSearchUrlFromTemplate(cfg("ch-lb").searchUrlTemplate || `https://www.laurasbakery.nl/zoeken/?_search={q}`, query),
       parseLaurasBakery, 4)),
-    maybeSearch("ch-ek", () => scrapeOrRest("https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek",
-      `https://www.eefkooktzo.nl/?s=${q}`,
+    maybeSearch("ch-ek", () => scrapeOrRest(cfg("ch-ek").baseUrl || "https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek",
+      buildSeedSearchUrlFromTemplate(cfg("ch-ek").searchUrlTemplate || `https://www.eefkooktzo.nl/?s={q}`, query),
       parseWPStandard, 3)),
-    maybeSearch("ch-up", () => wpRestSearch("https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 4)
+    maybeSearch("ch-up", () => wpRestSearch(cfg("ch-up").baseUrl || "https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 4)
       .then((items) => items.filter((r) => !/\/\d{4}\/\d{2}\//.test(r.url)).slice(0, 4))),
-    maybeSearch("ch-clf", () => scrapeOrRest("https://www.chickslovefood.com", "Chicks Love Food", "ch-clf",
-      `https://www.chickslovefood.com/?s=${q}`,
+    maybeSearch("ch-clf", () => scrapeOrRest(cfg("ch-clf").baseUrl || "https://www.chickslovefood.com", "Chicks Love Food", "ch-clf",
+      buildSeedSearchUrlFromTemplate(cfg("ch-clf").searchUrlTemplate || `https://www.chickslovefood.com/?s={q}`, query),
       parseChicksLoveFood, 3)),
-    maybeSearch("ch-culy", () => scrapeOrRest("https://www.culy.nl", "Culy", "ch-culy",
-      `https://www.culy.nl/?s=${q}&category=Recepten`,
+    maybeSearch("ch-culy", () => scrapeOrRest(cfg("ch-culy").baseUrl || "https://www.culy.nl", "Culy", "ch-culy",
+      buildSeedSearchUrlFromTemplate(cfg("ch-culy").searchUrlTemplate || `https://www.culy.nl/?s={q}&category=Recepten`, query),
       parseWPStandard, 4)),
 
     // SLOW: Include but expect timeouts
-    maybeSearch("ch-mj", () => scrapeOrRest("https://miljuschka.nl", "Miljuschka", "ch-mj",
-      `https://miljuschka.nl/?s=${q}`,
+    maybeSearch("ch-mj", () => scrapeOrRest(cfg("ch-mj").baseUrl || "https://miljuschka.nl", "Miljuschka", "ch-mj",
+      buildSeedSearchUrlFromTemplate(cfg("ch-mj").searchUrlTemplate || `https://miljuschka.nl/?s={q}`, query),
       parseWPStandard, 4)),
   ];
 
@@ -8723,11 +8850,17 @@ const server = http.createServer(async (request, response) => {
       try {
         await requireAdmin(request);
 
+        const seedOverrides = await getSeedChannelOverrides();
         const seedChannels = Array.isArray(SEED_CHANNELS)
           ? SEED_CHANNELS.map((ch) => ({
               id: sanitizeText(ch?.id || ""),
               name: sanitizeText(ch?.name || ""),
-              url: sanitizeText(ch?.url || ""),
+              url: sanitizeText(getEffectiveSeedChannelConfig(ch?.id || "", seedOverrides).baseUrl || ""),
+              searchUrlTemplate: sanitizeText(getEffectiveSeedChannelConfig(ch?.id || "", seedOverrides).searchUrlTemplate || ""),
+              defaultUrl: sanitizeText(getEffectiveSeedChannelConfig(ch?.id || "", seedOverrides).defaultBaseUrl || ""),
+              defaultSearchUrlTemplate: sanitizeText(getEffectiveSeedChannelConfig(ch?.id || "", seedOverrides).defaultSearchUrlTemplate || ""),
+              overrideUrl: sanitizeText(getEffectiveSeedChannelConfig(ch?.id || "", seedOverrides).override.baseUrl || ""),
+              overrideSearchUrlTemplate: sanitizeText(getEffectiveSeedChannelConfig(ch?.id || "", seedOverrides).override.searchUrlTemplate || ""),
               kind: "seed",
             })).filter((ch) => ch.id && ch.name)
           : [];
@@ -8778,6 +8911,78 @@ const server = http.createServer(async (request, response) => {
         return sendJson(response, 200, { ok: true, seedChannels, customChannels });
       } catch (error) {
         console.error("❌ Error in /api/admin/channels:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/seed-channel-override" && request.method === "POST") {
+      console.log("🔧 /api/admin/seed-channel-override called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+
+        const channelId = sanitizeText(body.channelId || "");
+        const nextBaseUrlRaw = sanitizeText(body.baseUrl || "");
+        const nextTemplateRaw = sanitizeText(body.searchUrlTemplate || "");
+        const clear = Boolean(body.clear);
+
+        if (!channelId) {
+          return sendJson(response, 400, { ok: false, error: "channelId required" });
+        }
+        if (!SEED_CHANNELS.some((ch) => ch.id === channelId)) {
+          return sendJson(response, 400, { ok: false, error: "Unknown seed channel" });
+        }
+
+        const overrides = await getSeedChannelOverrides();
+        if (clear) {
+          if (overrides && typeof overrides === "object") {
+            delete overrides[channelId];
+            await setSeedChannelOverrides(overrides);
+          }
+          const eff = getEffectiveSeedChannelConfig(channelId, overrides);
+          return sendJson(response, 200, { ok: true, channelId, overrides: null, effective: eff });
+        }
+
+        const next = {};
+        if (nextBaseUrlRaw) {
+          try {
+            const parsed = new URL(nextBaseUrlRaw);
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+              return sendJson(response, 400, { ok: false, error: "baseUrl must be http(s)" });
+            }
+            next.baseUrl = parsed.toString().replace(/\/+$/, "");
+          } catch {
+            return sendJson(response, 400, { ok: false, error: "Invalid baseUrl" });
+          }
+        }
+        if (nextTemplateRaw) {
+          try {
+            const parsed = new URL(nextTemplateRaw.replaceAll("{q}", "test"));
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+              return sendJson(response, 400, { ok: false, error: "searchUrlTemplate must be http(s)" });
+            }
+            if (!nextTemplateRaw.includes("{q}")) {
+              return sendJson(response, 400, { ok: false, error: "searchUrlTemplate must include {q}" });
+            }
+            next.searchUrlTemplate = nextTemplateRaw;
+          } catch {
+            return sendJson(response, 400, { ok: false, error: "Invalid searchUrlTemplate" });
+          }
+        }
+
+        if (!next.baseUrl && !next.searchUrlTemplate) {
+          return sendJson(response, 400, { ok: false, error: "baseUrl or searchUrlTemplate required (or clear=true)" });
+        }
+
+        overrides[channelId] = {
+          ...(overrides[channelId] && typeof overrides[channelId] === "object" ? overrides[channelId] : {}),
+          ...next,
+        };
+        await setSeedChannelOverrides(overrides);
+        const eff = getEffectiveSeedChannelConfig(channelId, overrides);
+        return sendJson(response, 200, { ok: true, channelId, overrides: overrides[channelId], effective: eff });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/seed-channel-override:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
       }
     }
@@ -8977,7 +9182,7 @@ const server = http.createServer(async (request, response) => {
         const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 30) : 10;
 
         if (!query || query.length < 2) {
-          return sendJson(response, 200, { ok: true, results: [] });
+          return sendJson(response, 200, { ok: true, results: [], usedQuery: query, usedUrl: "" });
         }
 
         if (channelKind === "custom") {
@@ -8988,17 +9193,73 @@ const server = http.createServer(async (request, response) => {
           if (!id || !name || !url) {
             return sendJson(response, 400, { ok: false, error: "customChannel (id,name,url) required" });
           }
-          const q = encodeURIComponent(query);
-          const results = await scrapeOrRestPublic(url, name, id, `${url}/?s=${q}`, parseWPStandard, Math.min(limit, 15), query);
-          return sendJson(response, 200, { ok: true, results: (results || []).slice(0, limit) });
+          const usedUrl = buildSeedSearchUrlFromTemplate(`${url.replace(/\/+$/, "")}/?s={q}`, query);
+          const results = await scrapeOrRestPublic(url, name, id, usedUrl, parseWPStandard, Math.min(limit, 15), query);
+          return sendJson(response, 200, {
+            ok: true,
+            results: (results || []).slice(0, limit),
+            usedQuery: query,
+            usedUrl,
+            channelId: id,
+          });
         }
 
         const channelId = sanitizeText(body.channelId || "");
         if (!channelId) {
           return sendJson(response, 400, { ok: false, error: "channelId required" });
         }
-        const results = await searchChannelRecipes(query, [channelId]);
-        return sendJson(response, 200, { ok: true, results: (results || []).slice(0, limit) });
+
+        const overrides = await getSeedChannelOverrides();
+        const eff = getEffectiveSeedChannelConfig(channelId, overrides);
+        let usedUrl = "";
+        let results = [];
+        const count = Math.min(limit, 15);
+
+        if (channelId === "ch-ah") {
+          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          results = await searchAHRecipes(query, count, { searchUrlTemplate: eff.searchUrlTemplate });
+        } else if (channelId === "ch-jumbo") {
+          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          results = await searchJumboRecipes(query, count, { searchUrlTemplate: eff.searchUrlTemplate });
+        } else if (channelId === "ch-24k") {
+          const meta = {};
+          results = await wpRestSearch(eff.baseUrl || "https://www.24kitchen.nl", "24 Kitchen", "ch-24k", query, count, meta);
+          usedUrl = sanitizeText(meta.usedUrl || "");
+        } else if (channelId === "ch-up") {
+          const meta = {};
+          results = await wpRestSearch(eff.baseUrl || "https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, count, meta);
+          results = (results || []).filter((r) => !/\/\d{4}\/\d{2}\//.test(r.url)).slice(0, count);
+          usedUrl = sanitizeText(meta.usedUrl || "");
+        } else if (channelId === "ch-les") {
+          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          results = await scrapeOrRestPublic(eff.baseUrl || "https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les", usedUrl, parseLekkerSimpel, count, query);
+        } else if (channelId === "ch-lb") {
+          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          results = await scrapeOrRestPublic(eff.baseUrl || "https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb", usedUrl, parseLaurasBakery, count, query);
+        } else if (channelId === "ch-ek") {
+          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          results = await scrapeOrRestPublic(eff.baseUrl || "https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek", usedUrl, parseWPStandard, count, query);
+        } else if (channelId === "ch-clf") {
+          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          results = await scrapeOrRestPublic(eff.baseUrl || "https://www.chickslovefood.com", "Chicks Love Food", "ch-clf", usedUrl, parseChicksLoveFood, count, query);
+        } else if (channelId === "ch-culy") {
+          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          results = await scrapeOrRestPublic(eff.baseUrl || "https://www.culy.nl", "Culy", "ch-culy", usedUrl, parseWPStandard, count, query);
+        } else if (channelId === "ch-mj") {
+          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          results = await scrapeOrRestPublic(eff.baseUrl || "https://miljuschka.nl", "Miljuschka", "ch-mj", usedUrl, parseWPStandard, count, query);
+        } else {
+          results = await searchChannelRecipes(query, [channelId]);
+          usedUrl = "";
+        }
+
+        return sendJson(response, 200, {
+          ok: true,
+          results: (results || []).slice(0, limit),
+          usedQuery: query,
+          usedUrl,
+          channelId,
+        });
       } catch (error) {
         console.error("❌ Error in /api/admin/channel-test/search:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });

@@ -6465,16 +6465,44 @@ body {
   color: #748a73;
 }
 
+.home-search-chips-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .home-search-chips {
   display: flex;
   gap: 8px;
   overflow-x: auto;
   padding: 0 2px 2px;
   scrollbar-width: none;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .home-search-chips::-webkit-scrollbar {
   display: none;
+}
+
+/* 44px tap target; visually aligned with quick chips */
+.home-search-chips-refresh {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+  border: 1px solid rgba(120, 147, 111, 0.22);
+  background: rgba(255, 255, 255, 0.9);
+  color: #36523b;
+  box-shadow: 0 8px 18px rgba(36, 60, 43, 0.08);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.home-search-chips-refresh svg {
+  stroke: currentColor;
+  fill: none;
 }
 
 .home-search-chip {
