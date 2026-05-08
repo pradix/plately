@@ -9681,7 +9681,6 @@ const onboardingScreen = document.getElementById("onboardingScreen");
 let onboardingData = {
   channels: [],
   cookbook: "",
-  name: "",
   photoData: null,
   supermarket: "ah",
 };
@@ -9691,7 +9690,6 @@ function resetOnboardingData() {
   onboardingData = {
     channels: sortedSeed.map((ch) => ch.id),
     cookbook: "",
-    name: "",
     photoData: null,
     supermarket: "ah",
     suggestedChannels: [],
@@ -9749,21 +9747,6 @@ function bindOnboardingGenderTiles() {
 }
 
 function initOnboardingStep4() {
-  const nameInput = document.getElementById("onboardingProfileName");
-  if (nameInput instanceof HTMLInputElement) {
-    if (nameInput.dataset.userEdited !== "1") {
-      const prefill = onboardingData.name || state?.profile?.name || "";
-      nameInput.value = prefill;
-    }
-    if (nameInput.dataset.bindEdited !== "1") {
-      nameInput.dataset.bindEdited = "1";
-      nameInput.addEventListener("input", () => {
-        nameInput.dataset.userEdited = "1";
-        onboardingData.name = nameInput.value;
-      });
-    }
-  }
-
   bindOnboardingGenderTiles();
   syncOnboardingGenderUI(onboardingData.gender || "");
 }
@@ -9906,13 +9889,6 @@ function finishOnboarding() {
     if (state.cookbooks.length === 1) state.selectedCookbookId = newCb.id;
   }
 
-  // Persist profile name from onboarding (prefer explicit step 4 input,
-  // fall back to whatever was set during registration).
-  const onboardedName = (onboardingData.name || "").trim();
-  if (onboardedName) {
-    state.profile.name = onboardedName;
-  }
-
   if (onboardingData.photoData) {
     state.profile.photo = onboardingData.photoData;
   }
@@ -10033,7 +10009,6 @@ bindEvent(document.getElementById("onboardingStep4Skip"), "click", () => {
 });
 
 bindEvent(document.getElementById("onboardingStep4Finish"), "click", () => {
-  onboardingData.name = document.getElementById("onboardingProfileName")?.value.trim() || "";
   onboardingData.gender = document.getElementById("onboardingGender")?.value || "";
   onboardingData.birthDate = document.getElementById("onboardingBirthDate")?.value || "";
   finishOnboarding();

@@ -313,8 +313,8 @@ const TIKTOK_CAPTION_FIELD_PATTERN = /(desc|description|caption|shareDesc|seoDes
 const TIKTOK_TITLE_FIELD_PATTERN = /(title|shareTitle|seoTitle|recipeName|name)/i;
 
 const DEFAULT_PROFILE = {
-  name: "Sarah de Vries",
-  handle: "@sarahkookt",
+  name: "",
+  handle: "",
   favoriteSupermarket: "ah",
   gender: "",
   birthDate: "",
