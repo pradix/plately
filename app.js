@@ -495,8 +495,6 @@ const state = {
   // Track optional pantry items quantities added directly in the basket sheet.
   // Shape: { [recipeId]: { [normalizedIngredientKey]: number } }
   basketOptionalQtyByRecipe: {},
-  // UI-only: expanded "Waarom?" panels per basket item id.
-  basketWhyOpenByItemId: {},
   altSheetItemIndex: null,
   altSheetFilter: null, // null = grouped view, otherwise one of: beterLeven1|vegetarisch|vegan|plantaardig|more
   cookbooks: [],
@@ -1784,32 +1782,37 @@ function getChoicePromotionLabel(choice) {
   return choice?.isBonus ? "BONUS" : "";
 }
 
-function formatMatchMetaCompact(meta) {
-  if (!meta || typeof meta !== "object") return "";
-  const score = Number.isFinite(meta.score) ? meta.score : null;
-  const tokens = Array.isArray(meta.matchedTokens) ? meta.matchedTokens : [];
-  const penalties = Array.isArray(meta.appliedPenalties) ? meta.appliedPenalties : [];
-  const bonuses = Array.isArray(meta.appliedBonuses) ? meta.appliedBonuses : [];
-  const lines = [];
-  if (tokens.length) lines.push(`<p><strong>Tokens</strong>: ${escapeHtml(tokens.join(", "))}</p>`);
-  if (bonuses.length) {
-    lines.push(
-      `<p><strong>Bonussen</strong>:</p><ul>${bonuses
-        .slice(0, 6)
-        .map((b) => `<li>${escapeHtml(b.label)} (${escapeHtml(String(b.delta))})</li>`)
-        .join("")}</ul>`
-    );
+function formatEuro(value) {
+  if (!Number.isFinite(Number(value))) return "";
+  const euros = Number(value).toFixed(2).replace(".", ",");
+  return `€${euros}`;
+}
+
+function getChoicePriceParts(choice) {
+  const current = Number(choice?.currentPrice);
+  const before = Number(choice?.priceBeforeBonus);
+  const hasDiscount =
+    Number.isFinite(current) &&
+    Number.isFinite(before) &&
+    current > 0 &&
+    before > current;
+
+  if (hasDiscount) {
+    return { current: formatEuro(current), before: formatEuro(before) };
   }
-  if (penalties.length) {
-    lines.push(
-      `<p><strong>Penalties</strong>:</p><ul>${penalties
-        .slice(0, 6)
-        .map((p) => `<li>${escapeHtml(p.label)} (+${escapeHtml(String(p.delta))})</li>`)
-        .join("")}</ul>`
-    );
+
+  // Fall back to legacy formatted `choice.price` (string like "€2,49")
+  const legacy = String(choice?.price || "").trim();
+  return legacy ? { current: legacy, before: "" } : { current: "", before: "" };
+}
+
+function renderChoicePriceHtml(choice) {
+  const parts = getChoicePriceParts(choice);
+  if (!parts.current) return "";
+  if (parts.before) {
+    return `<span class="price-new">${escapeHtml(parts.current)}</span><span class="price-old">${escapeHtml(parts.before)}</span>`;
   }
-  const header = score !== null ? `<p class="basket-why__score">Score: <strong>${escapeHtml(String(score))}</strong></p>` : "";
-  return header + lines.join("");
+  return `<span>${escapeHtml(parts.current)}</span>`;
 }
 
 function choiceMatchesBasketFilters(choice, filter, item) {
@@ -1944,27 +1947,6 @@ function renderBasketPreview() {
 
     const ingredientTitle = splitCompoundIngredientWords(item.ingredientTitle || "");
     const itemId = String(item.id || `basket-item-${itemIndex}`);
-    const whyOpen = Boolean(state.basketWhyOpenByItemId?.[itemId]);
-    const canExplain = preview.store === "albert-heijn" && choice?.matchMeta;
-    const whyHtml = canExplain
-      ? `
-          <div class="basket-why">
-            <div class="basket-why__row">
-              <button class="basket-why__btn" type="button" data-basket-why="${escapeHtml(itemId)}" aria-expanded="${whyOpen ? "true" : "false"}">Waarom?</button>
-              <button class="basket-why__btn basket-why__btn--secondary" type="button" data-basket-research="${itemIndex}">Herzoek</button>
-            </div>
-            ${whyOpen ? `<div class="basket-why__body">${formatMatchMetaCompact(choice.matchMeta)}</div>` : ""}
-          </div>
-        `
-      : preview.store === "albert-heijn"
-        ? `
-          <div class="basket-why">
-            <div class="basket-why__row">
-              <button class="basket-why__btn basket-why__btn--secondary" type="button" data-basket-research="${itemIndex}">Herzoek</button>
-            </div>
-          </div>
-        `
-        : "";
 
     return `
       <div class="basket-product" data-basket-item="${itemIndex}">
@@ -1974,7 +1956,7 @@ function renderBasketPreview() {
         <div class="basket-product__info">
           <p class="basket-product__name">${escapeHtml(displayTitle)}</p>
           <p class="basket-product__meta">
-            ${choice.price ? `<span>${escapeHtml(choice.price)}</span>` : ""}
+            ${renderChoicePriceHtml(choice)}
             ${promotionBadge}
             ${choice.subtitle ? `<span>${escapeHtml(choice.subtitle)}</span>` : ""}
           </p>
@@ -1983,7 +1965,6 @@ function renderBasketPreview() {
             ${WISSEL_SVG}
             Wissel
           </button>` : ""}
-          ${whyHtml}
         </div>
         <div class="basket-product__right">
           <button class="basket-product__delete" type="button" aria-label="Verwijder" data-basket-delete="${itemIndex}">
@@ -2041,11 +2022,6 @@ async function researchBasketItem(itemIndex, { excludeCurrent = true } = {}) {
     if (payload?.choices?.length) {
       item.choices = payload.choices;
       item.selectedChoiceIndex = 0;
-      const itemId = String(item.id || `basket-item-${itemIndex}`);
-      if (state.basketWhyOpenByItemId?.[itemId]) {
-        state.basketWhyOpenByItemId = { ...(state.basketWhyOpenByItemId || {}) };
-        delete state.basketWhyOpenByItemId[itemId];
-      }
       renderBasketPreview();
     } else {
       showToast("Geen betere match gevonden.");
@@ -8128,7 +8104,22 @@ function showAnnouncementModal(announcement) {
   overlay.className = "announce-modal-overlay";
   overlay.innerHTML = `
     <div class="announce-modal" role="dialog" aria-modal="true" aria-label="Nieuw">
-      <h3 class="announce-modal__title"></h3>
+      <div class="announce-modal__accent" aria-hidden="true"></div>
+      <div class="announce-modal__head">
+        <div class="announce-modal__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22a2.4 2.4 0 0 0 2.4-2.4H9.6A2.4 2.4 0 0 0 12 22Z"></path>
+            <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 7h18s-3 0-3-7Z"></path>
+          </svg>
+        </div>
+        <h3 class="announce-modal__title"></h3>
+        <button class="announce-modal__close" type="button" aria-label="Sluiten" data-announce-dismiss>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M18 6 6 18"></path>
+            <path d="M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
       <p class="announce-modal__body"></p>
       <div class="announce-modal__actions">
         ${url ? `<button class="primary-button" type="button" data-announce-open>Open</button>` : ""}
@@ -8141,11 +8132,19 @@ function showAnnouncementModal(announcement) {
   if (titleEl) titleEl.textContent = title;
   if (bodyEl) bodyEl.textContent = body;
 
+  const previouslyFocused = document.activeElement;
+  const closeBtn = overlay.querySelector(".announce-modal__close");
+  const onKeyDown = (e) => {
+    if (e.key === "Escape") cleanup();
+  };
+
   const cleanup = () => {
+    document.removeEventListener("keydown", onKeyDown);
     overlay.remove();
     if (id) markAnnouncementSeen(id);
     state.announce.unseen = false;
     setAnnounceBadgeVisible(false);
+    try { previouslyFocused?.focus?.(); } catch {}
   };
 
   overlay.addEventListener("click", (e) => {
@@ -8159,6 +8158,8 @@ function showAnnouncementModal(announcement) {
   });
 
   document.body.appendChild(overlay);
+  document.addEventListener("keydown", onKeyDown);
+  try { closeBtn?.focus?.(); } catch {}
 }
 
 async function handleAnnouncementQueryParams() {
@@ -9956,25 +9957,9 @@ bindEvent(document.getElementById("basketSheetList"), "click", async (e) => {
   if (!(target instanceof Element) || !state.basketPreview) return;
 
   const btn = target.closest(
-    "[data-basket-delete],[data-basket-qty-minus],[data-basket-qty-plus],[data-basket-wissel],[data-basket-pantry-qty-minus],[data-basket-pantry-qty-plus],[data-basket-why],[data-basket-research]"
+    "[data-basket-delete],[data-basket-qty-minus],[data-basket-qty-plus],[data-basket-wissel],[data-basket-pantry-qty-minus],[data-basket-pantry-qty-plus]"
   );
   if (!btn) return;
-
-  if (btn instanceof HTMLElement && btn.dataset.basketWhy !== undefined) {
-    const id = String(btn.dataset.basketWhy || "").trim();
-    if (!id) return;
-    const map = state.basketWhyOpenByItemId && typeof state.basketWhyOpenByItemId === "object" ? state.basketWhyOpenByItemId : {};
-    state.basketWhyOpenByItemId = { ...map, [id]: !map[id] };
-    renderBasketPreview();
-    return;
-  }
-
-  if (btn instanceof HTMLElement && btn.dataset.basketResearch !== undefined) {
-    const idx = parseInt(btn.dataset.basketResearch, 10);
-    if (!Number.isFinite(idx)) return;
-    await researchBasketItem(idx, { excludeCurrent: true });
-    return;
-  }
 
   // Optional pantry qty controls (0 -> optional, 1+ -> promote to main list)
   if (btn instanceof HTMLElement && btn.dataset.basketPantryQtyPlus !== undefined) {
