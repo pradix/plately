@@ -3060,7 +3060,6 @@ if (typeof window !== "undefined") {
       "Bouillonblokje",
       "Zout",
       "Peper",
-      "Zout en peper",
     ].map((title) => ({ title }));
 
     const existingKeys = new Set(); // emulate: not in grocery list
@@ -4562,7 +4561,6 @@ const PANTRY_OPTIONAL_POOL = [
   // Common “optional” seasonings: excluded from auto grocery, but should show in pantry.
   { title: "Zout", icon: "🧂" },
   { title: "Peper", icon: "🌶️" },
-  { title: "Zout en peper", icon: "🧂" },
 ];
 
 function recipeHasPantryOptionalItem(recipe, pantryTitle) {

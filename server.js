@@ -370,6 +370,11 @@ function normalizeIngredientForSearch(raw) {
   if (/sesamolie/.test(t)) return "sesamolie";
   if (/kokosolie/.test(t)) return "kokosolie";
 
+  // 6a. Pantry seasonings: prefer canonical cooking variants
+  // Keep conservative and exact to avoid false positives (e.g. "zoutjes", "pepernoten").
+  if (/^zout$/.test(t)) return "keukenzout";
+  if (/^peper$/.test(t)) return "zwarte peper";
+
   // 7. Tomato variants
   if (/kerstomaatje|cherrytomaat/.test(t)) return "cherrytomaten";
   if (/zongedroogde.*tomaten?/.test(t))     return "zongedroogde tomaten";
@@ -6127,6 +6132,11 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       /\b(toast|toastjes|melba|melbatoast|cracker|crackers|zadencracker|zadencrackers|beschuit|crouton|croutons)\b/.test(baseLower) ||
       /\b(toast|toastjes|melba|melbatoast|cracker|crackers|zadencracker|zadencrackers|beschuit|crouton|croutons)\b/.test(rawLower);
 
+    const isSaltQuery = baseLower === "zout" || baseLower === "keukenzout" || baseLower === "tafelzout" || baseLower === "zeezout";
+    const wantsSaltSnackLike =
+      /\b(zoutjes|chips|sticks|noten|gezouten)\b/.test(baseLower) || /\b(zoutjes|chips|sticks|noten|gezouten)\b/.test(rawLower);
+    const isPepperQuery = baseLower === "peper" || baseLower === "zwarte peper";
+
     const ingredientTokens = tokenizeForMatch(baseLower);
     const allowCheeseEquivs =
       baseLower === "parmezaanse kaas" || /\b(parmezaan|parmigiano|grana\s*padano)\b/.test(rawLower);
@@ -6179,6 +6189,30 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         if (/\b(tomatenpuree|tomatenpasta)\b/.test(title)) score += 75;
         if (/\b(aardappel|partjes|wok|smaakmaker|woksmaakmaker)\b/.test(title)) score += 55;
         if (/\b(pasta|puree|poeder|granulaat|zout)\b/.test(title)) score += 15;
+      }
+
+      // Pantry: salt ("zout") should match cooking salt, not snacks.
+      if (isSaltQuery) {
+        if (/\b(keukenzout|tafelzout|zeezout)\b/.test(title)) score -= 35;
+        if (/\b(molen)\b/.test(title) && /\bzout\b/.test(title)) score -= 6;
+        if (!wantsSaltSnackLike) {
+          if (/\b(zoutjes|sticks|chips)\b/.test(title)) score += 110;
+          if (/\bnoten\b/.test(title)) score += 65;
+          if (/\bgezouten\b/.test(title)) score += 55;
+        }
+      }
+
+      // Pantry: pepper ("peper") should match black pepper, not pepernoten/peperoni/etc.
+      if (isPepperQuery) {
+        if (/\b(zwarte\s+peper|peper\s*\(gemalen\)|gemalen\s+peper|peperkorrels?)\b/.test(title)) score -= 40;
+        if (/\b(molen)\b/.test(title) && /\bpeper\b/.test(title)) score -= 6;
+        if (/\bpepernoten\b/.test(title)) score += 170;
+        if (/\bpeperkoek\b/.test(title)) score += 150;
+        if (/\bpeperoni\b/.test(title)) score += 140;
+        if (/\bpaprika\b/.test(title)) score += 120;
+        if (/\bsambal\b/.test(title)) score += 120;
+        // Avoid mixes when user asked for plain pepper.
+        if (/\b(peper\s*(?:en|&)\s*zout|zout\s*(?:en|&)\s*peper)\b/.test(title)) score += 110;
       }
 
       // Penalize processed / "extra" items unless explicitly asked for.

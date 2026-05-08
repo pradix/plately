@@ -48,6 +48,8 @@ async function main() {
     "burrata",
     "basilicum",
     "tomaat basilicum",
+    "zout",
+    "peper",
   ];
 
   const basket = await postJson(`${base}/api/store-basket`, {
