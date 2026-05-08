@@ -3426,12 +3426,23 @@ function looksLikeBlockedSocialHtml(url, html) {
     h.includes("attention required") ||
     h.includes("cloudflare") ||
     h.includes("cf-challenge") ||
+    h.includes("challenge-platform") ||
+    h.includes("/cdn-cgi/") ||
+    h.includes("cf-ray") ||
     h.includes("captcha") ||
     h.includes("verify you are human") ||
     h.includes("enable javascript") ||
     h.includes("enable cookies") ||
     h.includes("checking your browser before accessing") ||
     h.includes("ddos protection");
+  // "Hard" Cloudflare challenge markers should override any accidental "recipe"
+  // words present in the page (some challenge templates contain navigation text).
+  const hasHardChallengeSignals =
+    h.includes("cf-challenge") ||
+    h.includes("challenge-platform") ||
+    h.includes("/cdn-cgi/") ||
+    h.includes("cf-ray");
+  if (hasHardChallengeSignals) return true;
   if (looksLikeWaf && !hasRecipeSignals) return true;
 
   if (u.includes("instagram.com")) {
@@ -4185,7 +4196,7 @@ function parseParagraphsAfterHeading(html, headingPattern) {
 function extractMarkdownSection(text, headingPattern, stopPattern) {
   // Headings can include extra trailing text, e.g. "## Bereidingswijze Surinaamse soep".
   const regex = new RegExp(
-    `(?:^|\\n)#{2,3}\\s*(?:${headingPattern})(?:\\s+[^\\n]*)?\\s*\\n([\\s\\S]*?)(?=\\n#{2,3}\\s*(?:${stopPattern})(?:\\s+[^\\n]*)?$|$)`,
+    `(?:^|\\n)#{2,3}\\s*(?:${headingPattern})(?:\\s+[^\\n]*)?\\s*\\n([\\s\\S]*?)(?=\\n#{2,3}\\s*(?:${stopPattern})(?:\\s+[^\\n]*)?\\s*\\n|$)`,
     "gi"
   );
   const matches = [...String(text || "").matchAll(regex)];
@@ -4228,6 +4239,7 @@ function parseTextRecipeDocument(text, url) {
     .replace(/^\*\s+/gim, "")
     .replace(/^Title:\s.*$/gim, "")
     .replace(/^URL Source:\s.*$/gim, "")
+    .replace(/^Published Time:\s.*$/gim, "")
     .replace(/^Markdown Content:\s*$/gim, "")
     .replace(/\r/g, "\n")
     .replace(/\t/g, " ")
@@ -4241,12 +4253,12 @@ function parseTextRecipeDocument(text, url) {
   const ingredientSection = extractMarkdownSection(
     cleanedText,
     "ingredi[eë]nten|ingredienten|ingredients?",
-    "dit heb je nodig|aan de slag|bereiding|voedingswaarden|boodschappen|allerhande|services|albert heijn"
+    "dit heb je nodig|aan de slag|bereiding|bereidingswijze|werkwijze|[^\\n]{0,120}:\\s*recept\\b|recept\\b|voedingswaarden|boodschappen|allerhande|services|albert heijn|dit vind je"
   );
   const instructionSection = extractMarkdownSection(
     cleanedText,
-    "aan de slag|bereiding|bereidingswijze|instructions?|method",
-    "voedingswaarden|ingredi[eë]nten|ingredienten|boodschappen|allerhande|services|albert heijn"
+    "aan de slag|bereiding|bereidingswijze|werkwijze|instructions?|method|[^\\n]{0,120}:\\s*recept\\b|recept\\b",
+    "voedingswaarden|ingredi[eë]nten|ingredienten|boodschappen|allerhande|services|albert heijn|dit vind je"
   );
 
   const title =
@@ -4254,7 +4266,46 @@ function parseTextRecipeDocument(text, url) {
     normalizeRecipeTitle(lines.find((line) => looksLikeRecipeTitle(line) && line.split(" ").length <= 8)) ||
     "Website recept";
 
+  const introFromMarkdown = (() => {
+    const rawLines = String(cleanedText || "").split(/\n+/).map((l) => sanitizeText(l)).filter(Boolean);
+    if (!rawLines.length) return "";
+    const ingredientHeadingIdxs = rawLines
+      .map((line, idx) => ({ line, idx }))
+      .filter(({ line }) => /^##\s+\S/.test(line))
+      .map(({ line, idx }) => (INGREDIENT_HEADING_PATTERN.test(sanitizeText(line.replace(/^##\s+/, ""))) ? idx : -1))
+      .filter((idx) => idx >= 0);
+
+    const h1s = rawLines
+      .map((line, idx) => ({ line, idx }))
+      .filter(({ line }) => /^#\s+\S/.test(line));
+
+    const picked = h1s
+      .map(({ line, idx }) => {
+        const nextIng = ingredientHeadingIdxs.find((i) => i > idx);
+        const dist = Number.isFinite(nextIng) ? nextIng - idx : 9999;
+        const penalty = /[-–]\s*culy\b/i.test(line) ? 200 : 0;
+        return { line, idx, score: dist + penalty };
+      })
+      .sort((a, b) => a.score - b.score)[0];
+    const start = picked ? picked.idx + 1 : 0;
+    for (const line of rawLines.slice(start, start + 80)) {
+      if (!line) continue;
+      if (/^##\s+/.test(line)) break;
+      const plain = sanitizeText(line.replace(/^\*\*([^*]+)\*\*$/g, "$1"));
+      if (!plain) continue;
+      if (/^- \[[x ]\]\s+/i.test(plain)) continue;
+      if (/(^|\b)(cookie|cookies|privacy|voorkeuren|consent)\b/i.test(plain)) continue;
+      if (/(^|\b)(advertentie|advertenties|gepersonaliseerd|doelgroepenonderzoek|productontwikkeling|vendors?|partners?)\b/i.test(plain)) continue;
+      if (/^(voorbereiding|kooktijd|bereidingstijd|beoordeling)\b/i.test(plain)) continue;
+      if (/^direct in je mandje\b/i.test(plain)) continue;
+      if (INGREDIENT_HEADING_PATTERN.test(plain) || INSTRUCTION_HEADING_PATTERN.test(plain)) break;
+      if (plain.length >= 30) return plain;
+    }
+    return "";
+  })();
+
   const description =
+    introFromMarkdown ||
     extractDescription(cleanedText, title) ||
     sanitizeText(lines.find((line) => line.length >= 30 && !INGREDIENT_HEADING_PATTERN.test(line) && !INSTRUCTION_HEADING_PATTERN.test(line))) ||
     "";
@@ -4287,7 +4338,7 @@ function parseMarkdownIngredientSection(text) {
   const ingredientSection = extractMarkdownSection(
     text,
     "ingredi[eë]nten|ingredienten|ingredients?|dit heb je nodig",
-    "aan de slag|bereiding|bereidingswijze|voedingswaarden|boodschappen|services|ontdek|gerelateerde|ook te zien|direct in je mandje|beoordeling"
+    "aan de slag|bereiding|bereidingswijze|werkwijze|[^\\n]{0,120}:\\s*recept\\b|recept\\b|voedingswaarden|boodschappen|services|ontdek|gerelateerde|ook te zien|direct in je mandje|beoordeling|dit vind je"
   );
 
   if (!ingredientSection) {
@@ -4313,8 +4364,8 @@ function parseMarkdownIngredientSection(text) {
 function parseMarkdownInstructionSection(text) {
   const instructionSection = extractMarkdownSection(
     text,
-    "aan de slag|bereiding|bereidingswijze|instructions?|method",
-    "voedingswaarden|ingredi[eë]nten|ingredienten|boodschappen|services"
+    "aan de slag|bereiding|bereidingswijze|werkwijze|instructions?|method|[^\\n]{0,120}:\\s*recept\\b|recept\\b",
+    "voedingswaarden|ingredi[eë]nten|ingredienten|boodschappen|services|dit vind je"
   );
 
   if (!instructionSection) {
@@ -4341,9 +4392,20 @@ function parseMarkdownServings(text) {
 function extractFirstImageUrlFromMarkdown(markdown) {
   const text = String(markdown || "");
   if (!text) return "";
-  const candidates = [...text.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)]
-    .map((m) => String(m[1] || "").trim())
+  // Jina markdown sometimes wraps long image URLs onto multiple lines inside `(...)`.
+  // Capture up to the closing `)` and then collapse whitespace.
+  const mdCandidates = [...text.matchAll(/!\[[^\]]*\]\(([\s\S]*?)\)/g)]
+    .map((m) => String(m[1] || "").replace(/\s+/g, "").trim())
     .filter(Boolean)
+    // Some CDNs (e.g. img.culy.nl) embed `quality(80)` parentheses in the URL,
+    // which can truncate the markdown capture. We'll also scan raw URLs below.
+    .map((raw) => raw.replace(/[)]+$/g, ""));
+
+  const rawUrlCandidates = [...text.matchAll(/https?:\/\/[^\s]+?\.(?:jpg|jpeg|png|webp)(?:\?[^\s]*)?/gi)]
+    .map((m) => String(m[0] || "").replace(/\s+/g, "").trim())
+    .filter(Boolean);
+
+  const candidates = [...mdCandidates, ...rawUrlCandidates]
     .map((raw) => {
       const encodedIdx = raw.indexOf("https%3A%2F%2F");
       if (encodedIdx >= 0) {
