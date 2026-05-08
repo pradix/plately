@@ -244,36 +244,42 @@
               </div>
             </section>
 
-            <section class="detail-section">
-              <div class="detail-section__header">
-                <h2>Ingrediënten</h2>
-                <p id="detailIngredientCount">6 items</p>
-              </div>
-              <div class="detail-servings-row">
-                <div class="servings-control">
-                  <button class="servings-btn" id="servingsDown" type="button" aria-label="Minder personen">−</button>
-                  <span id="servingsDisplay">2 pers.</span>
-                  <button class="servings-btn" id="servingsUp" type="button" aria-label="Meer personen">+</button>
-                </div>
-                <div class="ingredient-quick-actions">
-                  <button class="ingredient-quick-btn" id="checkAllIngredientsButton" type="button" aria-label="Alle ingrediënten checken">Alles checken</button>
-                  <button class="ingredient-quick-btn ingredient-quick-btn--secondary" id="uncheckAllIngredientsButton" type="button" aria-label="Alle ingrediënten uitvinken">Alles afhaken</button>
-                </div>
-              </div>
-              <ul class="ingredient-list" id="detailIngredientList"></ul>
-            </section>
+            <div class="detail-content-grid" id="detailContentGrid">
+              <div class="detail-col detail-col--ingredients">
+                <section class="detail-section">
+                  <div class="detail-section__header">
+                    <h2>Ingrediënten</h2>
+                    <p id="detailIngredientCount">6 items</p>
+                  </div>
+                  <div class="detail-servings-row">
+                    <div class="servings-control">
+                      <button class="servings-btn" id="servingsDown" type="button" aria-label="Minder personen">−</button>
+                      <span id="servingsDisplay">2 pers.</span>
+                      <button class="servings-btn" id="servingsUp" type="button" aria-label="Meer personen">+</button>
+                    </div>
+                    <div class="ingredient-quick-actions">
+                      <button class="ingredient-quick-btn" id="checkAllIngredientsButton" type="button" aria-label="Alle ingrediënten checken">Alles checken</button>
+                      <button class="ingredient-quick-btn ingredient-quick-btn--secondary" id="uncheckAllIngredientsButton" type="button" aria-label="Alle ingrediënten uitvinken">Alles afhaken</button>
+                    </div>
+                  </div>
+                  <ul class="ingredient-list" id="detailIngredientList"></ul>
+                </section>
 
-            <button class="detail-cta" id="addSelectedToGroceriesButton" type="button">
-              Zet op boodschappenlijst
-            </button>
-
-            <section class="detail-section">
-              <div class="detail-section__header">
-                <h2>Bereiding</h2>
-                <p id="detailStepCount"></p>
+                <button class="detail-cta" id="addSelectedToGroceriesButton" type="button">
+                  Zet op boodschappenlijst
+                </button>
               </div>
-              <ol class="step-list" id="detailStepList"></ol>
-            </section>
+
+              <div class="detail-col detail-col--instructions">
+                <section class="detail-section">
+                  <div class="detail-section__header">
+                    <h2>Bereiding</h2>
+                    <p id="detailStepCount"></p>
+                  </div>
+                  <ol class="step-list" id="detailStepList"></ol>
+                </section>
+              </div>
+            </div>
           </article>
         </section>
 
