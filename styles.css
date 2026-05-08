@@ -64,6 +64,11 @@ img { display: block; max-width: 100%; }
   .bottom-nav { max-width: 960px; }
 }
 
+@media (min-width: 960px) {
+  .app-shell { max-width: 1200px; }
+  .bottom-nav { max-width: 1200px; }
+}
+
 #homeScreen {
   position: relative;
   padding-bottom: 28px;
@@ -822,6 +827,13 @@ img { display: block; max-width: 100%; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   padding-inline: 16px;
+}
+
+@media (min-width: 760px) {
+  .recipe-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
 }
 
 .recipe-card {
@@ -5045,7 +5057,8 @@ img { display: block; max-width: 100%; }
 .kookstand-overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  /* Above fixed bottom nav + other UI chrome */
+  z-index: 9600;
   display: flex;
   align-items: stretch;
   justify-content: center;
@@ -5244,16 +5257,38 @@ img { display: block; max-width: 100%; }
 }
 
 .kookstand-controls {
-  position: sticky;
-  bottom: 0;
   z-index: 2;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  padding: 12px 0 calc(6px + env(safe-area-inset-bottom));
-  margin-top: 10px;
+  padding: 12px 0 calc(10px + env(safe-area-inset-bottom));
+  margin-top: 12px;
   background: linear-gradient(to top, rgba(248, 247, 242, 0.98) 65%, rgba(248, 247, 242, 0.70));
   border-top: 1px solid rgba(36, 60, 43, 0.08);
+}
+
+.kookstand-controls__row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.kookstand-controls__counter {
+  min-width: 64px;
+  text-align: center;
+  font-weight: 950;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  color: #516250;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.78);
+  border: 1px solid rgba(36, 60, 43, 0.10);
+}
+
+.kookstand-controls__ingredients {
+  width: 100%;
 }
 
 @media (min-width: 760px) {

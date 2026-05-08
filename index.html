@@ -1378,9 +1378,12 @@
         </div>
 
         <footer class="kookstand-controls" aria-label="Kookstand bediening">
-          <button class="soft-action" id="kookstandPrev" type="button">Vorige</button>
-          <button class="soft-action soft-action--pill" id="kookstandToggleIngredients" type="button">Ingrediënten</button>
-          <button class="soft-action soft-action--dark" id="kookstandNext" type="button">Volgende</button>
+          <div class="kookstand-controls__row">
+            <button class="soft-action" id="kookstandPrev" type="button">Vorige</button>
+            <span class="kookstand-controls__counter" id="kookstandCounter" aria-live="polite">1/1</span>
+            <button class="soft-action soft-action--dark" id="kookstandNext" type="button">Volgende</button>
+          </div>
+          <button class="soft-action soft-action--pill kookstand-controls__ingredients" id="kookstandToggleIngredients" type="button">Ingrediënten</button>
         </footer>
       </section>
     </div>

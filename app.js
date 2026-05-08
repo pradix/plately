@@ -754,6 +754,7 @@ const kookstandCloseButton = document.getElementById("kookstandClose");
 const kookstandTitle = document.getElementById("kookstandTitle");
 const kookstandServings = document.getElementById("kookstandServings");
 const kookstandProgress = document.getElementById("kookstandProgress");
+const kookstandCounter = document.getElementById("kookstandCounter");
 const kookstandStepIndex = document.getElementById("kookstandStepIndex");
 const kookstandStepText = document.getElementById("kookstandStepText");
 const kookstandPrevButton = document.getElementById("kookstandPrev");
@@ -4637,6 +4638,9 @@ function renderKookstand() {
   kookstandTitle.textContent = recipe.title || "Recept";
   kookstandServings.textContent = `${Math.max(1, state.currentServings || parseBaseServings(recipe.servings) || 2)} pers.`;
   kookstandProgress.textContent = hasSteps ? `Stap ${boundedIndex + 1} van ${instructions.length}` : "Nog geen stappen";
+  if (kookstandCounter) {
+    kookstandCounter.textContent = hasSteps ? `${boundedIndex + 1}/${instructions.length}` : "—/—";
+  }
   kookstandStepIndex.textContent = hasSteps ? String(boundedIndex + 1) : "—";
   kookstandStepText.textContent = hasSteps ? instructions[boundedIndex] : "Voeg eerst bereidingsstappen toe in Recept bewerken.";
 
