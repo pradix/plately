@@ -8802,16 +8802,27 @@ bindEvent(authForm, "submit", async (event) => {
   const email = authEmail.value.trim();
   const password = authPassword.value;
 
+  // Registration requires name + email (verplicht)
+  const nameInput = document.getElementById("authName");
+  const name = (nameInput?.value || "").trim();
+  if (state.auth.mode === "register") {
+    if (!name) {
+      showToast("Voer je naam in.");
+      nameInput?.focus?.();
+      return;
+    }
+    if (!email) {
+      showToast("Voer je e-mailadres in.");
+      authEmail?.focus?.();
+      return;
+    }
+    state.profile.name = name;
+    if (!state.profile.email) state.profile.email = email;
+  }
+
   submitAuthButton.disabled = true;
   submitAuthButton.textContent = state.auth.mode === "register" ? "Account aanmaken..." : "Inloggen...";
   if (authFeedback) authFeedback.textContent = "";
-
-  // Grab name for registration
-  const nameInput = document.getElementById("authName");
-  const name = (nameInput?.value || "").trim();
-  if (state.auth.mode === "register" && name) {
-    state.profile.name = name;
-  }
 
   try {
     await submitAuth(state.auth.mode, email, password);
@@ -9662,7 +9673,19 @@ let onboardingData = {
   supermarket: "ah",
 };
 
+function resetOnboardingData() {
+  onboardingData = {
+    channels: SEED_CHANNELS.map((ch) => ch.id),
+    cookbook: "",
+    handle: "",
+    photoData: null,
+    supermarket: "ah",
+    suggestedChannels: [],
+  };
+}
+
 function showOnboarding() {
+  resetOnboardingData();
   authModal.classList.add("hidden");
   authModal.setAttribute("aria-hidden", "true");
   onboardingScreen.classList.remove("hidden");
@@ -9699,9 +9722,10 @@ function renderOnboardingChannels() {
   const list = document.getElementById("onboardingChannelsList");
   list.innerHTML = SEED_CHANNELS.map((ch) => {
     const faviconUrl = getSourceIconUrl(ch.url);
+    const isChecked = onboardingData.channels.includes(ch.id);
     return `
       <label class="onboarding-channel-item" data-channel-id="${escapeHtml(ch.id)}">
-        <input type="checkbox" data-channel-check="${escapeHtml(ch.id)}" />
+        <input type="checkbox" data-channel-check="${escapeHtml(ch.id)}" ${isChecked ? "checked" : ""} />
         <span class="onboarding-channel-avatar">
           ${faviconUrl ? `<img class="onboarding-channel-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
         </span>
@@ -9710,13 +9734,18 @@ function renderOnboardingChannels() {
     `;
   }).join("");
 
+  list.querySelectorAll(".onboarding-channel-item").forEach((label) => {
+    const id = label.dataset.channelId;
+    label.classList.toggle("selected", Boolean(id && onboardingData.channels.includes(id)));
+  });
+
   // Event listeners for checkboxes
   list.querySelectorAll("input[type=checkbox]").forEach((checkbox) => {
     checkbox.addEventListener("change", (e) => {
       const channelId = e.target.dataset.channelCheck;
       const label = e.target.closest(".onboarding-channel-item");
       if (e.target.checked) {
-        onboardingData.channels.push(channelId);
+        if (!onboardingData.channels.includes(channelId)) onboardingData.channels.push(channelId);
         label.classList.add("selected");
       } else {
         onboardingData.channels = onboardingData.channels.filter((id) => id !== channelId);
@@ -9759,10 +9788,14 @@ function renderOnboardingSupermarkets() {
 }
 
 function finishOnboarding() {
-  // Apply channels
-  if (onboardingData.channels.length > 0) {
-    state.followedChannelIds = onboardingData.channels;
+  if (!Array.isArray(onboardingData.channels) || onboardingData.channels.length === 0) {
+    showToast("Kies minimaal 1 kanaal om te volgen.");
+    showOnboardingStep(1);
+    return;
   }
+
+  // Apply channels
+  state.followedChannelIds = [...new Set(onboardingData.channels)];
 
   // Persist suggested channels if any
   if (onboardingData.suggestedChannels && onboardingData.suggestedChannels.length > 0) {
@@ -9850,10 +9883,18 @@ bindEvent(document.getElementById("onboardingSuggestBtn"), "click", () => {
 });
 
 bindEvent(document.getElementById("onboardingStep1Skip"), "click", () => {
+  if (!Array.isArray(onboardingData.channels) || onboardingData.channels.length === 0) {
+    showToast("Kies minimaal 1 kanaal om te volgen.");
+    return;
+  }
   showOnboardingStep(2);
 });
 
 bindEvent(document.getElementById("onboardingStep1Next"), "click", () => {
+  if (!Array.isArray(onboardingData.channels) || onboardingData.channels.length === 0) {
+    showToast("Kies minimaal 1 kanaal om te volgen.");
+    return;
+  }
   showOnboardingStep(2);
 });
 
