@@ -641,6 +641,40 @@ function buildSeedSearchUrlFromTemplate(template, query) {
   return t.replaceAll("{q}", q).replaceAll("<zoekwoord>", q);
 }
 
+function getSeedChannelDefaultSearchUrlTemplate(channelId) {
+  // Important: keep this in sync with the hardcoded fallbacks used by
+  // `searchChannelRecipes` so admin channel testing builds the exact same URLs
+  // as the normal multi-channel search.
+  switch (sanitizeText(channelId || "")) {
+    case "ch-les":
+      return "https://www.lekkerensimpel.com/?s={q}&maaltijd=all&gerecht=all";
+    case "ch-lb":
+      return "https://www.laurasbakery.nl/zoeken/?_search={q}";
+    case "ch-ek":
+      return "https://www.eefkooktzo.nl/?s={q}";
+    case "ch-clf":
+      return "https://www.chickslovefood.com/?s={q}";
+    case "ch-culy":
+      return "https://www.culy.nl/?s={q}&category=Recepten";
+    case "ch-mj":
+      return "https://miljuschka.nl/?s={q}";
+    default:
+      return "";
+  }
+}
+
+function getSeedChannelSearchUrlTemplate(channelId, effectiveSeedConfig) {
+  const eff = effectiveSeedConfig && typeof effectiveSeedConfig === "object" ? effectiveSeedConfig : {};
+  const t = sanitizeText(eff.searchUrlTemplate || "");
+  if (t) return t;
+  return getSeedChannelDefaultSearchUrlTemplate(channelId);
+}
+
+function buildSeedChannelSearchUrl(channelId, effectiveSeedConfig, query) {
+  const template = getSeedChannelSearchUrlTemplate(channelId, effectiveSeedConfig);
+  return buildSeedSearchUrlFromTemplate(template, query);
+}
+
 function seedSearchTemplateHasPlaceholder(template) {
   const t = sanitizeText(template || "");
   return t.includes("{q}") || t.includes("<zoekwoord>");
@@ -7042,29 +7076,29 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     maybeSearch("ch-ah", () => searchAHRecipes(query, 4, { searchUrlTemplate: cfg("ch-ah").searchUrlTemplate })),
     maybeSearch("ch-jumbo", () => searchJumboRecipes(query, 4, { searchUrlTemplate: cfg("ch-jumbo").searchUrlTemplate })),
     maybeSearch("ch-les", () => scrapeOrRest(cfg("ch-les").baseUrl || "https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les",
-      buildSeedSearchUrlFromTemplate(cfg("ch-les").searchUrlTemplate || `https://www.lekkerensimpel.com/?s={q}&maaltijd=all&gerecht=all`, query),
+      buildSeedChannelSearchUrl("ch-les", cfg("ch-les"), query),
       parseLekkerSimpel, 4)),
     maybeSearch("ch-24k", () => wpRestSearch(cfg("ch-24k").baseUrl || "https://www.24kitchen.nl", "24 Kitchen", "ch-24k", query, 4)),
 
     // MEDIUM: May be slower, but try anyway
     maybeSearch("ch-lb", () => scrapeOrRest(cfg("ch-lb").baseUrl || "https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb",
-      buildSeedSearchUrlFromTemplate(cfg("ch-lb").searchUrlTemplate || `https://www.laurasbakery.nl/zoeken/?_search={q}`, query),
+      buildSeedChannelSearchUrl("ch-lb", cfg("ch-lb"), query),
       parseLaurasBakery, 4)),
     maybeSearch("ch-ek", () => scrapeOrRest(cfg("ch-ek").baseUrl || "https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek",
-      buildSeedSearchUrlFromTemplate(cfg("ch-ek").searchUrlTemplate || `https://www.eefkooktzo.nl/?s={q}`, query),
+      buildSeedChannelSearchUrl("ch-ek", cfg("ch-ek"), query),
       parseWPStandard, 3)),
     maybeSearch("ch-up", () => wpRestSearch(cfg("ch-up").baseUrl || "https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up", query, 4)
       .then((items) => items.filter((r) => !/\/\d{4}\/\d{2}\//.test(r.url)).slice(0, 4))),
     maybeSearch("ch-clf", () => scrapeOrRest(cfg("ch-clf").baseUrl || "https://www.chickslovefood.com", "Chicks Love Food", "ch-clf",
-      buildSeedSearchUrlFromTemplate(cfg("ch-clf").searchUrlTemplate || `https://www.chickslovefood.com/?s={q}`, query),
+      buildSeedChannelSearchUrl("ch-clf", cfg("ch-clf"), query),
       parseChicksLoveFood, 3)),
     maybeSearch("ch-culy", () => scrapeOrRest(cfg("ch-culy").baseUrl || "https://www.culy.nl", "Culy", "ch-culy",
-      buildSeedSearchUrlFromTemplate(cfg("ch-culy").searchUrlTemplate || `https://www.culy.nl/?s={q}&category=Recepten`, query),
+      buildSeedChannelSearchUrl("ch-culy", cfg("ch-culy"), query),
       parseWPStandard, 4)),
 
     // SLOW: Include but expect timeouts
     maybeSearch("ch-mj", () => scrapeOrRest(cfg("ch-mj").baseUrl || "https://miljuschka.nl", "Miljuschka", "ch-mj",
-      buildSeedSearchUrlFromTemplate(cfg("ch-mj").searchUrlTemplate || `https://miljuschka.nl/?s={q}`, query),
+      buildSeedChannelSearchUrl("ch-mj", cfg("ch-mj"), query),
       parseWPStandard, 4)),
   ];
 
@@ -9379,10 +9413,10 @@ const server = http.createServer(async (request, response) => {
         const count = Math.min(limit, 15);
 
         if (channelId === "ch-ah") {
-          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
           results = await searchAHRecipes(query, count, { searchUrlTemplate: eff.searchUrlTemplate });
         } else if (channelId === "ch-jumbo") {
-          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
           results = await searchJumboRecipes(query, count, { searchUrlTemplate: eff.searchUrlTemplate });
         } else if (channelId === "ch-24k") {
           const meta = {};
@@ -9394,22 +9428,22 @@ const server = http.createServer(async (request, response) => {
           results = (results || []).filter((r) => !/\/\d{4}\/\d{2}\//.test(r.url)).slice(0, count);
           usedUrl = sanitizeText(meta.usedUrl || "");
         } else if (channelId === "ch-les") {
-          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
           results = await scrapeOrRestPublic(eff.baseUrl || "https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les", usedUrl, parseLekkerSimpel, count, query);
         } else if (channelId === "ch-lb") {
-          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
           results = await scrapeOrRestPublic(eff.baseUrl || "https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb", usedUrl, parseLaurasBakery, count, query);
         } else if (channelId === "ch-ek") {
-          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
           results = await scrapeOrRestPublic(eff.baseUrl || "https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek", usedUrl, parseWPStandard, count, query);
         } else if (channelId === "ch-clf") {
-          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
           results = await scrapeOrRestPublic(eff.baseUrl || "https://www.chickslovefood.com", "Chicks Love Food", "ch-clf", usedUrl, parseChicksLoveFood, count, query);
         } else if (channelId === "ch-culy") {
-          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
           results = await scrapeOrRestPublic(eff.baseUrl || "https://www.culy.nl", "Culy", "ch-culy", usedUrl, parseWPStandard, count, query);
         } else if (channelId === "ch-mj") {
-          usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+          usedUrl = buildSeedChannelSearchUrl(channelId, eff, query);
           results = await scrapeOrRestPublic(eff.baseUrl || "https://miljuschka.nl", "Miljuschka", "ch-mj", usedUrl, parseWPStandard, count, query);
         } else {
           results = await searchChannelRecipes(query, [channelId]);
@@ -9478,4 +9512,13 @@ if (require.main === module) {
 module.exports = {
   stripSocialNoise,
   stripSocialUiArtifacts,
+  __dev: {
+    buildSeedSearchUrlFromTemplate,
+    buildSeedChannelSearchUrl,
+    getSeedChannelSearchUrlTemplate,
+    getEffectiveSeedChannelConfig,
+    getEffectiveCustomChannelConfig,
+    getSeedChannelOverrides,
+    getChannelOverrides,
+  },
 };
