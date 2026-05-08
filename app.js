@@ -703,6 +703,7 @@ const recipeUrlInput = document.getElementById("recipeUrl");
 const recipeNoteInput = document.getElementById("recipeNote");
 const searchInput = document.getElementById("searchInput");
 const homeSearchChipsWrap = document.querySelector(".home-search-chips");
+const homeSearchChipsRefresh = document.getElementById("homeSearchChipsRefresh");
 const channelSearchSection = document.getElementById("channelSearchSection");
 const channelSearchResults = document.getElementById("channelSearchResults");
 const closeImportSecondaryButton = document.getElementById("closeImportSecondaryButton");
@@ -8171,6 +8172,18 @@ bindEvent(homeSearchChipsWrap, "click", (event) => {
   searchInput.focus();
   searchInput.dispatchEvent(new Event("input", { bubbles: true }));
 });
+
+if (homeSearchChipsRefresh) {
+  homeSearchChipsRefresh.addEventListener(
+    "click",
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      renderHomeQuickChips();
+    },
+    { capture: true }
+  );
+}
 
 // Focus-state panel: intent chips, recent searches, and recent recipes
 bindEvent(document.getElementById("homeFocusPanel"), "click", (event) => {
