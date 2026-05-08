@@ -5144,9 +5144,9 @@ img { display: block; max-width: 100%; }
 }
 
 .cookbook-save-list.is-single {
-  grid-template-columns: minmax(0, 1fr);
-  max-width: 520px;
-  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: stretch;
 }
 
 /* thin scrollbar so it doesn't look clunky on mobile */
@@ -5173,6 +5173,15 @@ img { display: block; max-width: 100%; }
   max-width: 640px;
 }
 
+.cookbook-save-option.is-compact {
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 13px 16px;
+  justify-self: stretch;
+  max-width: none;
+  box-shadow: none;
+}
+
 .cookbook-save-option.is-selected {
   border-color: rgba(120, 147, 111, 0.45);
   box-shadow: 0 12px 28px rgba(76,85,69,0.09);
@@ -5190,6 +5199,13 @@ img { display: block; max-width: 100%; }
   color: #93a68d;
   font-size: 1.05rem;
   font-weight: 700;
+}
+
+.cookbook-save-option__cover--compact {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  font-size: 0.92rem;
 }
 
 .cookbook-save-option__cover--grid {
@@ -7511,6 +7527,54 @@ body {
 @keyframes miniModalIn {
   from { opacity: 0; transform: scale(0.94) translateY(12px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.cookbook-name-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cookbook-name-suggestions__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cookbook-name-suggestions__label {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cookbook-name-suggestions__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cookbook-name-suggestions__pills .onboarding-suggestion-pill {
+  padding: 9px 12px;
+  font-size: 0.9rem;
+}
+
+@keyframes refreshSpin {
+  from { transform: rotate(0); }
+  to { transform: rotate(360deg); }
+}
+
+.cookbook-name-suggestions__refresh.is-spinning svg {
+  animation: refreshSpin 0.45s linear both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cookbook-name-suggestions__refresh.is-spinning svg {
+    animation: none;
+  }
 }
 
 .mini-modal {

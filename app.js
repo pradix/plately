@@ -821,6 +821,8 @@ const cookbookSaveCreateButton = document.getElementById("cookbookSaveCreateButt
 const cookbookSaveConfirmButton = document.getElementById("cookbookSaveConfirmButton");
 const cookbookNameModal = document.getElementById("cookbookNameModal");
 const cookbookNameInput = document.getElementById("cookbookNameInput");
+const cookbookNameSuggestionsPills = document.getElementById("cookbookNameSuggestionsPills");
+const cookbookNameSuggestionsRefresh = document.getElementById("cookbookNameSuggestionsRefresh");
 const cookbookOptionsSheet = document.getElementById("cookbookOptionsSheet");
 
 function getSelectedRecipe() {
@@ -1211,27 +1213,27 @@ bindEvent(document.getElementById("resetEmailForm"), "submit", async (e) => {
   }
 });
 
-function getCookbookCoverMarkup(cookbook, modifier = "cookbook-save-option__cover") {
+function getCookbookCoverMarkup(cookbook, baseClass = "cookbook-save-option__cover", extraClass = "") {
   const recipes = (cookbook?.recipeIds || [])
     .map((recipeId) => getRecipeById(recipeId))
     .filter(Boolean);
   const coverRecipes = recipes.slice(0, 4);
 
   if (!coverRecipes.length) {
-    return `<span class="${modifier} ${modifier}--empty" aria-hidden="true">＋</span>`;
+    return `<span class="${baseClass} ${baseClass}--empty ${extraClass}" aria-hidden="true">＋</span>`;
   }
 
   if (coverRecipes.length === 1) {
     const recipe = coverRecipes[0];
     return `
-      <span class="${modifier}" aria-hidden="true">
+      <span class="${baseClass} ${extraClass}" aria-hidden="true">
         <img src="${escapeHtml(recipe.image)}" alt="" loading="lazy" />
       </span>
     `;
   }
 
   return `
-    <span class="${modifier} ${modifier}--grid" aria-hidden="true">
+    <span class="${baseClass} ${baseClass}--grid ${extraClass}" aria-hidden="true">
       ${coverRecipes
         .map(
           (recipe) => `
@@ -1248,6 +1250,8 @@ function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
     return;
   }
 
+  const isSingle = state.cookbooks.length === 1;
+
   cookbookSaveList.innerHTML = state.cookbooks
     .map((cookbook) => {
       const recipeCount = cookbook.recipeIds.length;
@@ -1262,14 +1266,14 @@ function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
 
       return `
         <button
-          class="cookbook-save-option ${isDefaultCookbook ? "is-default" : ""} ${isSelected ? "is-selected" : ""}"
+          class="cookbook-save-option ${isSingle ? "is-compact" : ""} ${isDefaultCookbook ? "is-default" : ""} ${isSelected ? "is-selected" : ""}"
           type="button"
           data-save-cookbook-id="${cookbook.id}"
           data-save-recipe-id="${escapeHtml(recipeId)}"
           role="option"
           aria-selected="${isSelected ? "true" : "false"}"
         >
-          ${getCookbookCoverMarkup(cookbook)}
+          ${getCookbookCoverMarkup(cookbook, "cookbook-save-option__cover", isSingle ? "cookbook-save-option__cover--compact" : "")}
           <span class="cookbook-save-option__copy">
             <strong>${escapeHtml(cookbook.name)}</strong>
             <span>${escapeHtml(meta)}</span>
@@ -1282,7 +1286,51 @@ function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
     })
     .join("");
 
-  cookbookSaveList.classList.toggle("is-single", state.cookbooks.length === 1);
+  cookbookSaveList.classList.toggle("is-single", isSingle);
+}
+
+const COOKBOOK_NAME_SUGGESTION_POOL = [
+  "Favorieten",
+  "Snel & makkelijk",
+  "Weekendkoken",
+  "Bakken",
+  "Vegetarisch",
+  "Vegan",
+  "Mealprep",
+  "Budget",
+  "30 minuten",
+  "Airfryer",
+  "Soepen",
+  "Salades",
+  "Pasta",
+  "Rijst & noedels",
+  "Kip",
+  "Vis",
+  "BBQ",
+  "Ovenschotels",
+  "Ontbijt",
+  "Lunch",
+  "Diner",
+  "Desserts",
+  "Hapjes",
+  "Gezinsproof",
+  "Feestdagen",
+  "Zomer",
+  "Winter",
+  "Italiaans",
+  "Aziatisch",
+  "Mexicaans",
+];
+
+let cookbookNameSuggestionSalt = 0;
+function renderCookbookNameSuggestions() {
+  if (!cookbookNameSuggestionsPills) return;
+  const seed = (Date.now() ^ ((++cookbookNameSuggestionSalt * 2654435761) >>> 0)) >>> 0;
+  const rng = mulberry32(seed);
+  const picks = pickUniqueRandom(COOKBOOK_NAME_SUGGESTION_POOL, 10, rng);
+  cookbookNameSuggestionsPills.innerHTML = picks
+    .map((label) => `<button class="onboarding-suggestion-pill" type="button" data-cookbook-name-suggest="${escapeHtml(label)}">${escapeHtml(label)}</button>`)
+    .join("");
 }
 
 function syncCookbookSaveConfirmButton() {
@@ -5584,6 +5632,7 @@ function openCookbookNameModal(purpose = "create", existingName = "", cookbookId
   if (!modal || !titleEl || !input) return;
   titleEl.textContent = purpose === "rename" ? "Hernoem kookboek" : "Nieuw kookboek";
   input.value = existingName;
+  renderCookbookNameSuggestions();
   modal.classList.remove("hidden");
   modal.setAttribute("aria-hidden", "false");
   setTimeout(() => input.focus(), 80);
@@ -9022,6 +9071,28 @@ bindEvent(document.getElementById("cookbookNameModalBackdrop"), "click", closeCo
 document.getElementById("cookbookNameInput")?.addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("cookbookNameConfirmButton")?.click();
   if (e.key === "Escape") closeCookbookNameModal();
+});
+
+// Cookbook name suggestions (pills + refresh)
+bindEvent(cookbookNameSuggestionsPills, "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const pill = target.closest("[data-cookbook-name-suggest]");
+  if (!(pill instanceof HTMLElement)) return;
+  const label = pill.dataset.cookbookNameSuggest || "";
+  if (!label) return;
+  const input = document.getElementById("cookbookNameInput");
+  if (input) {
+    input.value = label;
+    input.focus();
+  }
+});
+
+bindEvent(cookbookNameSuggestionsRefresh, "click", () => {
+  renderCookbookNameSuggestions();
+  if (!cookbookNameSuggestionsRefresh) return;
+  cookbookNameSuggestionsRefresh.classList.add("is-spinning");
+  window.setTimeout(() => cookbookNameSuggestionsRefresh.classList.remove("is-spinning"), 500);
 });
 
 // Cookbook options sheet (⋯ button)

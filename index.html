@@ -1679,6 +1679,18 @@
       <div class="mini-modal__box" role="dialog" aria-modal="true" aria-labelledby="cookbookNameModalTitle">
         <h3 class="mini-modal__title" id="cookbookNameModalTitle">Nieuw kookboek</h3>
         <input class="mini-modal__input" id="cookbookNameInput" type="text" placeholder="Naam van je kookboek..." maxlength="40" autocomplete="off" />
+        <div class="cookbook-name-suggestions" id="cookbookNameSuggestions" aria-label="Suggesties">
+          <div class="cookbook-name-suggestions__head">
+            <p class="cookbook-name-suggestions__label">Suggesties</p>
+            <button class="icon-button cookbook-name-suggestions__refresh" type="button" id="cookbookNameSuggestionsRefresh" aria-label="Ververs suggesties" title="Ververs suggesties">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M20 4v6h-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+          <div class="cookbook-name-suggestions__pills" id="cookbookNameSuggestionsPills"></div>
+        </div>
         <div class="mini-modal__actions">
           <button class="secondary-button" type="button" id="cookbookNameCancelButton">Annuleren</button>
           <button class="primary-button" type="button" id="cookbookNameConfirmButton">Opslaan</button>
