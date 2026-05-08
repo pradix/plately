@@ -9706,6 +9706,71 @@ function showOnboardingStep(step) {
   document.getElementById("onboardingStep4")?.classList.add("hidden");
   document.getElementById(`onboardingStep${step}`)?.classList.remove("hidden");
   updateOnboardingProgress(step);
+  if (step === 4) initOnboardingStep4();
+}
+
+function normalizeHandleBase(input) {
+  const base = (input || "")
+    .toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, "");
+  return base;
+}
+
+function suggestOnboardingHandle() {
+  const input = document.getElementById("onboardingHandle");
+  if (!(input instanceof HTMLInputElement)) return;
+  if (input.dataset.userEdited === "1") return;
+  if (input.value && input.value.trim()) return;
+
+  const name = state?.profile?.name || "";
+  let base = normalizeHandleBase(name);
+  if (!base) base = "plately" + Math.floor(100 + Math.random() * 900);
+
+  input.value = base.startsWith("@") ? base : `@${base}`;
+}
+
+function syncOnboardingGenderUI(value) {
+  const hidden = document.getElementById("onboardingGender");
+  if (hidden instanceof HTMLInputElement) hidden.value = value || "";
+  document.querySelectorAll("[data-onboarding-gender]").forEach((btn) => {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    const v = btn.dataset.onboardingGender || "";
+    btn.setAttribute("aria-pressed", v === value ? "true" : "false");
+  });
+}
+
+function bindOnboardingGenderTiles() {
+  const root = document.getElementById("onboardingStep4");
+  if (!root || root.dataset.genderTilesBound === "1") return;
+  root.dataset.genderTilesBound = "1";
+
+  root.querySelectorAll("[data-onboarding-gender]").forEach((btn) => {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    btn.addEventListener("click", () => {
+      const value = btn.dataset.onboardingGender || "";
+      onboardingData.gender = value;
+      syncOnboardingGenderUI(value);
+    });
+  });
+}
+
+function initOnboardingStep4() {
+  const handleInput = document.getElementById("onboardingHandle");
+  if (handleInput instanceof HTMLInputElement && handleInput.dataset.bindEdited !== "1") {
+    handleInput.dataset.bindEdited = "1";
+    handleInput.addEventListener("input", () => {
+      handleInput.dataset.userEdited = "1";
+    });
+  }
+
+  suggestOnboardingHandle();
+  bindOnboardingGenderTiles();
+  syncOnboardingGenderUI(onboardingData.gender || "");
 }
 
 function updateOnboardingProgress(step) {
