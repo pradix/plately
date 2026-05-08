@@ -301,6 +301,36 @@
       line-height:1;
     }
 
+    .channel-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .channel-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(120, 147, 111, 0.10);
+      border: 1px solid rgba(120, 147, 111, 0.18);
+      color: rgba(45, 74, 46, 0.92);
+      font-size: 11px;
+      font-weight: 750;
+      white-space: nowrap;
+      max-width: 240px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .channel-more {
+      color: var(--muted);
+      font-size: 12px;
+      margin-left: 2px;
+      white-space: nowrap;
+    }
+
     /* ── Detail panel ─────────────────────────────────────────────────────── */
     .detail-panel {
       position: fixed;
@@ -1278,17 +1308,13 @@
         const customTotal = user.customChannelsCounts?.total ?? 0;
         const customPending = user.customChannelsCounts?.pending ?? 0;
         const followedNames = (Array.isArray(user.followedChannels) ? user.followedChannels : [])
-          .map((ch) => (ch && ch.name ? String(ch.name) : ""))
-          .map((s) => s.trim())
+          .map((ch) => String(ch?.name || ch?.id || "").trim())
           .filter(Boolean);
         const maxShown = 4;
         const shown = followedNames.slice(0, maxShown);
         const extra = Math.max(0, followedNames.length - shown.length);
-        const chips = shown.map((name) => {
-          const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-          return `<span class="mini-chip" title="${escapeHtml(name)}">${escapeHtml(initials || name.slice(0,2).toUpperCase())}</span>`;
-        }).join("");
-        const more = extra ? `<span class="muted" style="font-size:12px;margin-left:6px">+${extra}</span>` : "";
+        const chips = shown.map((name) => `<span class="channel-chip" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`).join("");
+        const more = extra ? `<span class="channel-more">+${extra}</span>` : "";
         const followedHtml = followedNames.length ? `${chips}${more}` : `<span class="muted">—</span>`;
 
         return `
@@ -1304,7 +1330,7 @@
             <td>${user.cookbooks}</td>
             <td>${user.groceryItems}</td>
             <td>
-              <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">${followedHtml}</div>
+              <div class="channel-chips">${followedHtml}</div>
               <div class="muted" style="margin-top:4px;font-size:12px">Custom: ${customTotal}${customPending ? ` · <span class="badge" title="In behandeling">${customPending}</span>` : ""}</div>
             </td>
             <td class="timestamp">${createdStr}${isNew ? ' <span class="badge new">NEW</span>' : ''}</td>
@@ -1375,6 +1401,13 @@
       const user = allUsers.find(u => u.id === userId);
       if (!user) return;
 
+      const followedNames = (Array.isArray(user.followedChannels) ? user.followedChannels : [])
+        .map((ch) => String(ch?.name || ch?.id || "").trim())
+        .filter(Boolean);
+      const channelsHtml = followedNames.length
+        ? `<div class="channel-chips" style="margin-top:6px">${followedNames.map((name) => `<span class="channel-chip" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`).join("")}</div>`
+        : `<p class="muted">—</p>`;
+
       let photoHtml = '';
       if (user.profilePhoto) {
         photoHtml = `
@@ -1421,6 +1454,9 @@
 
         <h3>Boodschappen</h3>
         <p>${user.groceryItems} items</p>
+
+        <h3>Kanalen (${followedNames.length})</h3>
+        ${channelsHtml}
 
         <h3>Profiel</h3>
         <p>${user.hasProfile ? '✅ Compleet' : '❌ Onvolledig'}</p>

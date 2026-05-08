@@ -6465,9 +6465,17 @@ async function renderAdminScreen() {
     } else {
       const renderFollowedChannels = (user) => {
         const channels = Array.isArray(user?.followedChannels) ? user.followedChannels : [];
-        const names = channels
-          .map((ch) => String(ch?.name || "").trim())
+        let names = channels
+          .map((ch) => String(ch?.name || ch?.id || "").trim())
           .filter(Boolean);
+
+        if (!names.length && Array.isArray(user?.followedChannelIds) && user.followedChannelIds.length) {
+          const seedNameById = new Map(SEED_CHANNELS.map((ch) => [ch.id, ch.name]));
+          const customNameById = new Map((state.customChannels || []).map((ch) => [ch.id, ch.name]));
+          names = user.followedChannelIds
+            .map((id) => String(customNameById.get(id) || seedNameById.get(id) || id || "").trim())
+            .filter(Boolean);
+        }
         if (!names.length) {
           return `<span style="color:#b9ada0">—</span>`;
         }
@@ -6476,10 +6484,9 @@ async function renderAdminScreen() {
         const shown = names.slice(0, maxShown);
         const extra = Math.max(0, names.length - shown.length);
         const chips = shown.map((name) => {
-          const initials = getInitialsFromNameOrEmail(name, "");
-          return `<span title="${escapeHtml(name)}" style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:18px;padding:0 6px;border-radius:999px;background:#f6f7f1;color:#6b6258;font-size:0.72rem;line-height:1;margin-right:6px;border:1px solid #eee9e2">${escapeHtml(initials)}</span>`;
+          return `<span title="${escapeHtml(name)}" style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;background:#f6f7f1;color:#6b6258;font-size:0.72rem;line-height:1;border:1px solid #eee9e2;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis;margin-right:6px">${escapeHtml(name)}</span>`;
         }).join("");
-        const more = extra ? `<span style="color:#989188;font-size:0.75rem">+${extra}</span>` : "";
+        const more = extra ? `<span style="color:#989188;font-size:0.75rem;white-space:nowrap">+${extra}</span>` : "";
         return `${chips}${more}`;
       };
 
