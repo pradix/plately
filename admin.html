@@ -574,6 +574,24 @@
         <div id="channelTestImportStatus" class="muted" style="margin-top:8px"></div>
       </div>
 
+      <div class="section" id="pushAnnounceSection">
+        <div class="section-header">
+          <h2>📣 Push — Nieuwe functies</h2>
+          <div class="muted">Verstuur naar alle abonnees</div>
+        </div>
+        <div class="admin-test__row">
+          <input id="pushAnnounceTitle" class="admin-test__input" type="text" placeholder="Titel" />
+          <input id="pushAnnounceUrl" class="admin-test__input" type="text" placeholder="Deep link (optioneel, bijv. /?new=1)" />
+        </div>
+        <div style="margin-top:10px">
+          <textarea id="pushAnnounceBody" class="admin-test__input" rows="3" placeholder="Bericht" style="width:100%;resize:vertical"></textarea>
+        </div>
+        <div class="admin-test__row" style="margin-top:10px">
+          <button class="btn btn-primary" type="button" id="pushAnnounceBtn" onclick="sendPushAnnouncement()">Verstuur</button>
+          <div id="pushAnnounceStatus" class="muted" style="flex:2;min-width:240px"></div>
+        </div>
+      </div>
+
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-value" id="totalUsers">-</div>
@@ -2213,6 +2231,36 @@
       } catch (error) {
         if (statusEl) statusEl.textContent = "";
         showChannelTestError(error.message);
+      }
+    }
+
+    async function sendPushAnnouncement() {
+      const title = (document.getElementById("pushAnnounceTitle")?.value || "").trim();
+      const body = (document.getElementById("pushAnnounceBody")?.value || "").trim();
+      const url = (document.getElementById("pushAnnounceUrl")?.value || "").trim();
+      const statusEl = document.getElementById("pushAnnounceStatus");
+      const btn = document.getElementById("pushAnnounceBtn");
+      if (!title || !body) {
+        if (statusEl) statusEl.textContent = "Titel en bericht zijn verplicht.";
+        return;
+      }
+      if (btn) btn.disabled = true;
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> Versturen…`;
+      try {
+        const response = await fetch("/api/admin/push/announce", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, body, url: url || undefined }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Versturen mislukt");
+        const sent = Number(data.sent || 0);
+        const failed = Number(data.failed || 0);
+        if (statusEl) statusEl.textContent = `✅ Verstuurd: ${sent} · Mislukt: ${failed}`;
+      } catch (error) {
+        if (statusEl) statusEl.textContent = `❌ ${error.message}`;
+      } finally {
+        if (btn) btn.disabled = false;
       }
     }
 
