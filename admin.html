@@ -284,6 +284,23 @@
 
     .timestamp { font-size: 11px; color: rgba(0,0,0,0.45); }
 
+    .mini-chip{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-width:22px;
+      height:18px;
+      padding:0 6px;
+      border-radius:999px;
+      background:rgba(120, 147, 111, 0.10);
+      color:rgba(45, 74, 46, 0.92);
+      border:1px solid rgba(120, 147, 111, 0.18);
+      font-size:10px;
+      font-weight:800;
+      letter-spacing:0.02em;
+      line-height:1;
+    }
+
     /* ── Detail panel ─────────────────────────────────────────────────────── */
     .detail-panel {
       position: fixed;
@@ -540,7 +557,7 @@
               <th class="sortable" onclick="sortTable('recipes')">Recepten</th>
               <th class="sortable" onclick="sortTable('cookbooks')">Kookboeken</th>
               <th class="sortable" onclick="sortTable('groceryItems')">Boodschappen</th>
-              <th class="sortable" onclick="sortTable('customChannelsTotal')">Kanalen</th>
+              <th class="sortable" onclick="sortTable('followedChannelsTotal')">Volgt</th>
               <th class="sortable" onclick="sortTable('createdAt')">Aangemaakt</th>
               <th class="sortable" onclick="sortTable('updatedAt')">Laatst Actief</th>
             </tr>
@@ -1240,6 +1257,10 @@
           aVal = a.customChannelsCounts?.total ?? 0;
           bVal = b.customChannelsCounts?.total ?? 0;
         }
+        if (sortBy === 'followedChannelsTotal') {
+          aVal = Array.isArray(a.followedChannels) ? a.followedChannels.length : (Array.isArray(a.followedChannelIds) ? a.followedChannelIds.length : 0);
+          bVal = Array.isArray(b.followedChannels) ? b.followedChannels.length : (Array.isArray(b.followedChannelIds) ? b.followedChannelIds.length : 0);
+        }
 
         if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
         if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
@@ -1256,6 +1277,19 @@
         const isActive = Date.now() - updatedDate.getTime() < 604800000; // < 7 days
         const customTotal = user.customChannelsCounts?.total ?? 0;
         const customPending = user.customChannelsCounts?.pending ?? 0;
+        const followedNames = (Array.isArray(user.followedChannels) ? user.followedChannels : [])
+          .map((ch) => (ch && ch.name ? String(ch.name) : ""))
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const maxShown = 4;
+        const shown = followedNames.slice(0, maxShown);
+        const extra = Math.max(0, followedNames.length - shown.length);
+        const chips = shown.map((name) => {
+          const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+          return `<span class="mini-chip" title="${escapeHtml(name)}">${escapeHtml(initials || name.slice(0,2).toUpperCase())}</span>`;
+        }).join("");
+        const more = extra ? `<span class="muted" style="font-size:12px;margin-left:6px">+${extra}</span>` : "";
+        const followedHtml = followedNames.length ? `${chips}${more}` : `<span class="muted">—</span>`;
 
         return `
           <tr class="user-row" onclick="showDetail('${escapeHtml(user.id)}')">
@@ -1269,7 +1303,10 @@
             <td>${user.recipes}</td>
             <td>${user.cookbooks}</td>
             <td>${user.groceryItems}</td>
-            <td>${customTotal}${customPending ? ` <span class="badge" title="In behandeling">${customPending}</span>` : ""}</td>
+            <td>
+              <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">${followedHtml}</div>
+              <div class="muted" style="margin-top:4px;font-size:12px">Custom: ${customTotal}${customPending ? ` · <span class="badge" title="In behandeling">${customPending}</span>` : ""}</div>
+            </td>
             <td class="timestamp">${createdStr}${isNew ? ' <span class="badge new">NEW</span>' : ''}</td>
             <td class="timestamp">${updatedStr}${isActive ? ' <span class="badge active">ACTIVE</span>' : ''}</td>
           </tr>
