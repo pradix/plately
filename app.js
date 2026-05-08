@@ -471,8 +471,8 @@ const state = {
     mode: "login",
   },
   profile: {
-    name: "Sarah de Vries",
-    handle: "@sarahkookt",
+    name: "",
+    handle: "",
     email: "",
     photo: "",
     favoriteSupermarket: "ah",
@@ -9668,7 +9668,7 @@ const onboardingScreen = document.getElementById("onboardingScreen");
 let onboardingData = {
   channels: [],
   cookbook: "",
-  handle: "",
+  name: "",
   photoData: null,
   supermarket: "ah",
 };
@@ -9677,7 +9677,7 @@ function resetOnboardingData() {
   onboardingData = {
     channels: SEED_CHANNELS.map((ch) => ch.id),
     cookbook: "",
-    handle: "",
+    name: "",
     photoData: null,
     supermarket: "ah",
     suggestedChannels: [],
@@ -9709,31 +9709,6 @@ function showOnboardingStep(step) {
   if (step === 4) initOnboardingStep4();
 }
 
-function normalizeHandleBase(input) {
-  const base = (input || "")
-    .toString()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, "");
-  return base;
-}
-
-function suggestOnboardingHandle() {
-  const input = document.getElementById("onboardingHandle");
-  if (!(input instanceof HTMLInputElement)) return;
-  if (input.dataset.userEdited === "1") return;
-  if (input.value && input.value.trim()) return;
-
-  const name = state?.profile?.name || "";
-  let base = normalizeHandleBase(name);
-  if (!base) base = "plately" + Math.floor(100 + Math.random() * 900);
-
-  input.value = base.startsWith("@") ? base : `@${base}`;
-}
-
 function syncOnboardingGenderUI(value) {
   const hidden = document.getElementById("onboardingGender");
   if (hidden instanceof HTMLInputElement) hidden.value = value || "";
@@ -9760,15 +9735,21 @@ function bindOnboardingGenderTiles() {
 }
 
 function initOnboardingStep4() {
-  const handleInput = document.getElementById("onboardingHandle");
-  if (handleInput instanceof HTMLInputElement && handleInput.dataset.bindEdited !== "1") {
-    handleInput.dataset.bindEdited = "1";
-    handleInput.addEventListener("input", () => {
-      handleInput.dataset.userEdited = "1";
-    });
+  const nameInput = document.getElementById("onboardingProfileName");
+  if (nameInput instanceof HTMLInputElement) {
+    if (nameInput.dataset.userEdited !== "1") {
+      const prefill = onboardingData.name || state?.profile?.name || "";
+      nameInput.value = prefill;
+    }
+    if (nameInput.dataset.bindEdited !== "1") {
+      nameInput.dataset.bindEdited = "1";
+      nameInput.addEventListener("input", () => {
+        nameInput.dataset.userEdited = "1";
+        onboardingData.name = nameInput.value;
+      });
+    }
   }
 
-  suggestOnboardingHandle();
   bindOnboardingGenderTiles();
   syncOnboardingGenderUI(onboardingData.gender || "");
 }
@@ -9878,10 +9859,13 @@ function finishOnboarding() {
     if (state.cookbooks.length === 1) state.selectedCookbookId = newCb.id;
   }
 
-  // Update profile if handle provided
-  if (onboardingData.handle.trim()) {
-    state.profile.handle = onboardingData.handle;
+  // Persist profile name from onboarding (prefer explicit step 4 input,
+  // fall back to whatever was set during registration).
+  const onboardedName = (onboardingData.name || "").trim();
+  if (onboardedName) {
+    state.profile.name = onboardedName;
   }
+
   if (onboardingData.photoData) {
     state.profile.photo = onboardingData.photoData;
   }
@@ -10002,7 +9986,7 @@ bindEvent(document.getElementById("onboardingStep4Skip"), "click", () => {
 });
 
 bindEvent(document.getElementById("onboardingStep4Finish"), "click", () => {
-  onboardingData.handle = document.getElementById("onboardingHandle")?.value.trim() || "";
+  onboardingData.name = document.getElementById("onboardingProfileName")?.value.trim() || "";
   onboardingData.gender = document.getElementById("onboardingGender")?.value || "";
   onboardingData.birthDate = document.getElementById("onboardingBirthDate")?.value || "";
   finishOnboarding();
