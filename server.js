@@ -1925,6 +1925,8 @@ function createStoreChoice(store, choice) {
     productId: normalizedChoice.productId || "",
     imageUrl: normalizedChoice.imageUrl || "",
     labels: normalizedChoice.labels || [],
+    isBonus: Boolean(normalizedChoice.isBonus),
+    promotionLabel: sanitizeText(normalizedChoice.promotionLabel || ""),
   };
 }
 
@@ -2125,6 +2127,8 @@ function buildMatchedChoiceFromProduct(store, item, product, badge = "Gevonden")
     productId,
     imageUrl: sanitizeText(product.imageUrl || ""),
     labels: Array.isArray(product.labels) ? product.labels : [],
+    isBonus: Boolean(product.isBonus),
+    promotionLabel: sanitizeText(product.promotionLabel || ""),
   };
 
   choice.url = buildStoreChoiceUrl(store, choice);
@@ -5954,7 +5958,22 @@ function parseAHProduct(product) {
   // AH webshopId can be "wi123456" or "wi_123456" — strip prefix correctly
   const webshopId = String(product.webshopId || product.id || "");
   const numericId = webshopId.replace(/^wi_?/i, "");
-  const priceEuros = product.priceBeforeBonus ?? product.currentPrice ?? 0;
+  const priceEuros = product.currentPrice ?? product.priceBeforeBonus ?? 0;
+  const currentPrice = Number(product.currentPrice);
+  const priceBeforeBonus = Number(product.priceBeforeBonus);
+  const hasDiscountedPrice =
+    Number.isFinite(currentPrice) &&
+    Number.isFinite(priceBeforeBonus) &&
+    currentPrice > 0 &&
+    priceBeforeBonus > currentPrice;
+  const isBonus = Boolean(
+    product.isBonus ||
+    product.isBonusPrice ||
+    product.bonusMechanism ||
+    (Array.isArray(product.discountLabels) && product.discountLabels.length > 0) ||
+    hasDiscountedPrice
+  );
+  const promotionLabel = isBonus ? getAHPromotionLabel(product) : "";
   // Prefer the 200×200 rendition for thumbnails — index 2 in the standard AH image array
   const images = product.images || [];
   const imageUrl = images.find((i) => i.width === 200)?.url || images[0]?.url || "";
@@ -6092,7 +6111,51 @@ function parseAHProduct(product) {
     url: numericId ? `https://www.ah.nl/producten/product/wi${numericId}` : "",
     imageUrl,
     labels: [...new Set([...labels.map((l) => sanitizeText(l)).filter(Boolean), ...canonical])],
+    isBonus,
+    promotionLabel,
   };
+}
+
+function formatAHCurrency(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "";
+  return num.toFixed(2).replace(".", ",");
+}
+
+function getAHPromotionLabel(product) {
+  const labels = Array.isArray(product?.discountLabels) ? product.discountLabels : [];
+  const first = labels.find(Boolean) || {};
+
+  if (first.percentage !== null && first.percentage !== undefined && Number.isFinite(Number(first.percentage))) {
+    return `${Number(first.percentage)}%`;
+  }
+  if (first.precisePercentage !== null && first.precisePercentage !== undefined && Number.isFinite(Number(first.precisePercentage))) {
+    return `${Number(first.precisePercentage)}%`;
+  }
+  if (
+    first.count !== null &&
+    first.count !== undefined &&
+    first.freeCount !== null &&
+    first.freeCount !== undefined &&
+    Number.isFinite(Number(first.count)) &&
+    Number.isFinite(Number(first.freeCount))
+  ) {
+    return `${Number(first.count)}+${Number(first.freeCount)}`;
+  }
+  if (
+    first.count !== null &&
+    first.count !== undefined &&
+    first.price !== null &&
+    first.price !== undefined &&
+    Number.isFinite(Number(first.count)) &&
+    Number.isFinite(Number(first.price))
+  ) {
+    return `${Number(first.count)} voor ${formatAHCurrency(first.price)}`;
+  }
+
+  const mechanism = sanitizeText(product?.bonusMechanism || first.defaultDescription || "");
+  if (mechanism) return mechanism;
+  return "BONUS";
 }
 
 // Returns the best single match (for backward compat with buildMatchedChoiceFromProduct)

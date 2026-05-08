@@ -1743,6 +1743,12 @@ function extractBasketLabelsFromChoice(choice, item) {
   return flags;
 }
 
+function getChoicePromotionLabel(choice) {
+  const label = String(choice?.promotionLabel || "").trim();
+  if (label) return label;
+  return choice?.isBonus ? "BONUS" : "";
+}
+
 function choiceMatchesBasketFilters(choice, filter, item) {
   const labels = extractBasketLabelsFromChoice(choice, item);
   if (filter?.beterLeven1 && !labels.beterLeven1) return false;
@@ -1868,6 +1874,10 @@ function renderBasketPreview() {
     const displayTitle = bioActive && isBioChoice
       ? `🌱 Biologisch ${choice.title}`
       : choice.title;
+    const promotionLabel = getChoicePromotionLabel(choice);
+    const promotionBadge = promotionLabel
+      ? `<span class="basket-product__bonus">${escapeHtml(promotionLabel)}</span>`
+      : "";
 
     const ingredientTitle = splitCompoundIngredientWords(item.ingredientTitle || "");
 
@@ -1878,7 +1888,11 @@ function renderBasketPreview() {
         </div>
         <div class="basket-product__info">
           <p class="basket-product__name">${escapeHtml(displayTitle)}</p>
-          <p class="basket-product__meta">${escapeHtml(choice.price || "")}${choice.subtitle ? ` · ${escapeHtml(choice.subtitle)}` : ""}</p>
+          <p class="basket-product__meta">
+            ${choice.price ? `<span>${escapeHtml(choice.price)}</span>` : ""}
+            ${promotionBadge}
+            ${choice.subtitle ? `<span>${escapeHtml(choice.subtitle)}</span>` : ""}
+          </p>
           <p class="basket-product__for">voor ${escapeHtml(item.ingredientAmount || "")} ${escapeHtml(ingredientTitle)}</p>
           ${altCount > 1 ? `<button class="basket-product__wissel" type="button" data-basket-wissel="${itemIndex}" onclick="openAlternativesSheet(${itemIndex}); return false;">
             ${WISSEL_SVG}
@@ -2100,7 +2114,9 @@ function renderAltBadges(choice, item, { showCheapest = false, forceKeys = [] } 
     if (k) keys.add(k);
   }
   const primary = ALT_BADGE_PRIORITY.filter((k) => keys.has(k)).slice(0, 2);
+  const promotionLabel = getChoicePromotionLabel(choice);
   const badges = [
+    ...(promotionLabel ? [{ key: "bonus", label: promotionLabel }] : []),
     ...primary.map((k) => ({ key: k, label: formatAltBadgeLabel(k) })),
     ...(showCheapest ? [{ key: "cheapest", label: formatAltBadgeLabel("cheapest") }] : []),
   ].filter((b) => b.label);
