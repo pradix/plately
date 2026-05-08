@@ -2559,6 +2559,7 @@ function formatUnitForQuantity(unit, quantity) {
     ["reepje", "reepjes"],
     ["blokje", "blokjes"],
     ["schijfje", "schijfjes"],
+    ["handje", "handjes"],
     ["takje", "takjes"],
   ]);
 
