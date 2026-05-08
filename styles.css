@@ -3649,6 +3649,48 @@ img { display: block; max-width: 100%; }
   font-variant-numeric: tabular-nums;
 }
 
+/* ── Admin tabs (in-app) ─────────────────────────────────────────────────── */
+.admin-tabs {
+  position: sticky;
+  top: 10px;
+  z-index: 20;
+  margin: 0 14px 16px;
+}
+
+.admin-tabs__rail {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 32, 29, 0.10);
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: 0 10px 24px rgba(116, 111, 98, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  overflow-x: auto;
+}
+
+.admin-tabs__btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: rgba(37, 33, 29, 0.72);
+  white-space: nowrap;
+}
+
+.admin-tabs__btn[aria-selected="true"] {
+  background: rgba(141, 164, 133, 0.18);
+  color: rgba(37, 33, 29, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(141, 164, 133, 0.28);
+}
+
+.admin-tab-section { display: none; }
+.admin-tab-section.is-active { display: block; }
+
 .profile2-row {
   display: flex;
   align-items: center;

@@ -353,6 +353,30 @@
     .users-table tbody tr:hover { background: rgba(0,0,0,0.02); cursor: pointer; }
     .user-row { transition: background 0.15s; }
 
+    .admin-search-terms__table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+    .admin-search-terms__table th {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(0,0,0,0.12);
+      font-weight: 750;
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .admin-search-terms__table td {
+      padding: 9px 10px;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      vertical-align: top;
+    }
+    .admin-search-terms__table .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .admin-search-terms__table .query { font-weight: 700; color: rgba(0,0,0,0.82); max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
     .user-email { font-weight: 650; color: var(--green-ink); }
     .user-id { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 11px; color: rgba(0,0,0,0.45); }
 
@@ -525,6 +549,7 @@
     </div>
 
     <div id="content" style="display: none;">
+      <div class="admin-tab-section" id="adminTabChannelTest" data-tab="channel-test">
       <div class="section" id="channelTestSection">
         <div class="section-header">
           <h2>Kanaal test (search + import)</h2>
@@ -573,7 +598,9 @@
         </div>
         <div id="channelTestImportStatus" class="muted" style="margin-top:8px"></div>
       </div>
+      </div>
 
+      <div class="admin-tab-section" id="adminTabPush" data-tab="push">
       <div class="section" id="pushAnnounceSection">
         <div class="section-header">
           <h2>📣 Push — Nieuwe functies</h2>
@@ -592,7 +619,9 @@
           <div id="pushAnnounceStatus" class="muted" style="flex:2;min-width:240px"></div>
         </div>
       </div>
+      </div>
 
+      <div class="admin-tab-section" id="adminTabOverview" data-tab="overview">
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-value" id="totalUsers">-</div>
@@ -675,7 +704,9 @@
           </div>
         </div>
       </div>
+      </div>
 
+      <div class="admin-tab-section" id="adminTabChannels" data-tab="channels">
       <div class="section" id="inventorySection">
         <div class="section-header">
           <h2>Inventaris</h2>
@@ -714,43 +745,6 @@
         <div id="inventoryLoading" class="loading" style="display:none;padding:18px 0">⏳ Inventaris laden...</div>
 
         <div id="inventoryGrid" class="admin-inventory__grid" style="margin-top:14px"></div>
-      </div>
-
-      <div class="section">
-        <div class="section-header">
-          <h2>Gebruikers</h2>
-          <div class="muted">Klik op een rij voor details</div>
-        </div>
-        <div class="search-bar">
-          <input type="text" id="searchInput" placeholder="Zoek gebruiker by email..." onkeyup="filterUsers()">
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
-          <div style="color:#666;font-size:13px">
-            Geselecteerd: <strong id="selectedUsersCount">0</strong>
-          </div>
-          <div style="display:flex;gap:10px;align-items:center">
-            <button class="btn" onclick="clearSelection()">Selectie wissen</button>
-            <button class="btn btn-primary" onclick="bulkDeleteSelected()" id="bulkDeleteBtn" disabled>🗑️ Verwijder geselecteerden</button>
-          </div>
-        </div>
-        <table class="users-table">
-          <thead>
-            <tr>
-              <th style="width:36px">
-                <input type="checkbox" id="selectAllUsers" onclick="toggleSelectAll(event)" />
-              </th>
-              <th class="sortable" onclick="sortTable('email')">Email</th>
-              <th class="sortable" onclick="sortTable('recipes')">Recepten</th>
-              <th class="sortable" onclick="sortTable('cookbooks')">Kookboeken</th>
-              <th class="sortable" onclick="sortTable('groceryItems')">Boodschappen</th>
-              <th class="sortable" onclick="sortTable('followedChannelsTotal')">Volgt</th>
-              <th class="sortable" onclick="sortTable('createdAt')">Aangemaakt</th>
-              <th class="sortable" onclick="sortTable('updatedAt')">Laatst Actief</th>
-            </tr>
-          </thead>
-          <tbody id="usersList">
-          </tbody>
-        </table>
       </div>
 
       <div class="section">
@@ -798,6 +792,57 @@
             <h3 class="subhead">Top platforms</h3>
             <div id="importsTopPlatforms" style="font-size:12px;color:rgba(0,0,0,0.78)"></div>
           </div>
+        </div>
+      </div>
+      </div>
+
+      <div class="admin-tab-section" id="adminTabUsers" data-tab="users">
+      <div class="section" id="usersSection">
+        <div class="section-header">
+          <h2>Gebruikers</h2>
+          <div class="muted">Klik op een rij voor details</div>
+        </div>
+        <div class="search-bar">
+          <input type="text" id="searchInput" placeholder="Zoek gebruiker by email..." onkeyup="filterUsers()">
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
+          <div style="color:#666;font-size:13px">
+            Geselecteerd: <strong id="selectedUsersCount">0</strong>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn" onclick="clearSelection()">Selectie wissen</button>
+            <button class="btn btn-primary" onclick="bulkDeleteSelected()" id="bulkDeleteBtn" disabled>🗑️ Verwijder geselecteerden</button>
+          </div>
+        </div>
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th style="width:36px">
+                <input type="checkbox" id="selectAllUsers" onclick="toggleSelectAll(event)" />
+              </th>
+              <th class="sortable" onclick="sortTable('email')">Email</th>
+              <th class="sortable" onclick="sortTable('recipes')">Recepten</th>
+              <th class="sortable" onclick="sortTable('cookbooks')">Kookboeken</th>
+              <th class="sortable" onclick="sortTable('groceryItems')">Boodschappen</th>
+              <th class="sortable" onclick="sortTable('followedChannelsTotal')">Volgt</th>
+              <th class="sortable" onclick="sortTable('createdAt')">Aangemaakt</th>
+              <th class="sortable" onclick="sortTable('updatedAt')">Laatst Actief</th>
+            </tr>
+          </thead>
+          <tbody id="usersList">
+          </tbody>
+        </table>
+      </div>
+      </div>
+
+      <div class="admin-tab-section" id="adminTabSearchTerms" data-tab="search-terms">
+        <div class="section" id="searchTermsSection">
+          <div class="section-header">
+            <h2>Zoekwoorden</h2>
+            <div class="muted" id="searchTermsMeta">—</div>
+          </div>
+          <div id="searchTermsStatus" class="muted" style="margin-top:-6px">Laden…</div>
+          <div id="searchTermsTableWrap" style="margin-top:10px"></div>
         </div>
       </div>
     </div>
@@ -954,6 +999,7 @@
         loadPendingChannels();
         loadAnalytics();
         loadOverview(); // independent block (own loading/error)
+        loadSearchTerms(); // independent block (own loading/error)
         initInventoryUserFilter();
         loadInventory(); // independent block (own loading/error)
         const lastUpdatedPill = document.getElementById("lastUpdatedPill");
@@ -1339,6 +1385,70 @@
       } catch (error) {
         // keep admin usable even if analytics fails
         console.warn("Analytics load failed:", error.message);
+      }
+    }
+
+    async function loadSearchTerms() {
+      const statusEl = document.getElementById("searchTermsStatus");
+      const wrapEl = document.getElementById("searchTermsTableWrap");
+      const metaEl = document.getElementById("searchTermsMeta");
+      if (!wrapEl) return;
+      if (statusEl) statusEl.textContent = "⏳ Laden…";
+      if (metaEl) metaEl.textContent = "⏳ Laden…";
+      try {
+        const response = await fetch("/api/admin/search-terms?limit=20", adminFetchInit());
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "Failed to load search terms");
+        }
+
+        const searchTerms = data.searchTerms || { last7d: [], allTime: [] };
+        const last7d = Array.isArray(searchTerms?.last7d) ? searchTerms.last7d : [];
+        const allTime = Array.isArray(searchTerms?.allTime) ? searchTerms.allTime : [];
+        const allTimeByQuery = new Map(allTime.map((it) => [String(it?.query || ""), it]));
+
+        if (!last7d.length) {
+          if (statusEl) statusEl.textContent = "Nog geen zoekwoorden (of analytics staat uit).";
+          if (metaEl) metaEl.textContent = "—";
+          wrapEl.innerHTML = "";
+          return;
+        }
+
+        if (statusEl) statusEl.textContent = `Top ${last7d.length} (laatste 7 dagen)`;
+        if (metaEl) metaEl.textContent = "Top queries";
+
+        wrapEl.innerHTML = `
+          <div class="admin-search-terms">
+            <table class="admin-search-terms__table">
+              <thead>
+                <tr>
+                  <th>Zoekwoord</th>
+                  <th class="num">7d</th>
+                  <th class="num">All</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${last7d.map((row) => {
+                  const q = String(row?.query || "");
+                  const all = allTimeByQuery.get(q);
+                  const allCount = Number(all?.count || 0);
+                  const count7d = Number(row?.count || 0);
+                  return `
+                    <tr>
+                      <td class="query" title="${escapeHtml(q)}">${escapeHtml(q)}</td>
+                      <td class="num">${Number.isFinite(count7d) ? count7d : 0}</td>
+                      <td class="num">${Number.isFinite(allCount) ? allCount : 0}</td>
+                    </tr>
+                  `;
+                }).join("")}
+              </tbody>
+            </table>
+          </div>
+        `;
+      } catch (error) {
+        if (statusEl) statusEl.textContent = `❌ ${error.message}`;
+        if (metaEl) metaEl.textContent = "Kon niet laden";
+        wrapEl.innerHTML = "";
       }
     }
 
@@ -2321,6 +2431,58 @@
       return deduped;
     }
 
+    const ADMIN_TABS_STORAGE_KEY = "plately-admin-last-tab";
+
+    function setAdminTab(tabId, { persist = true } = {}) {
+      const sections = Array.from(document.querySelectorAll(".admin-tab-section"));
+      const btns = Array.from(document.querySelectorAll("[data-admin-tab]"));
+      const id = String(tabId || "").trim();
+      const exists = sections.some((s) => String(s.getAttribute("data-tab") || "") === id);
+      const next = exists ? id : "overview";
+
+      sections.forEach((s) => {
+        const sId = String(s.getAttribute("data-tab") || "");
+        s.classList.toggle("is-active", sId === next);
+      });
+      btns.forEach((b) => {
+        const bId = String(b.getAttribute("data-admin-tab") || "");
+        b.setAttribute("aria-selected", bId === next ? "true" : "false");
+      });
+
+      const detail = document.getElementById("detailPanel");
+      if (detail) {
+        if (next !== "users") {
+          detail.classList.remove("open");
+          detail.style.display = "none";
+        } else {
+          detail.style.display = "";
+        }
+      }
+
+      if (persist) {
+        try { localStorage.setItem(ADMIN_TABS_STORAGE_KEY, next); } catch {}
+      }
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+
+    function initAdminTabs() {
+      const rail = document.getElementById("adminTabsRail");
+      if (rail) {
+        rail.addEventListener("click", (e) => {
+          const btn = e.target?.closest?.("[data-admin-tab]");
+          if (!btn) return;
+          e.preventDefault();
+          setAdminTab(btn.getAttribute("data-admin-tab") || "");
+        });
+      }
+      let initial = "overview";
+      try {
+        const stored = localStorage.getItem(ADMIN_TABS_STORAGE_KEY);
+        if (stored) initial = stored;
+      } catch {}
+      setAdminTab(initial, { persist: false });
+    }
+
     // Initial push config status
     refreshPushConfigStatus();
 
@@ -2480,6 +2642,7 @@
       }
     }
 
+    initAdminTabs();
     refreshAll();
     loadChannelCatalog();
   </script>

@@ -7312,9 +7312,57 @@ function renderRecipeSlider() {
 
 // ── Admin Dashboard ───────────────────────────────────────────────────────────
 const ADMIN_EMAIL = "pradix@me.com";
+const ADMIN_TABS_STORAGE_KEY = "plately-admin-last-tab";
+let inAppAdminTabsInitialized = false;
 
 function isAdmin() {
   return state.auth.authenticated && state.auth.email === ADMIN_EMAIL;
+}
+
+function setInAppAdminTab(tabId, { persist = true } = {}) {
+  const sections = Array.from(document.querySelectorAll("#adminScreen .admin-tab-section"));
+  const btns = Array.from(document.querySelectorAll("#inAppAdminTabsRail [data-admin-tab]"));
+  if (!sections.length || !btns.length) return;
+
+  const id = String(tabId || "").trim();
+  const exists = sections.some((s) => String(s.getAttribute("data-tab") || "") === id);
+  const next = exists ? id : "overview";
+
+  sections.forEach((s) => {
+    const sId = String(s.getAttribute("data-tab") || "");
+    s.classList.toggle("is-active", sId === next);
+  });
+  btns.forEach((b) => {
+    const bId = String(b.getAttribute("data-admin-tab") || "");
+    b.setAttribute("aria-selected", bId === next ? "true" : "false");
+  });
+
+  if (persist) {
+    try { localStorage.setItem(ADMIN_TABS_STORAGE_KEY, next); } catch {}
+  }
+
+  // Scroll the admin screen content to top.
+  const scrollWrap = document.querySelector("#adminScreen section[style*='overflow-y']");
+  if (scrollWrap && typeof scrollWrap.scrollTo === "function") {
+    scrollWrap.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  } else {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }
+}
+
+function initInAppAdminTabs() {
+  if (inAppAdminTabsInitialized) return;
+  const rail = document.getElementById("inAppAdminTabsRail");
+  if (!rail) return;
+
+  rail.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("[data-admin-tab]");
+    if (!btn) return;
+    e.preventDefault();
+    setInAppAdminTab(btn.getAttribute("data-admin-tab") || "");
+  });
+
+  inAppAdminTabsInitialized = true;
 }
 
 async function fetchAdminStats() {
@@ -7629,6 +7677,14 @@ async function renderAdminScreen() {
 
   // Show admin screen
   if (adminScreen) adminScreen.removeAttribute("aria-hidden");
+
+  initInAppAdminTabs();
+  try {
+    const stored = localStorage.getItem(ADMIN_TABS_STORAGE_KEY);
+    setInAppAdminTab(stored || "overview", { persist: false });
+  } catch {
+    setInAppAdminTab("overview", { persist: false });
+  }
 
   // Fetch admin stats
   const stats = await fetchAdminStats();
