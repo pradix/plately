@@ -133,52 +133,6 @@
 
     .btn-sm { padding: 6px 10px; font-size: 12px; }
 
-    /* ── Admin tabs (standalone page) ─────────────────────────────────────── */
-    /* Fallback: if JS doesn't run, show all sections (no .tabs-enhanced). */
-    .admin-tab-section { display: block; }
-    .tabs-enhanced .admin-tab-section { display: none; }
-    .tabs-enhanced .admin-tab-section.is-active { display: block; }
-
-    .admin-tabs {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      margin-bottom: 14px;
-      padding-top: 10px;
-    }
-    .admin-tabs__rail {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-      background: rgba(246, 247, 246, 0.85);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow);
-      border-radius: 999px;
-      padding: 8px;
-    }
-    .admin-tabs__btn {
-      appearance: none;
-      border: 1px solid rgba(0,0,0,0.10);
-      background: rgba(0,0,0,0.03);
-      border-radius: 999px;
-      padding: 9px 12px;
-      font-size: 12px;
-      font-weight: 750;
-      cursor: pointer;
-      color: rgba(0,0,0,0.76);
-      transition: background 0.15s, border-color 0.15s, transform 0.05s;
-    }
-    .admin-tabs__btn:hover { background: rgba(0,0,0,0.05); }
-    .admin-tabs__btn:active { transform: translateY(1px); }
-    .admin-tabs__btn[aria-selected="true"] {
-      background: var(--green-soft);
-      border-color: rgba(120, 147, 111, 0.28);
-      color: rgba(60, 78, 54, 0.98);
-    }
-
     /* ── KPIs ──────────────────────────────────────────────────────────────── */
     .stats-grid {
       display: grid;
@@ -568,8 +522,6 @@
       .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .two-col { grid-template-columns: 1fr; }
       .header-actions { width: 100%; justify-content: flex-start; }
-      .admin-tabs { padding-top: 6px; }
-      .admin-tabs__rail { border-radius: 16px; }
     }
   </style>
 </head>
@@ -591,17 +543,6 @@
     </header>
 
     <div id="error" class="error" style="display: none;"></div>
-
-    <nav class="admin-tabs" aria-label="Admin tabs">
-      <div class="admin-tabs__rail" id="adminTabsRail" role="tablist" aria-label="Admin secties">
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="true" data-admin-tab="overview">Overzicht</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channels">Kanalen</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="users">Gebruikers</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="search-terms">Zoekwoorden</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="push">Push</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Kanaal test</button>
-      </div>
-    </nav>
 
     <div id="loading" class="loading">
       ⏳ Statistieken laden...
@@ -1070,8 +1011,6 @@
         document.getElementById("loading").style.display = "none";
         document.getElementById("error").style.display = "block";
         document.getElementById("error").textContent = "❌ " + error.message;
-        // Still show the UI (tabs/sections) so the page isn't "empty" on auth errors.
-        try { document.getElementById("content").style.display = "block"; } catch {}
       }
     }
 
@@ -2529,7 +2468,6 @@
     function initAdminTabs() {
       const rail = document.getElementById("adminTabsRail");
       if (rail) {
-        document.documentElement.classList.add("tabs-enhanced");
         rail.addEventListener("click", (e) => {
           const btn = e.target?.closest?.("[data-admin-tab]");
           if (!btn) return;
