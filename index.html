@@ -1583,6 +1583,36 @@
 
     <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
 
+    <!-- Recept-import splash: full-screen overlay tijdens import -->
+    <div class="import-splash hidden" id="importSplash" role="status" aria-live="polite" aria-hidden="true">
+      <div class="import-splash__inner">
+        <header class="import-splash__head">
+          <span class="import-splash__eyebrow">Recept importeren</span>
+          <span class="import-splash__source" id="importSplashSource"></span>
+        </header>
+
+        <div class="import-splash__stage" aria-hidden="true">
+          <div class="import-splash__halo"></div>
+          <div class="import-splash__basket">
+            <img src="assets/grocery.svg" alt="" />
+          </div>
+          <span class="import-splash__chip import-splash__chip--1"><img src="assets/eggs.svg" alt=""></span>
+          <span class="import-splash__chip import-splash__chip--2"><img src="assets/guac.svg" alt=""></span>
+          <span class="import-splash__chip import-splash__chip--3"><img src="assets/toast.svg" alt=""></span>
+          <span class="import-splash__chip import-splash__chip--4"><img src="assets/smoothie.svg" alt=""></span>
+        </div>
+
+        <div class="import-splash__copy">
+          <h2 class="import-splash__status" id="importSplashStatus">We halen het recept op…</h2>
+          <p class="import-splash__hint">Dit duurt meestal 5–15 seconden. We pluizen titel, ingrediënten en stappen voor je uit.</p>
+        </div>
+
+        <div class="import-splash__bar" aria-hidden="true">
+          <span class="import-splash__bar-fill"></span>
+        </div>
+      </div>
+    </div>
+
     <!-- Custom confirm action sheet -->
     <div class="confirm-sheet-backdrop hidden" id="confirmSheetBackdrop"></div>
     <div class="confirm-sheet hidden" id="confirmSheet" role="alertdialog" aria-modal="true">

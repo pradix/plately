@@ -9481,6 +9481,57 @@ async function toggleWakeLock() {
   await requestWakeLock();
 }
 
+/* ─── Recept-import splash overlay ─── */
+const IMPORT_SPLASH_PHASES = [
+  "We halen het recept op…",
+  "Ingrediënten verzamelen…",
+  "Stappen netjes opmaken…",
+  "Bijna klaar — even nog…",
+];
+let _importSplashTimer = null;
+let _importSplashPhase = 0;
+
+function _setImportSplashStatus(text) {
+  const el = document.getElementById("importSplashStatus");
+  if (!el || !text) return;
+  el.style.animation = "none";
+  // restart animation
+  void el.offsetWidth; // eslint-disable-line no-unused-expressions
+  el.textContent = text;
+  el.style.animation = "";
+}
+
+function showImportSplash(url) {
+  const splash = document.getElementById("importSplash");
+  if (!splash) return;
+  const sourceEl = document.getElementById("importSplashSource");
+  if (sourceEl) {
+    let host = "";
+    try { host = new URL(String(url || "").trim()).hostname.replace(/^www\./, ""); } catch {}
+    sourceEl.textContent = host;
+  }
+  _importSplashPhase = 0;
+  _setImportSplashStatus(IMPORT_SPLASH_PHASES[0]);
+  splash.classList.remove("hidden");
+  splash.setAttribute("aria-hidden", "false");
+  if (_importSplashTimer) clearInterval(_importSplashTimer);
+  _importSplashTimer = setInterval(() => {
+    _importSplashPhase = Math.min(_importSplashPhase + 1, IMPORT_SPLASH_PHASES.length - 1);
+    _setImportSplashStatus(IMPORT_SPLASH_PHASES[_importSplashPhase]);
+  }, 2200);
+}
+
+function hideImportSplash() {
+  const splash = document.getElementById("importSplash");
+  if (!splash) return;
+  splash.classList.add("hidden");
+  splash.setAttribute("aria-hidden", "true");
+  if (_importSplashTimer) {
+    clearInterval(_importSplashTimer);
+    _importSplashTimer = null;
+  }
+}
+
 async function submitImport(url, note, setFeedback, setLoading, onDone) {
   if (!validateUrl(url)) {
     setFeedback("Gebruik een geldige TikTok-, Instagram- of website-link.");
@@ -9495,6 +9546,7 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
 
   setLoading(true);
   setFeedback("Import is bezig: titel, ingrediënten en stappen worden opgeschoond...");
+  showImportSplash(url);
 
   try {
     const data = await handleImport(url, note);
@@ -9618,6 +9670,7 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
     }
   } finally {
     setLoading(false);
+    hideImportSplash();
   }
 }
 
