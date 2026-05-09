@@ -537,6 +537,8 @@ const DEFAULT_COOKBOOKS = [
 // Keep in sync with frontend `SEED_CHANNELS` for admin display / resolving names.
 /** WordPress sites met harde bot/WAF-blokkade: scraping + WP-REST falen op VPS; optioneel Serper site:-fallback. */
 const CHANNEL_SEARCH_SERPER_FALLBACK_IDS = new Set(["ch-mj", "ch-ek"]);
+/** WP REST API eerst proberen vóór HTML-scrape: Cloudflare blokkeert HTML-zoekpagina's vaker dan JSON-endpoints. */
+const SEARCH_WP_REST_FIRST_IDS = new Set(["ch-mj", "ch-ek"]);
 
 /**
  * Kanalen waar zoekresultaten uit de eigen site-index komen; titels herhalen het zoekwoord niet altijd
@@ -9798,6 +9800,12 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
       query: query || "",
       count,
     });
+  // ch-mj / ch-ek: WP REST eerst — HTML-zoekpagina is vrijwel altijd achter Cloudflare,
+  // JSON-endpoints worden minder agressief geblokkeerd.
+  if (SEARCH_WP_REST_FIRST_IDS.has(channelId)) {
+    const rest = await wpRestSearch(baseUrl, channelName, channelId, query || "", count);
+    if (rest.length > 0) return rest;
+  }
   try {
     const html = await fetchHtml(searchUrl);
     if (html && html.length > 500) {
@@ -9813,8 +9821,10 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
       if (filtered.length > 0) return filtered;
     }
   } catch { /* fall through */ }
-  const rest = await wpRestSearch(baseUrl, channelName, channelId, query || "", count);
-  if (rest.length > 0) return rest;
+  if (!SEARCH_WP_REST_FIRST_IDS.has(channelId)) {
+    const rest = await wpRestSearch(baseUrl, channelName, channelId, query || "", count);
+    if (rest.length > 0) return rest;
+  }
   // Bij MJ/EEF is Jina-langzaam vaak useless (Cloudflare); Google site: eerst als SERPER aan staat.
   try {
     const serp = await serpEarly;
@@ -9844,6 +9854,12 @@ async function searchChannelRecipes(query, allowedChannels = null) {
         query,
         count,
       });
+    // ch-mj / ch-ek: WP REST eerst — HTML-zoekpagina is vrijwel altijd achter Cloudflare,
+    // JSON-endpoints worden minder agressief geblokkeerd.
+    if (SEARCH_WP_REST_FIRST_IDS.has(channelId)) {
+      const rest = await wpRestSearch(baseUrl, channelName, channelId, query, count);
+      if (rest.length > 0) return rest;
+    }
     try {
       const html = await fetchHtml(searchUrl);
       if (html && html.length > 500) {
@@ -9861,8 +9877,10 @@ async function searchChannelRecipes(query, allowedChannels = null) {
         if (filtered.length > 0) return filtered;
       }
     } catch { /* fall through */ }
-    const rest = await wpRestSearch(baseUrl, channelName, channelId, query, count);
-    if (rest.length > 0) return rest;
+    if (!SEARCH_WP_REST_FIRST_IDS.has(channelId)) {
+      const rest = await wpRestSearch(baseUrl, channelName, channelId, query, count);
+      if (rest.length > 0) return rest;
+    }
     try {
       const serp = await serpEarly;
       if (Array.isArray(serp) && serp.length) return serp;
