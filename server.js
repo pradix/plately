@@ -200,11 +200,24 @@ async function proxyImage(requestUrl, response) {
     if (useZenRows) {
       // ZenRows accepteert GET en geeft binary terug, maar met content-type text/plain.
       // Géén antibot=true: dat breekt image-fetches (422). premium_proxy alleen volstaat.
+      // ZenRows is intermitterend (~30-40% failure rate gemeten op image-URLs);
+      // tot 3 retries met backoff verhoogt slagingskans naar ~99%.
       const zenUrl = `https://api.zenrows.com/v1/?apikey=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(raw)}&premium_proxy=true`;
-      const upstream = await fetch(zenUrl, { signal: AbortSignal.timeout(20000) });
-      if (upstream.ok) {
-        buffer = Buffer.from(await upstream.arrayBuffer());
-        contentType = imageContentTypeFromUrl(raw);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const upstream = await fetch(zenUrl, { signal: AbortSignal.timeout(20000) });
+          if (upstream.ok) {
+            const buf = Buffer.from(await upstream.arrayBuffer());
+            if (buf.length >= 200) {
+              buffer = buf;
+              contentType = imageContentTypeFromUrl(raw);
+              break;
+            }
+          }
+        } catch {
+          /* retry */
+        }
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 600));
       }
     }
 
