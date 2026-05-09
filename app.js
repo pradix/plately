@@ -9484,8 +9484,11 @@ async function toggleWakeLock() {
 
 /* ─── Recept-import splash overlay ─── */
 const IMPORT_SPLASH_PHASE_COUNT = 4;
+const IMPORT_SPLASH_MIN_MS = 3500; // splash blijft minimaal 3.5s zichtbaar voor visueel comfort
 let _importSplashTimer = null;
 let _importSplashPhase = 0;
+let _importSplashShownAt = 0;
+let _importSplashHideTimeout = null;
 
 function _renderImportSplashPhases(activeIdx) {
   const list = document.getElementById("importSplashPhases");
@@ -9496,9 +9499,26 @@ function _renderImportSplashPhases(activeIdx) {
   });
 }
 
+function _doHideImportSplash() {
+  const splash = document.getElementById("importSplash");
+  if (!splash) return;
+  splash.classList.add("hidden");
+  splash.setAttribute("aria-hidden", "true");
+  if (_importSplashTimer) {
+    clearInterval(_importSplashTimer);
+    _importSplashTimer = null;
+  }
+  _importSplashShownAt = 0;
+}
+
 function showImportSplash(url) {
   const splash = document.getElementById("importSplash");
   if (!splash) return;
+  // Annuleer een eventueel pending hide zodat een tweede import niet flikkert.
+  if (_importSplashHideTimeout) {
+    clearTimeout(_importSplashHideTimeout);
+    _importSplashHideTimeout = null;
+  }
   const sourceEl = document.getElementById("importSplashSource");
   if (sourceEl) {
     let host = "";
@@ -9509,21 +9529,30 @@ function showImportSplash(url) {
   _renderImportSplashPhases(0);
   splash.classList.remove("hidden");
   splash.setAttribute("aria-hidden", "false");
+  _importSplashShownAt = Date.now();
   if (_importSplashTimer) clearInterval(_importSplashTimer);
   _importSplashTimer = setInterval(() => {
     _importSplashPhase = Math.min(_importSplashPhase + 1, IMPORT_SPLASH_PHASE_COUNT - 1);
     _renderImportSplashPhases(_importSplashPhase);
-  }, 2400);
+  }, 1100);
 }
 
 function hideImportSplash() {
-  const splash = document.getElementById("importSplash");
-  if (!splash) return;
-  splash.classList.add("hidden");
-  splash.setAttribute("aria-hidden", "true");
-  if (_importSplashTimer) {
-    clearInterval(_importSplashTimer);
-    _importSplashTimer = null;
+  // Garandeer minimum-zichtbaarheid: als import sneller klaar is dan
+  // IMPORT_SPLASH_MIN_MS, sluiten we pas wanneer de timer alsnog verlopen is.
+  const elapsed = _importSplashShownAt ? Date.now() - _importSplashShownAt : IMPORT_SPLASH_MIN_MS;
+  const remaining = Math.max(0, IMPORT_SPLASH_MIN_MS - elapsed);
+  if (_importSplashHideTimeout) clearTimeout(_importSplashHideTimeout);
+  if (remaining === 0) {
+    _doHideImportSplash();
+  } else {
+    // Forceer dat alle fases zichtbaar geweest zijn — spring direct naar laatste fase.
+    _importSplashPhase = IMPORT_SPLASH_PHASE_COUNT - 1;
+    _renderImportSplashPhases(IMPORT_SPLASH_PHASE_COUNT - 1);
+    _importSplashHideTimeout = setTimeout(() => {
+      _importSplashHideTimeout = null;
+      _doHideImportSplash();
+    }, remaining);
   }
 }
 
