@@ -12392,17 +12392,17 @@ body {
 .nav-item {
   position: relative;
   min-height: 64px;
-  border-radius: 18px;
+  border-radius: 0;
   color: #84977f;
-  transition: color 170ms ease, background 170ms ease, transform 170ms cubic-bezier(.22,1,.36,1);
+  transition: color 170ms ease, transform 170ms cubic-bezier(.22,1,.36,1);
 }
 
 .nav-item::before {
   content: "";
   position: absolute;
-  top: 7px;
+  top: 5px;
   left: 50%;
-  width: 22px;
+  width: 18px;
   height: 3px;
   border-radius: var(--radius-pill);
   background: #78936f;
@@ -12412,8 +12412,8 @@ body {
 }
 
 .nav-item--active {
-  color: #243c2b;
-  background: rgba(120, 147, 111, 0.11);
+  color: #5f7f58;
+  background: transparent;
 }
 
 .nav-item--active::before {
@@ -12445,15 +12445,11 @@ body {
 .nav-item--active .nav-icon-wrap,
 .nav-item--active svg,
 .nav-item--active .nav-icon-image {
-  transform: translateY(-1px);
-}
-
-.nav-item--profile.nav-item--active {
-  background: transparent;
+  transform: translateY(-2px);
 }
 
 .nav-item--profile.nav-item--active .profile2-avatar--nav {
-  box-shadow: 0 0 0 4px rgba(120, 147, 111, 0.14), 0 10px 24px rgba(36, 60, 43, 0.14);
+  box-shadow: 0 0 0 3px rgba(120, 147, 111, 0.16);
 }
 
 @keyframes platelySoftFloat {

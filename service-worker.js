@@ -3,8 +3,8 @@
 // Important: do NOT intercept fetches or cache /api/*.
 // Previous SW versions caused stale auth state.
 
-self.__PLATELY_SW_VERSION__ = "2026-05-09-1";
-const CACHE_VERSION = "v1";
+self.__PLATELY_SW_VERSION__ = "2026-05-09-2";
+const CACHE_VERSION = "v2";
 const STATIC_CACHE = `plately-static-${CACHE_VERSION}`;
 const HTML_CACHE = `plately-html-${CACHE_VERSION}`;
 
@@ -60,6 +60,20 @@ self.addEventListener("fetch", (event) => {
   event.respondWith((async () => {
     const cache = await caches.open(cacheName);
     const cached = await cache.match(req);
+
+    // HTML must prefer the network so deployed UI changes are visible quickly.
+    if (isHtmlNav) {
+      try {
+        const fresh = await fetch(req);
+        if (fresh && fresh.ok) {
+          await cache.put(req, fresh.clone());
+          return fresh;
+        }
+      } catch {
+        // fall back to cached shell below
+      }
+      return cached || Response.error();
+    }
 
     const fetchAndUpdate = (async () => {
       try {
