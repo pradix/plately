@@ -1621,10 +1621,14 @@ async function setChannelEnabledState(nextState) {
   await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2));
 }
 
+/** Tijdelijk uitgeschakelde kanalen — Cloudflare blokkeert imports/zoek; weer aanzetten zodra dat stabiel is. */
+const TEMPORARILY_DISABLED_CHANNEL_IDS = new Set(["ch-mj", "ch-ek"]);
+
 function isChannelEnabled(channelKind, channelId, enabledState) {
   const kind = sanitizeText(channelKind || "");
   const id = sanitizeText(channelId || "");
   if (!id) return true;
+  if (TEMPORARILY_DISABLED_CHANNEL_IDS.has(id)) return false;
   if (kind !== "seed" && kind !== "custom") return true;
   const st = enabledState && typeof enabledState === "object" ? enabledState : {};
   const map = st[kind] && typeof st[kind] === "object" ? st[kind] : {};
