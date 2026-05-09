@@ -2,24 +2,85 @@
 
 :root {
   color-scheme: light;
-  --bg: #fbf7f1;
-  --surface: #ffffff;
-  --surface-soft: #fdfbf7;
-  --surface-muted: #f3f5ef;
-  --text: #25211d;
-  --muted: #989188;
-  --muted-strong: #726b63;
-  --sage: #dce8dc;
-  --sage-deep: #8da485;
-  --peach: #f6b69d;
-  --peach-soft: #fff1e7;
-  --line: rgba(34, 32, 29, 0.06);
-  --shadow: 0 14px 36px rgba(116, 111, 98, 0.08);
-  --radius-xl: 26px;
-  --radius-lg: 22px;
-  --radius-md: 18px;
+  /* ── Design tokens (light theme) ───────────────────────────────────────── */
+  /* Core palette */
+  --color-bg: #fbf7f1;
+  --color-surface: #ffffff;
+  --color-surface-2: #fdfbf7;
+  --color-surface-3: #f3f5ef;
+  --color-text: #25211d;
+  --color-text-muted: #989188;
+  --color-text-muted-2: #726b63;
+  --color-brand: #8da485;
+  --color-brand-soft: #dce8dc;
+  --color-accent: #f6b69d;
+  --color-accent-soft: #fff1e7;
+  --color-border: rgba(34, 32, 29, 0.06);
+  --color-overlay: rgba(24, 26, 22, 0.34);
+
+  /* Radii */
+  --radius-1: 12px;
+  --radius-2: 14px;
+  --radius-3: 18px;
+  --radius-4: 22px;
+  --radius-5: 26px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-2: 0 8px 18px rgba(55, 50, 45, 0.08);
+  --shadow-3: 0 12px 26px rgba(76, 85, 69, 0.06);
+  --shadow-4: 0 14px 36px rgba(116, 111, 98, 0.08);
+  --shadow-5: 0 -16px 44px rgba(33, 37, 30, 0.18);
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 14px;
+  --space-7: 16px;
+  --space-8: 18px;
+  --space-9: 20px;
+  --space-10: 24px;
+  --space-11: 28px;
+  --space-12: 32px;
+
+  /* Typography */
   --font-display: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
   --font-body: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-size-xs: 0.78rem;
+  --font-size-sm: 0.88rem;
+  --font-size-md: 0.97rem;
+  --font-size-lg: 1.15rem;
+  --font-size-xl: 1.35rem;
+
+  /* Components */
+  --btn-height: 44px;
+  --btn-radius: var(--radius-3);
+  --btn-shadow: var(--shadow-2);
+  --card-radius: var(--radius-5);
+  --card-shadow: var(--shadow-3);
+  --focus-ring: 0 0 0 3px rgba(120, 147, 111, 0.18);
+
+  /* Backwards-compatible aliases (existing code relies on these) */
+  --bg: var(--color-bg);
+  --surface: var(--color-surface);
+  --surface-soft: var(--color-surface-2);
+  --surface-muted: var(--color-surface-3);
+  --text: var(--color-text);
+  --muted: var(--color-text-muted);
+  --muted-strong: var(--color-text-muted-2);
+  --sage: var(--color-brand-soft);
+  --sage-deep: var(--color-brand);
+  --peach: var(--color-accent);
+  --peach-soft: var(--color-accent-soft);
+  --line: var(--color-border);
+  --shadow: var(--shadow-4);
+  --radius-xl: var(--radius-5);
+  --radius-lg: var(--radius-4);
+  --radius-md: var(--radius-3);
 }
 
 * { box-sizing: border-box; }
@@ -46,6 +107,12 @@ body {
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 img { display: block; max-width: 100%; }
+
+/* Better keyboard focus without layout shifts */
+:where(button, a, input, textarea, select):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
 
 .page { min-height: 100vh; overflow-x: hidden; }
 
