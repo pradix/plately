@@ -429,6 +429,9 @@ const DEFAULT_COOKBOOKS = [
 ];
 
 // Keep in sync with frontend `SEED_CHANNELS` for admin display / resolving names.
+/** WordPress sites met harde bot/WAF-blokkade: scraping + WP-REST falen op VPS; optioneel Serper site:-fallback. */
+const CHANNEL_SEARCH_SERPER_FALLBACK_IDS = new Set(["ch-mj", "ch-ek"]);
+
 const SEED_CHANNELS = [
   { id: "ch-ah", name: "Allerhande" },
   { id: "ch-24k", name: "24 Kitchen" },
@@ -8594,6 +8597,83 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count, meta 
 }
 
 /**
+ * When a site blocks datacenter IPs (Cloudflare), Google "site:host query" via Serper still returns URLs.
+ * API key: https://serper.dev/ — set SERPER_API_KEY or PLATELY_SERP_API_KEY.
+ */
+async function serperGoogleSiteSearchRecipes({ baseUrl, channelName, channelId, query, count }) {
+  if (!CHANNEL_SEARCH_SERPER_FALLBACK_IDS.has(channelId)) return [];
+  const apiKey = sanitizeText(process.env.SERPER_API_KEY || process.env.PLATELY_SERP_API_KEY || "").trim();
+  if (!apiKey) return [];
+  let host = "";
+  try {
+    host = new URL(baseUrl).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return [];
+  }
+  if (!host) return [];
+
+  const q = `site:${host} ${String(query || "").trim()}`.trim();
+  const num = Math.min(Math.max(Number(count) || 10, 4), 15);
+  const cap = Math.min(Math.max(Number(count) || 10, 1), 30);
+
+  try {
+    const resp = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-KEY": apiKey },
+      body: JSON.stringify({ q, num, gl: "nl", hl: "nl" }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    const organic = Array.isArray(data.organic) ? data.organic : [];
+    const rows = [];
+    for (const it of organic) {
+      const url = sanitizeText(it.link || it.url || "");
+      const title = sanitizeText(it.title || "");
+      const description = sanitizeText(it.snippet || "");
+      if (!url || !title) continue;
+      let linkHost = "";
+      try {
+        linkHost = new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
+      } catch {
+        continue;
+      }
+      if (linkHost !== host) continue;
+      rows.push({
+        title,
+        url,
+        thumbnail: "",
+        channel: channelName,
+        channelId,
+        description: description.slice(0, 160),
+        time: "",
+      });
+    }
+    return rows
+      .filter((r) => urlLooksLikeRecipe(r.url))
+      .filter((r) => titleLooksLikeRecipe(r.title))
+      .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
+      .filter((r) => titleMatchesQuery(r.title, query))
+      .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
+      .slice(0, cap);
+  } catch {
+    return [];
+  }
+}
+
+function channelSearchBackendNote(channelId, resultCount) {
+  const n = Number(resultCount || 0);
+  if (n > 0) return "";
+  if (!CHANNEL_SEARCH_SERPER_FALLBACK_IDS.has(channelId)) return "";
+  const label = channelId === "ch-mj" ? "Miljuschka" : channelId === "ch-ek" ? "Eef Kookt Zo" : "Dit kanaal";
+  const serperOn = Boolean(sanitizeText(process.env.SERPER_API_KEY || process.env.PLATELY_SERP_API_KEY || "").trim());
+  if (!serperOn) {
+    return `${label} blokkeert zoekrequests van servers (bv. Cloudflare). Zet SERPER_API_KEY voor Google site:-zoeken via serper.dev — zie .env.example.`;
+  }
+  return "Serper heeft geen recepten voor deze combinatie van site en zoekterm (of ze voldoen niet aan de receptfilters).";
+}
+
+/**
  * Search AH Allerhande — tries the API with anonymous token.
  */
 async function searchAHRecipes(query, count = 4, opts = {}) {
@@ -9211,7 +9291,16 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
   } catch { /* fall through */ }
   const rest = await wpRestSearch(baseUrl, channelName, channelId, query || "", count);
   if (rest.length > 0) return rest;
-  return readerSearchFallback(searchUrl, channelName, channelId, count, query || "");
+  const reader = await readerSearchFallback(searchUrl, channelName, channelId, count, query || "");
+  if (reader.length > 0) return reader;
+  const serp = await serperGoogleSiteSearchRecipes({
+    baseUrl,
+    channelName,
+    channelId,
+    query: query || "",
+    count,
+  });
+  return serp.length ? serp : [];
 }
 
 async function searchChannelRecipes(query, allowedChannels = null) {
@@ -9241,7 +9330,16 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     } catch { /* fall through */ }
     const rest = await wpRestSearch(baseUrl, channelName, channelId, query, count);
     if (rest.length > 0) return rest;
-    return readerSearchFallback(searchUrl, channelName, channelId, count, query);
+    const reader = await readerSearchFallback(searchUrl, channelName, channelId, count, query);
+    if (reader.length > 0) return reader;
+    const serp = await serperGoogleSiteSearchRecipes({
+      baseUrl,
+      channelName,
+      channelId,
+      query,
+      count,
+    });
+    return serp.length ? serp : [];
   }
 
   function maybeSearch(channelId, fn) {
@@ -12102,9 +12200,11 @@ const server = http.createServer(async (request, response) => {
           const eff = getEffectiveCustomChannelConfig({ channelId: id, url }, channelOverrides);
           const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
           const results = await scrapeOrRestPublic(eff.baseUrl, name, id, usedUrl, parseWPStandard, Math.min(limit, 15), query);
+          const slicedCustom = (results || []).slice(0, limit);
           return sendJson(response, 200, {
             ok: true,
-            results: (results || []).slice(0, limit),
+            results: slicedCustom,
+            searchBackendNote: channelSearchBackendNote(id, slicedCustom.length),
             usedQuery: query,
             usedUrl,
             usedSearchUrlTemplate: sanitizeText(eff.searchUrlTemplate || ""),
@@ -12180,9 +12280,11 @@ const server = http.createServer(async (request, response) => {
           results = await scrapeOrRestPublic(eff.baseUrl, name, channelId, usedUrl, parseWPStandard, count, query);
         }
 
+        const slicedSeed = (results || []).slice(0, limit);
         return sendJson(response, 200, {
           ok: true,
-          results: (results || []).slice(0, limit),
+          results: slicedSeed,
+          searchBackendNote: channelSearchBackendNote(channelId, slicedSeed.length),
           usedQuery: query,
           usedUrl,
           usedSearchUrlTemplate: sanitizeText(eff.searchUrlTemplate || ""),

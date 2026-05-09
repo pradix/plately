@@ -7943,12 +7943,16 @@ function getAdminSelectedChannel() {
   }
 }
 
-function renderAdminChannelTestResults(results) {
+function renderAdminChannelTestResults(results, backendNote = "") {
   const wrap = document.getElementById("adminChannelTestResults");
   if (!wrap) return;
   const list = Array.isArray(results) ? results : [];
+  const note = String(backendNote || "").trim();
   if (!list.length) {
-    wrap.innerHTML = `<div style="color:#989188;font-size:0.9rem">Geen resultaten.</div>`;
+    const tip = note
+      ? `<div style="margin-bottom:10px;line-height:1.45;color:#5c534c;font-size:0.9rem">${escapeHtml(note)}</div>`
+      : "";
+    wrap.innerHTML = `<div>${tip}<div style="color:#989188;font-size:0.9rem">Geen recepten gevonden voor deze zoekterm.</div></div>`;
     return;
   }
   wrap.innerHTML = list.slice(0, 10).map((r) => {
@@ -7998,8 +8002,9 @@ async function runAdminChannelTestSearch() {
       body: JSON.stringify(payload),
     });
     const results = Array.isArray(res?.results) ? res.results : [];
+    const note = String(res?.searchBackendNote || "").trim();
     if (statusEl) statusEl.textContent = results.length ? `Top ${results.length} resultaten` : "Geen resultaten";
-    renderAdminChannelTestResults(results);
+    renderAdminChannelTestResults(results, note);
   } catch (err) {
     if (statusEl) statusEl.textContent = "";
     setAdminChannelTestError(err.message);

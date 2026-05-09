@@ -2266,12 +2266,15 @@
       }
     }
 
-    function renderChannelTestSearchResults(results) {
+    function renderChannelTestSearchResults(results, backendNote = "") {
       const wrap = document.getElementById("channelTestSearchResults");
       if (!wrap) return;
       const list = Array.isArray(results) ? results : [];
+      const note = String(backendNote || "").trim();
       if (!list.length) {
-        wrap.innerHTML = `<p class="muted">Geen resultaten</p>`;
+        wrap.innerHTML = note
+          ? `<p style="margin:0 0 10px;line-height:1.45">${escapeHtml(note)}</p><p class="muted">Geen resultaten.</p>`
+          : `<p class="muted">Geen resultaten</p>`;
         return;
       }
       wrap.innerHTML = list.map((r) => {
@@ -2347,8 +2350,9 @@
             }, { once: true });
           });
         }
+        const note = String(data.searchBackendNote || "").trim();
         if (statusEl) statusEl.textContent = results.length ? `Top ${results.length} resultaten` : "Geen resultaten";
-        renderChannelTestSearchResults(results);
+        renderChannelTestSearchResults(results, note);
       } catch (error) {
         if (statusEl) statusEl.textContent = "";
         showChannelTestError(error.message);
@@ -2770,7 +2774,10 @@
             </div>
           `).join("")}
         </div>
-      ` : `<p class="muted" style="margin-top:10px">Geen resultaten</p>`;
+      ` : `<div style="margin-top:10px">
+          ${String(entry.searchBackendNote || "").trim() ? `<p style="margin:0 0 10px;line-height:1.45">${escapeHtml(String(entry.searchBackendNote || ""))}</p>` : ""}
+          <p class="muted">Geen resultaten.</p>
+        </div>`;
       const errHtml = error ? `<div class="admin-test__channel-error">❌ ${escapeHtml(error)}</div>` : "";
 
       return `
@@ -2840,6 +2847,7 @@
             usedUrl: data.usedUrl || "",
             resultCount: topResults.length,
             topResults,
+            searchBackendNote: String(data.searchBackendNote || "").trim(),
             error: "",
             channelName: ch.label || (ch.kind === "custom" ? ch.customChannel?.name : ch.channelId),
             channelId: ch.channelId || "",
