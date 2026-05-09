@@ -4326,13 +4326,17 @@ function isBenignOrEmptyUrlSearch(search) {
 /** Miljuschka / EEF: Cloudflare blokkeert datacenter-requests; gebruik Reader als eerste fetch niet lukt. */
 const JINA_READER_RECIPE_HOST_ALLOWLIST = new Set(["miljuschka.nl", "eefkooktzo.nl"]);
 
-/** Gebruikerstekst bij POST /api/import → 422 wanneer Jina een Cloudflare-/403-blok teruggeeft voor deze hosts. */
-const IMPORT_BLOCKED_MJ_EEF_READER_MESSAGE =
-  "Miljuschka en Eef blokkeren vaak automatisch importeren (beveiliging). Open het recept via “Bekijk” op de site, of probeer later opnieuw als de site import toestaat.";
-
-/** 422 wanneer we wel HTML krijgen maar geen receptstructuren (kale 403-pagina e.d.). */
-const IMPORT_BLOCKED_GENERIC_WAF_MESSAGE =
-  "Deze site blokkeert automatisch importeren; we kunnen geen ingrediënten of stappen ophalen. Open het recept via “Bekijk” of probeer later opnieuw.";
+/** 422 voor Miljuschka / Eef: Jina CF-/403 of kale 403-HTML — per site, niet “Miljuschka én Eef”. */
+function importBlockedReaderAllowlistMessage(hostname) {
+  const h = String(hostname || "").toLowerCase().replace(/^www\./, "");
+  if (h === "eefkooktzo.nl") {
+    return "Eef Kookt Zo geeft onze servers (en Jina Reader) hier geen recepttekst door — dit komt vaak door een beveiligingslaag tegen bots. Open het recept via “Bekijk” in je browser, of probeer later opnieuw.";
+  }
+  if (h === "miljuschka.nl") {
+    return "Miljuschka geeft onze servers (en Jina Reader) hier geen recepttekst door — dit komt vaak door een beveiligingslaag tegen bots. Open het recept via “Bekijk” in je browser, of probeer later opnieuw.";
+  }
+  return "Deze site laat automatisch importeren vaak niet toe. Open het recept via “Bekijk” of probeer later opnieuw.";
+}
 
 function hostMatchesReaderAllowlist(hostname) {
   const h = String(hostname || "").toLowerCase().replace(/^www\./, "");
@@ -6629,7 +6633,7 @@ async function importWebsite(sourceUrl) {
       importHostEarly = "";
     }
     if (hostMatchesReaderAllowlist(importHostEarly) && looksLikeJinaReaderCfWall(document.body)) {
-      throw new HttpError(422, IMPORT_BLOCKED_MJ_EEF_READER_MESSAGE);
+      throw new HttpError(422, importBlockedReaderAllowlistMessage(importHostEarly));
     }
     const textRecipe = parseTextRecipeDocument(document.body, document.finalUrl || sourceUrl);
     const mdIngredients = parseMarkdownIngredientSection(document.body);
@@ -6735,7 +6739,7 @@ async function importWebsite(sourceUrl) {
         const readerDocument = await fetchReaderFallback(finalUrl);
         if (readerDocument?.kind === "text") {
           if (hostNeedsReaderAssist && looksLikeJinaReaderCfWall(readerDocument.body)) {
-            throw new HttpError(422, IMPORT_BLOCKED_MJ_EEF_READER_MESSAGE);
+            throw new HttpError(422, importBlockedReaderAllowlistMessage(finalParsedUrl?.hostname));
           }
           const readerRecipe = parseTextRecipeDocument(readerDocument.body, readerDocument.finalUrl || finalUrl);
           const mdIngredients = parseMarkdownIngredientSection(readerDocument.body);
@@ -6822,7 +6826,7 @@ async function importWebsite(sourceUrl) {
       /<h1[^>]*>[^<]*\b403\b/i.test(htmlBodyForReader) ||
       /<title[^>]*>[^<]*\b403\b/i.test(htmlBodyForReader))
   ) {
-    throw new HttpError(422, IMPORT_BLOCKED_GENERIC_WAF_MESSAGE);
+    throw new HttpError(422, importBlockedReaderAllowlistMessage(finalParsedUrlEarly?.hostname));
   }
 
   return htmlRecipe;
