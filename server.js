@@ -4326,6 +4326,14 @@ function isBenignOrEmptyUrlSearch(search) {
 /** Miljuschka / EEF: Cloudflare blokkeert datacenter-requests; gebruik Reader als eerste fetch niet lukt. */
 const JINA_READER_RECIPE_HOST_ALLOWLIST = new Set(["miljuschka.nl", "eefkooktzo.nl"]);
 
+/** Gebruikerstekst bij POST /api/import → 422 wanneer Jina een Cloudflare-/403-blok teruggeeft voor deze hosts. */
+const IMPORT_BLOCKED_MJ_EEF_READER_MESSAGE =
+  "Miljuschka en Eef blokkeren vaak automatisch importeren (beveiliging). Open het recept via “Bekijk” op de site, of probeer later opnieuw als de site import toestaat.";
+
+/** 422 wanneer we wel HTML krijgen maar geen receptstructuren (kale 403-pagina e.d.). */
+const IMPORT_BLOCKED_GENERIC_WAF_MESSAGE =
+  "Deze site blokkeert automatisch importeren; we kunnen geen ingrediënten of stappen ophalen. Open het recept via “Bekijk” of probeer later opnieuw.";
+
 function hostMatchesReaderAllowlist(hostname) {
   const h = String(hostname || "").toLowerCase().replace(/^www\./, "");
   return JINA_READER_RECIPE_HOST_ALLOWLIST.has(h);
@@ -4440,6 +4448,12 @@ async function fetchWithProfile(url, profileHeaders = {}, referer = "") {
   });
 }
 
+/** Zet `JINA_API_KEY` of `JINA_READER_API_KEY` op de server om r.jina.ai met Bearer-token aan te roepen (hogere limieten / soms betere origin-toegang). */
+function jinaReaderAuthHeaders() {
+  const key = String(process.env.JINA_API_KEY || process.env.JINA_READER_API_KEY || "").trim();
+  return key ? { Authorization: `Bearer ${key}` } : {};
+}
+
 async function fetchReaderFallback(url) {
   // Jina Reader expects `https://r.jina.ai/https://example.com/...` (or http://...)
   const target = String(url || "").trim();
@@ -4450,6 +4464,7 @@ async function fetchReaderFallback(url) {
   const response = await fetch(readerUrl, {
     headers: {
       ...FETCH_HEADERS,
+      ...jinaReaderAuthHeaders(),
       accept: "text/plain, text/markdown;q=0.9, */*;q=0.8",
       "x-with-links-summary": "true",
     },
@@ -6614,10 +6629,7 @@ async function importWebsite(sourceUrl) {
       importHostEarly = "";
     }
     if (hostMatchesReaderAllowlist(importHostEarly) && looksLikeJinaReaderCfWall(document.body)) {
-      throw new HttpError(
-        422,
-        "Miljuschka en Eef blokkeren vaak automatisch importeren (beveiliging). Open het recept via “Bekijk” op de site, of probeer later opnieuw als de site import toestaat."
-      );
+      throw new HttpError(422, IMPORT_BLOCKED_MJ_EEF_READER_MESSAGE);
     }
     const textRecipe = parseTextRecipeDocument(document.body, document.finalUrl || sourceUrl);
     const mdIngredients = parseMarkdownIngredientSection(document.body);
@@ -6722,6 +6734,9 @@ async function importWebsite(sourceUrl) {
       try {
         const readerDocument = await fetchReaderFallback(finalUrl);
         if (readerDocument?.kind === "text") {
+          if (hostNeedsReaderAssist && looksLikeJinaReaderCfWall(readerDocument.body)) {
+            throw new HttpError(422, IMPORT_BLOCKED_MJ_EEF_READER_MESSAGE);
+          }
           const readerRecipe = parseTextRecipeDocument(readerDocument.body, readerDocument.finalUrl || finalUrl);
           const mdIngredients = parseMarkdownIngredientSection(readerDocument.body);
           const mdInstructions = parseMarkdownInstructionSection(readerDocument.body);
@@ -6762,7 +6777,8 @@ async function importWebsite(sourceUrl) {
             return mergedReaderRecipe;
           }
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof HttpError) throw err;
         // ignore and continue with HTML/Claude fallbacks
       }
     }
@@ -6802,12 +6818,11 @@ async function importWebsite(sourceUrl) {
     hostNeedsReaderAssist &&
     (Array.isArray(htmlRecipe.ingredients) ? htmlRecipe.ingredients.length : 0) < 2 &&
     (Array.isArray(htmlRecipe.instructions) ? htmlRecipe.instructions.length : 0) < 1 &&
-    (cfLikeEarly || /<h1>\s*403|<title>\s*403/i.test(htmlBodyForReader))
+    (cfLikeEarly ||
+      /<h1[^>]*>[^<]*\b403\b/i.test(htmlBodyForReader) ||
+      /<title[^>]*>[^<]*\b403\b/i.test(htmlBodyForReader))
   ) {
-    throw new HttpError(
-      422,
-      "Deze site blokkeert automatisch importeren; we kunnen geen ingrediënten of stappen ophalen. Open het recept via “Bekijk” of probeer later opnieuw."
-    );
+    throw new HttpError(422, IMPORT_BLOCKED_GENERIC_WAF_MESSAGE);
   }
 
   return htmlRecipe;
@@ -8666,7 +8681,7 @@ async function searchCulyRecipes(query, count = 12, opts = {}) {
   async function fetchJinaMarkdown(readerUrl, timeoutMs) {
     try {
       const response = await fetch(readerUrl, {
-        headers: FETCH_HEADERS,
+        headers: { ...FETCH_HEADERS, ...jinaReaderAuthHeaders() },
         signal: AbortSignal.timeout(timeoutMs),
       });
       if (!response.ok) return "";
@@ -8808,7 +8823,7 @@ async function readerSearchFallback(searchUrl, channelName, channelId, count, qu
     if (!target) return [];
     const readerUrl = `https://r.jina.ai/${encodeURIComponent(target)}`;
     const response = await fetch(readerUrl, {
-      headers: FETCH_HEADERS,
+      headers: { ...FETCH_HEADERS, ...jinaReaderAuthHeaders() },
       signal: AbortSignal.timeout(14000),
     });
     if (!response.ok) return [];
@@ -9165,7 +9180,7 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
     // Also fetch raw HTML to extract images
     const [markdownResp, htmlResp] = await Promise.all([
       fetch(readerUrl, {
-        headers: FETCH_HEADERS,
+        headers: { ...FETCH_HEADERS, ...jinaReaderAuthHeaders() },
         signal: AbortSignal.timeout(15000),
       }),
       fetch(searchUrl, {
