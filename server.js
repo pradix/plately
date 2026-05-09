@@ -163,6 +163,25 @@ function pickLargestSrcsetImage(srcset) {
 }
 
 
+/** Hosts waarvan images CF-blocked zijn voor datacenter-IPs — fetchen via ZenRows. */
+const CF_BLOCKED_IMAGE_HOSTS = new Set([
+  "miljuschka.nl",
+  "www.miljuschka.nl",
+  "www.eefkooktzo.nl",
+  "eefkooktzo.nl",
+  "www.culy.nl",
+  "culy.nl",
+  "img.culy.nl",
+]);
+
+/** Leid Content-Type af uit de URL-extensie (ZenRows geeft text/plain terug voor binary). */
+function imageContentTypeFromUrl(url) {
+  const ext = String(url || "").toLowerCase().match(/\.(jpe?g|png|webp|gif|avif|svg)(?:\?|#|$)/);
+  if (!ext) return "application/octet-stream";
+  const map = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", avif: "image/avif", svg: "image/svg+xml" };
+  return map[ext[1]] || "application/octet-stream";
+}
+
 async function proxyImage(requestUrl, response) {
   const raw = requestUrl.searchParams.get("url") || "";
   if (!raw || !isAllowedImageProxyUrl(raw)) {
@@ -170,21 +189,41 @@ async function proxyImage(requestUrl, response) {
     return;
   }
   try {
-    const upstream = await fetch(raw, {
-      headers: {
-        ...FETCH_HEADERS,
-        accept: "image/jpeg,image/png,image/webp,image/*,*/*;q=0.8",
-      },
-      signal: AbortSignal.timeout(8000),
-    });
+    let parsedHost = "";
+    try { parsedHost = new URL(raw).hostname.toLowerCase(); } catch {}
+    const apiKey = sanitizeText(process.env.ZENROWS_API_KEY || "").trim();
+    const useZenRows = apiKey && CF_BLOCKED_IMAGE_HOSTS.has(parsedHost);
 
-    if (!upstream.ok) {
-      sendJson(response, 502, { ok: false, error: `Upstream error (${upstream.status})` });
-      return;
+    let buffer = null;
+    let contentType = "";
+
+    if (useZenRows) {
+      // ZenRows accepteert GET en geeft binary terug, maar met content-type text/plain.
+      const zenUrl = `https://api.zenrows.com/v1/?apikey=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(raw)}&premium_proxy=true&antibot=true`;
+      const upstream = await fetch(zenUrl, { signal: AbortSignal.timeout(20000) });
+      if (upstream.ok) {
+        buffer = Buffer.from(await upstream.arrayBuffer());
+        contentType = imageContentTypeFromUrl(raw);
+      }
     }
 
-    const contentType = upstream.headers.get("content-type") || "application/octet-stream";
-    const buffer = Buffer.from(await upstream.arrayBuffer());
+    // Fallback: direct fetch (voor niet-CF-blocked hosts of als ZenRows faalt).
+    if (!buffer) {
+      const upstream = await fetch(raw, {
+        headers: {
+          ...FETCH_HEADERS,
+          accept: "image/jpeg,image/png,image/webp,image/*,*/*;q=0.8",
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!upstream.ok) {
+        sendJson(response, 502, { ok: false, error: `Upstream error (${upstream.status})` });
+        return;
+      }
+      contentType = upstream.headers.get("content-type") || imageContentTypeFromUrl(raw);
+      buffer = Buffer.from(await upstream.arrayBuffer());
+    }
+
     response.writeHead(200, {
       ...HTTP_HEADERS,
       "Content-Type": contentType,
