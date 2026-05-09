@@ -4507,13 +4507,13 @@ function renderChannelSettings() {
   if (!container) return;
 
   const seedRows = getSeedChannelsSortedByName()
-    .filter((ch) => isSeedChannelEnabled(ch.id) || state.followedChannelIds.includes(ch.id))
+    .filter((ch) => isSeedChannelEnabled(ch.id))
     .map((ch) => {
     const followed = state.followedChannelIds.includes(ch.id);
     const enabled = isSeedChannelEnabled(ch.id);
     const faviconUrl = getSourceIconUrl(ch.url);
-    const disabledBadge = enabled ? "" : ` <span class="channel-status-badge channel-status-badge--rejected">Uitgeschakeld</span>`;
-    const toggleDisabled = enabled ? "" : "disabled";
+    const disabledBadge = "";
+    const toggleDisabled = "";
     return `
       <label class="channel-toggle-row" data-channel-id="${escapeHtml(ch.id)}">
         <span class="channel-toggle-avatar">
@@ -4563,7 +4563,8 @@ function renderChannelSettings() {
       const isRejected = status === "rejected";
       const enabled = isCustomChannelEnabled(ch.id);
       const isAdminDisabled = status === "approved" && !enabled;
-      const shouldHide = status === "approved" && !enabled && !followed;
+      // Admin-uitgeschakelde kanalen volledig verbergen, ook als de gebruiker ze volgt.
+      const shouldHide = status === "approved" && !enabled;
       if (shouldHide) return "";
       const toggleDisabled = (isPending || isRejected || isAdminDisabled) ? "disabled" : "";
       const rowDisabledClass = (isPending || isRejected || isAdminDisabled) ? "channel-toggle-row--disabled" : "";
