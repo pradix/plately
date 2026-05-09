@@ -6748,8 +6748,12 @@ async function importWebsite(sourceUrl) {
     lowerEarly.includes("__cf_bm") ||
     lowerEarly.includes("cf-browser-verification");
 
+  // Als de HTML-parser al voldoende recept-inhoud vond (bv. via ZenRows), niet alsnog Jina
+  // aanroepen puur omdat de pagina Cloudflare-scripts bevat — die zijn op elke pagina aanwezig.
+  const htmlRecipeHasSufficientContent = hiEarly >= 2 && hsEarly >= 1;
+
   const tryReaderMerged =
-    htmlRecipe.needsReview || (hostNeedsReaderAssist && (htmlRecipeLooksWeakRecipe || cfLikeEarly));
+    htmlRecipe.needsReview || (hostNeedsReaderAssist && (htmlRecipeLooksWeakRecipe || (cfLikeEarly && !htmlRecipeHasSufficientContent)));
 
   if (tryReaderMerged) {
     const finalUrl = finalUrlEarly;
