@@ -10652,8 +10652,8 @@ bindEvent(channelSearchResults, "click", async (event) => {
   btn.disabled = true;
   btn.innerHTML = getChannelImportLoadingMarkup();
 
+  showImportSplash(url);
   try {
-    showToast("Plately is bezig met importeren…");
     const resp = await fetch("/api/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -10679,6 +10679,8 @@ bindEvent(channelSearchResults, "click", async (event) => {
     showToast(err.message || "Importeren mislukt");
     btn.disabled = false;
     btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+  } finally {
+    hideImportSplash();
   }
 });
 
@@ -12382,8 +12384,8 @@ bindEvent(document.getElementById("importChannelSearchResults"), "click", async 
   btn.disabled = true;
   btn.innerHTML = getChannelImportLoadingMarkup();
 
+  showImportSplash(url);
   try {
-    showToast("Plately is bezig met importeren…");
     const resp = await fetch("/api/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -12406,6 +12408,8 @@ bindEvent(document.getElementById("importChannelSearchResults"), "click", async 
     showToast(err.message || "Importeren mislukt");
     btn.disabled = false;
     btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg> Importeer`;
+  } finally {
+    hideImportSplash();
   }
 });
 
