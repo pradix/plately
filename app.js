@@ -9497,10 +9497,12 @@ async function toggleWakeLock() {
 /* ─── Recept-import splash overlay ─── */
 const IMPORT_SPLASH_PHASE_COUNT = 4;
 const IMPORT_SPLASH_MIN_MS = 3500; // splash blijft minimaal 3.5s zichtbaar voor visueel comfort
+const IMPORT_SPLASH_MAX_MS = 30000; // safety: forceer dichtklap als import hangt
 let _importSplashTimer = null;
 let _importSplashPhase = 0;
 let _importSplashShownAt = 0;
 let _importSplashHideTimeout = null;
+let _importSplashSafetyTimeout = null;
 
 function _renderImportSplashPhases(activeIdx) {
   const list = document.getElementById("importSplashPhases");
@@ -9519,6 +9521,10 @@ function _doHideImportSplash() {
   if (_importSplashTimer) {
     clearInterval(_importSplashTimer);
     _importSplashTimer = null;
+  }
+  if (_importSplashSafetyTimeout) {
+    clearTimeout(_importSplashSafetyTimeout);
+    _importSplashSafetyTimeout = null;
   }
   _importSplashShownAt = 0;
 }
@@ -9547,6 +9553,13 @@ function showImportSplash(url) {
     _importSplashPhase = Math.min(_importSplashPhase + 1, IMPORT_SPLASH_PHASE_COUNT - 1);
     _renderImportSplashPhases(_importSplashPhase);
   }, 1100);
+  // Safety: als hideImportSplash() onverhoopt nooit wordt aangeroepen
+  // (bv. import-promise hangt of een uncaught error), forceer dichtklap.
+  if (_importSplashSafetyTimeout) clearTimeout(_importSplashSafetyTimeout);
+  _importSplashSafetyTimeout = setTimeout(() => {
+    _importSplashSafetyTimeout = null;
+    _doHideImportSplash();
+  }, IMPORT_SPLASH_MAX_MS);
 }
 
 function hideImportSplash() {
