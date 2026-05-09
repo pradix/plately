@@ -4516,8 +4516,14 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
   let lastStatus = 0;
   let lastError = null;
 
-  // Miljuschka / EEF: eerste HTML-profielen zijn vrijwel altijd 403; als Jina wél echte inhoud geeft, direct gebruiken (sneller dan alle profielen nalopen).
+  // Miljuschka / EEF / Culy: directe HTML-profielen zijn vrijwel altijd 403.
+  // ZenRows (premium_proxy) levert volledige HTML met JSON-LD + WPRM-structuur;
+  // dat is veel beter dan Jina's markdown-extractie (die social-media iconen,
+  // rating-widgets en cooking-mode toggles meeneemt). Probeer dus ZenRows eerst.
   if (hostMatchesReaderAllowlist(parsedUrl.hostname) && isSafeForReaderFallback(parsedUrl)) {
+    const zenFirst = await fetchWithZenRows(url);
+    if (zenFirst) return zenFirst;
+    // ZenRows niet beschikbaar (geen key) of mislukt: probeer Jina als laatste redmiddel.
     try {
       const prefetch = await fetchReaderFallback(url);
       const raw = String(prefetch?.body || "");
