@@ -4493,6 +4493,23 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
   let lastStatus = 0;
   let lastError = null;
 
+  // Miljuschka / EEF: eerste HTML-profielen zijn vrijwel altijd 403; als Jina wél echte inhoud geeft, direct gebruiken (sneller dan alle profielen nalopen).
+  if (hostMatchesReaderAllowlist(parsedUrl.hostname) && isSafeForReaderFallback(parsedUrl)) {
+    try {
+      const prefetch = await fetchReaderFallback(url);
+      const raw = String(prefetch?.body || "");
+      if (
+        !looksLikeJinaReaderCfWall(raw) &&
+        raw.length > 450 &&
+        /ingredi|bereid|wprm|wp-content\/uploads|(^|\n)#{1,6}\s+\S|\d+\s*(?:el|tl|gram|mg|ml)|recept\b/im.test(raw)
+      ) {
+        return prefetch;
+      }
+    } catch {
+      /* verder met normale fetches */
+    }
+  }
+
   // Try each fetch profile
   for (const profile of HTML_FETCH_PROFILES) {
     let retryCount = 0;
@@ -9215,20 +9232,23 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
       }
       console.log(`✅ Jina returned ${markdown.length} chars, HTML: ${html.length} chars`);
 
-      // Extract recipe links from Jina output - multiple strategies
-      // Strategy 1: Direct URLs - extract ALL recipe URLs (both /recepten/ and /recept/)
-      // Note: Individual recipes use /recept/ (singular), categories use /recepten/ (plural)
+      // Extract recipe links from Jina output — alleen `/recept/…` met Allerhande-id `r-r123…/slug`.
       const allRecipeUrls = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recept\/([^\s\)]+)/g)];
 
-      // Strategy 2: Extract URLs and derive titles from slug (most reliable)
+      // Strategy 2: Extract URLs and derive titles from slug (most reliable).
+      // Alleen `/recept/…`: `/recepten/asperges` e.d. zijn hubs, geen recepten (veroorzaakte nutteloze logs).
       const urlsWithContext = [];
 
-      // Find all recipe URLs - BOTH patterns
-      const urlMatches = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recept(?:en)?\/([^\s\)]+)/g)];
+      const urlMatches = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recept\/([^\s\)]+)/g)];
 
       for (const match of urlMatches) {
         const url = match[0];
         const slug = match[1];
+
+        // Allerhande-receptpagina's gebruiken vrijwel altijd dit id-patroon in de URL.
+        if (!/^r-r\d+\//i.test(slug)) {
+          continue;
+        }
 
         // Skip obvious category links
         if (slug.endsWith('recepten') || slug.endsWith('gerechten') || slug.includes('categor') ||
@@ -9246,7 +9266,8 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
           .join(' ');
 
         if (title.length > 2) {
-          urlsWithContext.push({ 0: null, 1: title, 2: url });
+          const idMatch = slug.match(/^(r-r\d+)/i);
+          urlsWithContext.push({ 0: null, 1: title, 2: url, recipeId: idMatch ? idMatch[1] : "" });
         }
       }
 
@@ -9255,11 +9276,14 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
         allRecipeUrls.map((m) => {
           const url = m[0];
           const slug = m[1];
+          if (!/^r-r\d+\//i.test(slug)) {
+            return null;
+          }
           if (slug.endsWith('recepten') || slug.endsWith('gerechten')) {
             return null;
           }
 
-          // Parse slug: "R1202302/surinaamse-eiersalade" → ID + recipe name
+          // Parse slug: "r-r1193911/surinaamse-eiersalade" → ID + recipe name
           const parts = slug.split('/');
           let recipeId = '';
           let recipeName = '';
@@ -9791,14 +9815,15 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
   } catch { /* fall through */ }
   const rest = await wpRestSearch(baseUrl, channelName, channelId, query || "", count);
   if (rest.length > 0) return rest;
-  const reader = await readerSearchFallback(searchUrl, channelName, channelId, count, query || "");
-  if (reader.length > 0) return reader;
+  // Bij MJ/EEF is Jina-langzaam vaak useless (Cloudflare); Google site: eerst als SERPER aan staat.
   try {
     const serp = await serpEarly;
     if (Array.isArray(serp) && serp.length) return serp;
   } catch {
     /* ignore */
   }
+  const reader = await readerSearchFallback(searchUrl, channelName, channelId, count, query || "");
+  if (reader.length > 0) return reader;
   return [];
 }
 
@@ -9838,14 +9863,14 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     } catch { /* fall through */ }
     const rest = await wpRestSearch(baseUrl, channelName, channelId, query, count);
     if (rest.length > 0) return rest;
-    const reader = await readerSearchFallback(searchUrl, channelName, channelId, count, query);
-    if (reader.length > 0) return reader;
     try {
       const serp = await serpEarly;
       if (Array.isArray(serp) && serp.length) return serp;
     } catch {
       /* ignore */
     }
+    const reader = await readerSearchFallback(searchUrl, channelName, channelId, count, query);
+    if (reader.length > 0) return reader;
     return [];
   }
 
