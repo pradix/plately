@@ -29,7 +29,7 @@
           <!-- Topbar: logo | + import | avatar -->
           <header class="topbar topbar--home">
             <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar home">
-              <img class="brand-logo" src="assets/plately.png" alt="Plately" />
+              <img class="brand-logo" src="assets/plately.png" alt="Plately" decoding="async" fetchpriority="high" />
             </button>
             <div class="topbar-actions">
               <button class="icon-button icon-button--filled-green" id="openImportButton" type="button" aria-label="Recept importeren">
@@ -145,7 +145,7 @@
         <section class="screen detail-screen" id="detailScreen">
           <header class="topbar topbar--home">
             <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar recepten">
-              <img class="brand-logo" src="assets/plately.png" alt="Plately" />
+              <img class="brand-logo" src="assets/plately.png" alt="Plately" loading="lazy" decoding="async" fetchpriority="low" />
             </button>
             <div class="topbar-actions">
               <button class="icon-button" id="shareRecipeButton" type="button" aria-label="Recept delen">
@@ -161,7 +161,7 @@
             </div>
           </header>
           <div class="detail-hero">
-            <img id="detailHeroImage" src="assets/hero-burger.svg" alt="Receptafbeelding" />
+            <img id="detailHeroImage" src="assets/hero-burger.svg" alt="Receptafbeelding" loading="lazy" decoding="async" fetchpriority="low" />
             <div class="detail-hero__actions">
               <button class="detail-icon-action" id="favoriteRecipeButton" type="button" aria-label="Toevoegen aan favorieten" title="Voeg dit recept toe aan je favorieten (hartje) voor gemakkelijke terugkeer">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -458,7 +458,7 @@
           <!-- Profile header: name + stats -->
           <div class="profile2-hero" id="profileHero">
             <div class="profile2-hero-avatar" id="profileHeroAvatar">
-              <img src="assets/profile-avatar.svg" alt="" class="profile2-avatar__img" aria-hidden="true" />
+              <img src="assets/profile-avatar.svg" alt="" class="profile2-avatar__img" aria-hidden="true" loading="lazy" decoding="async" fetchpriority="low" />
             </div>
             <h1 class="profile2-name" id="profileName"></h1>
             <p class="profile2-email" id="profileHandle"></p>
