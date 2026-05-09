@@ -492,6 +492,7 @@ const state = {
   kookstandRecipeId: "",
   kookstandStepIndex: 0,
   kookstandShowIngredients: false,
+  kookstandJumpOpen: false,
   kookstandWakeLockOwned: false,
   session: {
     ready: false,
@@ -1003,10 +1004,14 @@ function normalizeRecipeProgressState(value) {
     const checkedIngredients = Array.isArray(progress.checkedIngredients)
       ? progress.checkedIngredients.map((item) => String(item || "").trim()).filter(Boolean)
       : [];
+    const checkedSteps = Array.isArray(progress.checkedSteps)
+      ? progress.checkedSteps.map((item) => String(item || "").trim()).filter(Boolean)
+      : [];
     const currentStep = Number.isFinite(progress.currentStep) ? Math.max(0, Math.floor(progress.currentStep)) : 0;
 
     accumulator[recipeId] = {
       checkedIngredients,
+      checkedSteps,
       currentStep,
       cookMode: Boolean(progress.cookMode),
     };
@@ -1019,6 +1024,7 @@ function getRecipeProgress(recipeId) {
   if (!cleanId) {
     return {
       checkedIngredients: [],
+      checkedSteps: [],
       currentStep: 0,
       cookMode: false,
     };
@@ -1027,6 +1033,7 @@ function getRecipeProgress(recipeId) {
   if (!state.recipeProgress[cleanId]) {
     state.recipeProgress[cleanId] = {
       checkedIngredients: [],
+      checkedSteps: [],
       currentStep: 0,
       cookMode: false,
     };
@@ -1042,6 +1049,25 @@ function getIngredientProgressKey(ingredient, index) {
 function isIngredientChecked(recipeId, ingredient, index) {
   const progress = getRecipeProgress(recipeId);
   return progress.checkedIngredients.includes(getIngredientProgressKey(ingredient, index));
+}
+
+function getStepProgressKey(stepIndex) {
+  return `step:${Math.max(0, Math.floor(Number(stepIndex) || 0))}`;
+}
+
+function isStepChecked(recipeId, stepIndex) {
+  const progress = getRecipeProgress(recipeId);
+  return Array.isArray(progress.checkedSteps) && progress.checkedSteps.includes(getStepProgressKey(stepIndex));
+}
+
+function toggleStepChecked(recipeId, stepIndex) {
+  const cleanId = String(recipeId || "").trim();
+  if (!cleanId) return;
+  const progress = getRecipeProgress(cleanId);
+  const key = getStepProgressKey(stepIndex);
+  const current = Array.isArray(progress.checkedSteps) ? progress.checkedSteps : [];
+  progress.checkedSteps = current.includes(key) ? current.filter((item) => item !== key) : [...current, key];
+  schedulePersistAppState();
 }
 
 function getSourceHost(sourceUrl) {
@@ -4832,18 +4858,27 @@ function renderDetailRecipe(resetServings = false) {
   }
 
   detailIngredientList.innerHTML = recipe.ingredients
-    .map(
-      (ingredient, index) => `
-        <li class="ingredient-item">
-          <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
-          <span class="ingredient-name">${ingredient.name}</span>
-          <span class="ingredient-image-wrapper">
-            <img class="ingredient-image" src="" alt="" loading="lazy" />
-            <span class="ingredient-image-fallback" aria-hidden="true">${getIngredientVisualMarkup(ingredient.name)}</span>
-          </span>
+    .map((ingredient, index) => {
+      const checked = isIngredientChecked(recipe.id, ingredient, index);
+      return `
+        <li>
+          <button
+            class="ingredient-item ${checked ? "is-checked" : ""}"
+            type="button"
+            data-detail-ingredient-index="${index}"
+            aria-pressed="${checked ? "true" : "false"}"
+          >
+            <span class="recipe-check" aria-hidden="true"></span>
+            <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
+            <span class="ingredient-name">${escapeHtml(ingredient.name)}</span>
+            <span class="ingredient-image-wrapper" aria-hidden="true">
+              <img class="ingredient-image" src="" alt="" loading="lazy" />
+              <span class="ingredient-image-fallback" aria-hidden="true">${getIngredientVisualMarkup(ingredient.name)}</span>
+            </span>
+          </button>
         </li>
-      `
-    )
+      `;
+    })
     .join("");
 
   // Clear any running timers when recipe changes
@@ -4852,19 +4887,40 @@ function renderDetailRecipe(resetServings = false) {
 
   detailStepList.innerHTML = recipe.instructions
     .map((step, index) => {
-      const secs = extractStepSeconds(step);
-      const timerBtn = secs > 0
-        ? `<button class="step-timer" type="button" data-step-seconds="${secs}" aria-label="Start timer ${formatTimerLabel(secs)}">
-             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4.5a1 1 0 0 1 3 0v.55A7.5 7.5 0 1 1 9 5.34v-.84Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 9v3.5l2 1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-             <span class="step-timer__time">${formatTimerLabel(secs)}</span>
-           </button>`
-        : "";
+      const defaultSecs = extractStepSeconds(step);
+      const checked = isStepChecked(recipe.id, index);
+      const presets = [60, 180, 300, 600];
+      const allPresets = defaultSecs > 0 && !presets.includes(defaultSecs) ? [defaultSecs, ...presets] : presets;
       return `
-        <li class="step-item">
-          <span class="step-index">${index + 1}</span>
+        <li class="step-item" data-step-row="${index}">
+          <button class="step-index ${checked ? "is-checked" : ""}" type="button" data-step-check="${index}" aria-pressed="${checked ? "true" : "false"}">
+            <span class="step-index__num">${index + 1}</span>
+          </button>
           <div class="step-body">
-            <p class="step-copy">${escapeHtml(step)}</p>
-            ${timerBtn}
+            <p class="step-copy ${checked ? "is-checked" : ""}">${escapeHtml(step)}</p>
+            <div class="step-actions">
+              <button class="step-timer" type="button" data-step-timer="${index}" data-step-default-seconds="${defaultSecs || 0}" aria-label="Timer voor stap ${index + 1}">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4.5a1 1 0 0 1 3 0v.55A7.5 7.5 0 1 1 9 5.34v-.84Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 9v3.5l2 1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                <span class="step-timer__time">${defaultSecs > 0 ? formatTimerLabel(defaultSecs) : "Timer"}</span>
+              </button>
+              <div class="step-timer-menu hidden" data-step-timer-menu="${index}">
+                <div class="step-timer-menu__presets">
+                  ${allPresets
+                    .map((secs) => {
+                      const label = secs === defaultSecs ? `${formatTimerLabel(secs)} (uit stap)` : formatTimerLabel(secs);
+                      return `<button class="step-timer-preset" type="button" data-step-timer-preset="${secs}" aria-label="Start timer ${escapeHtml(label)}">${escapeHtml(label)}</button>`;
+                    })
+                    .join("")}
+                </div>
+                <form class="step-timer-menu__custom" data-step-timer-custom-form="${index}">
+                  <label class="step-timer-menu__label">
+                    <span>Custom</span>
+                    <input class="step-timer-menu__input" type="number" inputmode="numeric" min="1" max="180" step="1" placeholder="min" aria-label="Custom timer in minuten" />
+                  </label>
+                  <button class="step-timer-preset step-timer-preset--primary" type="submit">Start</button>
+                </form>
+              </div>
+            </div>
           </div>
         </li>`;
     })
@@ -5016,6 +5072,75 @@ function renderKookstand() {
   }
   kookstandStepIndex.textContent = hasSteps ? String(boundedIndex + 1) : "—";
   kookstandStepText.textContent = hasSteps ? instructions[boundedIndex] : "Voeg eerst bereidingsstappen toe in Recept bewerken.";
+
+  const kookstandStepDoneButton = document.getElementById("kookstandStepDone");
+  if (kookstandStepDoneButton) {
+    const checked = hasSteps && isStepChecked(recipe.id, boundedIndex);
+    kookstandStepDoneButton.classList.toggle("is-active", checked);
+    kookstandStepDoneButton.setAttribute("aria-pressed", checked ? "true" : "false");
+    kookstandStepDoneButton.textContent = checked ? "Stap: klaar" : "Markeer klaar";
+  }
+
+  const jumpPanel = document.getElementById("kookstandJumpPanel");
+  const jumpList = document.getElementById("kookstandJumpList");
+  if (jumpPanel) {
+    jumpPanel.classList.toggle("hidden", !state.kookstandJumpOpen);
+  }
+  if (jumpList) {
+    jumpList.innerHTML = hasSteps
+      ? instructions
+          .map((_, i) => {
+            const active = i === boundedIndex;
+            const done = isStepChecked(recipe.id, i);
+            return `
+              <button
+                class="kookstand-jump__chip ${active ? "is-active" : ""} ${done ? "is-done" : ""}"
+                type="button"
+                data-kookstand-jump-index="${i}"
+                aria-label="Ga naar stap ${i + 1}"
+              >
+                ${i + 1}
+              </button>
+            `;
+          })
+          .join("")
+      : "";
+  }
+
+  const kookstandTimerButton = document.getElementById("kookstandStepTimer");
+  const kookstandTimerMenu = document.getElementById("kookstandStepTimerMenu");
+  if (kookstandTimerButton) {
+    if (!hasSteps) {
+      kookstandTimerButton.setAttribute("disabled", "disabled");
+    } else {
+      kookstandTimerButton.removeAttribute("disabled");
+      const defaultSecs = extractStepSeconds(instructions[boundedIndex]);
+      kookstandTimerButton.dataset.stepDefaultSeconds = String(defaultSecs || 0);
+      const labelEl = kookstandTimerButton.querySelector(".step-timer__time");
+      if (labelEl) labelEl.textContent = defaultSecs > 0 ? formatTimerLabel(defaultSecs) : "Timer";
+      if (kookstandTimerMenu) {
+        const presets = [60, 180, 300, 600];
+        const allPresets = defaultSecs > 0 && !presets.includes(defaultSecs) ? [defaultSecs, ...presets] : presets;
+        kookstandTimerMenu.innerHTML = `
+          <div class="step-timer-menu__presets">
+            ${allPresets
+              .map((secs) => {
+                const label = secs === defaultSecs ? `${formatTimerLabel(secs)} (uit stap)` : formatTimerLabel(secs);
+                return `<button class="step-timer-preset" type="button" data-kookstand-timer-preset="${secs}">${escapeHtml(label)}</button>`;
+              })
+              .join("")}
+          </div>
+          <form class="step-timer-menu__custom" id="kookstandTimerCustomForm">
+            <label class="step-timer-menu__label">
+              <span>Custom</span>
+              <input class="step-timer-menu__input" type="number" inputmode="numeric" min="1" max="180" step="1" placeholder="min" aria-label="Custom timer in minuten" />
+            </label>
+            <button class="step-timer-preset step-timer-preset--primary" type="submit">Start</button>
+          </form>
+        `;
+      }
+    }
+  }
 
   if (kookstandPrevButton) kookstandPrevButton.disabled = !hasSteps || boundedIndex <= 0;
   if (kookstandNextButton) kookstandNextButton.disabled = !hasSteps || boundedIndex >= instructions.length - 1;
@@ -7302,6 +7427,7 @@ function buildPersistedAppState() {
         recipeId,
         {
           checkedIngredients: [...(progress.checkedIngredients || [])],
+          checkedSteps: [...(progress.checkedSteps || [])],
           currentStep: Number.isFinite(progress.currentStep) ? progress.currentStep : 0,
           cookMode: Boolean(progress.cookMode),
         },
@@ -9543,6 +9669,60 @@ bindEvent(kookstandIngredientList, "click", (event) => {
   toggleIngredientChecked(index);
   renderKookstand();
 });
+
+bindEvent(document.getElementById("kookstandJumpToggle"), "click", () => {
+  state.kookstandJumpOpen = !state.kookstandJumpOpen;
+  renderKookstand();
+});
+bindEvent(document.getElementById("kookstandJumpList"), "click", (event) => {
+  const btn = event.target.closest("[data-kookstand-jump-index]");
+  if (!(btn instanceof HTMLElement)) return;
+  const idx = Number(btn.dataset.kookstandJumpIndex);
+  if (!Number.isFinite(idx)) return;
+  state.kookstandJumpOpen = false;
+  setKookstandStep(idx);
+});
+bindEvent(document.getElementById("kookstandStepDone"), "click", () => {
+  const recipe = getRecipeById(state.kookstandRecipeId) || getSelectedRecipe();
+  if (!recipe) return;
+  toggleStepChecked(recipe.id, state.kookstandStepIndex);
+  renderKookstand();
+});
+bindEvent(document.getElementById("kookstandStepTimer"), "click", (event) => {
+  const btn = event.target.closest("#kookstandStepTimer");
+  if (!(btn instanceof HTMLElement)) return;
+  if (stepTimers.has(btn)) {
+    startStepTimer(btn, 1);
+    return;
+  }
+  const menu = document.getElementById("kookstandStepTimerMenu");
+  if (menu) menu.classList.toggle("hidden");
+});
+bindEvent(document.getElementById("kookstandStepTimerMenu"), "click", (event) => {
+  const preset = event.target.closest("[data-kookstand-timer-preset]");
+  if (!(preset instanceof HTMLElement)) return;
+  const secs = parseInt(preset.dataset.kookstandTimerPreset || "0", 10);
+  const btn = document.getElementById("kookstandStepTimer");
+  if (btn instanceof HTMLElement && secs > 0) {
+    startStepTimer(btn, secs);
+    const menu = document.getElementById("kookstandStepTimerMenu");
+    menu && menu.classList.add("hidden");
+  }
+});
+bindEvent(document.getElementById("kookstandStepTimerMenu"), "submit", (event) => {
+  const form = event.target?.closest?.("#kookstandTimerCustomForm");
+  if (!(form instanceof HTMLFormElement)) return;
+  event.preventDefault();
+  const input = form.querySelector("input");
+  const mins = parseInt(String(input?.value || ""), 10);
+  const btn = document.getElementById("kookstandStepTimer");
+  if (btn instanceof HTMLElement && Number.isFinite(mins) && mins > 0) {
+    startStepTimer(btn, mins * 60);
+    const menu = document.getElementById("kookstandStepTimerMenu");
+    menu && menu.classList.add("hidden");
+    input && (input.value = "");
+  }
+});
 brandHomeButtons.forEach((button) => {
   button.addEventListener("click", goHome);
 });
@@ -9559,6 +9739,14 @@ bindEvent(topbarFavoriteButton, "click", () => {
 
 bindEvent(checkAllIngredientsButton, "click", () => {
   checkAllIngredients();
+});
+
+bindEvent(detailIngredientList, "click", (event) => {
+  const btn = event.target.closest("[data-detail-ingredient-index]");
+  if (!(btn instanceof HTMLElement)) return;
+  const index = Number(btn.dataset.detailIngredientIndex);
+  if (!Number.isFinite(index)) return;
+  toggleIngredientChecked(index);
 });
 
 bindEvent(uncheckAllIngredientsButton, "click", () => {
@@ -10216,10 +10404,63 @@ bindEvent(groceryGroups, "click", (event) => {
 });
 
 bindEvent(detailStepList, "click", (event) => {
-  const btn = event.target.closest(".step-timer");
-  if (!(btn instanceof HTMLElement)) return;
-  const secs = parseInt(btn.dataset.stepSeconds || "0", 10);
-  if (secs > 0) startStepTimer(btn, secs);
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  const stepCheckBtn = target.closest("[data-step-check]");
+  if (stepCheckBtn instanceof HTMLElement) {
+    const idx = Number(stepCheckBtn.dataset.stepCheck);
+    const recipe = getSelectedRecipe();
+    if (recipe && Number.isFinite(idx)) {
+      toggleStepChecked(recipe.id, idx);
+      renderDetailRecipe(false);
+    }
+    return;
+  }
+
+  const presetBtn = target.closest("[data-step-timer-preset]");
+  if (presetBtn instanceof HTMLElement) {
+    const secs = parseInt(presetBtn.dataset.stepTimerPreset || "0", 10);
+    const row = presetBtn.closest("[data-step-row]");
+    const timerBtn = row?.querySelector?.(".step-timer");
+    if (timerBtn instanceof HTMLElement && secs > 0) {
+      startStepTimer(timerBtn, secs);
+      const menu = row.querySelector?.(".step-timer-menu");
+      menu && menu.classList.add("hidden");
+    }
+    return;
+  }
+
+  const timerBtn = target.closest("[data-step-timer]");
+  if (timerBtn instanceof HTMLElement) {
+    if (stepTimers.has(timerBtn)) {
+      startStepTimer(timerBtn, 1);
+      return;
+    }
+    const row = timerBtn.closest("[data-step-row]");
+    const menu = row?.querySelector?.(".step-timer-menu");
+    if (menu instanceof HTMLElement) {
+      detailStepList.querySelectorAll(".step-timer-menu").forEach((el) => el !== menu && el.classList.add("hidden"));
+      menu.classList.toggle("hidden");
+    }
+    return;
+  }
+});
+
+bindEvent(detailStepList, "submit", (event) => {
+  const form = event.target?.closest?.("[data-step-timer-custom-form]");
+  if (!(form instanceof HTMLFormElement)) return;
+  event.preventDefault();
+  const row = form.closest("[data-step-row]");
+  const timerBtn = row?.querySelector?.(".step-timer");
+  const input = form.querySelector("input");
+  const mins = parseInt(String(input?.value || ""), 10);
+  if (timerBtn instanceof HTMLElement && Number.isFinite(mins) && mins > 0) {
+    startStepTimer(timerBtn, mins * 60);
+    const menu = row?.querySelector?.(".step-timer-menu");
+    menu && menu.classList.add("hidden");
+    input && (input.value = "");
+  }
 });
 
 // Basket servings controls
@@ -10248,11 +10489,7 @@ bindEvent(document.getElementById("basketOverlay"), "click", (e) => {
   if (e.target === document.getElementById("basketOverlay")) closeBasketModal();
 });
 
-bindEvent(document.getElementById("basketSmartPickButton"), "click", () => {
-  smartPickLowConfidence().catch(() => {
-    showToast("Herzoeken lukte niet.");
-  });
-});
+// Removed: smart pick button in basket UI (bulk actions remain)
 
 bindEvent(document.getElementById("basketBulkCheapestButton"), "click", () => {
   applyBasketBulkOptimization("cheapest").catch(() => showToast("Bulkactie lukte niet."));
