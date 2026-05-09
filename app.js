@@ -9496,6 +9496,12 @@ async function toggleWakeLock() {
 
 /* ─── Recept-import splash overlay ─── */
 const IMPORT_SPLASH_PHASE_COUNT = 4;
+const IMPORT_SPLASH_PHASE_LABELS = [
+  "Pagina wordt opgehaald",
+  "Ingrediënten worden verzameld",
+  "Bereiding wordt netjes gemaakt",
+  "Recept staat bijna klaar"
+];
 const IMPORT_SPLASH_MIN_MS = 3500; // splash blijft minimaal 3.5s zichtbaar voor visueel comfort
 const IMPORT_SPLASH_MAX_MS = 30000; // safety: forceer dichtklap als import hangt
 let _importSplashTimer = null;
@@ -9503,21 +9509,41 @@ let _importSplashPhase = 0;
 let _importSplashShownAt = 0;
 let _importSplashHideTimeout = null;
 let _importSplashSafetyTimeout = null;
+let _importSplashExitTimeout = null;
 
 function _renderImportSplashPhases(activeIdx) {
   const list = document.getElementById("importSplashPhases");
+  const splash = document.getElementById("importSplash");
+  const status = document.getElementById("importSplashStatus");
   if (!list) return;
   const items = list.querySelectorAll(".import-splash__phase");
+  const safeIdx = Math.max(0, Math.min(activeIdx, items.length - 1));
+  if (splash) {
+    splash.dataset.phase = String(safeIdx);
+    splash.style.setProperty("--import-progress", `${((safeIdx + 1) / items.length) * 100}%`);
+  }
+  if (status) status.textContent = IMPORT_SPLASH_PHASE_LABELS[safeIdx] || "Recept importeren";
   items.forEach((el, i) => {
-    el.dataset.state = i < activeIdx ? "done" : i === activeIdx ? "active" : "pending";
+    el.dataset.state = i < safeIdx ? "done" : i === safeIdx ? "active" : "pending";
   });
 }
 
 function _doHideImportSplash() {
   const splash = document.getElementById("importSplash");
   if (!splash) return;
-  splash.classList.add("hidden");
-  splash.setAttribute("aria-hidden", "true");
+  if (_importSplashExitTimeout) {
+    clearTimeout(_importSplashExitTimeout);
+    _importSplashExitTimeout = null;
+  }
+  splash.classList.add("import-splash--leaving");
+  _importSplashExitTimeout = window.setTimeout(() => {
+    _importSplashExitTimeout = null;
+    splash.classList.add("hidden");
+    splash.classList.remove("import-splash--leaving", "import-splash--ready");
+    splash.setAttribute("aria-hidden", "true");
+    splash.style.removeProperty("--import-progress");
+    delete splash.dataset.phase;
+  }, 260);
   if (_importSplashTimer) {
     clearInterval(_importSplashTimer);
     _importSplashTimer = null;
@@ -9537,6 +9563,10 @@ function showImportSplash(url) {
     clearTimeout(_importSplashHideTimeout);
     _importSplashHideTimeout = null;
   }
+  if (_importSplashExitTimeout) {
+    clearTimeout(_importSplashExitTimeout);
+    _importSplashExitTimeout = null;
+  }
   const sourceEl = document.getElementById("importSplashSource");
   if (sourceEl) {
     let host = "";
@@ -9545,7 +9575,7 @@ function showImportSplash(url) {
   }
   _importSplashPhase = 0;
   _renderImportSplashPhases(0);
-  splash.classList.remove("hidden");
+  splash.classList.remove("hidden", "import-splash--leaving", "import-splash--ready");
   splash.setAttribute("aria-hidden", "false");
   _importSplashShownAt = Date.now();
   if (_importSplashTimer) clearInterval(_importSplashTimer);
@@ -9574,6 +9604,8 @@ function hideImportSplash() {
     // Forceer dat alle fases zichtbaar geweest zijn — spring direct naar laatste fase.
     _importSplashPhase = IMPORT_SPLASH_PHASE_COUNT - 1;
     _renderImportSplashPhases(IMPORT_SPLASH_PHASE_COUNT - 1);
+    const splash = document.getElementById("importSplash");
+    if (splash) splash.classList.add("import-splash--ready");
     _importSplashHideTimeout = setTimeout(() => {
       _importSplashHideTimeout = null;
       _doHideImportSplash();
