@@ -4495,8 +4495,10 @@ async function fetchReaderFallback(url) {
 async function fetchWithZenRows(url) {
   const apiKey = sanitizeText(process.env.ZENROWS_API_KEY || "").trim();
   if (!apiKey) return null;
-  // premium_proxy=true is door ZenRows aanbevolen voor CF-protected sites (Miljuschka, Eef Kookt Zo, Culy).
-  const zenUrl = `https://api.zenrows.com/v1/?apikey=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(url)}&js_render=true&antibot=true&premium_proxy=true`;
+  // premium_proxy=true volstaat voor CF-protected WPRM-sites (Miljuschka/Eef/Culy):
+  // de receptdata zit al in statische HTML + JSON-LD, dus js_render is overbodig.
+  // Combinatie js_render+antibot+premium_proxy gaf bovendien 422 RESP001 op Eef.
+  const zenUrl = `https://api.zenrows.com/v1/?apikey=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(url)}&premium_proxy=true`;
   try {
     const response = await fetch(zenUrl, { signal: AbortSignal.timeout(35000) });
     if (!response.ok) return null;
