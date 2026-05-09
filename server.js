@@ -4210,7 +4210,10 @@ async function fetchWithProfile(url, profileHeaders = {}, referer = "") {
 async function fetchReaderFallback(url) {
   // Jina Reader expects `https://r.jina.ai/https://example.com/...` (or http://...)
   const target = String(url || "").trim();
-  const readerUrl = `https://r.jina.ai/${target}`;
+  // IMPORTANT: When the target contains `?` or `#`, it MUST be URL-encoded.
+  // Otherwise the query/fragment is interpreted as *r.jina.ai's* query/fragment,
+  // and the target URL loses its `?q=...` — breaking search pages.
+  const readerUrl = `https://r.jina.ai/${encodeURIComponent(target)}`;
   const response = await fetch(readerUrl, {
     headers: {
       ...FETCH_HEADERS,
@@ -8186,7 +8189,7 @@ async function readerSearchFallback(searchUrl, channelName, channelId, count, qu
   try {
     const target = String(searchUrl || "").trim();
     if (!target) return [];
-    const readerUrl = `https://r.jina.ai/${target}`;
+    const readerUrl = `https://r.jina.ai/${encodeURIComponent(target)}`;
     const response = await fetch(readerUrl, {
       headers: FETCH_HEADERS,
       signal: AbortSignal.timeout(8000),
