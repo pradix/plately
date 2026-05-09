@@ -199,7 +199,8 @@ async function proxyImage(requestUrl, response) {
 
     if (useZenRows) {
       // ZenRows accepteert GET en geeft binary terug, maar met content-type text/plain.
-      const zenUrl = `https://api.zenrows.com/v1/?apikey=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(raw)}&premium_proxy=true&antibot=true`;
+      // Géén antibot=true: dat breekt image-fetches (422). premium_proxy alleen volstaat.
+      const zenUrl = `https://api.zenrows.com/v1/?apikey=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(raw)}&premium_proxy=true`;
       const upstream = await fetch(zenUrl, { signal: AbortSignal.timeout(20000) });
       if (upstream.ok) {
         buffer = Buffer.from(await upstream.arrayBuffer());
