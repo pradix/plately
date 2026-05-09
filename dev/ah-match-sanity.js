@@ -48,6 +48,11 @@ async function main() {
     "burrata",
     "basilicum",
     "tomaat basilicum",
+    "zwarte peper",
+    "keukenzout",
+    "gelatine",
+    "sinaasappels",
+    "melbatoast",
     "zout",
     "peper",
   ];

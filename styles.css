@@ -10234,41 +10234,6 @@ body {
   gap: 10px;
 }
 
-.basket-sheet__bulk-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 2px;
-}
-
-.basket-sheet__bulk-actions::-webkit-scrollbar { display: none; }
-
-.basket-sheet__bulk-btn {
-  flex: 0 0 auto;
-  border: 1.5px solid rgba(74,107,76,0.22);
-  background: rgba(255,255,255,0.9);
-  color: #2d4a2e;
-  font-size: 0.82rem;
-  font-weight: 700;
-  padding: 7px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: transform 0.08s ease, opacity 0.15s ease, background 0.15s ease;
-}
-
-.basket-sheet__bulk-btn:active { transform: scale(0.98); opacity: 0.92; }
-
-.basket-sheet__bulk-btn--secondary {
-  border-color: rgba(122,116,110,0.26);
-  background: rgba(255,255,255,0.65);
-  color: #7a746e;
-}
-
 .basket-sheet__close {
   background: none;
   border: none;

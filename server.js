@@ -6838,6 +6838,13 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         score += delta;
         adjustments.push({ kind: "bonus", label: `Token overlap (${overlap})`, delta });
       }
+      // If there is no meaningful token overlap, the title is often only loosely related
+      // (e.g. "met basilicum" style flavour variants). Keep these as alternatives, but
+      // make them much less likely to become the default pick.
+      if (overlap === 0 && ingredientTokens.length >= 2) {
+        score += 60;
+        adjustments.push({ kind: "penalty", label: "Geen token-overlap", delta: 60 });
+      }
 
       // Cheese equivalents: if ingredient is parmesan-like, accept Italian names too.
       if (cheeseEquivTokens.length) {
@@ -6955,6 +6962,7 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         { re: /\b(saus|dressing|marinade)\b/, score: 55, okIf: /\b(saus|dressing|marinade)\b/.test(baseLower) },
         { re: /\b(mix|kruidenmix|kruiden)\b/, score: 35, okIf: /\b(mix|kruiden)\b/.test(baseLower) },
         { re: /\b(pasta|poeder|granulaat|puree)\b/, score: 28, okIf: /\b(pasta|poeder|granulaat|puree)\b/.test(baseLower) },
+        { re: /\b(snack|toast|toastjes|crackers?|chips|noten)\b/, score: 55, okIf: wantsToastLike || /\b(not(en)?|chips)\b/.test(baseLower) },
         // Guard: herbs/veg terms like "basilicum" can accidentally match snack products (e.g. melbatoast).
         { re: /\b(melbatoast|toastjes?|toast|crackers?|zadencrackers?|beschuit|croutons?)\b/, score: 80, okIf: wantsToastLike },
       ];
@@ -9209,6 +9217,53 @@ async function buildStoreBasket(body) {
   const recipeTitle = sanitizeText(body.recipeTitle || "Boodschappenlijst");
   const sourceUrl = sanitizeText(body.sourceUrl || "");
 
+  const parseEuroPriceNumber = (value) => {
+    const raw = sanitizeText(value || "");
+    if (!raw) return Number.POSITIVE_INFINITY;
+    const cleaned = raw
+      .replace(/[^\d,.\-]/g, "")
+      .replace(/\.(?=\d{3}\b)/g, "") // thousands separators like 1.234,56
+      .replace(",", ".");
+    const n = Number.parseFloat(cleaned);
+    return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+  };
+
+  const isBioProduct = (p) =>
+    Array.isArray(p?.labels) && p.labels.some((l) => /\b(biologisch|bio)\b/i.test(String(l || "")));
+
+  const pickCheapestAmongGoodMatches = (products, prefs) => {
+    const list = Array.isArray(products) ? products.filter(Boolean) : [];
+    if (!list.length) return null;
+
+    const scored = list
+      .map((p, idx) => ({
+        idx,
+        product: p,
+        score: Number.isFinite(Number(p?.matchMeta?.score)) ? Number(p.matchMeta.score) : null,
+        price: parseEuroPriceNumber(p?.price),
+        bio: isBioProduct(p),
+      }))
+      .filter((x) => x.product);
+
+    if (!scored.length) return list[0] || null;
+
+    const finiteScores = scored.map((s) => s.score).filter((s) => Number.isFinite(s));
+    const bestScore = finiteScores.length ? Math.min(...finiteScores) : null;
+    // "Good match" window: keep relevance primary, then pick cheapest within that window.
+    // Score is a distance/penalty where lower is better (can be negative).
+    const cutoff = bestScore === null ? null : Math.min(bestScore + 60, 95);
+    const good = cutoff === null ? scored : scored.filter((s) => s.score === null || s.score <= cutoff);
+
+    const byPrice = (a, b) => (a.price !== b.price ? a.price - b.price : a.idx - b.idx);
+    const goodSorted = [...good].sort(byPrice);
+
+    if (prefs?.bio) {
+      const bioGood = goodSorted.filter((s) => s.bio);
+      if (bioGood.length) return bioGood[0].product;
+    }
+    return goodSorted[0].product;
+  };
+
   if (sourceUrl) {
     try {
       const html = await fetchHtml(sourceUrl);
@@ -9270,13 +9325,7 @@ async function buildStoreBasket(body) {
             products = await findAHProducts(ingredientName, 3);
           }
         }
-        const isBio = (p) =>
-          Array.isArray(p?.labels) &&
-          p.labels.some((l) => /\b(biologisch|bio)\b/i.test(String(l || "")));
-        const picked =
-          preferences?.bio
-            ? (products.find(isBio) || products[0] || null)
-            : (products[0] || null);
+        const picked = pickCheapestAmongGoodMatches(products, preferences);
 
         // Ensure the selected product is also the first choice shown in the UI.
         // The basket UI assumes `choices[0]` is the current pick (selectedChoiceIndex = 0).

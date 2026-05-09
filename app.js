@@ -10776,17 +10776,7 @@ bindEvent(document.getElementById("basketOverlay"), "click", (e) => {
   if (e.target === document.getElementById("basketOverlay")) closeBasketModal();
 });
 
-// Removed: smart pick button in basket UI (bulk actions remain)
-
-bindEvent(document.getElementById("basketBulkCheapestButton"), "click", () => {
-  applyBasketBulkOptimization("cheapest").catch(() => showToast("Bulkactie lukte niet."));
-});
-bindEvent(document.getElementById("basketBulkBonusButton"), "click", () => {
-  applyBasketBulkOptimization("bonus").catch(() => showToast("Bulkactie lukte niet."));
-});
-bindEvent(document.getElementById("basketBulkBioButton"), "click", () => {
-  applyBasketBulkOptimization("bio").catch(() => showToast("Bulkactie lukte niet."));
-});
+// Removed: bulk optimization buttons (Goedkoopste / BONUS / Bio)
 
 // Basket product interactions (delete, qty, swap)
 bindEvent(document.getElementById("basketSheetList"), "click", async (e) => {
