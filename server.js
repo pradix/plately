@@ -6784,7 +6784,12 @@ async function importWebsite(sourceUrl) {
         const readerDocument = await fetchReaderFallback(finalUrl);
         if (readerDocument?.kind === "text") {
           if (hostNeedsReaderAssist && looksLikeJinaReaderCfWall(readerDocument.body)) {
-            throw new HttpError(422, importBlockedReaderAllowlistMessage(finalParsedUrl?.hostname));
+            // Als de HTML-parser (bv. via ZenRows) al voldoende inhoud heeft, niet alsnog 422
+            // gooien — val terug op htmlRecipe ipv de gebruiker een fout te tonen.
+            if (!htmlRecipeHasSufficientContent) {
+              throw new HttpError(422, importBlockedReaderAllowlistMessage(finalParsedUrl?.hostname));
+            }
+            // Jina CF-wall maar HTML heeft recept-data: reader-poging stoppen.
           }
           const readerRecipe = parseTextRecipeDocument(readerDocument.body, readerDocument.finalUrl || finalUrl);
           const mdIngredients = parseMarkdownIngredientSection(readerDocument.body);
