@@ -119,6 +119,34 @@ img { display: block; max-width: 100%; }
   -webkit-tap-highlight-color: transparent;
 }
 
+/* ── Skeleton loader ─────────────────────────────────────────────────────── */
+.skeleton {
+  --skeleton-base: rgba(34, 32, 29, 0.06);
+  --skeleton-shine: rgba(255, 255, 255, 0.55);
+  background:
+    linear-gradient(
+      90deg,
+      var(--skeleton-base) 0%,
+      var(--skeleton-shine) 38%,
+      var(--skeleton-base) 72%
+    );
+  background-size: 240% 100%;
+  border-radius: var(--radius-3);
+  animation: skeleton-shimmer 1.2s ease-in-out infinite;
+}
+
+.skeleton--rounded { border-radius: var(--radius-pill); }
+.skeleton--card { border-radius: var(--card-radius); }
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 180% 0; }
+  100% { background-position: -60% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; background-size: 100% 100%; }
+}
+
 .page { min-height: 100vh; overflow-x: hidden; }
 
 .app-shell {

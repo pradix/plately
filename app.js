@@ -3767,10 +3767,27 @@ async function searchChannels(query) {
   state.channelSearchQuery = query.trim();
   pushRecentSearch(state.channelSearchQuery);
 
-  if (channelSearchSection) {
+  // Skeleton loader: only show if the request isn't instant.
+  const requestId = (searchChannels._reqId = (searchChannels._reqId || 0) + 1);
+  let skeletonTimer = null;
+  skeletonTimer = setTimeout(() => {
+    if (requestId !== searchChannels._reqId) return;
+    if (!channelSearchSection || !channelSearchResults) return;
     channelSearchSection.classList.remove("hidden");
-    if (channelSearchResults) channelSearchResults.innerHTML = `<p class="ch-result__loading"><span class="plately-hourglass"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M6 2h12v6c0 2-2 3-6 3s-6-1-6-3V2z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><path d="M6 22h12v-6c0-2-2-3-6-3s-6 1-6 3v6z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><rect x="11" y="9" width="2" height="6" fill="#f6b69d"/></svg></span>Zoeken…</p>`;
-  }
+    channelSearchResults.innerHTML = `
+      <div style="padding: 12px 14px; display: grid; gap: 10px;">
+        ${Array.from({ length: 4 }).map(() => `
+          <div class="ch-result" aria-hidden="true" style="cursor: default;">
+            <div class="skeleton" style="width: 54px; height: 54px; border-radius: 12px;"></div>
+            <div style="flex:1; min-width:0; display:grid; gap:6px;">
+              <div class="skeleton" style="height: 12px; width: 62%;"></div>
+              <div class="skeleton" style="height: 10px; width: 38%; opacity: .9;"></div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }, 120);
   try {
     const channels = getActiveFollowedSeedChannelIds().join(",");
     // Only include approved custom channels in search
@@ -3812,6 +3829,8 @@ async function searchChannels(query) {
   } catch (error) {
     console.error("❌ Channel search error:", error);
     renderChannelSearchResults([]);
+  } finally {
+    if (skeletonTimer) clearTimeout(skeletonTimer);
   }
 }
 
@@ -3826,7 +3845,26 @@ async function searchChannelsOnImportScreen(query) {
   }
   state.channelSearchQuery = query.trim();
   if (section) section.classList.remove("hidden");
-  if (results) results.innerHTML = `<p class="ch-result__loading"><span class="plately-hourglass"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M6 2h12v6c0 2-2 3-6 3s-6-1-6-3V2z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><path d="M6 22h12v-6c0-2-2-3-6-3s-6 1-6 3v6z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><rect x="11" y="9" width="2" height="6" fill="#f6b69d"/></svg></span>Zoeken…</p>`;
+  // Skeleton loader: only show if the request isn't instant.
+  const requestId = (searchChannelsOnImportScreen._reqId = (searchChannelsOnImportScreen._reqId || 0) + 1);
+  let skeletonTimer = null;
+  skeletonTimer = setTimeout(() => {
+    if (requestId !== searchChannelsOnImportScreen._reqId) return;
+    if (!results) return;
+    results.innerHTML = `
+      <div style="padding: 12px 14px; display: grid; gap: 10px;">
+        ${Array.from({ length: 4 }).map(() => `
+          <div class="ch-result" aria-hidden="true" style="cursor: default;">
+            <div class="skeleton" style="width: 54px; height: 54px; border-radius: 12px;"></div>
+            <div style="flex:1; min-width:0; display:grid; gap:6px;">
+              <div class="skeleton" style="height: 12px; width: 62%;"></div>
+              <div class="skeleton" style="height: 10px; width: 38%; opacity: .9;"></div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }, 120);
   if (orRow) orRow.classList.add("hidden");
   try {
     const channels = getActiveFollowedSeedChannelIds().join(",");
@@ -3896,6 +3934,8 @@ async function searchChannelsOnImportScreen(query) {
   } catch {
     if (section) section.classList.add("hidden");
     if (orRow) orRow.classList.remove("hidden");
+  } finally {
+    if (skeletonTimer) clearTimeout(skeletonTimer);
   }
 }
 
@@ -6915,15 +6955,24 @@ async function refetchBasketWithPreferences(preferences) {
   // Show loading indicator in the list
   const listEl = document.getElementById("basketSheetList");
   if (listEl) {
-    const prefs = preferences || {};
-    const bits = [];
-    if (prefs.bio) bits.push("biologisch");
-    if (prefs.beterLeven1) bits.push("beter leven");
-    if (prefs.vegetarisch) bits.push("vegetarisch");
-    if (prefs.vegan) bits.push("vegan");
-    if (prefs.plantaardig) bits.push("plantaardig");
-    const label = bits.length ? bits.join(", ") : "alternatieven";
-    listEl.innerHTML = `<p style="text-align:center;padding:32px 24px;color:#aaa;font-size:0.95rem">Nieuwe ${escapeHtml(label)} producten zoeken…</p>`;
+    listEl.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap: 10px;">
+        ${Array.from({ length: 5 }).map(() => `
+          <div class="basket-product" aria-hidden="true">
+            <div class="skeleton" style="width:72px;height:72px;border-radius:12px;flex:0 0 auto;"></div>
+            <div style="flex:1; min-width:0; display:grid; gap: 8px;">
+              <div class="skeleton" style="height: 12px; width: 70%;"></div>
+              <div class="skeleton" style="height: 10px; width: 45%; opacity: .9;"></div>
+              <div class="skeleton" style="height: 10px; width: 35%; opacity: .85;"></div>
+            </div>
+            <div style="display:grid; gap: 8px; justify-items:end;">
+              <div class="skeleton skeleton--rounded" style="height: 36px; width: 36px;"></div>
+              <div class="skeleton" style="height: 34px; width: 86px; border-radius: 12px;"></div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `;
   }
 
   try {
@@ -11532,7 +11581,8 @@ if (importSearchInput) {
       if (orRow) orRow.classList.remove("hidden");
       return;
     }
-    if (results) results.innerHTML = `<p class="ch-result__loading"><span class="plately-hourglass"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M6 2h12v6c0 2-2 3-6 3s-6-1-6-3V2z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><path d="M6 22h12v-6c0-2-2-3-6-3s-6 1-6 3v6z" fill="#8da485" stroke="#8da485" stroke-width="1.5"/><rect x="11" y="9" width="2" height="6" fill="#f6b69d"/></svg></span>Zoeken…</p>`;
+    // Lightweight placeholder; the real skeleton is handled inside searchChannelsOnImportScreen.
+    if (results) results.innerHTML = `<div style="padding:12px 14px"><div class="skeleton" style="height:12px;width:50%"></div></div>`;
     if (section) section.classList.remove("hidden");
     if (orRow) orRow.classList.add("hidden");
     importSearchTimeout = setTimeout(() => searchChannelsOnImportScreen(q), 600);
