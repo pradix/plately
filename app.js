@@ -614,6 +614,24 @@ function clearTransientProfilePhoto() {
 
 const SEED_RECIPE_IDS = new Set(initialRecipes.map((recipe) => recipe.id));
 
+/** Startset voor registratie-onboarding (kopie krijgt een eigen id voor je kookboek). */
+const ONBOARDING_FIRST_RECIPE_IDS = ["recipe-1", "recipe-9", "recipe-4", "recipe-8"];
+
+function cloneSeedRecipeForUserCollection(seedId) {
+  const seed = initialRecipes.find((r) => r && r.id === seedId);
+  if (!seed) return null;
+  const id = `${seed.id}-${Date.now().toString(36)}`;
+  try {
+    const copy = JSON.parse(JSON.stringify(seed));
+    copy.id = id;
+    copy.isSeed = false;
+    copy.platform = seed.platform || "website";
+    return copy;
+  } catch {
+    return null;
+  }
+}
+
 const SEED_CHANNELS = [
   { id: "ch-ah",  initials: "AH",  name: "Allerhande",          color: "#0071c2", url: "https://www.ah.nl/allerhande" },
   { id: "ch-24k", initials: "24K", name: "24 Kitchen",          color: "#e82828", url: "https://www.24kitchen.nl/recepten" },
@@ -3327,6 +3345,10 @@ function normalizeIngredientKey(name) {
     .toLowerCase()
     .trim();
 
+  // Typo's: „kom kommer” → komkommer (consistent met AH-zoek & mergen).
+  if (/\bkom\s+kom+m?ers\b/.test(t)) t = t.replace(/\bkom\s+kom+m?ers\b/g, "komkommers");
+  else if (/\bkom\s+kom+m?er\b/.test(t)) t = t.replace(/\bkom\s+kom+m?er\b/g, "komkommer");
+
   // Remove parenthetical notes: "kip (zonder bot)" → "kip"
   t = t.replace(/\s*\([^)]*\)/g, " ").trim();
 
@@ -3827,8 +3849,21 @@ function normalizeChannelThumbnailUrl(url) {
   if (/^https?:\/\//i.test(raw)) {
     try {
       const host = new URL(raw).hostname.replace(/^www\./, "").toLowerCase();
-      const proxyHosts = new Set(["static.ah.nl", "lekkerensimpel.com", "lekkeren-simpel.nl", "i0.wp.com", "i1.wp.com", "i2.wp.com", "i3.wp.com"]);
-      if (proxyHosts.has(host) || host.endsWith(".static.ah.nl")) {
+      const proxyHosts = new Set([
+        "static.ah.nl",
+        "lekkerensimpel.com",
+        "lekkeren-simpel.nl",
+        "i0.wp.com",
+        "i1.wp.com",
+        "i2.wp.com",
+        "i3.wp.com",
+      ]);
+      if (
+        proxyHosts.has(host) ||
+        host.endsWith(".static.ah.nl") ||
+        host.endsWith(".googleusercontent.com") ||
+        host.endsWith(".gstatic.com")
+      ) {
         return `/api/image-proxy?url=${encodeURIComponent(raw)}`;
       }
     } catch {
@@ -6745,7 +6780,7 @@ function renderMealPlanGrid() {
     .join("");
 }
 
-function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId) {
+function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId, opts = {}) {
   // If the recipe is still a preview (not yet in the real collection),
   // promote it to a real recipe now that the user is saving it.
   const id = String(recipeId || "").trim();
@@ -6781,7 +6816,9 @@ function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId) {
   }
   schedulePersistAppState();
   renderCookbookSaveList(recipeId);
-  showToast(`Opgeslagen in ${cookbook.name}.`);
+  if (!opts || !opts.silentToast) {
+    showToast(`Opgeslagen in ${cookbook.name}.`);
+  }
 }
 
 const FAVORITES_COOKBOOK_NAME = "❤️ Favorieten";
@@ -7010,10 +7047,10 @@ function addRecipeToGrocery(recipe) {
     if (key === "zout peper" || key === "peper zout") return true;
     if (/^(zout|peper)\b/.test(key) && key.length <= 14) return true;
     if (/\bnaar smaak\b/.test(String(name || "").toLowerCase()) && /^(zout|peper)\b/.test(key)) return true;
-    // Kitchen tools / non-food items (no bare "oven" — that wrongly skips phrases like "kip uit de oven").
+    // Kitchen tools / non-food items (no bare "oven" — skip phrases like "kip uit de oven").
     const n = String(name || "");
     if (
-      /\b(?:air\s*fryer|airfryer|bakplaat|bakvorm|contactgrill|contact\s+grill|hapjespan|koekenpan|springvorm|muffinvorm|grillschaal|raclett(?:e|edoos)|(?:grill|grilles)\s*[-]?\s*pan(?:nen?)?|grillpan(?:nen?)?|ovenschalen?|ovenschotel(?:s)?|overnschaal(?:en)?|ovenschaal(?:en)?|opvouwbaar|opvouwgrill)\b/i.test(
+      /\b(?:air\s*fryer|airfryer|bakpapier|bakplaat|bakvorm|braadpan|steelpan|cocotte|contactgrill|contact\s+grill|hapjespan|koekenpan|wok(?:pan)?|springvorm|muffinvorm|grillschaal|knoflookpers|knoflook\s*[~–-]?\s*pers|\bknoflook\s+pers\b|garlic\s+press|citruspers|citroenpers|tortilla\s*pers|(?:grill|grilles)\s*[~–-]?\s*pan(?:nen?)?|grillpan(?:nen?)?|\boven[\s~–-]+(?:schaal(?:en)?|bakplaat(?:en)?|vorm(?:en)?|schotel)\b|ovenschalen?|ovenschotel(?:en)?|overnschaal(?:en)?|ovenschaal(?:en)?|ovenvorm(?:en)?|raclett(?:e|edoos)|opvouwgrill|opvouwbaar|staafmixer|blendstick|handmixer|keukenmachine|kitchenaid|pureestok|fijnrasp|grofte\s*rasp|siliconen(?:e)?\s*bakmat|bakmat\b|vergiet|fine\s+mesh\b|kartelmes|schilmes)\b/i.test(
         n
       )
     ) {
@@ -8934,7 +8971,7 @@ async function submitAuth(mode, email, password) {
 
   if (mode === "register") {
     showOnboarding();
-    showToast("Account aangemaakt! Volg de stappen om je profiel compleet te maken.");
+    showToast("Welkom! Drie snelle stappen — daarna kun je aan de slag.");
   } else {
     closeAuthModal();
     showToast("Je bent ingelogd.");
@@ -12599,75 +12636,46 @@ const onboardingScreen = document.getElementById("onboardingScreen");
 let onboardingData = {
   channels: [],
   cookbook: "",
-  photoData: null,
   supermarket: "ah",
+  suggestedChannels: [],
+  firstRecipeSeedId: "",
 };
 
 function resetOnboardingData() {
-  const sortedSeed = getSeedChannelsSortedByName();
+  const sortedSeed = getSeedChannelsSortedByName().filter((ch) => isSeedChannelEnabled(ch.id));
   onboardingData = {
     channels: sortedSeed.map((ch) => ch.id),
     cookbook: "",
-    photoData: null,
     supermarket: "ah",
     suggestedChannels: [],
+    firstRecipeSeedId: "",
   };
 }
 
 function showOnboarding() {
   resetOnboardingData();
-  resetOnboardingPhotoCircle();
   authModal.classList.add("hidden");
   authModal.setAttribute("aria-hidden", "true");
   onboardingScreen.classList.remove("hidden");
 
-  // Hide tutorial overlays/bubbles while onboarding
+  const cookbookInput = document.getElementById("onboardingCookbookName");
+  if (cookbookInput instanceof HTMLInputElement) cookbookInput.value = "";
+
   const overlay = document.getElementById("onboardingOverlay");
   if (overlay) overlay.setAttribute("hidden", "");
 
   showOnboardingStep(1);
-  renderOnboardingChannels();
+  renderOnboardingRecipePick();
   renderOnboardingSupermarkets();
 }
 
 function showOnboardingStep(step) {
-  document.getElementById("onboardingStep1")?.classList.add("hidden");
-  document.getElementById("onboardingStep2")?.classList.add("hidden");
-  document.getElementById("onboardingStep3")?.classList.add("hidden");
-  document.getElementById("onboardingStep4")?.classList.add("hidden");
-  document.getElementById(`onboardingStep${step}`)?.classList.remove("hidden");
-  updateOnboardingProgress(step);
-  if (step === 4) initOnboardingStep4();
-}
-
-function syncOnboardingGenderUI(value) {
-  const hidden = document.getElementById("onboardingGender");
-  if (hidden instanceof HTMLInputElement) hidden.value = value || "";
-  document.querySelectorAll("[data-onboarding-gender]").forEach((btn) => {
-    if (!(btn instanceof HTMLButtonElement)) return;
-    const v = btn.dataset.onboardingGender || "";
-    btn.setAttribute("aria-pressed", v === value ? "true" : "false");
+  const safe = Math.min(Math.max(Number(step) || 1, 1), 3);
+  ["onboardingStep1", "onboardingStep2", "onboardingStep3"].forEach((id) => {
+    document.getElementById(id)?.classList.add("hidden");
   });
-}
-
-function bindOnboardingGenderTiles() {
-  const root = document.getElementById("onboardingStep4");
-  if (!root || root.dataset.genderTilesBound === "1") return;
-  root.dataset.genderTilesBound = "1";
-
-  root.querySelectorAll("[data-onboarding-gender]").forEach((btn) => {
-    if (!(btn instanceof HTMLButtonElement)) return;
-    btn.addEventListener("click", () => {
-      const value = btn.dataset.onboardingGender || "";
-      onboardingData.gender = value;
-      syncOnboardingGenderUI(value);
-    });
-  });
-}
-
-function initOnboardingStep4() {
-  bindOnboardingGenderTiles();
-  syncOnboardingGenderUI(onboardingData.gender || "");
+  document.getElementById(`onboardingStep${safe}`)?.classList.remove("hidden");
+  updateOnboardingProgress(safe);
 }
 
 function updateOnboardingProgress(step) {
@@ -12680,73 +12688,32 @@ function updateOnboardingProgress(step) {
   });
 }
 
-function renderOnboardingChannels() {
-  const list = document.getElementById("onboardingChannelsList");
-  if (!list) return;
+function renderOnboardingRecipePick() {
+  const grid = document.getElementById("onboardingRecipePickGrid");
+  if (!grid) return;
 
-  const sortedSeed = getSeedChannelsSortedByName().filter((ch) => isSeedChannelEnabled(ch.id));
-
-  // Default: all channels are checked (deduped).
-  onboardingData.channels = [...new Set(onboardingData.channels)];
-  onboardingData.channels = onboardingData.channels.filter((id) => isSeedChannelEnabled(id));
-
-  list.innerHTML = sortedSeed.map((ch) => {
-    const followed = onboardingData.channels.includes(ch.id);
-    const faviconUrl = getSourceIconUrl(ch.url);
-    return `
-      <label class="channel-toggle-row" data-onboarding-channel-id="${escapeHtml(ch.id)}">
-        <span class="channel-toggle-avatar">
-          ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
-        </span>
-        <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
-        <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-onboarding-toggle-channel="${escapeHtml(ch.id)}"></span>
-      </label>`;
+  grid.innerHTML = ONBOARDING_FIRST_RECIPE_IDS.map((rid) => {
+    const r = initialRecipes.find((x) => x && x.id === rid);
+    if (!r) return "";
+    const sel = onboardingData.firstRecipeSeedId === rid ? " selected" : "";
+    const img = escapeHtml(r.image || "");
+    const title = escapeHtml(r.title || "");
+    const safeId = escapeHtml(rid);
+    return `<button type="button" class="onboarding-recipe-card${sel}" data-onboarding-recipe-seed="${safeId}">
+      <img class="onboarding-recipe-card__img" src="${img}" alt="" loading="lazy" />
+      <div class="onboarding-recipe-card__body"><p class="onboarding-recipe-card__title">${title}</p></div>
+    </button>`;
   }).join("");
 
-  function setOnboardingChannelFollowed(channelId, shouldFollow) {
-    if (shouldFollow) {
-      onboardingData.channels = [...new Set([...onboardingData.channels, channelId])];
-    } else {
-      onboardingData.channels = onboardingData.channels.filter((id) => id !== channelId);
-    }
-    const row = list.querySelector(`[data-onboarding-channel-id="${CSS.escape(channelId)}"]`);
-    if (!row) return;
-    const sw = row.querySelector("[data-onboarding-toggle-channel]");
-    if (!(sw instanceof HTMLElement)) return;
-    sw.classList.toggle("toggle-switch--on", shouldFollow);
-    sw.setAttribute("aria-checked", shouldFollow ? "true" : "false");
-  }
-
-  list.querySelectorAll("[data-onboarding-toggle-channel]").forEach((sw) => {
-    if (!(sw instanceof HTMLElement)) return;
-    const channelId = sw.dataset.onboardingToggleChannel || "";
-    const toggle = () => {
-      if (!channelId) return;
-      const currentlyOn = onboardingData.channels.includes(channelId);
-      setOnboardingChannelFollowed(channelId, !currentlyOn);
-    };
-    sw.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      toggle();
-    });
-    sw.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        toggle();
-      }
-    });
-  });
-
-  list.querySelectorAll("[data-onboarding-channel-id]").forEach((row) => {
-    if (!(row instanceof HTMLElement)) return;
-    row.addEventListener("click", (e) => {
-      // allow switch handler to do its own work
-      if ((e.target instanceof HTMLElement) && e.target.closest("[data-onboarding-toggle-channel]")) return;
-      const channelId = row.dataset.onboardingChannelId || "";
-      if (!channelId) return;
-      const currentlyOn = onboardingData.channels.includes(channelId);
-      setOnboardingChannelFollowed(channelId, !currentlyOn);
+  grid.querySelectorAll("[data-onboarding-recipe-seed]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.onboardingRecipeSeed || "";
+      onboardingData.firstRecipeSeedId = id;
+      grid.querySelectorAll(".onboarding-recipe-card").forEach((el) => {
+        if (!(el instanceof HTMLElement)) return;
+        const sid = el.dataset.onboardingRecipeSeed || "";
+        el.classList.toggle("selected", Boolean(id) && sid === id);
+      });
     });
   });
 }
@@ -12784,111 +12751,72 @@ function renderOnboardingSupermarkets() {
 }
 
 function finishOnboarding() {
-  if (!Array.isArray(onboardingData.channels) || onboardingData.channels.length === 0) {
-    showToast("Kies minimaal 1 kanaal om te volgen.");
-    showOnboardingStep(1);
-    return;
-  }
+  const cookbookInput = document.getElementById("onboardingCookbookName");
+  onboardingData.cookbook =
+    cookbookInput instanceof HTMLInputElement ? cookbookInput.value.trim() : String(onboardingData.cookbook || "").trim();
 
-  // Apply channels
-  state.followedChannelIds = [...new Set(onboardingData.channels.filter((id) => isSeedChannelEnabled(id)))];
+  state.followedChannelIds = [...new Set((onboardingData.channels || []).filter((id) => isSeedChannelEnabled(id)))];
 
-  // Persist suggested channels if any
-  if (onboardingData.suggestedChannels && onboardingData.suggestedChannels.length > 0) {
+  if (Array.isArray(onboardingData.suggestedChannels) && onboardingData.suggestedChannels.length > 0) {
     state.customChannels.push(...onboardingData.suggestedChannels);
   }
 
-  // Create first cookbook if name provided
-  if (onboardingData.cookbook.trim()) {
+  let newCookbookId = "";
+  if (onboardingData.cookbook) {
     const newCb = {
       id: "cb-" + Date.now(),
       name: onboardingData.cookbook,
       recipeIds: [],
     };
     state.cookbooks.push(newCb);
-    if (state.cookbooks.length === 1) state.selectedCookbookId = newCb.id;
+    newCookbookId = newCb.id;
+    state.selectedCookbookId = newCb.id;
   }
 
-  if (onboardingData.photoData) {
-    state.profile.photo = onboardingData.photoData;
-  } else {
-    state.profile.photo = "";
-  }
-  if (onboardingData.gender) {
-    state.profile.gender = onboardingData.gender;
-  }
-  if (onboardingData.birthDate) {
-    state.profile.birthDate = onboardingData.birthDate;
+  ensureFavoritesCookbookExists({ persist: false });
+  const favoritesRow = state.cookbooks.find((cb) => cb && cb.name === FAVORITES_COOKBOOK_NAME);
+  const cookbookForRecipe =
+    newCookbookId || state.selectedCookbookId || favoritesRow?.id || state.cookbooks[0]?.id || "";
+
+  const seedPick = onboardingData.firstRecipeSeedId;
+  if (seedPick && cookbookForRecipe) {
+    const clone = cloneSeedRecipeForUserCollection(seedPick);
+    if (clone) {
+      state.recipes = [clone, ...state.recipes.filter((r) => r && r.id !== clone.id)];
+      saveRecipeToCookbook(clone.id, cookbookForRecipe, { silentToast: true });
+    }
   }
 
-  // Save favorite supermarket
   state.profile.favoriteSupermarket = onboardingData.supermarket || "ah";
 
-  persistAppState();
   onboardingScreen.classList.add("hidden");
   switchView("home");
   renderAll();
-  showToast("Welkom! Je profiel is klaar.");
-  // Show tutorial tooltips for first-time users
+  persistAppState();
+  showToast("Welkom bij Plately!");
   setTimeout(() => startOnboarding(), 800);
+}
+
+function abandonRegistrationOnboarding() {
+  state.followedChannelIds = [...new Set((onboardingData.channels || []).filter((id) => isSeedChannelEnabled(id)))];
+  state.profile.favoriteSupermarket = onboardingData.supermarket || state.profile.favoriteSupermarket || "ah";
+  onboardingScreen.classList.add("hidden");
+  switchView("home");
+  renderAll();
+  persistAppState();
+  showToast("Je kunt alles nog instellen onder Instellingen.");
 }
 
 // ── Onboarding event listeners ─────────────────────────────────────────────────
 bindEvent(document.getElementById("onboardingClose"), "click", () => {
-  onboardingScreen.classList.add("hidden");
-  switchView("home");
-});
-
-bindEvent(document.getElementById("onboardingSuggestBtn"), "click", () => {
-  const name = prompt("Kanaal naam (bijv. \"Leuke Recepten\"):");
-  if (!name || !name.trim()) return;
-
-  const url = prompt("Website URL (bijv. \"https://www.leukerecepten.nl\"):");
-  if (!url || !url.trim()) return;
-
-  // Create temporary channel object
-  const newChannelId = `ch-custom-${Date.now()}`;
-  const initials = name
-    .split(" ")
-    .map((word) => word[0])
-    .filter((c) => /[a-zA-Z]/.test(c))
-    .slice(0, 2)
-    .join("")
-    .toUpperCase() || "NC";
-
-  // Add to onboarding data temporarily
-  if (!onboardingData.suggestedChannels) {
-    onboardingData.suggestedChannels = [];
-  }
-
-  onboardingData.suggestedChannels.push({
-    id: newChannelId,
-    name: name.trim(),
-    url: url.trim(),
-    initials: initials,
-  });
-
-  // Add to followed channels
-  onboardingData.channels = [...new Set([...onboardingData.channels, newChannelId])];
-
-  // Re-render with the new channel
-  renderOnboardingChannels();
-  showToast(`"${escapeHtml(name)}" voorgesteld! Het wordt gevolgd.`);
+  abandonRegistrationOnboarding();
 });
 
 bindEvent(document.getElementById("onboardingStep1Skip"), "click", () => {
-  if (!Array.isArray(onboardingData.channels) || onboardingData.channels.length === 0) {
-    showToast("Kies minimaal 1 kanaal om te volgen.");
-    return;
-  }
   showOnboardingStep(2);
 });
 
 bindEvent(document.getElementById("onboardingStep1Next"), "click", () => {
-  if (!Array.isArray(onboardingData.channels) || onboardingData.channels.length === 0) {
-    showToast("Kies minimaal 1 kanaal om te volgen.");
-    return;
-  }
   showOnboardingStep(2);
 });
 
@@ -12897,12 +12825,6 @@ bindEvent(document.getElementById("onboardingStep2Skip"), "click", () => {
 });
 
 bindEvent(document.getElementById("onboardingStep2Next"), "click", () => {
-  const name = document.getElementById("onboardingCookbookName")?.value.trim();
-  if (!name) {
-    showToast("Voer een naam voor je kookboek in.");
-    return;
-  }
-  onboardingData.cookbook = name;
   showOnboardingStep(3);
 });
 
@@ -12919,44 +12841,11 @@ document.querySelectorAll(".onboarding-suggestion-pill").forEach((pill) => {
 });
 
 bindEvent(document.getElementById("onboardingStep3Skip"), "click", () => {
-  showOnboardingStep(4);
+  finishOnboarding();
 });
 
 bindEvent(document.getElementById("onboardingStep3Next"), "click", () => {
-  showOnboardingStep(4);
-});
-
-bindEvent(document.getElementById("onboardingStep4Skip"), "click", () => {
   finishOnboarding();
-});
-
-bindEvent(document.getElementById("onboardingStep4Finish"), "click", () => {
-  onboardingData.gender = document.getElementById("onboardingGender")?.value || "";
-  onboardingData.birthDate = document.getElementById("onboardingBirthDate")?.value || "";
-  finishOnboarding();
-});
-
-// Photo upload
-bindEvent(document.getElementById("onboardingPhotoBtn"), "click", () => {
-  document.getElementById("onboardingPhotoInput")?.click();
-});
-
-bindEvent(document.getElementById("onboardingPhotoInput"), "change", (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  resizeImageToDataUrl(file, 320).then((dataUrl) => {
-    onboardingData.photoData = dataUrl;
-    // Display the photo in the circle
-    const circle = document.getElementById("onboardingPhotoCircle");
-    const icon = circle?.querySelector(".onboarding-photo-icon");
-    if (circle && icon) {
-      circle.style.backgroundImage = `url(${dataUrl})`;
-      circle.style.backgroundSize = "cover";
-      circle.style.backgroundPosition = "center";
-      icon.style.display = "none";
-    }
-    showToast("Foto toegevoegd!");
-  });
 });
 
 // ── Confirm sheet ──────────────────────────────────────────────────────────────

@@ -53,9 +53,29 @@ const HTTP_HEADERS = {
 
 const FETCH_HEADERS = {
   "user-agent":
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-  "accept-language": "en-US,en;q=0.9,nl;q=0.8",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  accept: "*/*",
+  "accept-language": "nl-NL,nl;q=0.9,en-GB;q=0.8,en;q=0.7",
 };
+
+/** Correleert alle logregels voor één `/api/import`-aanvraag (grep op traceId). */
+function newImportTraceId() {
+  return `imp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function shortenUrlForLog(url, maxLen = 180) {
+  const s = String(url || "").trim();
+  if (!s) return "";
+  return s.length <= maxLen ? s : `${s.slice(0, maxLen)}…`;
+}
+
+function logImportRequest(phase, traceId, details = {}) {
+  try {
+    console.log("[import]", { phase, traceId, ...details });
+  } catch {
+    console.log("[import]", phase, traceId);
+  }
+}
 
 function isAllowedImageProxyUrl(rawUrl) {
   try {
@@ -94,6 +114,8 @@ function isAllowedImageProxyUrl(rawUrl) {
     if (ALLOW_HOSTS.has(host)) return true;
     // Allow subdomains of static.ah.nl (defensive; usually not needed)
     if (host.endsWith(".static.ah.nl")) return true;
+    // Serper / Google SERP thumbnails voor kanaalzoek
+    if (host.endsWith(".googleusercontent.com") || host.endsWith(".gstatic.com")) return true;
     return false;
   } catch {
     return false;
@@ -228,6 +250,10 @@ const INGREDIENT_WORD_PATTERN =
 const NON_FOOD_INGREDIENT_PATTERN =
   /\b(keukenpapier|bakpapier|sat[ée]prikkers?|cocktailprikkers?|aluminiumfolie|folie|servetten?|touw|spiesen?|prikker|tandpasta|tandgel|tandenborstel|mondspoeling|floss|shampoo|conditioner|douchegel|bodylotion|bodywash|handlotion|handcrème|zeep|vloeibare\s+zeep|wasmiddel|vaatwasmiddel|afwasmiddel|schoonmaakmiddel|allesreiniger|wc-reiniger|toiletblok|deodorant|anti-transpirant|parfum|eau\s+de|aftershave|scheerschuim|scheermesje?|scheergel|mascara|make-?up|foundation|lipstick|lippenstift|nagellak|zonnebrand|sunscreen|moisturizer|dagcrème|nachtcrème|toiletpapier|wc-papier|tissues?|wegwerpluier|maandverband|tampon|batterij(?:en)?|gloeilamp(?:en)?|spaarlamp|led-lamp|vuilniszak(?:ken)?|afvalzak|handdoek(?:en)?|washandje?|spons|sponzen|schuurspons|dweil|stofdoek)\b/i;
 
+/** Keukengerei dat soms als “ingredient” uit recepttekst komt — hoort niet in de boodschappenlijst-import. */
+const KITCHEN_TOOL_INGREDIENT_RE =
+  /\b(?:knoflookpers|knoflook\s+[~-–]?\s*pers|garlic\s+press|(?:grill|grilles)[\s~-–]*pan(?:nen?)?|grillpan(?:nen?)?|(?:oven|bak)[\s~-–]+(?:schaal(?:en)?|bakplaat(?:en)?)|(?:oven|bak)schaal(?:en)?|ovenschalen?|ovenschotels?|siliconen(?:e)?\s*bakmat|staafmixer|(?:hand|keuken)?mixer)\b/i;
+
 // Check that an ingredient appears as a meaningful word start in a product title.
 // This prevents "pasta" from matching "tandpasta" (no word boundary before "pasta").
 function ingredientMatchesProduct(ingredient, productTitle) {
@@ -311,13 +337,90 @@ function buildIngredientMatchTerms(rawIngredient, normalizedBase) {
     terms.add("pecorino romano");
   }
 
+  // Produce: bilingual catalog hits (English appears on AH labels occasionally).
+  if (/\bcourgu?ettes?\b/.test(base) || /\bcourgu?ettes?\b/.test(raw)) {
+    terms.add("courgette");
+    terms.add("courgettes");
+    terms.add("zucchini");
+  }
+  if (/\baubergines?\b/.test(base) || /\baubergines?\b/.test(raw)) {
+    terms.add("aubergine");
+    terms.add("aubergines");
+    terms.add("eggplant");
+  }
+  if (/\bkomkommers?\b/.test(base) || /\bkomkommers?\b/.test(raw)) {
+    terms.add("komkommer");
+    terms.add("komkommers");
+    terms.add("cucumber");
+  }
+
   return [...terms].filter(Boolean);
+}
+
+/**
+ * AH-zoekresultaten worden consistenter bij enkelvoud (tomaten/aubergines/courgettes → singular).
+ * Alleen veilige lemma’s — geen blinde `-en`/`-s`-strip (anders “gehakt”, “bouillon”, … ).
+ */
+function singularizeDutchIngredientPhraseForSearch(phrase) {
+  let s = sanitizeText(String(phrase || "").toLowerCase()).replace(/\s+/g, " ").trim();
+  if (!s) return s;
+
+  /** Langste eerst zodat `cherrytomaten` niet als `tomaten` gematcht wordt. */
+  const PLURAL_TO_SINGULAR = [
+    ["cherrytomaten", "cherrytomaat"],
+    ["kerstomaten", "kerstomaat"],
+    ["tomaten", "tomaat"],
+    ["rode paprika's", "rode paprika"],
+    ["groene paprika's", "groene paprika"],
+    ["gele paprika's", "gele paprika"],
+    ["oranje paprika's", "oranje paprika"],
+    ["puntpaprika's", "puntpaprika"],
+    ["blauwe bessen", "blauwe bes"],
+    ["braambessen", "braam"],
+    ["courgettes", "courgette"],
+    ["zucchinis", "zucchini"],
+    ["aubergines", "aubergine"],
+    ["komkommers", "komkommer"],
+    ["paprika's", "paprika"],
+    ["paprikas", "paprika"],
+    ["aardappeltjes", "aardappel"],
+    ["aardappelen", "aardappel"],
+    ["worteltjes", "wortel"],
+    ["wortelen", "wortel"],
+    ["uitjes", "ui"],
+    ["uien", "ui"],
+    ["sjalotten", "sjalot"],
+    ["champignons", "champignon"],
+    ["olijven", "olijf"],
+    ["eieren", "ei"],
+    ["citroenen", "citroen"],
+    ["limoenen", "limoen"],
+    ["sinaasappels", "sinaasappel"],
+    ["frambozen", "framboos"],
+    ["pruimen", "pruim"],
+    ["appels", "appel"],
+    ["peren", "peer"],
+  ].sort((a, b) => b[0].length - a[0].length);
+
+  for (const [plural, singular] of PLURAL_TO_SINGULAR) {
+    const re = new RegExp(`(^|\\s)${plural.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\s|$)`, "gi");
+    s = s.replace(re, `$1${singular}`);
+  }
+
+  return s.replace(/\s+/g, " ").trim();
 }
 
 // ── Ingredient search normalisation ──────────────────────────────────────────
 // Strips quantities, descriptors and maps variants to the best AH search term.
 function normalizeIngredientForSearch(raw) {
   let t = (raw || "").toLowerCase().trim();
+
+  // Typo's / OCR: “kom kommer”, “kom kommmer” → komkommer (AH catalogue uses one word).
+  if (/\bkom\s+kom+m?ers?\b/i.test(t)) {
+    t = t.replace(/\bkom\s+kom+m?ers?\b/gi, "komkommers");
+  } else if (/\bkom\s+kom+m?er\b/i.test(t)) {
+    t = t.replace(/\bkom\s+kom+m?er\b/gi, "komkommer");
+  }
 
   // 1. Strip leading numeric quantity + optional unit
   t = t.replace(
@@ -380,8 +483,8 @@ function normalizeIngredientForSearch(raw) {
   if (/^zout$/.test(t)) return "keukenzout";
   if (/^peper$/.test(t)) return "zwarte peper";
 
-  // 7. Tomato variants
-  if (/kerstomaatje|cherrytomaat/.test(t)) return "cherrytomaten";
+  // 7. Tomato variants (enkelvoud beter voor AH-zoekresultaten)
+  if (/kerstomaatje|cherrytomaat|cherrytomaten/.test(t)) return "cherrytomaat";
   if (/zongedroogde.*tomaten?/.test(t))     return "zongedroogde tomaten";
   if (/\b(gezeefde|gepureerde|gehakte|ingeblikte)\s*tomaten?/.test(t)) return "tomaten gepeld";
 
@@ -402,6 +505,9 @@ function normalizeIngredientForSearch(raw) {
 
   // 10. Strip parenthetical notes: "kip (zonder bot)" → "kip"
   t = t.replace(/\s*\([^)]*\)/g, "").trim();
+
+  // 10b. Winkelzoek enkelvoud: aubergines → aubergine, tomaten → tomaat (veilige mapping only)
+  t = singularizeDutchIngredientPhraseForSearch(t);
 
   // 11. Cap at 3 words to avoid overly specific queries
   const words = t.split(/\s+/).filter((w) => w.length > 1);
@@ -431,6 +537,12 @@ const DEFAULT_COOKBOOKS = [
 // Keep in sync with frontend `SEED_CHANNELS` for admin display / resolving names.
 /** WordPress sites met harde bot/WAF-blokkade: scraping + WP-REST falen op VPS; optioneel Serper site:-fallback. */
 const CHANNEL_SEARCH_SERPER_FALLBACK_IDS = new Set(["ch-mj", "ch-ek"]);
+
+/**
+ * Kanalen waar zoekresultaten uit de eigen site-index komen; titels herhalen het zoekwoord niet altijd
+ * (bv. query „surinaamse” → „Klassieke roti zelf maken”).
+ */
+const CHANNEL_SEARCH_TRUST_SITE_INDEXER_IDS = new Set(["ch-clf"]);
 
 const SEED_CHANNELS = [
   { id: "ch-ah", name: "Allerhande" },
@@ -1977,7 +2089,29 @@ async function updateAuthenticatedUserState(userId, body) {
     throw new HttpError(404, "Gebruiker niet gevonden.");
   }
 
-  const appState = sanitizeUserStatePayload(body, buildAppStateFromUser(currentUser));
+  const baseState = buildAppStateFromUser(currentUser);
+  const prevImported = Array.isArray(baseState.importedRecipes) ? baseState.importedRecipes.length : 0;
+  const appState = sanitizeUserStatePayload(body, baseState);
+  const nextImported = Array.isArray(appState.importedRecipes) ? appState.importedRecipes.length : 0;
+  if (nextImported > prevImported) {
+    const last = appState.importedRecipes[nextImported - 1];
+    console.log("[app-state]", {
+      phase: "imported_recipes_saved",
+      userId: String(userId).slice(0, 24),
+      prevCount: prevImported,
+      nextCount: nextImported,
+      lastTitle:
+        typeof last?.title === "string" ? shortenUrlForLog(sanitizeText(last.title), 88) : undefined,
+      lastId: typeof last?.id === "string" ? sanitizeText(last.id).slice(0, 28) : undefined,
+      sourceHost: (() => {
+        try {
+          return new URL(sanitizeText(last?.sourceUrl || "")).hostname.replace(/^www\./i, "");
+        } catch {
+          return undefined;
+        }
+      })(),
+    });
+  }
   const nextProfile = appState.profile;
 
   const updated = await pool.query(
@@ -2329,10 +2463,19 @@ function splitCompoundIngredientWords(text) {
 }
 
 function canonicalizeIngredientForStoreSearch(value) {
-  const raw = splitCompoundIngredientWords(sanitizeText(value || ""));
+  let scrubbed = sanitizeText(value || "");
+  const lowScr = scrubbed.toLowerCase();
+  if (/\bkom\s+kom+m?ers?\b/i.test(lowScr)) {
+    scrubbed = scrubbed.replace(/\bkom\s+kom+m?ers?\b/gi, "komkommers");
+  } else if (/\bkom\s+kom+m?er\b/i.test(lowScr)) {
+    scrubbed = scrubbed.replace(/\bkom\s+kom+m?er\b/gi, "komkommer");
+  }
+  const raw = splitCompoundIngredientWords(scrubbed);
   if (!raw) return "";
 
-  const key = raw
+  const singular = singularizeDutchIngredientPhraseForSearch(raw.toLowerCase().trim());
+
+  const key = singular
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -2349,7 +2492,8 @@ function canonicalizeIngredientForStoreSearch(value) {
     return "grana padano";
   }
 
-  return raw;
+  // Leesbare titel: enkelvoud is voor zoeken; eerste letter netjes voor UI
+  return singular ? singular.charAt(0).toLocaleUpperCase("nl-NL") + singular.slice(1) : "";
 }
 
 function decodeHtml(value) {
@@ -3867,7 +4011,7 @@ function parseIngredientLine(line) {
 function uniqueByName(items) {
   const seen = new Set();
   return items.filter((item) => {
-    if (!item?.name || NON_FOOD_INGREDIENT_PATTERN.test(item.name)) {
+    if (!item?.name || NON_FOOD_INGREDIENT_PATTERN.test(item.name) || KITCHEN_TOOL_INGREDIENT_RE.test(item.name)) {
       return false;
     }
     const key = `${item.quantity}|${item.unit}|${item.name}`.toLowerCase();
@@ -4108,6 +4252,73 @@ async function fetchJson(url, options = {}) {
   return payload;
 }
 
+/** Marketing/tracking query keys — stripping them canonicalises URLs and allows Jina reader fallback. */
+const BENIGN_URL_QUERY_PARAM = new Set([
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+  "utm_term",
+  "utm_id",
+  "gclid",
+  "fbclid",
+  "mc_cid",
+  "mc_eid",
+  "ref",
+  "igshid",
+  "srsltid",
+  "mkt_tok",
+  "_gl",
+  "_ga",
+  "_gid",
+  "yclid",
+  "gbraid",
+  "wbraid",
+]);
+
+function stripBenignMarketingParamsFromUrl(urlString) {
+  let u;
+  try {
+    u = new URL(String(urlString || "").trim());
+  } catch {
+    return String(urlString || "").trim();
+  }
+  if (!u.search) return u.toString();
+  const sp = u.searchParams;
+  let changed = false;
+  for (const k of [...new Set([...sp.keys()])]) {
+    if (BENIGN_URL_QUERY_PARAM.has(String(k).toLowerCase())) {
+      sp.delete(k);
+      changed = true;
+    }
+  }
+  if (!changed) return u.toString();
+  const pathAndQuery = `${u.pathname}${sp.toString() ? `?${sp.toString()}` : ""}`;
+  return `${u.origin}${pathAndQuery}${u.hash || ""}`;
+}
+
+function isBenignOrEmptyUrlSearch(search) {
+  if (!search || search === "?") return true;
+  const qs = search.startsWith("?") ? search.slice(1) : search;
+  try {
+    const sp = new URLSearchParams(qs);
+    for (const k of sp.keys()) {
+      if (!BENIGN_URL_QUERY_PARAM.has(String(k).toLowerCase())) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Miljuschka / EEF: Cloudflare blokkeert datacenter-requests; gebruik Reader als eerste fetch niet lukt. */
+const JINA_READER_RECIPE_HOST_ALLOWLIST = new Set(["miljuschka.nl", "eefkooktzo.nl"]);
+
+function hostMatchesReaderAllowlist(hostname) {
+  const h = String(hostname || "").toLowerCase().replace(/^www\./, "");
+  return JINA_READER_RECIPE_HOST_ALLOWLIST.has(h);
+}
+
 function isSafeForReaderFallback(parsedUrl) {
   if (parsedUrl.username || parsedUrl.password) return false;
   // Social platforms sometimes require query params to be present (e.g. Instagram igsh).
@@ -4122,7 +4333,8 @@ function isSafeForReaderFallback(parsedUrl) {
   ) {
     return true;
   }
-  return !parsedUrl.search && !parsedUrl.hash;
+  // Recipe blogs with ?utm_=… from Google zijn veilig voor Reader; blokkeer alleen onbekende queries + hash-targets.
+  return isBenignOrEmptyUrlSearch(parsedUrl.search) && !parsedUrl.hash;
 }
 
 function looksLikeBlockedSocialHtml(url, html) {
@@ -4145,12 +4357,18 @@ function looksLikeBlockedSocialHtml(url, html) {
     h.includes("cf-challenge") ||
     h.includes("challenge-platform") ||
     h.includes("/cdn-cgi/") ||
+    h.includes("/cdn-cgi/challenge-platform/") ||
     h.includes("cf-ray") ||
+    h.includes("__cf_bm") ||
     h.includes("captcha") ||
     h.includes("verify you are human") ||
     h.includes("enable javascript") ||
     h.includes("enable cookies") ||
+    h.includes("checking your browser") ||
     h.includes("checking your browser before accessing") ||
+    h.includes("just a moment") ||
+    h.includes("security verification") ||
+    h.includes("performing security verification") ||
     h.includes("ddos protection");
   // "Hard" Cloudflare challenge markers should override any accidental "recipe"
   // words present in the page (some challenge templates contain navigation text).
@@ -4319,6 +4537,15 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
       return await fetchReaderFallback(url);
     } catch (error) {
       // Jina also failed, continue to error handling below
+    }
+  }
+
+  // Miljuschka / Eef: direct fetches fail with 5xx or empty; probeer Reader vóór harde fout.
+  if (hostMatchesReaderAllowlist(parsedUrl.hostname) && isSafeForReaderFallback(parsedUrl)) {
+    try {
+      return await fetchReaderFallback(url);
+    } catch {
+      /* fall through */
     }
   }
 
@@ -6321,19 +6548,39 @@ async function importWebsite(sourceUrl) {
 
   const htmlRecipe = parseWebsiteRecipe(document.body, document.finalUrl || sourceUrl);
 
-  // If the HTML is "thin" (JS-rendered / consent / WAF-ish) and we couldn't extract a recipe,
-  // try the reader fallback before we declare it "not_recipe" at the API layer.
-  if (htmlRecipe.needsReview) {
-    const finalUrl = document.finalUrl || sourceUrl;
-    let finalParsedUrl = null;
+  // Miljuschka / EEF: veel 200/HTML + CF-lagen; andere sites: dunne/consent/Challengewalls.
+  const finalUrlEarly = document.finalUrl || sourceUrl;
+  let finalParsedUrlEarly = null;
+  try {
+    finalParsedUrlEarly = new URL(finalUrlEarly);
+  } catch {
     try {
-      finalParsedUrl = new URL(finalUrl);
+      finalParsedUrlEarly = new URL(sourceUrl);
     } catch {
-      try { finalParsedUrl = new URL(sourceUrl); } catch { finalParsedUrl = null; }
+      finalParsedUrlEarly = null;
     }
+  }
+  const hostNeedsReaderAssist = Boolean(finalParsedUrlEarly?.hostname && hostMatchesReaderAllowlist(finalParsedUrlEarly.hostname));
+  const htmlBodyForReader = String(document.body || "");
+  const lowerEarly = htmlBodyForReader.toLowerCase();
+  const hiEarly = Array.isArray(htmlRecipe.ingredients) ? htmlRecipe.ingredients.length : 0;
+  const hsEarly = Array.isArray(htmlRecipe.instructions) ? htmlRecipe.instructions.length : 0;
+  const htmlRecipeLooksWeakRecipe = hiEarly < 2 || hsEarly < 1;
+  const cfLikeEarly =
+    lowerEarly.includes("cloudflare") ||
+    lowerEarly.includes("checking your browser") ||
+    lowerEarly.includes("__cf_bm") ||
+    lowerEarly.includes("cf-browser-verification");
 
-    const html = String(document.body || "");
-    const lower = html.toLowerCase();
+  const tryReaderMerged =
+    htmlRecipe.needsReview || (hostNeedsReaderAssist && (htmlRecipeLooksWeakRecipe || cfLikeEarly));
+
+  if (tryReaderMerged) {
+    const finalUrl = finalUrlEarly;
+    let finalParsedUrl = finalParsedUrlEarly;
+
+    const html = htmlBodyForReader;
+    const lower = lowerEarly;
     const looksThin = html.length < 2500;
     const looksJsRequired =
       lower.includes("enable javascript") ||
@@ -6350,7 +6597,7 @@ async function importWebsite(sourceUrl) {
     const shouldTryReader =
       Boolean(finalParsedUrl) &&
       isSafeForReaderFallback(finalParsedUrl) &&
-      (looksThin || looksJsRequired || looksConsentWall);
+      (looksThin || looksJsRequired || looksConsentWall || hostNeedsReaderAssist);
 
     if (shouldTryReader) {
       try {
@@ -6373,13 +6620,26 @@ async function importWebsite(sourceUrl) {
               (mdInstructions.length ? mdInstructions.length : readerRecipe.instructions.length) < 1,
           };
 
-          const betterThanHtml =
-            (Array.isArray(mergedReaderRecipe.ingredients) ? mergedReaderRecipe.ingredients.length : 0) >
-              (Array.isArray(htmlRecipe.ingredients) ? htmlRecipe.ingredients.length : 0) ||
-            (Array.isArray(mergedReaderRecipe.instructions) ? mergedReaderRecipe.instructions.length : 0) >
-              (Array.isArray(htmlRecipe.instructions) ? htmlRecipe.instructions.length : 0);
+          const hi = Array.isArray(htmlRecipe.ingredients) ? htmlRecipe.ingredients.length : 0;
+          const hs = Array.isArray(htmlRecipe.instructions) ? htmlRecipe.instructions.length : 0;
+          const ri = Array.isArray(mergedReaderRecipe.ingredients) ? mergedReaderRecipe.ingredients.length : 0;
+          const rs = Array.isArray(mergedReaderRecipe.instructions) ? mergedReaderRecipe.instructions.length : 0;
 
-          if (betterThanHtml) {
+          const betterThanHtml =
+            ri > hi || rs > hs || (hi < 3 && hs < 2 && ri >= 3 && rs >= 2);
+
+          // Miljuschka / EEF: Reader levert vaak waar WordPress-fetch faalt; gebruik bruikbare merge tenzij HTML duidelijk rijker is.
+          const readerUsable = ri >= 2 && rs >= 1;
+          const readerLooksConfident = ri >= 3 && rs >= 2 && !mergedReaderRecipe.needsReview;
+          const mjEefPreferReader =
+            hostNeedsReaderAssist &&
+            readerUsable &&
+            (readerLooksConfident ||
+              cfLikeEarly ||
+              htmlRecipeLooksWeakRecipe ||
+              mergedReaderRecipe.needsReview === false);
+
+          if (betterThanHtml || mjEefPreferReader) {
             return mergedReaderRecipe;
           }
         }
@@ -6482,6 +6742,12 @@ async function importRecipe(url, note, imageHint = "") {
       console.error("⚠️ Failed to expand Facebook share URL, continuing with original:", error.message);
       /* keep original */
     }
+  }
+
+  try {
+    parsedUrl = new URL(stripBenignMarketingParamsFromUrl(parsedUrl.toString()));
+  } catch {
+    /* keep parsedUrl */
   }
 
   const platform = detectPlatform(parsedUrl);
@@ -6816,6 +7082,11 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
     const isPepperQuery = baseLower === "peper" || baseLower === "zwarte peper";
 
     const ingredientTokens = tokenizeForMatch(baseLower);
+    const produceSynonymTokens = [];
+    if (/\bcourgu?ettes?\b/.test(baseLower) || /\bcourgu?ettes?\b/.test(rawLower)) produceSynonymTokens.push("zucchini");
+    if (/\baubergines?\b/.test(baseLower) || /\baubergines?\b/.test(rawLower)) produceSynonymTokens.push("eggplant");
+    if (/\bkomkommers?\b/.test(baseLower) || /\bkomkommers?\b/.test(rawLower)) produceSynonymTokens.push("cucumber");
+    const tokensForOverlap = [...new Set([...ingredientTokens, ...produceSynonymTokens])];
     const allowCheeseEquivs =
       baseLower === "parmezaanse kaas" || /\b(parmezaan|parmigiano|grana\s*padano)\b/.test(rawLower);
     const cheeseEquivTokens = allowCheeseEquivs
@@ -6832,8 +7103,11 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       "cherrytomaat",
       "cherrytomaten",
       "aubergine",
+      "aubergines",
       "courgette",
+      "courgettes",
       "komkommer",
+      "komkommers",
     ]);
     const isPlainFreshVegIngredient =
       PLAIN_FRESH_VEG_CORE.has(plainFreshVegBase) ||
@@ -6851,7 +7125,7 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
 
       // Token overlap bonus: more shared tokens means a better match.
       let overlap = 0;
-      for (const tok of ingredientTokens) {
+      for (const tok of tokensForOverlap) {
         if (tokenSet.has(tok)) {
           overlap += 1;
           matchedTokens.push(tok);
@@ -6865,7 +7139,7 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       // If there is no meaningful token overlap, the title is often only loosely related
       // (e.g. "met basilicum" style flavour variants). Keep these as alternatives, but
       // make them much less likely to become the default pick.
-      if (overlap === 0 && ingredientTokens.length >= 2) {
+      if (overlap === 0 && tokensForOverlap.length >= 2) {
         score += 60;
         adjustments.push({ kind: "penalty", label: "Geen token-overlap", delta: 60 });
       }
@@ -6981,6 +7255,13 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
 
       // Produce: tomaat/courgette/komkommer/aubergine (en paprika): liever vers per stuk dan potjes, spreads of ingelegde varianten.
       if (isPlainFreshVegIngredient) {
+        // Samenstellingen zoals "courgettesoep" / "tomatensoep": geen woordgrens vóór "soep" → apart vangen.
+        const compoundVegSoup =
+          /(?:tomaten|tomaat|cherrytomaten|courgu?ettes?|zucchini|aubergines?|komkommers?|paprika(?:s)?)\w*(?:soep|bisque)\b|(?:tomaten|tomaat|courgu?ettes?|zucchini|aubergines?|komkommers?|paprika(?:s)?)\s+(?:soep|bisque)\b|(?:courgu?ettes?|tomaten|paprika)soup\b/i;
+        if (compoundVegSoup.test(title)) {
+          score += 85;
+          adjustments.push({ kind: "penalty", label: "Soep (geen verse groente als zodanig)", delta: 85 });
+        }
         const processedFreshVeg =
           /\b(?:gegrild|gefrituurde?|gefrituurd|op\s+zuur|gepekeld|ingesneden|ingemaakt|augurk|op\s+sap|op\s+wijn|gevuld|opgiet(?:en)?|spread|dip\b|hummus|humus|pesto|dressing|marinade|tomatenpuree|passata|(?:tomaten\s*)?puree|ketchup|\bblik\b|bouillon|opgemaakt|voorgesneden|reepjes|op\s+zak|zakje|antipasti|carpaccio|soep|chips|snack|sticks|gehakt)\b/i;
         if (processedFreshVeg.test(title)) {
@@ -6990,6 +7271,12 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         if (/\b(?:per\s+stuk|los(?:\s+verkocht)?|rimpel)\b/i.test(title)) {
           score -= 10;
           adjustments.push({ kind: "bonus", label: "Vers (per stuk / los)", delta: -10 });
+        }
+        // Whole courgette ≠ spiralen/noedels-vervangers (AH catalog heeft veel “spaghetti”).
+        if (/\bcourgu?ettes?\b/.test(baseLower) &&
+          /\b(?:courgetti|courgette\s*[~-–]\s*spaghetti|vegetable\s+noodles|veg(?:gie)?(?:\s*|-)?(?:pasta|noodles?))\b/i.test(title)) {
+          score += 55;
+          adjustments.push({ kind: "penalty", label: "Courgette als vermicelli/noedels", delta: 55 });
         }
       }
 
@@ -7433,41 +7720,79 @@ function parseLaurasBakery(html, baseUrl, channelName, channelId, count) {
  *     </li>
  *   </ul>
  */
-function parseChicksLoveFood(html, _baseUrl, channelName, channelId, count) {
+function parseChicksLoveFood(html, baseUrlRaw, channelName, channelId, count) {
   const results = [];
   const seenUrls = new Set();
+  const base = String(baseUrlRaw || "https://www.chickslovefood.com").replace(/\/+$/, "");
+  const abs = (u) => {
+    const raw = sanitizeText(u || "");
+    if (!raw) return "";
+    if (/^https?:\/\//i.test(raw)) return raw.replace(/^http:\/\//i, "https://");
+    if (raw.startsWith("//")) return `https:${raw}`;
+    if (raw.startsWith("/")) return `${base}${raw}`;
+    return `${base}/${raw.replace(/^\.\//, "")}`;
+  };
 
-  // Find the recipe-list section
-  const listStart = html.indexOf('class="recipe-list');
-  if (listStart === -1) return results;
-  const listEnd = html.indexOf("</ul>", listStart);
-  const listHtml = listEnd > listStart ? html.slice(listStart, listEnd) : html.slice(listStart, listStart + 20000);
+  const ulMatch = html.match(/<ul[^>]*\brecipe-list\b[^>]*>/i);
+  if (!ulMatch || ulMatch.index === undefined) return results;
+  const afterOpen = ulMatch.index + ulMatch[0].length;
+  let depth = 1;
+  let pos = afterOpen;
+  let listEnd = -1;
+  const lower = html;
+  while (pos < lower.length && depth > 0) {
+    const openAt = lower.indexOf("<ul", pos);
+    const closeAt = lower.indexOf("</ul>", pos);
+    if (closeAt === -1) break;
+    if (openAt !== -1 && openAt < closeAt) {
+      depth += 1;
+      pos = openAt + 3;
+    } else {
+      depth -= 1;
+      if (depth === 0) listEnd = closeAt + 5;
+      pos = closeAt + 5;
+    }
+  }
 
-  // Split by <li> items
+  const listHtml =
+    listEnd > afterOpen
+      ? html.slice(ulMatch.index, listEnd)
+      : html.slice(ulMatch.index, ulMatch.index + Math.min(html.length - ulMatch.index, 120_000));
+
   const items = listHtml.split(/<li[\s>]/).slice(1);
+  const hrefGrab = (item) =>
+    item.match(/<div[^>]*class="[^"]*recipe-image[^"]*"[\s\S]*?href=["']([^"']+)["']/i)
+      || item.match(/<h4[^>]*>[\s\S]*?href=["']([^"']+)["']/i);
+
   for (const item of items) {
     if (results.length >= count) break;
 
-    // URL from recipe-image link or h4 link
-    const urlMatch = item.match(/<div[^>]*class="[^"]*recipe-image[^"]*"[^>]*>[\s\S]*?href="(https?:\/\/[^"]+)"/i)
-      || item.match(/<h4[^>]*>[\s\S]*?href="(https?:\/\/[^"]+)"/i);
+    const urlMatch = hrefGrab(item);
     if (!urlMatch) continue;
-    const url = urlMatch[1];
-    if (seenUrls.has(url) || !/\/recept\//i.test(url)) continue;
+    const url = abs(urlMatch[1]);
+    if (!url || seenUrls.has(url) || !/\/recept\//i.test(url)) continue;
 
-    // Title from h4 link text or img alt
     const titleMatch = item.match(/<h4[^>]*>[\s\S]*?<a[^>]*>([\s\S]+?)<\/a>/i)
-      || item.match(/alt="([^"]+)"/i);
+      || item.match(/alt=["']([^"']+)["']/i);
     const title = decodeHtmlEntities(stripHtmlTags(titleMatch?.[1] || "")).trim();
     if (!title) continue;
 
-    // Thumbnail from recipe-image img
-    const thumbMatch = item.match(/<div[^>]*class="[^"]*recipe-image[^"]*"[^>]*>[\s\S]*?src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i)
-      || item.match(/src="(https?:\/\/[^"]+\.(?:jpe?g|png|webp)[^"]*)"/i);
-    const thumbnail = thumbMatch?.[1] || "";
+    const thumbMatch =
+      item.match(/srcset\s*=\s*["']([^"']+)["']/i)
+      || item.match(/<div[^>]*class="[^"]*recipe-image[^"]*"[\s\S]*?data-src=["']([^"']+\.(?:jpe?g|png|webp)[^"']*)["']/i)
+      || item.match(/<div[^>]*class="[^"]*recipe-image[^"]*"[\s\S]*?src=["']([^"']+\.(?:jpe?g|png|webp)[^"']*)["']/i)
+      || item.match(/src=["'](https?:\/\/[^"']+\.(?:jpe?g|png|webp)[^"']*)["']/i);
+    let thumbnail = "";
+    if (thumbMatch?.[1]) {
+      const rawSet = thumbMatch[1];
+      const pick =
+        /^https?:\/\//i.test(rawSet.trim())
+          ? rawSet.split(",").pop()
+          : rawSet.split(",").pop() || rawSet;
+      thumbnail = abs((pick || "").trim().split(/\s+/)[0]);
+    }
 
-    // Time from recipe-info span
-    const timeMatch = item.match(/class="[^"]*recipe-info[^"]*"[^>]*>[\s\S]*?•\s*([^<]+)/i);
+    const timeMatch = item.match(/class=["'][^"']*recipe-info[^"']*["'][^>]*>[\s\S]*?•\s*([^<]+)/i);
     const time = timeMatch ? timeMatch[1].trim() : "";
 
     seenUrls.add(url);
@@ -7889,7 +8214,7 @@ function parseReaderSearchResults(markdown, channelName, channelId, count, query
     if (!urlLooksLikeRecipe(url)) continue;
 
     const title = sanitizeText(alt);
-    if (!title || !titleLooksLikeRecipe(title) || !titleMatchesQuery(title, query)) continue;
+    if (!title || !titleLooksLikeRecipe(title) || !channelSearchResultTitleMatchesQuery(channelId, title, query)) continue;
 
     seenUrls.add(url);
     results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
@@ -7911,7 +8236,7 @@ function parseReaderSearchResults(markdown, channelName, channelId, count, query
       const url = sanitizeText(urlMatch?.[0] || "");
       const title = sanitizeText(alt);
       if (!url || seenUrls.has(url)) continue;
-      if (!urlLooksLikeRecipe(url) || !titleLooksLikeRecipe(title) || !titleMatchesQuery(title, query)) continue;
+      if (!urlLooksLikeRecipe(url) || !titleLooksLikeRecipe(title) || !channelSearchResultTitleMatchesQuery(channelId, title, query)) continue;
 
       seenUrls.add(url);
       results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
@@ -7929,7 +8254,8 @@ function parseReaderSearchResults(markdown, channelName, channelId, count, query
         try { return new URL(url).pathname.split("/").filter(Boolean).pop() || ""; } catch { return ""; }
       })();
       const title = sanitizeText(decodeURIComponent(slug).replace(/[-_]+/g, " ").trim());
-      if (!title || !titleLooksLikeRecipe(title) || !titleMatchesQuery(title, query)) continue;
+      if (!title || !titleLooksLikeRecipe(title) || !channelSearchResultTitleMatchesQuery(channelId, title, query))
+        continue;
       seenUrls.add(url);
       results.push({ title, url, thumbnail: "", channel: channelName, channelId, description: "", time: "" });
     }
@@ -8542,6 +8868,18 @@ function titleMatchesQuery(title, query) {
   return titleQueryScore(title, query) >= 0.5;
 }
 
+function channelSearchTrustsSiteIndexer(channelId) {
+  return CHANNEL_SEARCH_TRUST_SITE_INDEXER_IDS.has(String(channelId || ""));
+}
+
+/** Voor sommige kanalen: site-zoekindex is al relevant — geen verplichte woord-match in de titel. */
+function channelSearchResultTitleMatchesQuery(channelId, title, query) {
+  const q = String(query || "").trim();
+  if (!q) return true;
+  if (channelSearchTrustsSiteIndexer(channelId)) return true;
+  return titleMatchesQuery(String(title || ""), q);
+}
+
 async function wpRestSearch(baseUrl, channelName, channelId, query, count, meta = null) {
   const params = `search=${encodeURIComponent(query)}&per_page=${count}&_embed=wp:featuredmedia`;
   const headers = { ...FETCH_HEADERS, accept: "application/json" };
@@ -8583,8 +8921,7 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count, meta 
             // Filter out posts whose title looks like a tip/review/guide
             .filter((r) => titleLooksLikeRecipe(r.title))
             .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
-            // Filter out results whose title doesn't share half the query words
-            .filter((r) => titleMatchesQuery(r.title, query))
+            .filter((r) => channelSearchResultTitleMatchesQuery(channelId, r.title, query))
             // Sort by relevance — best title-match first
             .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
             .slice(0, count);
@@ -8628,21 +8965,23 @@ async function serperGoogleSiteSearchRecipes({ baseUrl, channelName, channelId, 
     const organic = Array.isArray(data.organic) ? data.organic : [];
     const rows = [];
     for (const it of organic) {
-      const url = sanitizeText(it.link || it.url || "");
+      const urlRaw = sanitizeText(it.link || it.url || "");
       const title = sanitizeText(it.title || "");
       const description = sanitizeText(it.snippet || "");
-      if (!url || !title) continue;
+      if (!urlRaw || !title) continue;
+      const urlNorm = stripBenignMarketingParamsFromUrl(urlRaw);
+      const thumbnail = sanitizeText(it.imageUrl || it.thumbnailUrl || it.image || it.img || "");
       let linkHost = "";
       try {
-        linkHost = new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
+        linkHost = new URL(urlNorm).hostname.replace(/^www\./i, "").toLowerCase();
       } catch {
         continue;
       }
       if (linkHost !== host) continue;
       rows.push({
         title,
-        url,
-        thumbnail: "",
+        url: urlNorm,
+        thumbnail,
         channel: channelName,
         channelId,
         description: description.slice(0, 160),
@@ -9274,6 +9613,17 @@ async function searchJumboRecipes(query, count = 4, opts = {}) {
 }
 
 async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, parser, count, query) {
+  // Miljuschka / Eef Kookt Zo block datacenter + reader IPs (403 / Cloudflare). Serper runs in
+  // parallel so we don't wait on slow HTML → REST → Jina timeouts before hitting Google site:.
+  const serpEarly =
+    CHANNEL_SEARCH_SERPER_FALLBACK_IDS.has(channelId) &&
+    serperGoogleSiteSearchRecipes({
+      baseUrl,
+      channelName,
+      channelId,
+      query: query || "",
+      count,
+    });
   try {
     const html = await fetchHtml(searchUrl);
     if (html && html.length > 500) {
@@ -9283,7 +9633,7 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
         .filter((r) => urlLooksLikeRecipe(r.url))
         .filter((r) => titleLooksLikeRecipe(r.title))
         .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
-        .filter((r) => titleMatchesQuery(r.title, query || ""))
+        .filter((r) => channelSearchResultTitleMatchesQuery(channelId, r.title, query || ""))
         .sort((a, b) => titleQueryScore(b.title, query || "") - titleQueryScore(a.title, query || ""))
         .slice(0, count);
       if (filtered.length > 0) return filtered;
@@ -9293,14 +9643,13 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
   if (rest.length > 0) return rest;
   const reader = await readerSearchFallback(searchUrl, channelName, channelId, count, query || "");
   if (reader.length > 0) return reader;
-  const serp = await serperGoogleSiteSearchRecipes({
-    baseUrl,
-    channelName,
-    channelId,
-    query: query || "",
-    count,
-  });
-  return serp.length ? serp : [];
+  try {
+    const serp = await serpEarly;
+    if (Array.isArray(serp) && serp.length) return serp;
+  } catch {
+    /* ignore */
+  }
+  return [];
 }
 
 async function searchChannelRecipes(query, allowedChannels = null) {
@@ -9311,6 +9660,15 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   const cfg = (id) => getEffectiveSeedChannelConfig(id, seedOverrides);
 
   async function scrapeOrRest(baseUrl, channelName, channelId, searchUrl, parser, count) {
+    const serpEarly =
+      CHANNEL_SEARCH_SERPER_FALLBACK_IDS.has(channelId) &&
+      serperGoogleSiteSearchRecipes({
+        baseUrl,
+        channelName,
+        channelId,
+        query,
+        count,
+      });
     try {
       const html = await fetchHtml(searchUrl);
       if (html && html.length > 500) {
@@ -9322,7 +9680,7 @@ async function searchChannelRecipes(query, allowedChannels = null) {
           .filter((r) => urlLooksLikeRecipe(r.url))
           .filter((r) => titleLooksLikeRecipe(r.title))
           .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
-          .filter((r) => titleMatchesQuery(r.title, query))
+          .filter((r) => channelSearchResultTitleMatchesQuery(channelId, r.title, query))
           .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
           .slice(0, count);
         if (filtered.length > 0) return filtered;
@@ -9332,14 +9690,13 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     if (rest.length > 0) return rest;
     const reader = await readerSearchFallback(searchUrl, channelName, channelId, count, query);
     if (reader.length > 0) return reader;
-    const serp = await serperGoogleSiteSearchRecipes({
-      baseUrl,
-      channelName,
-      channelId,
-      query,
-      count,
-    });
-    return serp.length ? serp : [];
+    try {
+      const serp = await serpEarly;
+      if (Array.isArray(serp) && serp.length) return serp;
+    } catch {
+      /* ignore */
+    }
+    return [];
   }
 
   function maybeSearch(channelId, fn) {
@@ -9413,7 +9770,11 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   // for multi-channel variety. Otherwise Promise.race timeouts return [] before the
   // only requested channel finishes.
   const singleChannelMode = Boolean(allow && allow.size === 1);
-  const GLOBAL_DEADLINE_MS = singleChannelMode ? 20_000 : 1400;
+  // ch-mj / ch-ek only work from the server via Serper; give their Google round-trip time to land.
+  const allowNeedsSerperSlack =
+    !allow || [...allow].some((id) => CHANNEL_SEARCH_SERPER_FALLBACK_IDS.has(id));
+  // First slice: keep snappy, but Serper + some store APIs often need 3–6s in multi-channel mode.
+  const GLOBAL_DEADLINE_MS = singleChannelMode ? 20_000 : allowNeedsSerperSlack ? 5200 : 1400;
   await Promise.race([Promise.allSettled(instrumented), waitMs(GLOBAL_DEADLINE_MS)]);
 
   const countDistinctChannels = (lists) => {
@@ -9426,9 +9787,11 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     return ids.size;
   };
 
-  // If nothing has arrived yet, wait a tiny bit longer (helps on cold starts)
+  // If nothing has arrived yet: admin single-channel tests await the full stack, but here we
+  // previously raced too short — Serper fallbacks (Miljuschka / Eef) often land after 2–8s.
   if (collected.length === 0 && !singleChannelMode) {
-    await Promise.race([Promise.allSettled(instrumented), waitMs(700)]);
+    const lingerMs = allowNeedsSerperSlack ? 10_500 : 2400;
+    await Promise.race([Promise.allSettled(instrumented), waitMs(lingerMs)]);
   }
 
   // If AH is enabled but hasn't arrived yet, wait a short extra window.
@@ -10290,7 +10653,32 @@ const server = http.createServer(async (request, response) => {
 
       const user = await ensureUserSession(request, response);
       const db = await loadDatabase();
+      const prevImportedGuest = Array.isArray(user.importedRecipes) ? user.importedRecipes.length : 0;
       const nextUser = sanitizeUserStatePayload(body, user);
+      const nextImportedGuest = Array.isArray(nextUser.importedRecipes) ? nextUser.importedRecipes.length : 0;
+      if (nextImportedGuest > prevImportedGuest) {
+        const lastGuest = nextUser.importedRecipes[nextImportedGuest - 1];
+        console.log("[app-state]", {
+          phase: "imported_recipes_saved",
+          guest: true,
+          userId: String(nextUser.id).slice(0, 24),
+          prevCount: prevImportedGuest,
+          nextCount: nextImportedGuest,
+          lastTitle:
+            typeof lastGuest?.title === "string"
+              ? shortenUrlForLog(sanitizeText(lastGuest.title), 88)
+              : undefined,
+          lastId:
+            typeof lastGuest?.id === "string" ? sanitizeText(lastGuest.id).slice(0, 28) : undefined,
+          sourceHost: (() => {
+            try {
+              return new URL(sanitizeText(lastGuest?.sourceUrl || "")).hostname.replace(/^www\./i, "");
+            } catch {
+              return undefined;
+            }
+          })(),
+        });
+      }
       db.users[nextUser.id] = nextUser;
       await persistDatabase();
       sendJson(response, 200, {
@@ -10726,7 +11114,11 @@ const server = http.createServer(async (request, response) => {
         }
       }
 
-      setCachedChannelSearch(cacheKey, results);
+      // Never cache empty responses: a cold multi-channel race often returns [] once, then succeeds
+      // a second later — caching [] poisons the app while admin "test channel" (no cache) works.
+      if (Array.isArray(results) && results.length > 0) {
+        setCachedChannelSearch(cacheKey, results);
+      }
       sendJson(response, 200, { ok: true, results });
       return;
     }
@@ -10751,12 +11143,27 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/api/import" && request.method === "POST") {
+      const traceId = newImportTraceId();
       try {
         const body = await readRequestBody(request);
         // Strip surrounding text — extract the first http(s) URL from whatever was pasted
         const rawInput = String(body.url || "").trim();
         const urlMatch = rawInput.match(/https?:\/\/[^\s]+/);
         const cleanUrl = urlMatch ? urlMatch[0] : rawInput;
+        let sourceHost = "";
+        try {
+          sourceHost = new URL(cleanUrl).hostname.replace(/^www\./, "");
+        } catch {
+          sourceHost = "";
+        }
+        const imageHintPresent = Boolean(String(body.imageHint || "").trim());
+        logImportRequest("start", traceId, {
+          url: shortenUrlForLog(cleanUrl),
+          host: sourceHost || undefined,
+          hasNote: Boolean(String(body.note || "").trim()),
+          hasImageHint: imageHintPresent,
+        });
+
         const recipe = await importRecipe(cleanUrl, body.note || "", body.imageHint || "");
 
         const isInvalidRecipe = (candidate) => {
@@ -10770,6 +11177,16 @@ const server = http.createServer(async (request, response) => {
         };
 
         if (isInvalidRecipe(recipe)) {
+          const ig = Array.isArray(recipe?.ingredients) ? recipe.ingredients.filter(Boolean).length : 0;
+          const st = Array.isArray(recipe?.instructions) ? recipe.instructions.filter(Boolean).length : 0;
+          logImportRequest("reject_not_recipe", traceId, {
+            url: shortenUrlForLog(cleanUrl),
+            host: sourceHost || undefined,
+            platform: sanitizeText(recipe?.platform || "") || undefined,
+            titleLen: sanitizeText(recipe?.title || "").length,
+            ingredientsCount: ig,
+            stepsCount: st,
+          });
           sendJson(response, 400, {
             ok: false,
             error: "not_recipe",
@@ -10780,9 +11197,20 @@ const server = http.createServer(async (request, response) => {
 
         // Analytics: record import event (best-effort)
         const authUser = await getAuthenticatedUser(request).catch(() => null);
-        const sourceHost = (() => {
-          try { return new URL(cleanUrl).hostname.replace(/^www\./, ""); } catch { return ""; }
-        })();
+        const igOk = Array.isArray(recipe?.ingredients) ? recipe.ingredients.filter(Boolean).length : 0;
+        const stOk = Array.isArray(recipe?.instructions) ? recipe.instructions.filter(Boolean).length : 0;
+        logImportRequest("ok", traceId, {
+          url: shortenUrlForLog(cleanUrl),
+          host: sourceHost || undefined,
+          title: shortenUrlForLog(sanitizeText(recipe.title || ""), 80),
+          platform: sanitizeText(recipe?.platform || "") || undefined,
+          channelId: sanitizeText(recipe?.channelId || "") || undefined,
+          ingredientsCount: igOk,
+          stepsCount: stOk,
+          needsReview: Boolean(recipe?.needsReview),
+          userId: authUser?.id ? String(authUser.id).slice(0, 24) : undefined,
+        });
+
         await recordEvent("import", authUser?.id || null, {
           sourceUrl: cleanUrl,
           sourceHost,
@@ -10791,15 +11219,30 @@ const server = http.createServer(async (request, response) => {
         });
         sendJson(response, 200, { ok: true, recipe });
       } catch (error) {
-        console.error("❌ Import error:", error);
         const statusCode = error.statusCode || 400;
         const rawMessage = String(error?.message || "");
+        console.error("[import] error", traceId, {
+          statusCode,
+          name: error?.name,
+          message: rawMessage.slice(0, 500),
+          stack:
+            typeof error?.stack === "string"
+              ? error.stack
+                  .split("\n")
+                  .slice(0, 8)
+                  .join(" → ")
+                  .slice(0, 900)
+              : undefined,
+        });
 
         if (
           /jsdom is not defined/i.test(rawMessage) ||
           /JSDOM is not defined/i.test(rawMessage) ||
           /not[_\\s-]*recei?pe/i.test(rawMessage)
         ) {
+          logImportRequest("reject_not_recipe_exception", traceId, {
+            reason: rawMessage.slice(0, 200),
+          });
           sendJson(response, 400, {
             ok: false,
             error: "not_recipe",
@@ -10808,6 +11251,10 @@ const server = http.createServer(async (request, response) => {
           return;
         }
 
+        logImportRequest("fail", traceId, {
+          httpStatus: statusCode,
+          error: sanitizeText(rawMessage).slice(0, 280) || "import_failed",
+        });
         const errorMessage = rawMessage || "Import mislukt. Controleer de link en probeer opnieuw.";
         sendJson(response, statusCode, { ok: false, error: "import_failed", message: errorMessage });
       }
