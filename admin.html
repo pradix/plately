@@ -137,16 +137,16 @@
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
-      margin: 14px 0 16px;
+      gap: var(--space-6);
+      margin: var(--space-7) 0 var(--space-8);
     }
 
     .stat-card {
-      background: var(--panel);
-      padding: 12px 12px 10px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow);
+      background: var(--color-surface);
+      padding: var(--space-7);
+      border-radius: var(--radius-4);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow-1);
       text-align: left;
       min-width: 0;
     }
