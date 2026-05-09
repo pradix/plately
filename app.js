@@ -3791,6 +3791,15 @@ function getActiveFollowedSeedChannelIds() {
     .filter((id) => isSeedChannelEnabled(id));
 }
 
+/**
+ * Alle ingeschakelde seed-kanalen voor /api/channel-search — los van "volgen".
+ * Volgen ≠ ontdekken: gebruikers hoeven Miljuschka niet te volgen om die bron in zoekresultaten te krijgen;
+ * admins testen één bron tegelijk; de app zoekt breed tenzij een bron in standaarden uit staat.
+ */
+function getSeedChannelIdsForRecipeSearch() {
+  return SEED_CHANNELS.map((ch) => ch.id).filter((id) => isSeedChannelEnabled(id));
+}
+
 function countActiveFollowedChannels() {
   const seedActive = getActiveFollowedSeedChannelIds().length;
   const approvedCustomActive = state.customChannels.filter(
@@ -4023,7 +4032,7 @@ async function searchChannels(query) {
     `;
   }, 120);
   try {
-    const channels = getActiveFollowedSeedChannelIds().join(",");
+    const channels = getSeedChannelIdsForRecipeSearch().join(",");
     // Only include approved custom channels in search
     const followedCustomChannels = state.customChannels.filter(
       (ch) =>
@@ -4033,8 +4042,8 @@ async function searchChannels(query) {
     );
     const dedupedCustomChannels = followedCustomChannels.filter((ch) => {
       const seed = findMatchingSeedChannelForUrl(ch.url);
-      // Only dedupe when the user also follows the matching seed channel.
-      return !(seed && state.followedChannelIds.includes(seed.id));
+      // Only dedupe when the matching seed exists in zoek-scope (enabled) and zou dubbel zoeken.
+      return !(seed && getSeedChannelIdsForRecipeSearch().includes(seed.id));
     });
     if (dedupedCustomChannels.length !== followedCustomChannels.length) {
       console.log("🧹 Deduped custom channels for search:", {
@@ -4101,7 +4110,7 @@ async function searchChannelsOnImportScreen(query) {
   }, 120);
   if (orRow) orRow.classList.add("hidden");
   try {
-    const channels = getActiveFollowedSeedChannelIds().join(",");
+    const channels = getSeedChannelIdsForRecipeSearch().join(",");
     // Only include approved custom channels in search
     const followedCustomChannels = state.customChannels.filter(
       (ch) =>
@@ -4111,8 +4120,7 @@ async function searchChannelsOnImportScreen(query) {
     );
     const dedupedCustomChannels = followedCustomChannels.filter((ch) => {
       const seed = findMatchingSeedChannelForUrl(ch.url);
-      // Only dedupe when the user also follows the matching seed channel.
-      return !(seed && state.followedChannelIds.includes(seed.id));
+      return !(seed && getSeedChannelIdsForRecipeSearch().includes(seed.id));
     });
     if (dedupedCustomChannels.length !== followedCustomChannels.length) {
       console.log("🧹 Deduped custom channels for search (import):", {
