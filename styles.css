@@ -1630,7 +1630,7 @@ img { display: block; max-width: 100%; }
 .ingredient-item {
   list-style: none;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 42px;
+  grid-template-columns: 42px auto minmax(0, 1fr) 42px;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -1639,11 +1639,53 @@ img { display: block; max-width: 100%; }
   border-radius: 14px;
   box-shadow: 0 2px 8px rgba(76,85,69,0.04);
   border: 1px solid rgba(120, 147, 111, 0.06);
+  text-align: left;
 }
 
 .ingredient-item:hover {
   transform: translateY(-1px);
   border-color: rgba(141, 164, 133, 0.16);
+}
+
+.ingredient-item {
+  border: 1px solid rgba(120, 147, 111, 0.06);
+}
+
+/* Make ingredient buttons look like cards */
+button.ingredient-item {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid rgba(120, 147, 111, 0.06);
+}
+
+.recipe-check {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 2px solid #90a890;
+  background: rgba(255,255,255,0.96);
+  display: grid;
+  place-items: center;
+  color: transparent;
+  flex: none;
+}
+
+.ingredient-item.is-checked .recipe-check {
+  background: #cfd9ca;
+  border-color: #cfd9ca;
+  color: #fff;
+}
+
+.ingredient-item.is-checked .ingredient-name {
+  opacity: 0.72;
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(141, 164, 133, 0.45);
+}
+
+.ingredient-item.is-checked .ingredient-image-wrapper {
+  opacity: 0.55;
+  filter: grayscale(0.6);
 }
 
 .ingredient-amount {
@@ -1744,8 +1786,95 @@ img { display: block; max-width: 100%; }
   font-size: 0.85rem;
   flex: none;
   margin-top: 2px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
 }
 
+.step-index__num { display: inline-block; }
+
+.step-index.is-checked {
+  background: #dce8dc;
+  color: #29422b;
+}
+
+.step-copy.is-checked {
+  opacity: 0.72;
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(141, 164, 133, 0.45);
+}
+
+.step-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.step-timer-menu {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(120, 147, 111, 0.10);
+  background: rgba(255,255,255,0.96);
+  box-shadow: 0 6px 22px rgba(55,50,45,0.07);
+}
+
+.step-timer-menu__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.step-timer-preset {
+  border: 1.5px solid rgba(141, 164, 133, 0.26);
+  background: rgba(220, 232, 220, 0.22);
+  color: #3a4a3a;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.step-timer-preset:hover {
+  background: rgba(220, 232, 220, 0.34);
+}
+
+.step-timer-preset--primary {
+  background: #8da485;
+  border-color: #8da485;
+  color: #fff;
+}
+
+.step-timer-menu__custom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.step-timer-menu__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #6f6a63;
+}
+
+.step-timer-menu__input {
+  width: 88px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(120, 147, 111, 0.18);
+  padding: 0 10px;
+  background: rgba(255,255,255,0.98);
+}
 .step-body {
   display: flex;
   flex-direction: column;
@@ -5683,6 +5812,56 @@ img { display: block; max-width: 100%; }
   font-weight: 800;
 }
 
+.kookstand-quickbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+
+#kookstandStepDone.is-active {
+  background: rgba(220, 232, 220, 0.92);
+  border-color: rgba(84, 122, 88, 0.22);
+  color: #29422b;
+}
+
+.kookstand-jump-panel {
+  margin: 0 0 14px;
+  padding: 12px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.86);
+  border: 1px solid rgba(141, 164, 133, 0.12);
+}
+
+.kookstand-jump-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kookstand-jump__chip {
+  min-width: 42px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(141, 164, 133, 0.20);
+  background: rgba(220, 232, 220, 0.18);
+  font-weight: 900;
+  color: #2f3a2f;
+}
+
+.kookstand-jump__chip.is-active {
+  background: #8da485;
+  border-color: #8da485;
+  color: #fff;
+}
+
+.kookstand-jump__chip.is-done:not(.is-active) {
+  background: rgba(220, 232, 220, 0.40);
+  border-color: rgba(141, 164, 133, 0.34);
+}
+
 .kookstand-step {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -5692,6 +5871,26 @@ img { display: block; max-width: 100%; }
   background: rgba(255,255,255,0.92);
   border: 1px solid rgba(141, 164, 133, 0.14);
   box-shadow: 0 14px 36px rgba(55,50,45,0.08);
+}
+
+.kookstand-step__content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.kookstand-step__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+#kookstandStepTimerMenu.step-timer-menu {
+  padding: 12px;
+  background: rgba(250, 252, 247, 0.96);
+  border-color: rgba(141, 164, 133, 0.16);
 }
 
 .kookstand-step__index {
