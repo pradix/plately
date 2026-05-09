@@ -9483,23 +9483,17 @@ async function toggleWakeLock() {
 }
 
 /* ─── Recept-import splash overlay ─── */
-const IMPORT_SPLASH_PHASES = [
-  "We halen het recept op…",
-  "Ingrediënten verzamelen…",
-  "Stappen netjes opmaken…",
-  "Bijna klaar — even nog…",
-];
+const IMPORT_SPLASH_PHASE_COUNT = 4;
 let _importSplashTimer = null;
 let _importSplashPhase = 0;
 
-function _setImportSplashStatus(text) {
-  const el = document.getElementById("importSplashStatus");
-  if (!el || !text) return;
-  el.style.animation = "none";
-  // restart animation
-  void el.offsetWidth; // eslint-disable-line no-unused-expressions
-  el.textContent = text;
-  el.style.animation = "";
+function _renderImportSplashPhases(activeIdx) {
+  const list = document.getElementById("importSplashPhases");
+  if (!list) return;
+  const items = list.querySelectorAll(".import-splash__phase");
+  items.forEach((el, i) => {
+    el.dataset.state = i < activeIdx ? "done" : i === activeIdx ? "active" : "pending";
+  });
 }
 
 function showImportSplash(url) {
@@ -9512,14 +9506,14 @@ function showImportSplash(url) {
     sourceEl.textContent = host;
   }
   _importSplashPhase = 0;
-  _setImportSplashStatus(IMPORT_SPLASH_PHASES[0]);
+  _renderImportSplashPhases(0);
   splash.classList.remove("hidden");
   splash.setAttribute("aria-hidden", "false");
   if (_importSplashTimer) clearInterval(_importSplashTimer);
   _importSplashTimer = setInterval(() => {
-    _importSplashPhase = Math.min(_importSplashPhase + 1, IMPORT_SPLASH_PHASES.length - 1);
-    _setImportSplashStatus(IMPORT_SPLASH_PHASES[_importSplashPhase]);
-  }, 2200);
+    _importSplashPhase = Math.min(_importSplashPhase + 1, IMPORT_SPLASH_PHASE_COUNT - 1);
+    _renderImportSplashPhases(_importSplashPhase);
+  }, 2400);
 }
 
 function hideImportSplash() {

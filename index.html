@@ -1583,33 +1583,47 @@
 
     <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
 
-    <!-- Recept-import splash: full-screen overlay tijdens import -->
+    <!-- Recept-import splash: gecentreerde kaart tijdens import -->
     <div class="import-splash hidden" id="importSplash" role="status" aria-live="polite" aria-hidden="true">
-      <div class="import-splash__inner">
+      <div class="import-splash__backdrop"></div>
+      <div class="import-splash__card">
         <header class="import-splash__head">
           <span class="import-splash__eyebrow">Recept importeren</span>
           <span class="import-splash__source" id="importSplashSource"></span>
         </header>
 
         <div class="import-splash__stage" aria-hidden="true">
-          <div class="import-splash__halo"></div>
+          <span class="import-splash__halo"></span>
+          <span class="import-splash__halo import-splash__halo--2"></span>
           <div class="import-splash__basket">
             <img src="assets/grocery.svg" alt="" />
           </div>
-          <span class="import-splash__chip import-splash__chip--1"><img src="assets/eggs.svg" alt=""></span>
-          <span class="import-splash__chip import-splash__chip--2"><img src="assets/guac.svg" alt=""></span>
-          <span class="import-splash__chip import-splash__chip--3"><img src="assets/toast.svg" alt=""></span>
-          <span class="import-splash__chip import-splash__chip--4"><img src="assets/smoothie.svg" alt=""></span>
         </div>
 
-        <div class="import-splash__copy">
-          <h2 class="import-splash__status" id="importSplashStatus">We halen het recept op…</h2>
-          <p class="import-splash__hint">Dit duurt meestal 5–15 seconden. We pluizen titel, ingrediënten en stappen voor je uit.</p>
-        </div>
+        <ul class="import-splash__phases" id="importSplashPhases">
+          <li class="import-splash__phase" data-phase="0">
+            <span class="import-splash__phase-marker"></span>
+            <span class="import-splash__phase-label">Pagina ophalen</span>
+          </li>
+          <li class="import-splash__phase" data-phase="1">
+            <span class="import-splash__phase-marker"></span>
+            <span class="import-splash__phase-label">Ingrediënten verzamelen</span>
+          </li>
+          <li class="import-splash__phase" data-phase="2">
+            <span class="import-splash__phase-marker"></span>
+            <span class="import-splash__phase-label">Stappen netjes opmaken</span>
+          </li>
+          <li class="import-splash__phase" data-phase="3">
+            <span class="import-splash__phase-marker"></span>
+            <span class="import-splash__phase-label">Bijna klaar</span>
+          </li>
+        </ul>
 
         <div class="import-splash__bar" aria-hidden="true">
           <span class="import-splash__bar-fill"></span>
         </div>
+
+        <p class="import-splash__hint">Even geduld — meestal 5–15 seconden.</p>
       </div>
     </div>
 
