@@ -7702,11 +7702,123 @@ function parsePaulineSearch(html, baseUrl, channelName, channelId, count) {
   return results.slice(0, count);
 }
 
+/** www.miljuschka.nl ↔ miljuschka.nl variants for REST + host checks */
+function wordpressOriginVariants(baseUrl) {
+  const raw = sanitizeText(baseUrl || "").replace(/\/+$/, "");
+  if (!raw) return [];
+  try {
+    const u = new URL(raw);
+    const h = String(u.hostname || "").toLowerCase();
+    const withWww = h.startsWith("www.") ? h : `www.${h}`;
+    const sansWww = h.startsWith("www.") ? h.slice(4) : h;
+    const a = `${u.protocol}//${withWww}`;
+    const b = `${u.protocol}//${sansWww}`;
+    return [...new Set([raw, a, b].map((x) => x.replace(/\/+$/, "")))];
+  } catch {
+    return [raw];
+  }
+}
+
+/**
+ * When WP search HTML has no `<article>` blocks (common on modern/block themes),
+ * still collect plausible same-site recipe URLs from anchors.
+ */
+function parseWpSearchAnchorFallback(html, baseUrl, channelName, channelId, count) {
+  const results = [];
+  const seenNorm = new Set();
+  let siteHost = "";
+  try {
+    siteHost = new URL(baseUrl).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return results;
+  }
+  const navTitle = /^(home|homepage|welkom|lees meer|meer laden|bewaar|opgeslagen|opslaan)$/i;
+
+  let siteHostVariants;
+  try {
+    const variants = wordpressOriginVariants(baseUrl);
+    siteHostVariants = new Set(variants.map((o) => new URL(o).hostname.replace(/^www\./i, "").toLowerCase()));
+  } catch {
+    siteHostVariants = new Set([siteHost]);
+  }
+
+  const lim = Math.min(Math.max(Number(count) || 12, 1), 48);
+  const anchorRe =
+    /<a\b[^>]*\bhref\s*=\s*["'](https?:\/\/[^"'>\s]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m;
+  while ((m = anchorRe.exec(html)) !== null && results.length < lim * 4) {
+    const rawHref = String(m[1] || "")
+      .trim()
+      .replace(/&amp;/gi, "&");
+    let u;
+    try {
+      u = new URL(rawHref.split("#")[0]);
+    } catch {
+      continue;
+    }
+    const linkHostNorm = u.hostname.replace(/^www\./i, "").toLowerCase();
+    if (!siteHostVariants.has(linkHostNorm)) continue;
+
+    const pathname = `${u.pathname || ""}`;
+    if (/\b(?:mailto:|tel:)\b/i.test(rawHref)) continue;
+
+    let urlNorm = `${u.origin}${pathname.replace(/\/?$/, "") || "/"}`;
+    if (seenNorm.has(urlNorm)) continue;
+
+    let title = decodeHtmlEntities(stripHtmlTags(m[2] || "")).replace(/\s+/g, " ").trim();
+    title = title.replace(/\s+[»«]+$/u, "").trim();
+
+    const segs = pathname.split("/").filter(Boolean);
+    if (!title || title.length < 4 || navTitle.test(title)) {
+      const slug = segs[segs.length - 1] || "";
+      const fromSlug = decodeURIComponent(slug).replace(/[-_]+/g, " ").trim();
+      title = /^https?:?\/?\/?$/i.test(fromSlug) ? "" : fromSlug;
+    }
+
+    const imgInAnchor =
+      m[0].match(/(?:src|data-src)\s*=\s*["'](https?:\/\/[^"']+\.(?:jpe?g|png|webp)[^"']*)["']/i)?.[1] ||
+      "";
+
+    const lowPath = pathname.toLowerCase();
+
+    const skipUrl =
+      !pathname ||
+      pathname === "/" ||
+      /\b(wp-login\.php|wp-admin)\b/i.test(urlNorm) ||
+      /\/(?:feed|rss)\/?$/i.test(pathname) ||
+      /\.(?:pdf|zip|php)(\?|$)/i.test(lowPath);
+
+    if (!title || skipUrl) continue;
+
+    seenNorm.add(urlNorm);
+
+    if (/\/(?:tag|categor(?:y|ie)|auteur|author|page|zoek)\b/i.test(lowPath)) continue;
+    if (!urlLooksLikeRecipe(urlNorm)) continue;
+    const looksRecipeish =
+      RECIPE_URL_RE.test(urlNorm) ||
+      titleLooksLikeRecipe(title) ||
+      (segs.length >= 2 && title.length >= 10);
+    if (!looksRecipeish) continue;
+
+    results.push({
+      title,
+      url: urlNorm,
+      thumbnail: cleanImageUrl(imgInAnchor || ""),
+      channel: channelName,
+      channelId,
+      description: "",
+      time: "",
+    });
+  }
+
+  return results.slice(0, Math.max(lim, count));
+}
+
 /**
  * Generic WordPress search HTML parser.
  * Handles standard WP themes where <article> contains <h2 class="entry-title"><a href="...">
  */
-function parseWPStandard(html, _baseUrl, channelName, channelId, count) {
+function parseWPStandard(html, baseUrl, channelName, channelId, count) {
   const results = [];
   const seenUrls = new Set();
   const blocks = extractArticleBlocks(html);
@@ -7732,6 +7844,19 @@ function parseWPStandard(html, _baseUrl, channelName, channelId, count) {
     seenUrls.add(url);
     results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
   }
+
+  // Many sites (Miljuschka, refreshed WP themes) no longer emit search hits inside <article>.
+  if (results.length === 0) {
+    const extra = parseWpSearchAnchorFallback(html, baseUrl, channelName, channelId, Math.max(Number(count) || 12, 12));
+    for (const row of extra) {
+      const u = row?.url || "";
+      if (!u || seenUrls.has(u)) continue;
+      seenUrls.add(u);
+      results.push(row);
+      if (results.length >= Math.max(Number(count) || 12, 24)) break;
+    }
+  }
+
   return results;
 }
 
@@ -8224,7 +8349,7 @@ async function readerSearchFallback(searchUrl, channelName, channelId, count, qu
     const readerUrl = `https://r.jina.ai/${encodeURIComponent(target)}`;
     const response = await fetch(readerUrl, {
       headers: FETCH_HEADERS,
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(14000),
     });
     if (!response.ok) return [];
 
@@ -8375,13 +8500,17 @@ function titleQueryScore(title, query) {
   const words = query.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
   if (!words.length) return 1;
 
-  // Check for word boundary matches (more accurate than substring)
-  const wordBoundaryHits = words.filter((w) => {
-    const wordRegex = new RegExp(`\\b${w}\\b`);
-    return wordRegex.test(t);
-  }).length;
+  const escWords = words.map((w) => String(w || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
 
-  const baseScore = wordBoundaryHits / words.length;
+  // Strict whole-word hits
+  let hits = escWords.filter((ew, i) => new RegExp(`\\b${ew}\\b`, "i").test(t)).length;
+  // Dutch compounds: „pastasaus”, „pastarecept” voor querywoord „pasta”
+  if (hits / words.length < 0.5) {
+    const prefixHits = escWords.filter((ew) => new RegExp(`\\b${ew}`, "i").test(t)).length;
+    hits = Math.max(hits, prefixHits);
+  }
+
+  const baseScore = hits / words.length;
 
   // Bonus: exact phrase match (higher confidence)
   if (t.includes(query.toLowerCase())) {
@@ -8413,6 +8542,7 @@ function titleMatchesQuery(title, query) {
 async function wpRestSearch(baseUrl, channelName, channelId, query, count, meta = null) {
   const params = `search=${encodeURIComponent(query)}&per_page=${count}&_embed=wp:featuredmedia`;
   const headers = { ...FETCH_HEADERS, accept: "application/json" };
+  const origins = wordpressOriginVariants(baseUrl);
 
   function mapWPItem(r) {
     const thumbnail =
@@ -8429,32 +8559,36 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count, meta 
     };
   }
 
-  for (const type of ["recipe", "recepten", "recipes", "posts"]) {
-    try {
-      const usedUrl = `${baseUrl}/wp-json/wp/v2/${type}?${params}`;
-      if (meta && typeof meta === "object" && !meta.usedUrl) meta.usedUrl = usedUrl;
-      const resp = await fetch(usedUrl, {
-        headers,
-        signal: AbortSignal.timeout(4000), // Aggressive timeout for quick results
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        const mapped = (Array.isArray(data) ? data : [])
-          .map(mapWPItem)
-          .filter((r) => r.title && r.url)
-          // Filter out blog/non-recipe URLs for all endpoint types
-          .filter((r) => urlLooksLikeRecipe(r.url))
-          // Filter out posts whose title looks like a tip/review/guide
-          .filter((r) => titleLooksLikeRecipe(r.title))
-          .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
-          // Filter out results whose title doesn't share half the query words
-          .filter((r) => titleMatchesQuery(r.title, query))
-          // Sort by relevance — best title-match first
-          .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
-          .slice(0, count);
-        if (mapped.length > 0) return mapped;
-      }
-    } catch { /* try next */ }
+  for (const origin of origins) {
+    const root = String(origin || "").replace(/\/+$/, "");
+    if (!root) continue;
+    for (const type of ["recipe", "recepten", "recipes", "posts"]) {
+      try {
+        const usedUrl = `${root}/wp-json/wp/v2/${type}?${params}`;
+        if (meta && typeof meta === "object" && !meta.usedUrl) meta.usedUrl = usedUrl;
+        const resp = await fetch(usedUrl, {
+          headers,
+          signal: AbortSignal.timeout(6500),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const mapped = (Array.isArray(data) ? data : [])
+            .map(mapWPItem)
+            .filter((r) => r.title && r.url)
+            // Filter out blog/non-recipe URLs for all endpoint types
+            .filter((r) => urlLooksLikeRecipe(r.url))
+            // Filter out posts whose title looks like a tip/review/guide
+            .filter((r) => titleLooksLikeRecipe(r.title))
+            .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
+            // Filter out results whose title doesn't share half the query words
+            .filter((r) => titleMatchesQuery(r.title, query))
+            // Sort by relevance — best title-match first
+            .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
+            .slice(0, count);
+          if (mapped.length > 0) return mapped;
+        }
+      } catch { /* try next */ }
+    }
   }
   return [];
 }
