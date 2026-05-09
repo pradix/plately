@@ -825,6 +825,8 @@ const detailStepCount = document.getElementById("detailStepCount");
 const detailIngredientCount = document.getElementById("detailIngredientCount");
 const servingsDisplay = document.getElementById("servingsDisplay");
 const detailIngredientList = document.getElementById("detailIngredientList");
+const ingredientSwapPanel = document.getElementById("ingredientSwapPanel");
+const ingredientSwapList = document.getElementById("ingredientSwapList");
 const checkAllIngredientsButton = document.getElementById("checkAllIngredientsButton");
 const uncheckAllIngredientsButton = document.getElementById("uncheckAllIngredientsButton");
 const detailStepList = document.getElementById("detailStepList");
@@ -1116,11 +1118,13 @@ function showToast(message) {
 }
 
 let confirmCallback = null;
-function showConfirm({ title, subtitle, confirmLabel = "Bevestigen", destructive = false, onConfirm }) {
+let confirmAltCallback = null;
+function showConfirm({ title, subtitle, confirmLabel = "Bevestigen", destructive = false, altLabel = "", onConfirm, onAlt }) {
   const sheet = document.getElementById("confirmSheet");
   const titleEl = document.getElementById("confirmSheetTitle");
   const subtitleEl = document.getElementById("confirmSheetSubtitle");
   const confirmBtn = document.getElementById("confirmSheetConfirmBtn");
+  const altBtn = document.getElementById("confirmSheetAltBtn");
   if (!sheet) return;
   if (titleEl) titleEl.textContent = title || "";
   if (subtitleEl) subtitleEl.textContent = subtitle || "";
@@ -1128,7 +1132,13 @@ function showConfirm({ title, subtitle, confirmLabel = "Bevestigen", destructive
     confirmBtn.textContent = confirmLabel;
     confirmBtn.className = "confirm-sheet__btn confirm-sheet__btn--confirm" + (destructive ? " confirm-sheet__btn--destructive" : "");
   }
+  if (altBtn) {
+    const hasAlt = Boolean(String(altLabel || "").trim()) && typeof onAlt === "function";
+    altBtn.textContent = String(altLabel || "").trim() || "Andere optie";
+    altBtn.classList.toggle("hidden", !hasAlt);
+  }
   confirmCallback = onConfirm || null;
+  confirmAltCallback = typeof onAlt === "function" ? onAlt : null;
   sheet.classList.remove("hidden");
   document.getElementById("confirmSheetBackdrop")?.classList.remove("hidden");
 }
@@ -1150,6 +1160,7 @@ function closeConfirmSheet() {
   sheet?.classList.add("hidden");
   document.getElementById("confirmSheetBackdrop")?.classList.add("hidden");
   confirmCallback = null;
+  confirmAltCallback = null;
 }
 
 function showIosSetupModal() {
@@ -1382,7 +1393,17 @@ function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
     return;
   }
 
-  cookbookSaveList.innerHTML = state.cookbooks
+  const cookbooks = [...(state.cookbooks || [])];
+  const preferredId = String(state.selectedCookbookId || "").trim();
+  if (preferredId) {
+    cookbooks.sort((a, b) => {
+      if (a?.id === preferredId) return -1;
+      if (b?.id === preferredId) return 1;
+      return 0;
+    });
+  }
+
+  cookbookSaveList.innerHTML = cookbooks
     .map((cookbook) => {
       const recipeCount = cookbook.recipeIds.length;
       const containsRecipe = cookbook.recipeIds.includes(recipeId);
@@ -3699,6 +3720,14 @@ function getImportStatusMeta(recipe) {
 const CLOCK_SVG = `<svg class="recipe-time__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const WISSEL_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>`;
 
+const INGREDIENT_SWAPS = [
+  ["koriander", "peterselie"],
+  ["kipfilet", "kippendij"],
+  ["rundergehakt", "half om half gehakt"],
+  ["slagroom", "kookroom"],
+  ["crème fraîche", "yoghurt"],
+];
+
 function renderFeaturedRecipe() {
   const recipe = getHomeFeaturedRecipe();
   featuredImage.src = recipe.image;
@@ -4881,6 +4910,8 @@ function renderDetailRecipe(resetServings = false) {
     })
     .join("");
 
+  renderIngredientSwapSuggestions(recipe);
+
   // Clear any running timers when recipe changes
   stepTimers.forEach((id) => clearInterval(id));
   stepTimers.clear();
@@ -4963,6 +4994,43 @@ function renderDetailRecipe(resetServings = false) {
 
   // Fetch ingredient photos from Albert Heijn
   fetchIngredientPhotos();
+}
+
+function renderIngredientSwapSuggestions(recipe) {
+  if (!ingredientSwapPanel || !ingredientSwapList || !recipe) return;
+  const ingKeys = recipe.ingredients.map((i) => normalizeIngredientKey(i?.name || ""));
+  const present = new Set(ingKeys.filter(Boolean));
+  const suggestions = [];
+  for (const [a, b] of INGREDIENT_SWAPS) {
+    const aKey = normalizeIngredientKey(a);
+    const bKey = normalizeIngredientKey(b);
+    if (present.has(aKey) && !present.has(bKey)) suggestions.push({ from: a, to: b });
+    else if (present.has(bKey) && !present.has(aKey)) suggestions.push({ from: b, to: a });
+  }
+
+  if (!suggestions.length) {
+    ingredientSwapPanel.classList.add("hidden");
+    ingredientSwapList.innerHTML = "";
+    return;
+  }
+
+  ingredientSwapPanel.classList.remove("hidden");
+  ingredientSwapList.innerHTML = suggestions
+    .map(
+      (s) => `
+        <div class="swap-row">
+          <div class="swap-row__copy">
+            <div class="swap-row__title">${escapeHtml(s.from)} → ${escapeHtml(s.to)}</div>
+            <div class="swap-row__sub">Vervang op je lijst (voor dit recept)</div>
+          </div>
+          <button class="swap-row__btn" type="button" data-swap-from="${escapeHtml(s.from)}" data-swap-to="${escapeHtml(s.to)}">
+            ${WISSEL_SVG}
+            Wissel
+          </button>
+        </div>
+      `
+    )
+    .join("");
 }
 
 function renderCookMode(recipe, recipeProgress = getRecipeProgress(recipe.id)) {
@@ -6690,6 +6758,7 @@ function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId) {
   if (!cookbook) {
     return;
   }
+  state.selectedCookbookId = cookbook.id;
   if (id && !cookbook.recipeIds.includes(id)) {
     cookbook.recipeIds.unshift(id);
   }
@@ -6715,22 +6784,33 @@ function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId) {
   showToast(`Opgeslagen in ${cookbook.name}.`);
 }
 
-function getOrCreateFavoritesBookmark() {
-  let favoritesBookmark = state.cookbooks.find((cb) => cb.name === "❤️ Favorieten");
-  if (!favoritesBookmark) {
-    favoritesBookmark = {
+const FAVORITES_COOKBOOK_NAME = "❤️ Favorieten";
+function ensureFavoritesCookbookExists({ persist = true } = {}) {
+  let favorites = state.cookbooks.find((cb) => cb && cb.name === FAVORITES_COOKBOOK_NAME);
+  if (!favorites) {
+    favorites = {
       id: `cookbook-favorites-${Date.now()}`,
-      name: "❤️ Favorieten",
+      name: FAVORITES_COOKBOOK_NAME,
       recipeIds: [],
     };
-    state.cookbooks.unshift(favoritesBookmark);
-    schedulePersistAppState();
+    state.cookbooks.unshift(favorites);
+    if (!state.selectedCookbookId) {
+      state.selectedCookbookId = favorites.id;
+    }
+    if (persist) schedulePersistAppState();
   }
-  return favoritesBookmark;
+  if (!state.selectedCookbookId || !state.cookbooks.some((cb) => cb.id === state.selectedCookbookId)) {
+    state.selectedCookbookId = favorites.id;
+  }
+  return favorites;
+}
+
+function getOrCreateFavoritesBookmark() {
+  return ensureFavoritesCookbookExists({ persist: true });
 }
 
 function isRecipeFavorited(recipeId) {
-  const favoritesBookmark = state.cookbooks.find((cb) => cb.name === "❤️ Favorieten");
+  const favoritesBookmark = state.cookbooks.find((cb) => cb.name === FAVORITES_COOKBOOK_NAME);
   return favoritesBookmark ? favoritesBookmark.recipeIds.includes(recipeId) : false;
 }
 
@@ -7007,6 +7087,57 @@ function addRecipeToGrocery(recipe) {
     return;
   }
   showToast("Dit recept stond al op je lijst.");
+}
+
+function applyIngredientSwapToGroceryList({ recipeId, from, to } = {}) {
+  const rId = String(recipeId || "").trim();
+  const fromLabel = String(from || "").trim();
+  const toLabel = String(to || "").trim();
+  if (!rId || !fromLabel || !toLabel) return;
+
+  const recipe = getRecipeById(rId) || getSelectedRecipe();
+  const fromKey = normalizeIngredientKey(fromLabel);
+  const toKey = normalizeIngredientKey(toLabel);
+  if (!fromKey || !toKey) return;
+
+  let changed = 0;
+  for (const item of state.groceryItems) {
+    if (item?.recipeId !== rId) continue;
+    if (item.checked) continue;
+    const itemKey = normalizeIngredientKey(item.title || "");
+    if (itemKey !== fromKey) continue;
+    item.title = toLabel;
+    item.group = getIngredientGroup(toLabel);
+    changed += 1;
+  }
+
+  if (!changed && recipe) {
+    const sourceIngredient = recipe.ingredients.find((i) => normalizeIngredientKey(i?.name || "") === fromKey) || null;
+    if (sourceIngredient) {
+      const nextAmount = formatIngredientAmount(sourceIngredient, state.currentServings / parseBaseServings(recipe.servings));
+      state.groceryItems.push({
+        id: `${recipe.id}-swap-${toLabel}-${Date.now()}`,
+        title: toLabel,
+        amount: nextAmount,
+        recipeId: recipe.id,
+        recipeTitle: recipe.title,
+        recipeSourceUrl: recipe.sourceUrl || "",
+        recipePlatform: recipe.platform || "website",
+        group: getIngredientGroup(toLabel),
+        checked: false,
+      });
+      changed = 1;
+    }
+  }
+
+  if (!changed) {
+    showToast("Kon niets wisselen op je lijst.");
+    return;
+  }
+
+  renderGroceryGroups();
+  schedulePersistAppState();
+  showToast("Wissel toegepast op je boodschappenlijst.");
 }
 
 function addCustomGroceryItem() {
@@ -7523,6 +7654,9 @@ function applyPersistedAppState(user) {
   if (typeof user.selectedCookbookId === "string" && user.selectedCookbookId) {
     state.selectedCookbookId = user.selectedCookbookId;
   }
+
+  // Always ensure favorites + a valid last-used cookbook exist (migration-safe).
+  ensureFavoritesCookbookExists({ persist: false });
 
   if (user.mealPlan && typeof user.mealPlan === "object") {
     state.mealPlan = {
@@ -9309,6 +9443,94 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
     const data = await handleImport(url, note);
     const importedRecipe = normalizeImportedRecipe(data.recipe);
 
+    const confirmWithAlt = ({ title, subtitle, confirmLabel, altLabel }) =>
+      new Promise((resolve) => {
+        showConfirm({
+          title,
+          subtitle,
+          confirmLabel,
+          altLabel,
+          onConfirm: () => resolve("confirm"),
+          onAlt: () => resolve("alt"),
+        });
+      });
+
+    const normalizeImportUrlForDedup = (rawUrl) => {
+      const raw = String(rawUrl || "").trim();
+      if (!raw) return "";
+      try {
+        const u = new URL(raw);
+        u.hash = "";
+        const paramsToDrop = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid"];
+        paramsToDrop.forEach((p) => u.searchParams.delete(p));
+        u.searchParams.sort?.();
+        const host = u.hostname.replace(/^www\./, "").toLowerCase();
+        const path = u.pathname.replace(/\/+$/, "");
+        const search = u.searchParams.toString();
+        return `${u.protocol}//${host}${path}${search ? `?${search}` : ""}`;
+      } catch {
+        return raw;
+      }
+    };
+
+    const normalizeTitleForDedup = (title) =>
+      normalizeImportedTitle(String(title || ""))
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const findDuplicateImportedRecipe = (candidate) => {
+      const urlKey = normalizeImportUrlForDedup(candidate?.sourceUrl || "");
+      const titleKey = normalizeTitleForDedup(candidate?.title || "");
+      const saved = getSavedImportedRecipes();
+      if (!saved.length) return null;
+
+      if (urlKey) {
+        const byUrl = saved.find((r) => normalizeImportUrlForDedup(r?.sourceUrl || "") === urlKey);
+        if (byUrl) return { recipe: byUrl, reason: "url" };
+      }
+      if (titleKey) {
+        const byTitle = saved.find((r) => normalizeTitleForDedup(r?.title || "") === titleKey);
+        if (byTitle) return { recipe: byTitle, reason: "title" };
+      }
+      return null;
+    };
+
+    const applyOverwrite = (existing, incoming) => {
+      if (!existing || !incoming) return;
+      const keepId = existing.id;
+      Object.assign(existing, { ...incoming, id: keepId, isSeed: false });
+    };
+
+    const dupe = findDuplicateImportedRecipe(importedRecipe);
+    if (dupe?.recipe?.id) {
+      const choice = await confirmWithAlt({
+        title: "Dubbel recept gevonden",
+        subtitle:
+          dupe.reason === "url"
+            ? "Dit recept lijkt al eerder geïmporteerd (zelfde link). Wil je het bestaande recept overschrijven of als nieuw bewaren?"
+            : "Dit recept lijkt al eerder geïmporteerd (zelfde titel). Wil je het bestaande recept overschrijven of als nieuw bewaren?",
+        confirmLabel: "Overschrijven",
+        altLabel: "Nieuw bewaren",
+      });
+
+      if (choice === "confirm") {
+        const existing = state.recipes.find((r) => r.id === dupe.recipe.id);
+        if (existing) {
+          applyOverwrite(existing, importedRecipe);
+          state.selectedRecipeId = existing.id;
+          state.currentServings = parseBaseServings(existing.servings);
+          renderDetailRecipe(true);
+          switchView("detail");
+          onDone(existing);
+          showToast("Bestaand recept is bijgewerkt.");
+          return;
+        }
+      }
+      // else: "Nieuw bewaren" -> continue as normal (preview)
+    }
+
     // Keep as preview until user actually saves it to a cookbook
     importedRecipe._previewCreatedAt = Date.now();
     state.importPreviews[importedRecipe.id] = importedRecipe;
@@ -9317,6 +9539,18 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
 
     renderDetailRecipe(true);
     switchView("detail");
+
+    if (importedRecipe.needsReview) {
+      const choice = await confirmWithAlt({
+        title: "Even nalopen?",
+        subtitle: "Deze import lijkt nog onvolledig (weinig ingrediënten/stappen). Wil je 'm eerst reviewen?",
+        confirmLabel: "Nalopen",
+        altLabel: "Later",
+      });
+      if (choice === "confirm") {
+        openImportReview(importedRecipe.id);
+      }
+    }
 
     onDone(importedRecipe);
   } catch (error) {
@@ -9749,18 +9983,71 @@ bindEvent(detailIngredientList, "click", (event) => {
   toggleIngredientChecked(index);
 });
 
+bindEvent(ingredientSwapList, "click", (event) => {
+  const btn = event.target.closest("[data-swap-from][data-swap-to]");
+  if (!(btn instanceof HTMLElement)) return;
+  const recipe = getSelectedRecipe();
+  if (!recipe) return;
+  applyIngredientSwapToGroceryList({
+    recipeId: recipe.id,
+    from: btn.dataset.swapFrom,
+    to: btn.dataset.swapTo,
+  });
+});
+
 bindEvent(uncheckAllIngredientsButton, "click", () => {
   uncheckAllIngredients();
 });
 
-bindEvent(saveRecipeButton, "click", () => {
+function quickSaveSelectedRecipeToLastUsed() {
   const recipe = getSelectedRecipe();
-  if (recipe) openCookbookSaveModal(recipe.id);
-});
-bindEvent(detailSaveHeaderButton, "click", () => {
-  const recipe = getSelectedRecipe();
-  if (recipe) openCookbookSaveModal(recipe.id);
-});
+  if (!recipe) return;
+  const preferredId = String(state.selectedCookbookId || "").trim();
+  const preferred = preferredId ? getCookbookById(preferredId) : null;
+  if (!preferred?.id) {
+    openCookbookSaveModal(recipe.id);
+    return;
+  }
+  const alreadyInPreferred = preferred.recipeIds?.includes?.(recipe.id);
+  if (alreadyInPreferred) {
+    openCookbookSaveModal(recipe.id);
+    return;
+  }
+  saveRecipeToCookbook(recipe.id, preferred.id);
+}
+
+function bindCookbookQuickSaveButton(button) {
+  if (!(button instanceof HTMLElement)) return;
+  let longPressTimer = 0;
+  let longPressed = false;
+  const clear = () => {
+    window.clearTimeout(longPressTimer);
+    longPressTimer = 0;
+  };
+  const start = () => {
+    clear();
+    longPressed = false;
+    longPressTimer = window.setTimeout(() => {
+      longPressed = true;
+      const recipe = getSelectedRecipe();
+      if (recipe) openCookbookSaveModal(recipe.id);
+    }, 420);
+  };
+  const end = () => {
+    const fired = longPressed;
+    clear();
+    if (!fired) {
+      quickSaveSelectedRecipeToLastUsed();
+    }
+  };
+  button.addEventListener("pointerdown", start);
+  button.addEventListener("pointerup", end);
+  button.addEventListener("pointercancel", clear);
+  button.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+
+bindCookbookQuickSaveButton(saveRecipeButton);
+bindCookbookQuickSaveButton(detailSaveHeaderButton);
 bindEvent(document.getElementById("deleteRecipeButton"), "click", () => {
   const recipe = getSelectedRecipe();
   if (!recipe || SEED_RECIPE_IDS.has(recipe.id) || recipe.isSeed) return;
@@ -12676,6 +12963,11 @@ bindEvent(document.getElementById("confirmSheetCancelBtn"), "click", closeConfir
 bindEvent(document.getElementById("confirmSheetConfirmBtn"), "click", () => {
   // Capture callback BEFORE closing (closeConfirmSheet sets it to null)
   const cb = confirmCallback;
+  closeConfirmSheet();
+  if (typeof cb === "function") cb();
+});
+bindEvent(document.getElementById("confirmSheetAltBtn"), "click", () => {
+  const cb = confirmAltCallback;
   closeConfirmSheet();
   if (typeof cb === "function") cb();
 });

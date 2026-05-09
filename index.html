@@ -263,6 +263,13 @@
                     </div>
                   </div>
                   <ul class="ingredient-list" id="detailIngredientList"></ul>
+                  <div class="swap-panel hidden" id="ingredientSwapPanel" aria-label="Slim wisselen">
+                    <div class="swap-panel__head">
+                      <p class="section-kicker">SLIM WISSELEN</p>
+                      <p class="swap-panel__hint">Pas alleen je boodschappenlijst aan (recept blijft hetzelfde).</p>
+                    </div>
+                    <div class="swap-panel__list" id="ingredientSwapList"></div>
+                  </div>
                 </section>
 
                 <button class="detail-cta" id="addSelectedToGroceriesButton" type="button">
@@ -1588,6 +1595,7 @@
       <p class="confirm-sheet__subtitle" id="confirmSheetSubtitle"></p>
       <div class="confirm-sheet__actions">
         <button class="confirm-sheet__btn confirm-sheet__btn--confirm" id="confirmSheetConfirmBtn" type="button">Bevestigen</button>
+        <button class="confirm-sheet__btn confirm-sheet__btn--alt hidden" id="confirmSheetAltBtn" type="button">Andere optie</button>
         <button class="confirm-sheet__btn confirm-sheet__btn--cancel" id="confirmSheetCancelBtn" type="button">Annuleren</button>
       </div>
     </div>

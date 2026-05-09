@@ -1522,12 +1522,15 @@ function generateId(prefix) {
 }
 
 function buildDefaultUserData(userId = generateId("user")) {
+  const favoritesCookbookId = generateId("cb");
   return {
     id: userId,
     profile: { ...DEFAULT_PROFILE },
     importedRecipes: [],
-    cookbooks: [], // Empty for anonymous/guest users - no default cookbooks
-    selectedCookbookId: "",
+    cookbooks: [
+      { id: favoritesCookbookId, name: "❤️ Favorieten", recipeIds: [] },
+    ],
+    selectedCookbookId: favoritesCookbookId,
     onboardingSeenAt: "",
     mealPlan: {
       maandag: null,
