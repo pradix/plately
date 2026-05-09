@@ -6819,6 +6819,24 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       ? ["parmezaan", "parmezaanse", "parmigiano", "reggiano", "grana", "padano"]
       : [];
 
+    const plainFreshVegBase = sanitizeText(baseLower || "")
+      .toLowerCase()
+      .replace(/^biologisch\s+/i, "")
+      .trim();
+    const PLAIN_FRESH_VEG_CORE = new Set([
+      "tomaat",
+      "tomaten",
+      "cherrytomaat",
+      "cherrytomaten",
+      "aubergine",
+      "courgette",
+      "komkommer",
+    ]);
+    const isPlainFreshVegIngredient =
+      PLAIN_FRESH_VEG_CORE.has(plainFreshVegBase) ||
+      /^(?:punt)?paprika$/i.test(plainFreshVegBase) ||
+      /^(rode|groene|oranje|gele)\s+(?:punt)?paprika$/i.test(plainFreshVegBase);
+
     const scoreForIngredientDetailed = (productTitle) => {
       const title = sanitizeText(productTitle).toLowerCase();
       let score = 0;
@@ -6955,6 +6973,20 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         if (/\b(peper\s*(?:en|&)\s*zout|zout\s*(?:en|&)\s*peper)\b/.test(title)) {
           score += 110;
           adjustments.push({ kind: "penalty", label: "Mix (peper en zout)", delta: 110 });
+        }
+      }
+
+      // Produce: tomaat/courgette/komkommer/aubergine (en paprika): liever vers per stuk dan potjes, spreads of ingelegde varianten.
+      if (isPlainFreshVegIngredient) {
+        const processedFreshVeg =
+          /\b(?:gegrild|gefrituurde?|gefrituurd|op\s+zuur|gepekeld|ingesneden|ingemaakt|augurk|op\s+sap|op\s+wijn|gevuld|opgiet(?:en)?|spread|dip\b|hummus|humus|pesto|dressing|marinade|tomatenpuree|passata|(?:tomaten\s*)?puree|ketchup|\bblik\b|bouillon|opgemaakt|voorgesneden|reepjes|op\s+zak|zakje|antipasti|carpaccio|soep|chips|snack|sticks|gehakt)\b/i;
+        if (processedFreshVeg.test(title)) {
+          score += 48;
+          adjustments.push({ kind: "penalty", label: "Verwerkte groente (niet puur vers)", delta: 48 });
+        }
+        if (/\b(?:per\s+stuk|los(?:\s+verkocht)?|rimpel)\b/i.test(title)) {
+          score -= 10;
+          adjustments.push({ kind: "bonus", label: "Vers (per stuk / los)", delta: -10 });
         }
       }
 

@@ -7010,8 +7010,15 @@ function addRecipeToGrocery(recipe) {
     if (key === "zout peper" || key === "peper zout") return true;
     if (/^(zout|peper)\b/.test(key) && key.length <= 14) return true;
     if (/\bnaar smaak\b/.test(String(name || "").toLowerCase()) && /^(zout|peper)\b/.test(key)) return true;
-    // Kitchen tools / non-food items that sometimes leak into ingredient lines.
-    if (/\b(?:airfryer|air\s*fryer|oven|koekenpan|hapjespan|bakplaat)\b/i.test(String(name || ""))) return true;
+    // Kitchen tools / non-food items (no bare "oven" — that wrongly skips phrases like "kip uit de oven").
+    const n = String(name || "");
+    if (
+      /\b(?:air\s*fryer|airfryer|bakplaat|bakvorm|contactgrill|contact\s+grill|hapjespan|koekenpan|springvorm|muffinvorm|grillschaal|raclett(?:e|edoos)|(?:grill|grilles)\s*[-]?\s*pan(?:nen?)?|grillpan(?:nen?)?|ovenschalen?|ovenschotel(?:s)?|overnschaal(?:en)?|ovenschaal(?:en)?|opvouwbaar|opvouwgrill)\b/i.test(
+        n
+      )
+    ) {
+      return true;
+    }
     // Pantry basics: skip from auto-add, but show as suggestions instead.
     if (PANTRY_SKIP_KEYS.has(key)) return true;
     return false;
