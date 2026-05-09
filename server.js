@@ -1561,6 +1561,14 @@ async function setChannelOverrides(nextOverrides) {
   await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2));
 }
 
+/** Merge hardcoded TEMPORARILY_DISABLED_CHANNEL_IDS in op de seed-state zodat
+ * de client ook de "code-level" uitgeschakelde kanalen ziet als enabled=false. */
+function _withHardcodedDisables(state) {
+  const seed = { ...(state?.seed || {}) };
+  for (const id of TEMPORARILY_DISABLED_CHANNEL_IDS) seed[id] = false;
+  return { seed, custom: { ...(state?.custom || {}) } };
+}
+
 async function getChannelEnabledState() {
   const fallback = { seed: {}, custom: {} };
   if (isPostgresEnabled()) {
@@ -1577,21 +1585,21 @@ async function getChannelEnabledState() {
         st = {};
       }
     }
-    return {
+    return _withHardcodedDisables({
       seed: st.seed && typeof st.seed === "object" ? st.seed : {},
       custom: st.custom && typeof st.custom === "object" ? st.custom : {},
-    };
+    });
   }
   try {
     const rawFile = await fsp.readFile(DATA_FILE, "utf8");
     const db = JSON.parse(rawFile);
     const st = db?.adminState?.channelEnabledState;
-    return {
+    return _withHardcodedDisables({
       seed: st?.seed && typeof st.seed === "object" ? st.seed : {},
       custom: st?.custom && typeof st.custom === "object" ? st.custom : {},
-    };
+    });
   } catch {
-    return fallback;
+    return _withHardcodedDisables(fallback);
   }
 }
 
