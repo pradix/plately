@@ -4495,19 +4495,27 @@ async function fetchReaderFallback(url) {
 async function fetchWithZenRows(url) {
   const apiKey = sanitizeText(process.env.ZENROWS_API_KEY || "").trim();
   if (!apiKey) return null;
-  // premium_proxy=true volstaat voor CF-protected WPRM-sites (Miljuschka/Eef/Culy):
-  // de receptdata zit al in statische HTML + JSON-LD, dus js_render is overbodig.
-  // Combinatie js_render+antibot+premium_proxy gaf bovendien 422 RESP001 op Eef.
-  const zenUrl = `https://api.zenrows.com/v1/?apikey=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(url)}&premium_proxy=true`;
-  try {
-    const response = await fetch(zenUrl, { signal: AbortSignal.timeout(35000) });
-    if (!response.ok) return null;
-    const body = await response.text();
-    if (!body || body.length < 300) return null;
-    return { kind: "html", body, finalUrl: url };
-  } catch {
-    return null;
+  // premium_proxy + antibot werkt het stabielst voor WPRM-sites (Miljuschka/Eef/Culy).
+  // js_render is niet nodig (data zit in statische HTML + JSON-LD) en levert
+  // soms een ingekorte/andere HTML op waarmee de parser slechter scoort.
+  // ZenRows kan intermitterend 422 RESP001 ("Could not get content") teruggeven —
+  // één retry verhoogt de slagingskans aanzienlijk.
+  const zenUrl = `https://api.zenrows.com/v1/?apikey=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(url)}&premium_proxy=true&antibot=true`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(zenUrl, { signal: AbortSignal.timeout(35000) });
+      if (response.ok) {
+        const body = await response.text();
+        if (body && body.length >= 300) {
+          return { kind: "html", body, finalUrl: url };
+        }
+      }
+    } catch {
+      /* retry below */
+    }
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 800));
   }
+  return null;
 }
 
 async function fetchWebsiteDocument(url, maxRetries = 2) {
