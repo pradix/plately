@@ -3033,9 +3033,14 @@ function looksLikeRecipeTitle(value) {
 }
 
 function normalizeRecipeTitle(value) {
+  const raw = String(value || "").trim();
+  // Jina warning lines look like "Warning: Target URL returned error 403…";
+  // splitting on `:` would wrongly yield the 7-letter word "Warning" as the title.
+  const withoutLeadingWarning = raw.replace(/^(?:warning|error|notice)\s*:\s*/i, "").trim();
+  const splitSource = withoutLeadingWarning || raw;
   const clean = sanitizeText(
     stripSocialNoise(
-      String(value || "")
+      splitSource
         .replace(/\s+on\s+tiktok$/i, "")
         .replace(/\s+on\s+instagram$/i, "")
         .replace(/^how to make\s+/i, "")
@@ -3047,6 +3052,12 @@ function normalizeRecipeTitle(value) {
         .split(/[:|]/)[0]
     )
   );
+  if (/^(warning|error|notice|forbidden|moment|cloudflare|captcha)$/i.test(clean)) {
+    return "";
+  }
+  if (/^target url returned error\b/i.test(clean)) {
+    return "";
+  }
 
   const words = clean.split(/\s+/).filter(Boolean);
   if (clean.length <= 42 || words.length <= 7) {
@@ -5141,12 +5152,29 @@ function extractWpRecipeMakerInstructionLines(html) {
 function looksLikeJinaReaderCfWall(markdown) {
   const t = String(markdown || "");
   const lower = t.toLowerCase();
-  if (t.length < 40) return false;
-  if (/target url returned error 403/i.test(t) || /\b403\s*forbidden\b/i.test(lower)) {
-    if (/cloudflare|captcha|security verification|malicious bots|just a moment/i.test(lower)) return true;
+  // Jina prepends `Warning: Target URL returned error 403` when Cloudflare/origin rejects the fetch — always treat as unblockable for datacenter IPs.
+  if (/target url returned error\s*403\b/i.test(t)) return true;
+  if (/\b403\s*forbidden\b/i.test(lower) && (t.length < 800 || /cloudflare|captcha|security verification/i.test(lower))) {
+    return true;
   }
   if (/performing security verification/i.test(lower)) return true;
+  if (/this website uses a security service to protect against malicious bots/i.test(lower)) return true;
+  if (/maybe requiring captcha|authorized to access this page/i.test(lower)) return true;
   if (/^\s*#\s*just a moment/i.test(lower) && lower.includes("cloudflare")) return true;
+  return false;
+}
+
+/** Lines Jina / error pages sometimes match `looksLikeRecipeTitle` but must never become the recipe name. */
+function isJinaOrErrorPageTitleLine(raw) {
+  const t = sanitizeText(String(raw || "")).toLowerCase();
+  if (!t || t.length < 3) return true;
+  if (/^warning\b|^error\b|^notice\b/i.test(t)) return true;
+  if (/target url returned error|url returned error/i.test(t)) return true;
+  if (/\berror\s*403\b|\b403\s*forbidden\b|^403\b/i.test(t)) return true;
+  if (/^just a moment|performing security verification/i.test(t)) return true;
+  if (/requiring captcha|authorized to access this page/i.test(t)) return true;
+  if (/^markdown content$/i.test(t)) return true;
+  if (/^miljuschka\.nl$/i.test(t) || /^eefkooktzo\.nl$/i.test(t)) return true;
   return false;
 }
 
@@ -5274,7 +5302,9 @@ function parseTextRecipeDocument(text, url) {
   const markdownH1Title = (() => {
     const raw = String(cleanedText || "");
     const candidates = [...raw.matchAll(/^\s*#\s+(.+?)\s*$/gm)]
-      .map((m) => normalizeRecipeTitle(sanitizeText(m[1] || "")))
+      .map((m) => sanitizeText(m[1] || ""))
+      .filter((line) => !isJinaOrErrorPageTitleLine(line))
+      .map((line) => normalizeRecipeTitle(line))
       .filter(Boolean)
       .filter((t) => !/chickslovefood\b/i.test(t));
     return candidates[0] || "";
@@ -5293,8 +5323,22 @@ function parseTextRecipeDocument(text, url) {
 
   const title =
     markdownH1Title ||
-    normalizeRecipeTitle(lines.find((line) => looksLikeRecipeTitle(line) && RECIPE_TITLE_HINT_PATTERN.test(line))) ||
-    normalizeRecipeTitle(lines.find((line) => looksLikeRecipeTitle(line) && line.split(" ").length <= 8)) ||
+    normalizeRecipeTitle(
+      lines.find(
+        (line) =>
+          !isJinaOrErrorPageTitleLine(line) &&
+          looksLikeRecipeTitle(line) &&
+          RECIPE_TITLE_HINT_PATTERN.test(line)
+      )
+    ) ||
+    normalizeRecipeTitle(
+      lines.find(
+        (line) =>
+          !isJinaOrErrorPageTitleLine(line) &&
+          looksLikeRecipeTitle(line) &&
+          line.split(" ").length <= 8
+      )
+    ) ||
     "Website recept";
 
   const introFromMarkdown = (() => {
