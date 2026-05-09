@@ -13019,13 +13019,43 @@ const server = http.createServer(async (request, response) => {
         const recipe = await importRecipe(cleanUrl, "", "");
         const title = sanitizeText(recipe?.title || "");
         const intro = sanitizeText(recipe?.description || recipe?.intro || "");
-        const ingredientsCount = Array.isArray(recipe?.ingredients) ? recipe.ingredients.filter(Boolean).length : 0;
-        const stepsCount = Array.isArray(recipe?.instructions) ? recipe.instructions.filter(Boolean).length : 0;
+        const ingredientsRaw = Array.isArray(recipe?.ingredients) ? recipe.ingredients.filter(Boolean) : [];
+        const stepsRaw = Array.isArray(recipe?.instructions) ? recipe.instructions.filter(Boolean) : [];
+        const ingredients = ingredientsRaw.map((it) => {
+          if (typeof it === "string") return { quantity: "", unit: "", name: it };
+          return {
+            quantity: sanitizeText(it.quantity || ""),
+            unit: sanitizeText(it.unit || ""),
+            name: sanitizeText(it.name || ""),
+          };
+        });
+        const instructions = stepsRaw.map((s) => sanitizeText(typeof s === "string" ? s : s?.text || ""));
         const platform = sanitizeText(recipe?.platform || "");
         const channelId = sanitizeText(recipe?.channelId || "");
+        const image = sanitizeText(recipe?.image || "");
+        const sourceUrl = sanitizeText(recipe?.sourceUrl || cleanUrl);
+        const author = sanitizeText(recipe?.author || "");
+        const time = sanitizeText(String(recipe?.time || ""));
+        const servings = sanitizeText(String(recipe?.servings || ""));
+        const needsReview = Boolean(recipe?.needsReview);
         return sendJson(response, 200, {
           ok: true,
-          recipe: { title, intro, ingredientsCount, stepsCount, platform, channelId },
+          recipe: {
+            title,
+            intro,
+            ingredientsCount: ingredients.length,
+            stepsCount: instructions.length,
+            ingredients,
+            instructions,
+            platform,
+            channelId,
+            image,
+            sourceUrl,
+            author,
+            time,
+            servings,
+            needsReview,
+          },
         });
       } catch (error) {
         console.error("❌ Error in /api/admin/channel-test/import:", error.message);

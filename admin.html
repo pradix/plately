@@ -2387,12 +2387,42 @@
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || "Import test failed");
         const r = data.recipe || {};
+        const esc = (s) =>
+          String(s == null ? "" : s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
         const title = r.title || "—";
         const ing = Number(r.ingredientsCount || 0);
         const steps = Number(r.stepsCount || 0);
         const platform = r.platform ? ` · ${r.platform}` : "";
         const channelId = r.channelId ? ` · ${r.channelId}` : "";
-        if (statusEl) statusEl.textContent = `✅ ${title}${platform}${channelId} · ingrediënten: ${ing} · stappen: ${steps}`;
+        const ingredientsHtml = (Array.isArray(r.ingredients) ? r.ingredients : [])
+          .map((it) => {
+            const q = esc(it?.quantity || "");
+            const u = esc(it?.unit || "");
+            const n = esc(it?.name || "");
+            return `<li><strong>${q || "—"}</strong> · <em>${u || "—"}</em> · ${n}</li>`;
+          })
+          .join("");
+        const instructionsHtml = (Array.isArray(r.instructions) ? r.instructions : [])
+          .map((s, i) => `<li><strong>${i + 1}.</strong> ${esc(s)}</li>`)
+          .join("");
+        const imgHtml = r.image
+          ? `<div style="margin-top:8px"><img src="${esc(r.image)}" alt="" style="max-width:240px;max-height:160px;border-radius:6px;border:1px solid #ddd"><div style="font-size:12px;color:#666;word-break:break-all">${esc(r.image)}</div></div>`
+          : `<div style="margin-top:8px;color:#a00;font-size:12px">⚠️ geen image</div>`;
+        const reviewBadge = r.needsReview ? ` · <span style="color:#a00">needsReview</span>` : "";
+        if (statusEl) {
+          statusEl.innerHTML =
+            `<div style="margin-bottom:8px">✅ <strong>${esc(title)}</strong>${esc(platform)}${esc(channelId)} · ingrediënten: <strong>${ing}</strong> · stappen: <strong>${steps}</strong>${reviewBadge}</div>` +
+            `<div style="font-size:12px;color:#444">tijd: ${esc(r.time || "—")} · porties: ${esc(r.servings || "—")} · auteur: ${esc(r.author || "—")}</div>` +
+            (r.sourceUrl ? `<div style="font-size:12px;color:#666;word-break:break-all">${esc(r.sourceUrl)}</div>` : "") +
+            imgHtml +
+            (r.intro ? `<div style="margin-top:10px"><strong>Beschrijving</strong><div style="font-size:13px;color:#222;white-space:pre-wrap">${esc(r.intro)}</div></div>` : "") +
+            (ingredientsHtml ? `<div style="margin-top:10px"><strong>Ingrediënten (${ing})</strong><ol style="margin:4px 0 0 18px;padding:0;font-size:13px">${ingredientsHtml}</ol></div>` : "") +
+            (instructionsHtml ? `<div style="margin-top:10px"><strong>Stappen (${steps})</strong><ol style="margin:4px 0 0 18px;padding:0;font-size:13px">${instructionsHtml}</ol></div>` : "");
+        }
       } catch (error) {
         if (statusEl) statusEl.textContent = "";
         showChannelTestError(error.message);
