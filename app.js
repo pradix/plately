@@ -2076,6 +2076,150 @@ function pickBestChoiceIndexByScore(item) {
   return bestIdx;
 }
 
+function parseChoicePriceNumber(choice) {
+  const current = Number(choice?.currentPrice);
+  if (Number.isFinite(current) && current > 0) return current;
+  const legacy = String(choice?.price || "").trim();
+  if (!legacy) return Number.POSITIVE_INFINITY;
+  const num = parseFloat(
+    legacy
+      .replace(/[^\d,.\-]+/g, "")
+      .replace(/\.(?=\d{3}\b)/g, "")
+      .replace(",", ".")
+  );
+  return Number.isFinite(num) && num > 0 ? num : Number.POSITIVE_INFINITY;
+}
+
+function pickCheapestChoiceIndex(item) {
+  const choices = Array.isArray(item?.choices) ? item.choices : [];
+  if (!choices.length) return 0;
+  let bestIdx = 0;
+  let bestPrice = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < choices.length; i++) {
+    const p = parseChoicePriceNumber(choices[i]);
+    if (p < bestPrice) {
+      bestPrice = p;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+function pickPreferredChoiceIndex(item, predicate) {
+  const choices = Array.isArray(item?.choices) ? item.choices : [];
+  if (!choices.length) return 0;
+  const currentIdx = item?.selectedChoiceIndex || 0;
+  const current = choices[currentIdx];
+  if (current && predicate(current, item)) return currentIdx;
+  let bestIdx = null;
+  let bestPrice = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < choices.length; i++) {
+    const c = choices[i];
+    if (!c) continue;
+    if (!predicate(c, item)) continue;
+    const p = parseChoicePriceNumber(c);
+    if (p < bestPrice) {
+      bestPrice = p;
+      bestIdx = i;
+    }
+  }
+  return bestIdx ?? currentIdx;
+}
+
+async function ensureBasketChoicesLoaded(itemIndexes) {
+  const preview = state.basketPreview;
+  if (!preview || preview.store !== "albert-heijn") return;
+  const items = Array.isArray(preview.items) ? preview.items : [];
+  const idxs = Array.isArray(itemIndexes) ? itemIndexes.filter((i) => Number.isInteger(i)) : [];
+  if (!idxs.length) return;
+
+  const missing = idxs
+    .map((idx) => ({ idx, item: items[idx] }))
+    .filter(({ item }) => item && (!Array.isArray(item.choices) || item.choices.length === 0));
+
+  if (!missing.length) return;
+
+  const activeItems = getActiveGroceryItems();
+  const sourceUrl = preview.sourceUrl || getSingleRecipeContext(activeItems)?.sourceUrl || "";
+  const recipeTitle = preview.recipeTitle || getSingleRecipeContext(activeItems)?.recipeTitle || "Boodschappenlijst";
+
+  try {
+    const payload = await fetchJson(`${state.apiBase}/api/store-basket`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        store: "albert-heijn",
+        sourceUrl,
+        recipeTitle,
+        bio: Boolean(state.basketFilter?.bio),
+        beterLeven1: Boolean(state.basketFilter?.beterLeven1),
+        vegetarisch: Boolean(state.basketFilter?.vegetarisch),
+        vegan: Boolean(state.basketFilter?.vegan),
+        plantaardig: Boolean(state.basketFilter?.plantaardig),
+        items: missing.map(({ item }) => ({
+          title: item.ingredientTitle,
+          amount: item.ingredientAmount || "1",
+          recipeTitle: item.recipeTitle || "",
+        })),
+      }),
+    });
+
+    const fetched = Array.isArray(payload?.items) ? payload.items : [];
+    if (!fetched.length) return;
+
+    const keyOf = (s) => normalizeBasketToken(s || "");
+    const fetchedByKey = new Map(fetched.map((it) => [keyOf(it?.ingredientTitle), it]));
+    for (const { idx, item } of missing) {
+      const hit = fetchedByKey.get(keyOf(item?.ingredientTitle));
+      if (hit?.choices?.length) {
+        item.choices = hit.choices;
+        item.selectedChoiceIndex = Number.isInteger(item.selectedChoiceIndex) ? item.selectedChoiceIndex : 0;
+      }
+    }
+  } catch {
+    // ignore (bulk actions will operate on whatever data exists)
+  }
+}
+
+async function applyBasketBulkOptimization(mode) {
+  const preview = state.basketPreview;
+  if (!preview || preview.store !== "albert-heijn") return;
+  const items = Array.isArray(preview.items) ? preview.items : [];
+  if (!items.length) return;
+
+  const idxs = items.map((_, i) => i);
+  await ensureBasketChoicesLoaded(idxs);
+
+  let changed = 0;
+  for (let idx = 0; idx < items.length; idx++) {
+    const item = items[idx];
+    if (!item) continue;
+    const currentIdx = item.selectedChoiceIndex || 0;
+    const choices = Array.isArray(item.choices) ? item.choices : [];
+    if (!choices.length) continue;
+
+    let nextIdx = currentIdx;
+    if (mode === "cheapest") {
+      nextIdx = pickCheapestChoiceIndex(item);
+    } else if (mode === "bonus") {
+      nextIdx = pickPreferredChoiceIndex(item, (choice) => Boolean(getChoicePromotionLabel(choice)));
+    } else if (mode === "bio") {
+      nextIdx = pickPreferredChoiceIndex(item, (choice, it) => Boolean(extractBasketLabelsFromChoice(choice, it).bio));
+    }
+
+    if (Number.isInteger(nextIdx) && nextIdx !== currentIdx) {
+      item.selectedChoiceIndex = nextIdx;
+      changed += 1;
+    }
+  }
+
+  renderBasketPreview();
+
+  if (mode === "cheapest") showToast(changed ? "Goedkoopste keuzes geselecteerd." : "Alles stond al op goedkoopste.");
+  if (mode === "bonus") showToast(changed ? "BONUS keuzes geselecteerd." : "Geen BONUS alternatieven gevonden.");
+  if (mode === "bio") showToast(changed ? "Bio keuzes geselecteerd." : "Geen bio alternatieven gevonden.");
+}
+
 async function smartPickLowConfidence() {
   const preview = state.basketPreview;
   if (!preview || preview.store !== "albert-heijn") return;
@@ -2097,7 +2241,7 @@ async function smartPickLowConfidence() {
     changed += 1;
   }
   renderBasketPreview();
-  showToast(changed ? "Slimmer gekozen voor lastige items." : "Alles ziet er al goed uit.");
+  showToast(changed ? "Lage matches opnieuw gezocht." : "Alles ziet er al goed uit.");
 }
 
 async function fetchSingleBasketItemMatch(store, title, preferences) {
@@ -10106,8 +10250,18 @@ bindEvent(document.getElementById("basketOverlay"), "click", (e) => {
 
 bindEvent(document.getElementById("basketSmartPickButton"), "click", () => {
   smartPickLowConfidence().catch(() => {
-    showToast("Slimmer kiezen lukte niet.");
+    showToast("Herzoeken lukte niet.");
   });
+});
+
+bindEvent(document.getElementById("basketBulkCheapestButton"), "click", () => {
+  applyBasketBulkOptimization("cheapest").catch(() => showToast("Bulkactie lukte niet."));
+});
+bindEvent(document.getElementById("basketBulkBonusButton"), "click", () => {
+  applyBasketBulkOptimization("bonus").catch(() => showToast("Bulkactie lukte niet."));
+});
+bindEvent(document.getElementById("basketBulkBioButton"), "click", () => {
+  applyBasketBulkOptimization("bio").catch(() => showToast("Bulkactie lukte niet."));
 });
 
 // Basket product interactions (delete, qty, swap)
