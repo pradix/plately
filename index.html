@@ -1602,61 +1602,53 @@
     <div class="import-splash hidden" id="importSplash" role="status" aria-live="polite" aria-hidden="true">
       <div class="import-splash__backdrop"></div>
       <div class="import-splash__card">
-        <header class="import-splash__head">
-          <img class="import-splash__logo" src="assets/plately.png" alt="Plately" />
-          <span class="import-splash__eyebrow">Recept importeren</span>
-          <span class="import-splash__source" id="importSplashSource"></span>
-        </header>
-
         <div class="import-splash__stage" aria-hidden="true">
           <span class="import-splash__ring import-splash__ring--1"></span>
           <span class="import-splash__ring import-splash__ring--2"></span>
           <span class="import-splash__halo"></span>
           <span class="import-splash__halo import-splash__halo--2"></span>
-          <span class="import-splash__scan"></span>
           <span class="import-splash__sparkle import-splash__sparkle--1"></span>
           <span class="import-splash__sparkle import-splash__sparkle--2"></span>
           <span class="import-splash__sparkle import-splash__sparkle--3"></span>
-          <span class="import-splash__sparkle import-splash__sparkle--4"></span>
-          <span class="import-splash__sparkle import-splash__sparkle--5"></span>
-          <span class="import-splash__drop import-splash__drop--1"><img src="assets/eggs.svg" alt=""></span>
-          <span class="import-splash__drop import-splash__drop--2"><img src="assets/guac.svg" alt=""></span>
-          <span class="import-splash__drop import-splash__drop--3"><img src="assets/toast.svg" alt=""></span>
-          <span class="import-splash__drop import-splash__drop--4"><img src="assets/smoothie.svg" alt=""></span>
+          <span class="import-splash__food import-splash__food--leaf"><img src="assets/ingredients/herb.svg" alt=""></span>
+          <span class="import-splash__food import-splash__food--jar"><img src="assets/ingredients/jar.svg" alt=""></span>
+          <span class="import-splash__falling import-splash__falling--1"><img src="assets/ingredients/cheese.svg" alt=""></span>
+          <span class="import-splash__falling import-splash__falling--2"><img src="assets/ingredients/tomato.svg" alt=""></span>
+          <span class="import-splash__falling import-splash__falling--3"><img src="assets/ingredients/herb.svg" alt=""></span>
+          <span class="import-splash__falling import-splash__falling--4"><img src="assets/ingredients/jar.svg" alt=""></span>
+          <span class="import-splash__falling import-splash__falling--5"><img src="assets/ingredients/avocado.svg" alt=""></span>
+          <span class="import-splash__catch-burst import-splash__catch-burst--1"></span>
+          <span class="import-splash__catch-burst import-splash__catch-burst--2"></span>
+          <span class="import-splash__catch-burst import-splash__catch-burst--3"></span>
+          <span class="import-splash__orbit-step import-splash__orbit-step--url" data-phase="0">
+            <span class="import-splash__orbit-check"></span>
+            <span>URL Analyseren</span>
+          </span>
+          <span class="import-splash__orbit-step import-splash__orbit-step--text" data-phase="1">
+            <span class="import-splash__orbit-check"></span>
+            <span>Tekst Lezen</span>
+          </span>
+          <span class="import-splash__orbit-step import-splash__orbit-step--products" data-phase="2">
+            <span class="import-splash__orbit-check"></span>
+            <span>Producten Matchen</span>
+          </span>
+          <span class="import-splash__orbit-step import-splash__orbit-step--done" data-phase="3">
+            <span class="import-splash__orbit-check"></span>
+            <span>Afronden</span>
+          </span>
           <div class="import-splash__basket">
             <img src="assets/grocery.svg" alt="" />
           </div>
-          <span class="import-splash__chip import-splash__chip--1"><img src="assets/eggs.svg" alt=""></span>
-          <span class="import-splash__chip import-splash__chip--2"><img src="assets/guac.svg" alt=""></span>
-          <span class="import-splash__chip import-splash__chip--3"><img src="assets/toast.svg" alt=""></span>
-          <span class="import-splash__chip import-splash__chip--4"><img src="assets/smoothie.svg" alt=""></span>
         </div>
-
-        <ul class="import-splash__phases" id="importSplashPhases">
-          <li class="import-splash__phase" data-phase="0">
-            <span class="import-splash__phase-marker"></span>
-            <span class="import-splash__phase-label">Pagina ophalen</span>
-          </li>
-          <li class="import-splash__phase" data-phase="1">
-            <span class="import-splash__phase-marker"></span>
-            <span class="import-splash__phase-label">Ingrediënten verzamelen</span>
-          </li>
-          <li class="import-splash__phase" data-phase="2">
-            <span class="import-splash__phase-marker"></span>
-            <span class="import-splash__phase-label">Stappen netjes opmaken</span>
-          </li>
-          <li class="import-splash__phase" data-phase="3">
-            <span class="import-splash__phase-marker"></span>
-            <span class="import-splash__phase-label">Bijna klaar</span>
-          </li>
-        </ul>
 
         <div class="import-splash__bar" aria-hidden="true">
           <span class="import-splash__bar-fill"></span>
         </div>
 
-        <p class="import-splash__hint">Even geduld — meestal 5–15 seconden.</p>
-        <p class="import-splash__status" id="importSplashStatus">Pagina ophalen</p>
+        <h2 class="import-splash__title">Magie aan het werk...</h2>
+        <p class="import-splash__hint">We lezen het recept en zoeken de lekkerste ingrediënten voor je bij elkaar.</p>
+        <p class="import-splash__source" id="importSplashSource"></p>
+        <p class="import-splash__status" id="importSplashStatus">URL analyseren</p>
       </div>
     </div>
 

@@ -9510,10 +9510,10 @@ async function toggleWakeLock() {
 /* ─── Recept-import splash overlay ─── */
 const IMPORT_SPLASH_PHASE_COUNT = 4;
 const IMPORT_SPLASH_PHASE_LABELS = [
-  "Pagina wordt opgehaald",
-  "Ingrediënten worden verzameld",
-  "Bereiding wordt netjes gemaakt",
-  "Recept staat bijna klaar"
+  "URL analyseren",
+  "Tekst lezen",
+  "Producten matchen",
+  "Afronden"
 ];
 const IMPORT_SPLASH_MIN_MS = 3500; // splash blijft minimaal 3.5s zichtbaar voor visueel comfort
 const IMPORT_SPLASH_MAX_MS = 30000; // safety: forceer dichtklap als import hangt
@@ -9525,15 +9525,14 @@ let _importSplashSafetyTimeout = null;
 let _importSplashExitTimeout = null;
 
 function _renderImportSplashPhases(activeIdx) {
-  const list = document.getElementById("importSplashPhases");
   const splash = document.getElementById("importSplash");
   const status = document.getElementById("importSplashStatus");
-  if (!list) return;
-  const items = list.querySelectorAll(".import-splash__phase");
-  const safeIdx = Math.max(0, Math.min(activeIdx, items.length - 1));
+  const items = splash ? splash.querySelectorAll(".import-splash__orbit-step") : [];
+  const phaseCount = items.length || IMPORT_SPLASH_PHASE_COUNT;
+  const safeIdx = Math.max(0, Math.min(activeIdx, phaseCount - 1));
   if (splash) {
     splash.dataset.phase = String(safeIdx);
-    splash.style.setProperty("--import-progress", `${((safeIdx + 1) / items.length) * 100}%`);
+    splash.style.setProperty("--import-progress", `${((safeIdx + 1) / phaseCount) * 100}%`);
   }
   if (status) status.textContent = IMPORT_SPLASH_PHASE_LABELS[safeIdx] || "Recept importeren";
   items.forEach((el, i) => {
