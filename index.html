@@ -1073,13 +1073,28 @@
           </header>
 
           <div class="review-container">
-            <h1 class="review-title">Recept controleren</h1>
+            <section class="review-hero-panel" aria-labelledby="reviewTitle">
+              <div class="review-hero-panel__copy">
+                <span class="review-eyebrow">Import review</span>
+                <h1 class="review-title" id="reviewTitle">Maak je recept kookklaar</h1>
+                <p class="review-subtitle">Controleer de titel, ingrediënten en stappen voordat Plately het bewaart.</p>
+              </div>
+              <div class="review-hero-panel__status" id="reviewHeroStatus">
+                <span class="review-status-dot" aria-hidden="true"></span>
+                <span id="reviewHeroStatusText">Klaar om na te lopen</span>
+              </div>
+            </section>
             <section class="review-card">
               <div class="review-preview">
                 <img id="reviewPreviewImage" src="assets/hero-burger.svg" alt="Recept preview" />
                 <div class="review-preview__copy">
                   <span class="meal-pill" id="reviewPreviewMealTag">Avond</span>
+                  <strong id="reviewPreviewTitle">Geïmporteerd recept</strong>
                   <p id="reviewPreviewHost">Geïmporteerde bron</p>
+                  <div class="review-preview__metrics" aria-label="Import samenvatting">
+                    <span id="reviewMetricIngredients">0 ingrediënten</span>
+                    <span id="reviewMetricSteps">0 stappen</span>
+                  </div>
                 </div>
               </div>
 
