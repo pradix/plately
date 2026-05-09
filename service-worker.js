@@ -3,18 +3,87 @@
 // Important: do NOT intercept fetches or cache /api/*.
 // Previous SW versions caused stale auth state.
 
+self.__PLATELY_SW_VERSION__ = "2026-05-09-1";
+const CACHE_VERSION = "v1";
+const STATIC_CACHE = `plately-static-${CACHE_VERSION}`;
+const HTML_CACHE = `plately-html-${CACHE_VERSION}`;
+
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil((async () => {
+    // Cleanup old caches
+    try {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys
+          .filter((k) => (k.startsWith("plately-static-") && k !== STATIC_CACHE) || (k.startsWith("plately-html-") && k !== HTML_CACHE))
+          .map((k) => caches.delete(k))
+      );
+    } catch {
+      // ignore
+    }
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener("message", (event) => {
   if (event?.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
+});
+
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (!req || req.method !== "GET") return;
+
+  let url;
+  try {
+    url = new URL(req.url);
+  } catch {
+    return;
+  }
+
+  // Only same-origin.
+  if (url.origin !== self.location.origin) return;
+
+  // NEVER cache API or auth endpoints.
+  if (url.pathname.startsWith("/api/")) return;
+  if (url.pathname.startsWith("/auth/")) return;
+
+  const accept = req.headers.get("accept") || "";
+  const isHtmlNav = req.mode === "navigate" || accept.includes("text/html");
+  const cacheName = isHtmlNav ? HTML_CACHE : STATIC_CACHE;
+
+  event.respondWith((async () => {
+    const cache = await caches.open(cacheName);
+    const cached = await cache.match(req);
+
+    const fetchAndUpdate = (async () => {
+      try {
+        const resp = await fetch(req);
+        if (!resp || !resp.ok) return resp;
+        const cc = resp.headers.get("cache-control") || "";
+        if (/\bno-store\b/i.test(cc)) return resp;
+        await cache.put(req, resp.clone());
+        return resp;
+      } catch {
+        return null;
+      }
+    })();
+
+    if (cached) {
+      // Stale-while-revalidate
+      event.waitUntil(fetchAndUpdate);
+      return cached;
+    }
+
+    const fresh = await fetchAndUpdate;
+    if (fresh) return fresh;
+    return cached || Response.error();
+  })());
 });
 
 self.addEventListener("push", (event) => {
