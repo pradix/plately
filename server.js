@@ -4328,7 +4328,7 @@ function isBenignOrEmptyUrlSearch(search) {
 }
 
 /** Miljuschka / EEF: Cloudflare blokkeert datacenter-requests; gebruik Reader als eerste fetch niet lukt. */
-const JINA_READER_RECIPE_HOST_ALLOWLIST = new Set(["miljuschka.nl", "eefkooktzo.nl"]);
+const JINA_READER_RECIPE_HOST_ALLOWLIST = new Set(["miljuschka.nl", "eefkooktzo.nl", "culy.nl"]);
 
 /** 422 voor Miljuschka / Eef: Jina CF-/403 of kale 403-HTML — per site, niet “Miljuschka én Eef”. */
 function importBlockedReaderAllowlistMessage(hostname) {
@@ -4495,7 +4495,8 @@ async function fetchReaderFallback(url) {
 async function fetchWithZenRows(url) {
   const apiKey = sanitizeText(process.env.ZENROWS_API_KEY || "").trim();
   if (!apiKey) return null;
-  const zenUrl = `https://api.zenrows.com/v1/?apikey=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(url)}&js_render=true&antibot=true`;
+  // premium_proxy=true is door ZenRows aanbevolen voor CF-protected sites (Miljuschka, Eef Kookt Zo, Culy).
+  const zenUrl = `https://api.zenrows.com/v1/?apikey=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(url)}&js_render=true&antibot=true&premium_proxy=true`;
   try {
     const response = await fetch(zenUrl, { signal: AbortSignal.timeout(35000) });
     if (!response.ok) return null;
@@ -5175,6 +5176,7 @@ function parseJsonLdInstructions(value) {
 function extractWpRecipeMakerIngredientLines(html) {
   const raw = String(html || "");
   const out = [];
+  // Some WPRM themes emit a wprm-recipe-ingredient-text span with just the name.
   const reSpan = /<span[^>]*\bwprm-recipe-ingredient-text\b[^>]*>([\s\S]*?)<\/span>/gi;
   let m;
   while ((m = reSpan.exec(raw)) !== null) {
@@ -5182,10 +5184,30 @@ function extractWpRecipeMakerIngredientLines(html) {
     if (line.length > 2) out.push(line);
   }
   if (out.length) return out;
-  const reLi = /<li[^>]*\bwprm-recipe-ingredient\b[^>]*>([\s\S]*?)<\/li>/gi;
+  // Fall back to li-level extraction.
+  // Use (?!-) so we don't accidentally match wprm-recipe-ingredient-group,
+  // -notes, -checkbox, etc. (CSS hyphen is a non-word char so \b alone isn't enough).
+  const reLi = /<li[^>]*\bwprm-recipe-ingredient(?!-)\b[^>]*>([\s\S]*?)<\/li>/gi;
   while ((m = reLi.exec(raw)) !== null) {
-    const line = sanitizeText(stripTags(m[1])).replace(/\s+/g, " ").trim();
-    if (line.length > 2) out.push(line);
+    const liHtml = m[1];
+    // Prefer structured span extraction: amount + unit + name, skip checkbox span.
+    const amountM = liHtml.match(/<span[^>]*\bwprm-recipe-ingredient-amount\b[^>]*>([\s\S]*?)<\/span>/i);
+    const unitM   = liHtml.match(/<span[^>]*\bwprm-recipe-ingredient-unit\b[^>]*>([\s\S]*?)<\/span>/i);
+    const nameM   = liHtml.match(/<span[^>]*\bwprm-recipe-ingredient-name\b[^>]*>([\s\S]*?)<\/span>/i);
+    if (nameM) {
+      const amount = amountM ? sanitizeText(stripTags(amountM[1])).trim() : "";
+      const unit   = unitM   ? sanitizeText(stripTags(unitM[1])).trim()   : "";
+      const name   = sanitizeText(stripTags(nameM[1])).trim();
+      if (name.length > 1) {
+        const line = [amount, unit, name].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+        out.push(line);
+      }
+    } else {
+      // No structured spans: strip checkbox char and collapse whitespace.
+      const noCheckbox = liHtml.replace(/<span[^>]*\bwprm-recipe-ingredient-checkbox\b[^>]*>[\s\S]*?<\/span>/gi, "");
+      const line = sanitizeText(stripTags(noCheckbox)).replace(/[▢□☐]/g, "").replace(/\s+/g, " ").trim();
+      if (line.length > 2) out.push(line);
+    }
   }
   return out;
 }
@@ -5200,7 +5222,8 @@ function extractWpRecipeMakerInstructionLines(html) {
     if (line.length > 8) out.push(line);
   }
   if (out.length) return out;
-  const reLi = /<li[^>]*\bwprm-recipe-instruction\b[^>]*>([\s\S]*?)<\/li>/gi;
+  // Same (?!-) fix as ingredient li to avoid matching wprm-recipe-instruction-group etc.
+  const reLi = /<li[^>]*\bwprm-recipe-instruction(?!-)\b[^>]*>([\s\S]*?)<\/li>/gi;
   while ((m = reLi.exec(raw)) !== null) {
     const line = sanitizeText(stripTags(m[1])).replace(/\s+/g, " ").trim();
     if (line.length > 8) out.push(line);
@@ -6789,8 +6812,8 @@ async function importWebsite(sourceUrl) {
             if (!htmlRecipeHasSufficientContent) {
               throw new HttpError(422, importBlockedReaderAllowlistMessage(finalParsedUrl?.hostname));
             }
-            // Jina CF-wall maar HTML heeft recept-data: reader-poging stoppen.
-          }
+            // Jina CF-wall maar HTML heeft voldoende inhoud: skip Jina-pad volledig.
+          } else {
           const readerRecipe = parseTextRecipeDocument(readerDocument.body, readerDocument.finalUrl || finalUrl);
           const mdIngredients = parseMarkdownIngredientSection(readerDocument.body);
           const mdInstructions = parseMarkdownInstructionSection(readerDocument.body);
@@ -6819,16 +6842,18 @@ async function importWebsite(sourceUrl) {
           // Miljuschka / EEF: Reader levert vaak waar WordPress-fetch faalt; gebruik bruikbare merge tenzij HTML duidelijk rijker is.
           const readerUsable = ri >= 2 && rs >= 1;
           const readerLooksConfident = ri >= 3 && rs >= 2 && !mergedReaderRecipe.needsReview;
+          // cfLikeEarly weggehaald: ZenRows-pagina's bevatten altijd CF-scripts,
+          // dus cfLikeEarly is bij ZenRows altijd true — dat mag Jina niet automatisch laten winnen.
           const mjEefPreferReader =
             hostNeedsReaderAssist &&
             readerUsable &&
             (readerLooksConfident ||
-              cfLikeEarly ||
               htmlRecipeLooksWeakRecipe ||
               mergedReaderRecipe.needsReview === false);
 
           if (betterThanHtml || mjEefPreferReader) {
             return mergedReaderRecipe;
+          }
           }
         }
       } catch (err) {
