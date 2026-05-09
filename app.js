@@ -7736,9 +7736,15 @@ function applyPersistedAppState(user) {
   }
 
   if (Array.isArray(user.followedChannelIds) && user.followedChannelIds.length) {
-    state.followedChannelIds = user.followedChannelIds.filter((id) =>
-      SEED_CHANNELS.some((ch) => ch.id === id) || state.customChannels.some((ch) => ch.id === id)
-    );
+    state.followedChannelIds = user.followedChannelIds.filter((id) => {
+      const isSeed = SEED_CHANNELS.some((ch) => ch.id === id);
+      const isCustom = state.customChannels.some((ch) => ch.id === id);
+      if (!isSeed && !isCustom) return false;
+      // Admin-uitgeschakelde kanalen mogen niet meer in de followed-lijst blijven hangen.
+      if (isSeed && !isSeedChannelEnabled(id)) return false;
+      if (isCustom && !isCustomChannelEnabled(id)) return false;
+      return true;
+    });
   }
 
   // Restore the view the user was on
@@ -8669,9 +8675,15 @@ async function refreshChannelStatusesFromServer() {
         .map((ch) => ({ ...ch }));
     }
     if (Array.isArray(user.followedChannelIds) && user.followedChannelIds.length) {
-      state.followedChannelIds = user.followedChannelIds.filter((id) =>
-        SEED_CHANNELS.some((ch) => ch.id === id) || state.customChannels.some((ch) => ch.id === id)
-      );
+      state.followedChannelIds = user.followedChannelIds.filter((id) => {
+        const isSeed = SEED_CHANNELS.some((ch) => ch.id === id);
+        const isCustom = state.customChannels.some((ch) => ch.id === id);
+        if (!isSeed && !isCustom) return false;
+        // Admin-uitgeschakelde kanalen mogen niet meer in de followed-lijst blijven hangen.
+        if (isSeed && !isSeedChannelEnabled(id)) return false;
+        if (isCustom && !isCustomChannelEnabled(id)) return false;
+        return true;
+      });
     }
     renderChannelSettings();
     renderChannelRow();
