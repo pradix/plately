@@ -10612,7 +10612,8 @@ bindEvent(channelSearchResults, "click", async (event) => {
       body: JSON.stringify({ url, imageHint }),
     });
     const data = await resp.json();
-    if (!resp.ok || !data.recipe) throw new Error(data.error || "Importeren mislukt");
+    if (!resp.ok || !data.recipe)
+      throw new Error(data.message || data.error || "Importeren mislukt");
     const recipe = normalizeImportedRecipe({ ...data.recipe, needsReview: true });
     // Keep as preview until user actually saves it to a cookbook
     recipe._previewCreatedAt = Date.now();
@@ -12341,7 +12342,8 @@ bindEvent(document.getElementById("importChannelSearchResults"), "click", async 
       body: JSON.stringify({ url, imageHint }),
     });
     const data = await resp.json();
-    if (!resp.ok || !data.recipe) throw new Error(data.error || "Importeren mislukt");
+    if (!resp.ok || !data.recipe)
+      throw new Error(data.message || data.error || "Importeren mislukt");
     const recipe = normalizeImportedRecipe({ ...data.recipe, needsReview: true });
     // Keep as preview until user actually saves it to a cookbook
     recipe._previewCreatedAt = Date.now();

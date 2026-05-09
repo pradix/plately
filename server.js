@@ -541,8 +541,9 @@ const CHANNEL_SEARCH_SERPER_FALLBACK_IDS = new Set(["ch-mj", "ch-ek"]);
 /**
  * Kanalen waar zoekresultaten uit de eigen site-index komen; titels herhalen het zoekwoord niet altijd
  * (bv. query „surinaamse” → „Klassieke roti zelf maken”).
+ * Miljuschka / Eef: vaak Serper Google `site:` hits — titel/snippet komen van Google, geen strikte woordmatch.
  */
-const CHANNEL_SEARCH_TRUST_SITE_INDEXER_IDS = new Set(["ch-clf"]);
+const CHANNEL_SEARCH_TRUST_SITE_INDEXER_IDS = new Set(["ch-clf", "ch-mj", "ch-ek"]);
 
 const SEED_CHANNELS = [
   { id: "ch-ah", name: "Allerhande" },
@@ -5096,6 +5097,59 @@ function parseJsonLdInstructions(value) {
   return [];
 }
 
+/**
+ * WordPress Recipe Maker (WP Recipe Maker) — veel NL foodblogs waaronder Miljuschka.
+ * JSON-LD ontbreekt soms; deze DOM-blobs blijven vaak wél in HTML.
+ */
+function extractWpRecipeMakerIngredientLines(html) {
+  const raw = String(html || "");
+  const out = [];
+  const reSpan = /<span[^>]*\bwprm-recipe-ingredient-text\b[^>]*>([\s\S]*?)<\/span>/gi;
+  let m;
+  while ((m = reSpan.exec(raw)) !== null) {
+    const line = sanitizeText(stripTags(m[1])).replace(/\s+/g, " ").trim();
+    if (line.length > 2) out.push(line);
+  }
+  if (out.length) return out;
+  const reLi = /<li[^>]*\bwprm-recipe-ingredient\b[^>]*>([\s\S]*?)<\/li>/gi;
+  while ((m = reLi.exec(raw)) !== null) {
+    const line = sanitizeText(stripTags(m[1])).replace(/\s+/g, " ").trim();
+    if (line.length > 2) out.push(line);
+  }
+  return out;
+}
+
+function extractWpRecipeMakerInstructionLines(html) {
+  const raw = String(html || "");
+  const out = [];
+  const reTxt = /<div[^>]*\bwprm-recipe-instruction-text\b[^>]*>([\s\S]*?)<\/div>/gi;
+  let m;
+  while ((m = reTxt.exec(raw)) !== null) {
+    const line = sanitizeText(stripTags(m[1])).replace(/\s+/g, " ").trim();
+    if (line.length > 8) out.push(line);
+  }
+  if (out.length) return out;
+  const reLi = /<li[^>]*\bwprm-recipe-instruction\b[^>]*>([\s\S]*?)<\/li>/gi;
+  while ((m = reLi.exec(raw)) !== null) {
+    const line = sanitizeText(stripTags(m[1])).replace(/\s+/g, " ").trim();
+    if (line.length > 8) out.push(line);
+  }
+  return out;
+}
+
+/** Jina Reader geeft deze blob terug als de origin Cloudflare-/botlaag teruggeeft. */
+function looksLikeJinaReaderCfWall(markdown) {
+  const t = String(markdown || "");
+  const lower = t.toLowerCase();
+  if (t.length < 40) return false;
+  if (/target url returned error 403/i.test(t) || /\b403\s*forbidden\b/i.test(lower)) {
+    if (/cloudflare|captcha|security verification|malicious bots|just a moment/i.test(lower)) return true;
+  }
+  if (/performing security verification/i.test(lower)) return true;
+  if (/^\s*#\s*just a moment/i.test(lower) && lower.includes("cloudflare")) return true;
+  return false;
+}
+
 function parseListAfterHeading(html, headingPattern) {
   // First remove common ad containers that might interrupt lists
   let cleanHtml = removeAdContainers(html);
@@ -5519,28 +5573,26 @@ function parseWebsiteRecipe(html, url) {
     }
     const recipeInstructions = parseJsonLdInstructions(rawInstructions);
     const fallbackIngredientsList = normalizeIngredientList(fallbackIngredients.map(parseIngredientLine));
-    const mergedIngredients = recipeIngredients.length >= 2
-      ? recipeIngredients
-      : fallbackIngredientsList.length >= 2
-        ? fallbackIngredientsList
-        : recipeIngredients;
+    const wprmIngredientsList = normalizeIngredientList(
+      extractWpRecipeMakerIngredientLines(cleanHtml).map(parseIngredientLine)
+    );
+
+    const ingBuckets = [recipeIngredients, wprmIngredientsList, fallbackIngredientsList].sort(
+      (a, b) => b.length - a.length
+    );
+    const mergedIngredients = ingBuckets.find((c) => c.length >= 2) || ingBuckets[0] || recipeIngredients;
 
     // Prefer JSON-LD if it has at least 2 steps; otherwise prefer the HTML
     // fallback when it offers significantly more steps.
     const fallbackInstructionsFinal = finalizeInstructionSteps(mergeInstructionLines(fallbackInstructions));
     const jsonLdInstructionsFinal = finalizeInstructionSteps(recipeInstructions);
+    const wprmInstructionsFinal = finalizeInstructionSteps(extractWpRecipeMakerInstructionLines(cleanHtml));
 
-    // Be more lenient about which source to use
-    let mergedInstructions = [];
-    if (jsonLdInstructionsFinal.length >= 3) {
-      mergedInstructions = jsonLdInstructionsFinal;
-    } else if (fallbackInstructionsFinal.length >= 3) {
-      mergedInstructions = fallbackInstructionsFinal;
-    } else if (jsonLdInstructionsFinal.length > fallbackInstructionsFinal.length) {
-      mergedInstructions = jsonLdInstructionsFinal;
-    } else {
-      mergedInstructions = fallbackInstructionsFinal;
-    }
+    const insBuckets = [jsonLdInstructionsFinal, wprmInstructionsFinal, fallbackInstructionsFinal].sort(
+      (a, b) => b.length - a.length
+    );
+    const mergedInstructions =
+      insBuckets.find((c) => c.length >= 3) || insBuckets.find((c) => c.length >= 2) || insBuckets[0] || [];
     const recipeYield = Array.isArray(recipeSource.recipeYield)
       ? sanitizeText(recipeSource.recipeYield.find(Boolean) || recipeSource.recipeYield[0])
       : sanitizeText(recipeSource.recipeYield);
@@ -5607,6 +5659,17 @@ function parseWebsiteRecipe(html, url) {
   const fallbackDescription = extractDescription(metaDescription, fallbackTitle);
   const fallbackIngredientsList = normalizeIngredientList(fallbackIngredients.map(parseIngredientLine));
   const fallbackInstructionsList = finalizeInstructionSteps(fallbackInstructions);
+  const wprmIngredientsSide = normalizeIngredientList(
+    extractWpRecipeMakerIngredientLines(cleanHtml).map(parseIngredientLine)
+  );
+  const wprmInstructionsSide = finalizeInstructionSteps(extractWpRecipeMakerInstructionLines(cleanHtml));
+
+  const ingPick =
+    [wprmIngredientsSide, fallbackIngredientsList].sort((a, b) => b.length - a.length).find((c) => c.length >= 2) ||
+    (wprmIngredientsSide.length ? wprmIngredientsSide : fallbackIngredientsList);
+  const insPick =
+    [wprmInstructionsSide, fallbackInstructionsList].sort((a, b) => b.length - a.length).find((c) => c.length >= 2) ||
+    (wprmInstructionsSide.length ? wprmInstructionsSide : fallbackInstructionsList);
 
   return {
     platform: "website",
@@ -5616,11 +5679,11 @@ function parseWebsiteRecipe(html, url) {
     caption: fallbackDescription,
     image: metaImage,
     author: new URL(url).hostname.replace(/^www\./, ""),
-    ingredients: fallbackIngredientsList,
-    instructions: fallbackInstructionsList,
+    ingredients: ingPick,
+    instructions: insPick,
     time: estimateTime(fallbackDescription),
     servings: "2",
-    needsReview: fallbackIngredientsList.length < 2 || fallbackInstructionsList.length < 2,
+    needsReview: ingPick.length < 2 || insPick.length < 2,
     sourceLabel: "Imported from Website",
   };
 }
@@ -6500,6 +6563,18 @@ async function importWebsite(sourceUrl) {
 
   const document = await fetchWebsiteDocument(sourceUrl);
   if (document.kind === "text") {
+    let importHostEarly = "";
+    try {
+      importHostEarly = new URL(sourceUrl).hostname.replace(/^www\./, "").toLowerCase();
+    } catch {
+      importHostEarly = "";
+    }
+    if (hostMatchesReaderAllowlist(importHostEarly) && looksLikeJinaReaderCfWall(document.body)) {
+      throw new HttpError(
+        422,
+        "Miljuschka en Eef blokkeren vaak automatisch importeren (beveiliging). Open het recept via “Bekijk” op de site, of probeer later opnieuw als de site import toestaat."
+      );
+    }
     const textRecipe = parseTextRecipeDocument(document.body, document.finalUrl || sourceUrl);
     const mdIngredients = parseMarkdownIngredientSection(document.body);
     const mdInstructions = parseMarkdownInstructionSection(document.body);
@@ -6677,6 +6752,18 @@ async function importWebsite(sourceUrl) {
         needsReview: parsedIngredients.length < 2 || parsedInstructions.length < 1,
       };
     }
+  }
+
+  if (
+    hostNeedsReaderAssist &&
+    (Array.isArray(htmlRecipe.ingredients) ? htmlRecipe.ingredients.length : 0) < 2 &&
+    (Array.isArray(htmlRecipe.instructions) ? htmlRecipe.instructions.length : 0) < 1 &&
+    (cfLikeEarly || /<h1>\s*403|<title>\s*403/i.test(htmlBodyForReader))
+  ) {
+    throw new HttpError(
+      422,
+      "Deze site blokkeert automatisch importeren; we kunnen geen ingrediënten of stappen ophalen. Open het recept via “Bekijk” of probeer later opnieuw."
+    );
   }
 
   return htmlRecipe;
@@ -11107,7 +11194,7 @@ const server = http.createServer(async (request, response) => {
           for (const s of customSearches) {
             if (s.status === "fulfilled" && Array.isArray(s.value)) {
               results.push(
-                ...s.value.filter((r) => titleMatchesQuery(r.title, query)).slice(0, 4)
+                ...s.value.filter((r) => channelSearchResultTitleMatchesQuery(r.channelId, r.title, query)).slice(0, 4)
               );
             }
           }
