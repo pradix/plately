@@ -95,6 +95,8 @@ function isAllowedImageProxyUrl(rawUrl) {
       "www.miljuschka.nl",
       "static.24kitchen.nl",
       "cdn.24kitchen.nl",
+      "www.24kitchen.nl",
+      "24kitchen.nl",
       "uitpaulineskeuken.nl",
       "www.uitpaulineskeuken.nl",
       "www.chickslovefood.com",
