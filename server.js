@@ -4489,6 +4489,22 @@ async function fetchReaderFallback(url) {
   };
 }
 
+/** ZenRows API — optionele fallback voor sites die datacenter-IPs blokkeren (bv. Cloudflare). Zet ZENROWS_API_KEY als env var. */
+async function fetchWithZenRows(url) {
+  const apiKey = sanitizeText(process.env.ZENROWS_API_KEY || "").trim();
+  if (!apiKey) return null;
+  const zenUrl = `https://api.zenrows.com/v1/?apikey=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(url)}&js_render=true&antibot=true`;
+  try {
+    const response = await fetch(zenUrl, { signal: AbortSignal.timeout(35000) });
+    if (!response.ok) return null;
+    const body = await response.text();
+    if (!body || body.length < 300) return null;
+    return { kind: "html", body, finalUrl: url };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchWebsiteDocument(url, maxRetries = 2) {
   const parsedUrl = new URL(url);
   const originReferer = `${parsedUrl.protocol}//${parsedUrl.host}/`;
@@ -4598,6 +4614,10 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
       /* fall through */
     }
   }
+
+  // ZenRows: opt-in Cloudflare-bypass via ZENROWS_API_KEY — werkt voor sites die alle datacenter-IPs blokkeren.
+  const zenResult = await fetchWithZenRows(url);
+  if (zenResult) return zenResult;
 
   throw new HttpError(502, `Kon bronpagina niet ophalen (${lastStatus || 403})${lastError ? `: ${lastError.message}` : ""}.`);
 }
@@ -9132,6 +9152,14 @@ async function serperGoogleSiteSearchRecipes({ baseUrl, channelName, channelId, 
     if (!resp.ok) return [];
     const data = await resp.json();
     const organic = Array.isArray(data.organic) ? data.organic : [];
+    // Serper geeft afbeeldingen terug in een apart `images`-array — URL matchen met organische resultaten.
+    const serpImages = Array.isArray(data.images) ? data.images : [];
+    const imgByUrl = new Map();
+    for (const img of serpImages) {
+      const link = sanitizeText(img.link || "");
+      const imgUrl = sanitizeText(img.imageUrl || img.thumbnailUrl || "");
+      if (link && imgUrl) imgByUrl.set(stripBenignMarketingParamsFromUrl(link), imgUrl);
+    }
     const rows = [];
     for (const it of organic) {
       const urlRaw = sanitizeText(it.link || it.url || "");
@@ -9139,7 +9167,9 @@ async function serperGoogleSiteSearchRecipes({ baseUrl, channelName, channelId, 
       const description = sanitizeText(it.snippet || "");
       if (!urlRaw || !title) continue;
       const urlNorm = stripBenignMarketingParamsFromUrl(urlRaw);
-      const thumbnail = sanitizeText(it.imageUrl || it.thumbnailUrl || it.image || it.img || "");
+      const thumbnail =
+        imgByUrl.get(urlNorm) ||
+        sanitizeText(it.imageUrl || it.thumbnailUrl || it.image || it.img || "");
       let linkHost = "";
       try {
         linkHost = new URL(urlNorm).hostname.replace(/^www\./i, "").toLowerCase();
