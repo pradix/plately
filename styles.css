@@ -1641,6 +1641,12 @@ img { display: block; max-width: 100%; }
   padding: 10px 0;
 }
 
+/* Zorg dat de toggle nooit als tekstknop oogt */
+.cook-toggle-row .pl-toggle {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .cook-toggle-row + .cook-toggle-row {
   border-top: 1px solid var(--color-border);
   margin-top: 2px;
@@ -1667,6 +1673,7 @@ img { display: block; max-width: 100%; }
   font-weight: 600;
   color: var(--muted-strong);
   line-height: 1.4;
+  max-width: 46ch;
 }
 
 /* Aan/uit schakelaar (Plately) */

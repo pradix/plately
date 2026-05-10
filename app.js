@@ -1446,9 +1446,9 @@ function updateAuthUI() {
   }
   const adminBtn = document.getElementById("adminDashboardBtn");
   const adminLeadDivider = document.getElementById("adminDashboardLeadDivider");
-  const shouldShowAdmin = isAdmin();
-  if (adminBtn) adminBtn.style.display = shouldShowAdmin ? "" : "none";
-  if (adminLeadDivider) adminLeadDivider.style.display = shouldShowAdmin ? "" : "none";
+  // Hide admin dashboard for now (not production-ready)
+  if (adminBtn) adminBtn.style.display = "none";
+  if (adminLeadDivider) adminLeadDivider.style.display = "none";
 
   if (!state.auth.enabled) {
     accountTitle.textContent = "Account volgt zodra Postgres is gekoppeld";
@@ -7294,7 +7294,8 @@ function renderProfileSummary() {
   const profileHero = document.getElementById("profileHero");
   const logoutCard = document.getElementById("logoutCard");
   if (loginBanner) loginBanner.style.display = isAuth ? "none" : "";
-  if (profileHero) profileHero.style.display = isAuth ? "" : "none";
+  // Hide profile hero for now (WIP layout)
+  if (profileHero) profileHero.style.display = "none";
   if (logoutCard) logoutCard.style.display = isAuth ? "" : "none";
 
   if (profileName) {
@@ -10935,6 +10936,7 @@ if (openConceptsImportReviewBtn) {
     }
   });
 }
+// Button removed from Home UI; keep behavior only if reintroduced.
 
 bindEvent(homeSearchChipsWrap, "click", (event) => {
   const chip = event.target.closest("[data-home-search-chip]");
