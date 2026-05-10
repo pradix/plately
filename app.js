@@ -633,6 +633,12 @@ const state = {
     email: "",
     mode: "login",
   },
+  /** Sign in with Apple (alleen als server /api/auth/apple-config enabled teruggeeft) */
+  appleSignIn: {
+    enabled: false,
+    clientId: "",
+    redirectUri: "",
+  },
   profile: {
     name: "",
     handle: "",
@@ -1666,6 +1672,8 @@ function openAuthModal(mode = "login") {
     }
     authEmail?.focus();
   }, 100);
+
+  syncAppleSignInRowVisibility();
 }
 
 function closeAuthModal() {
@@ -1689,6 +1697,7 @@ bindEvent(document.getElementById("forgotPasswordBtn"), "click", (e) => {
   const resetForm = document.getElementById("passwordResetForm");
   if (authForm) authForm.style.display = "none";
   if (resetForm) resetForm.classList.remove("hidden");
+  syncAppleSignInRowVisibility();
 });
 
 bindEvent(document.getElementById("resetFormBack"), "click", (e) => {
@@ -1699,6 +1708,7 @@ bindEvent(document.getElementById("resetFormBack"), "click", (e) => {
   if (resetForm) resetForm.classList.add("hidden");
   const resetFeedback = document.getElementById("resetFeedback");
   if (resetFeedback) resetFeedback.textContent = "";
+  syncAppleSignInRowVisibility();
 });
 
 bindEvent(document.getElementById("resetEmailForm"), "submit", async (e) => {
@@ -1734,6 +1744,7 @@ bindEvent(document.getElementById("resetEmailForm"), "submit", async (e) => {
         const resetForm = document.getElementById("passwordResetForm");
         if (authForm) authForm.style.display = "";
         if (resetForm) resetForm.classList.add("hidden");
+        syncAppleSignInRowVisibility();
       }, 3000);
     } else {
       if (resetFeedback) resetFeedback.textContent = data.error || "Er is iets fout gegaan.";
@@ -9020,6 +9031,58 @@ async function fetchJson(url, options = {}) {
   return payload;
 }
 
+let appleAuthSdkInitialized = false;
+
+function loadAppleIdScript() {
+  return new Promise((resolve, reject) => {
+    if (typeof window.AppleID !== "undefined" && window.AppleID?.auth) {
+      resolve();
+      return;
+    }
+    const existing = document.querySelector("script[data-plately-apple-id]");
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Kon Apple-inloggen niet laden.")), { once: true });
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = "https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js";
+    s.async = true;
+    s.defer = true;
+    s.dataset.platelyAppleId = "1";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Kon Apple-inloggen niet laden."));
+    document.head.appendChild(s);
+  });
+}
+
+async function ensureAppleAuthSdkInitialized() {
+  await loadAppleIdScript();
+  const clientId = state.appleSignIn?.clientId;
+  const redirectURI = state.appleSignIn?.redirectUri;
+  if (!clientId || !redirectURI) {
+    throw new Error("Apple-inloggen is niet geconfigureerd.");
+  }
+  if (appleAuthSdkInitialized) return;
+  window.AppleID.auth.init({
+    clientId,
+    scope: "name email",
+    redirectURI,
+    usePopup: true,
+  });
+  appleAuthSdkInitialized = true;
+}
+
+function syncAppleSignInRowVisibility() {
+  const wrap = document.getElementById("appleSignInWrap");
+  if (!wrap) return;
+  const resetForm = document.getElementById("passwordResetForm");
+  const resetVisible = resetForm && !resetForm.classList.contains("hidden");
+  const show = Boolean(state.appleSignIn?.enabled && !resetVisible);
+  wrap.classList.toggle("hidden", !show);
+  wrap.setAttribute("aria-hidden", show ? "false" : "true");
+}
+
 async function refreshBackendStatus() {
   try {
     await fetchJson(`${state.apiBase}/api/health`);
@@ -9304,6 +9367,17 @@ async function bootstrapSession() {
       if (saved !== null) state.groceryItems = JSON.parse(saved);
     } catch {}
   } finally {
+    try {
+      const appleRes = await fetchJson(`${state.apiBase}/api/auth/apple-config`);
+      state.appleSignIn = {
+        enabled: Boolean(appleRes?.apple?.enabled),
+        clientId: String(appleRes?.apple?.clientId || ""),
+        redirectUri: String(appleRes?.apple?.redirectUri || ""),
+      };
+    } catch {
+      state.appleSignIn = { enabled: false, clientId: "", redirectUri: "" };
+    }
+
     console.log("🔄 Bootstrap session finally block - authenticated:", state.auth.authenticated, "sessionCheckSucceeded:", sessionCheckSucceeded);
     state.session.ready = true;
 
@@ -9374,6 +9448,33 @@ async function bootstrapSession() {
   }
 }
 
+function completeAuthSessionFromPayload(payload, { treatAsNewUser } = {}) {
+  if (payload?.auth) {
+    state.auth.enabled = Boolean(payload.auth.enabled);
+    state.auth.authenticated = Boolean(payload.auth.authenticated);
+    state.auth.email = payload.auth.email || "";
+    if (payload.auth.token) storeAuthToken(payload.auth.token);
+  }
+  applyPersistedAppState(payload.user);
+  // Keep the account email visible under Profile → Mijn account.
+  // (Server user.email is the canonical login email; profile.email is optional UI metadata.)
+  if (!state.profile.email && state.auth.email) {
+    state.profile.email = state.auth.email;
+  }
+  if (state.auth.authenticated) markUserAsAuthed();
+  renderAll();
+
+  if (treatAsNewUser) {
+    showOnboarding();
+    showToast("Welkom! Nog een paar stappen, dan kun je beginnen.");
+  } else {
+    closeAuthModal();
+    showToast("Je bent ingelogd.");
+    scrollToTopSoon();
+    window.setTimeout(() => startOnboarding(), 450);
+  }
+}
+
 async function submitAuth(mode, email, password, registerOpts = {}) {
   const endpoint = mode === "register" ? "/api/auth/register" : "/api/auth/login";
   const body = {
@@ -9400,30 +9501,7 @@ async function submitAuth(mode, email, password, registerOpts = {}) {
     body: JSON.stringify(body),
   });
 
-  if (payload?.auth) {
-    state.auth.enabled = Boolean(payload.auth.enabled);
-    state.auth.authenticated = Boolean(payload.auth.authenticated);
-    state.auth.email = payload.auth.email || "";
-    if (payload.auth.token) storeAuthToken(payload.auth.token);
-  }
-  applyPersistedAppState(payload.user);
-  // Keep the account email visible under Profile → Mijn account.
-  // (Server user.email is the canonical login email; profile.email is optional UI metadata.)
-  if (!state.profile.email && state.auth.email) {
-    state.profile.email = state.auth.email;
-  }
-  if (state.auth.authenticated) markUserAsAuthed();
-  renderAll();
-
-  if (mode === "register") {
-    showOnboarding();
-    showToast("Welkom! Nog een paar stappen, dan kun je beginnen.");
-  } else {
-    closeAuthModal();
-    showToast("Je bent ingelogd.");
-    scrollToTopSoon();
-    window.setTimeout(() => startOnboarding(), 450);
-  }
+  completeAuthSessionFromPayload(payload, { treatAsNewUser: mode === "register" });
 }
 
 async function logoutAccount() {
@@ -12641,6 +12719,47 @@ bindEvent(authForm, "submit", async (event) => {
   } finally {
     submitAuthButton.disabled = false;
     submitAuthButton.textContent = state.auth.mode === "register" ? "Account aanmaken" : "Inloggen";
+  }
+});
+
+bindEvent(document.getElementById("appleSignInBtn"), "click", async () => {
+  const btn = document.getElementById("appleSignInBtn");
+  const feedback = document.getElementById("authFeedback");
+  if (!btn || !state.appleSignIn?.enabled) return;
+  if (feedback) feedback.textContent = "";
+  btn.disabled = true;
+  try {
+    await ensureAppleAuthSdkInitialized();
+    const res = await window.AppleID.auth.signIn();
+    const idToken = res?.authorization?.id_token;
+    if (!idToken) {
+      throw new Error("Geen Apple-token ontvangen.");
+    }
+    let name = "";
+    if (res?.user?.name) {
+      const fn = String(res.user.name.firstName || "").trim();
+      const ln = String(res.user.name.lastName || "").trim();
+      name = [fn, ln].filter(Boolean).join(" ").trim();
+    }
+    const payload = await fetchJson(`${state.apiBase}/api/auth/apple`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        idToken,
+        ...(name ? { name } : {}),
+        currentState: buildPersistedAppState(),
+      }),
+    });
+    completeAuthSessionFromPayload(payload, { treatAsNewUser: Boolean(payload?.isNewUser) });
+  } catch (err) {
+    const code = String(err?.error || err?.code || "");
+    const msg = String(err?.message || (typeof err === "string" ? err : "") || "");
+    const silent = /popup_closed|cancel/i.test(code) || /cancel|closed/i.test(msg);
+    if (!silent && feedback) {
+      feedback.textContent = msg || t("auth.error");
+    }
+  } finally {
+    btn.disabled = false;
   }
 });
 

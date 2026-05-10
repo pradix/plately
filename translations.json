@@ -95,6 +95,7 @@
     "auth.switchLogin": "Heb je al een account? Log in",
     "auth.error": "Er is iets misgegaan",
     "auth.loginError": "Onjuiste inloggegevens",
+    "auth.appleSignIn": "Inloggen met Apple",
 
     "onboarding.step1": "Stap 1: Kanalen",
     "onboarding.step2": "Stap 2: Winkels",
@@ -234,6 +235,7 @@
     "auth.switchLogin": "Already have an account? Login",
     "auth.error": "Something went wrong",
     "auth.loginError": "Incorrect credentials",
+    "auth.appleSignIn": "Sign in with Apple",
 
     "onboarding.step1": "Step 1: Channels",
     "onboarding.step2": "Step 2: Stores",

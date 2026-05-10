@@ -71,6 +71,10 @@ const META_APP_ID = process.env.META_APP_ID || "";
 const META_APP_SECRET = process.env.META_APP_SECRET || "";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const DATABASE_URL = process.env.DATABASE_URL || "";
+/** Services ID (bv. nl.plately.web) — Sign in with Apple, alleen met DATABASE_URL */
+const APPLE_CLIENT_ID = String(process.env.APPLE_CLIENT_ID || "").trim();
+/** Moet exact overeenkomen met een Return URL in Apple Developer (default: origin + /) */
+const APPLE_REDIRECT_URI = String(process.env.APPLE_REDIRECT_URI || "").trim();
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "";
@@ -1508,6 +1512,13 @@ async function ensurePostgresSchema() {
         CREATE INDEX IF NOT EXISTS idx_plately_events_user_id_created_at
         ON plately_events (user_id, created_at DESC);
       `);
+      await pool.query(`ALTER TABLE plately_users ADD COLUMN IF NOT EXISTS apple_sub TEXT;`);
+      await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS plately_users_apple_sub_uidx
+        ON plately_users (apple_sub) WHERE apple_sub IS NOT NULL;
+      `);
+      await pool.query(`ALTER TABLE plately_users ALTER COLUMN password_hash DROP NOT NULL;`);
+      await pool.query(`ALTER TABLE plately_users ALTER COLUMN password_salt DROP NOT NULL;`);
     })();
   }
 
@@ -2393,6 +2404,146 @@ async function createPostgresUser(email, password, currentState) {
     console.error(`❌ Error creating PostgreSQL user: ${error.message}`);
     throw error;
   }
+}
+
+function getRequestPublicOrigin(request) {
+  const xfProto = String(request.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  const proto = xfProto || (request.socket?.encrypted ? "https" : "http");
+  const host =
+    String(request.headers["x-forwarded-host"] || "")
+      .split(",")[0]
+      .trim() || String(request.headers.host || "").trim();
+  if (!host) return "";
+  return `${proto}://${host}`;
+}
+
+let appleJwksCache = { keys: null, at: 0 };
+const APPLE_JWKS_TTL_MS = 6 * 60 * 60 * 1000;
+
+async function fetchAppleJwksKeys() {
+  const now = Date.now();
+  if (appleJwksCache.keys && now - appleJwksCache.at < APPLE_JWKS_TTL_MS) {
+    return appleJwksCache.keys;
+  }
+  const res = await fetch("https://appleid.apple.com/auth/keys");
+  if (!res.ok) {
+    throw new HttpError(503, "Apple-inloggen tijdelijk niet beschikbaar.");
+  }
+  const data = await res.json();
+  const keys = Array.isArray(data.keys) ? data.keys : [];
+  appleJwksCache = { keys, at: now };
+  return keys;
+}
+
+function decodeAppleJwtSegment(segment) {
+  return JSON.parse(Buffer.from(String(segment || ""), "base64url").toString("utf8"));
+}
+
+async function verifyAppleIdToken(idToken, expectedAud) {
+  const parts = String(idToken || "").split(".");
+  if (parts.length !== 3) {
+    throw new HttpError(400, "Ongeldig Apple-token.");
+  }
+  let header;
+  let payload;
+  try {
+    header = decodeAppleJwtSegment(parts[0]);
+    payload = decodeAppleJwtSegment(parts[1]);
+  } catch {
+    throw new HttpError(400, "Ongeldig Apple-token.");
+  }
+  if (header.alg !== "RS256" || !header.kid) {
+    throw new HttpError(400, "Ongeldig Apple-token.");
+  }
+  const keys = await fetchAppleJwksKeys();
+  const jwk = keys.find((k) => k && k.kid === header.kid && k.use === "sig" && k.kty === "RSA");
+  if (!jwk) {
+    throw new HttpError(401, "Apple-token niet te verifiëren.");
+  }
+  const signingInput = `${parts[0]}.${parts[1]}`;
+  const sig = Buffer.from(parts[2], "base64url");
+  let keyObj;
+  try {
+    keyObj = crypto.createPublicKey({ key: jwk, format: "jwk" });
+  } catch {
+    throw new HttpError(401, "Apple-token niet te verifiëren.");
+  }
+  const ok = crypto.verify("RSA-SHA256", Buffer.from(signingInput, "utf8"), keyObj, sig);
+  if (!ok) {
+    throw new HttpError(401, "Apple-token niet geldig.");
+  }
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (payload.iss !== "https://appleid.apple.com") {
+    throw new HttpError(401, "Apple-token niet geldig.");
+  }
+  if (payload.aud !== expectedAud) {
+    throw new HttpError(401, "Apple-token niet voor deze app.");
+  }
+  if (typeof payload.exp !== "number" || payload.exp < nowSec - 120) {
+    throw new HttpError(401, "Apple-token verlopen.");
+  }
+  if (!payload.sub) {
+    throw new HttpError(401, "Apple-token onvolledig.");
+  }
+  const emailRaw = payload.email ? sanitizeEmail(payload.email) : "";
+  return {
+    sub: String(payload.sub),
+    email: emailRaw && isValidEmail(emailRaw) ? emailRaw : "",
+  };
+}
+
+async function findOrCreateApplePostgresUser(pool, { sub, email, displayName }) {
+  const existingByApple = await pool.query(`SELECT * FROM plately_users WHERE apple_sub = $1 LIMIT 1`, [sub]);
+  if (existingByApple.rows[0]) {
+    return { user: existingByApple.rows[0], isNew: false };
+  }
+
+  if (email && isValidEmail(email)) {
+    const byEmail = await pool.query(`SELECT * FROM plately_users WHERE lower(email) = lower($1) LIMIT 1`, [email]);
+    if (byEmail.rows[0]) {
+      const u = byEmail.rows[0];
+      if (u.apple_sub && u.apple_sub !== sub) {
+        throw new HttpError(409, "Dit e-mailadres is al gekoppeld aan een ander Apple-account.");
+      }
+      if (!u.apple_sub) {
+        await pool.query(`UPDATE plately_users SET apple_sub = $1, updated_at = NOW() WHERE id = $2`, [sub, u.id]);
+        u.apple_sub = sub;
+      }
+      return { user: u, isNew: false };
+    }
+  }
+
+  const userId = generateId("user");
+  let canonicalEmail = email && isValidEmail(email) ? sanitizeEmail(email) : "";
+  if (!canonicalEmail) {
+    canonicalEmail = `apple_${String(sub).replace(/[^a-z0-9]/gi, "").slice(0, 48)}@plately-user.invalid`;
+  }
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const clash = await pool.query(`SELECT id FROM plately_users WHERE lower(email) = lower($1) LIMIT 1`, [
+      canonicalEmail,
+    ]);
+    if (!clash.rows[0]) break;
+    canonicalEmail = `apple_${String(sub).replace(/[^a-z0-9]/gi, "").slice(0, 36)}_${attempt}@plately-user.invalid`;
+  }
+
+  const base = buildDefaultUserData(userId);
+  if (displayName) {
+    base.profile = sanitizeProfilePayload({ ...base.profile, name: sanitizeText(displayName).slice(0, 80) });
+  }
+  if (email && isValidEmail(email)) {
+    base.profile = sanitizeProfilePayload({ ...base.profile, email: sanitizeEmail(email) });
+  }
+  const appState = sanitizeUserStatePayload({}, base);
+
+  await pool.query(
+    `
+      INSERT INTO plately_users (id, email, password_hash, password_salt, apple_sub, profile, app_state)
+      VALUES ($1, $2, NULL, NULL, $3, $4::jsonb, $5::jsonb)
+    `,
+    [userId, canonicalEmail, sub, JSON.stringify(appState.profile), JSON.stringify(appState)]
+  );
+  const ins = await pool.query(`SELECT * FROM plately_users WHERE id = $1 LIMIT 1`, [userId]);
+  return { user: ins.rows[0], isNew: true };
 }
 
 async function updateAuthenticatedUserState(userId, body) {
@@ -12547,6 +12698,55 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/auth/apple-config" && request.method === "GET") {
+      const enabled = isPostgresEnabled() && Boolean(APPLE_CLIENT_ID);
+      const origin = getRequestPublicOrigin(request).replace(/\/$/, "");
+      const redirectUri = APPLE_REDIRECT_URI || (origin ? `${origin}/` : "");
+      sendJson(response, 200, {
+        apple: {
+          enabled,
+          clientId: enabled ? APPLE_CLIENT_ID : "",
+          redirectUri: enabled ? redirectUri : "",
+        },
+      });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/auth/apple" && request.method === "POST") {
+      if (!isPostgresEnabled() || !APPLE_CLIENT_ID) {
+        throw new HttpError(503, "Apple-inloggen is niet ingeschakeld.");
+      }
+      const body = await readRequestBody(request);
+      const idToken = String(body?.idToken || "").trim();
+      if (!idToken) {
+        throw new HttpError(400, "Apple-token ontbreekt.");
+      }
+      const displayName = sanitizeText(body?.name || "").slice(0, 80);
+
+      await ensurePostgresSchema();
+      const pool = await getPostgresPool();
+      const { sub, email } = await verifyAppleIdToken(idToken, APPLE_CLIENT_ID);
+      let { user, isNew } = await findOrCreateApplePostgresUser(pool, { sub, email, displayName });
+
+      if (isNew && body?.currentState && typeof body.currentState === "object") {
+        user = await updateAuthenticatedUserState(user.id, body.currentState);
+      }
+
+      const token = await createAuthSession(response, user.id);
+      sendJson(response, 200, {
+        ok: true,
+        isNewUser: isNew,
+        user: buildAppStateFromUser(user),
+        auth: {
+          enabled: true,
+          authenticated: true,
+          email: user.email,
+          token,
+        },
+      });
+      return;
+    }
+
     if (requestUrl.pathname === "/api/auth/register" && request.method === "POST") {
       const body = await readRequestBody(request);
       const email = sanitizeEmail(body.email);
@@ -12626,6 +12826,13 @@ const server = http.createServer(async (request, response) => {
         const user = result.rows[0];
         if (!user) {
           throw new HttpError(401, "Onjuiste inloggegevens.");
+        }
+
+        if (!user.password_hash || !user.password_salt) {
+          throw new HttpError(
+            401,
+            "Dit account gebruikt Inloggen met Apple. Kies ‘Inloggen met Apple’ of gebruik ‘Wachtwoord vergeten?’ om een wachtwoord te zetten."
+          );
         }
 
         const { hash } = createPasswordHash(password, user.password_salt);

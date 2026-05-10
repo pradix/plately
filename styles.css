@@ -6138,6 +6138,65 @@ button.ingredient-item {
   transform: none;
 }
 
+.auth-screen__apple-wrap {
+  margin-top: 14px;
+}
+
+.auth-screen__apple-wrap.hidden {
+  display: none !important;
+}
+
+.auth-screen__apple-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 18px;
+  border: none;
+  border-radius: var(--radius-3);
+  background: #000;
+  color: #fff;
+  font-size: 1.02rem;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  box-shadow: 0 8px 22px color-mix(in srgb, #000 35%, transparent);
+  transition: transform 0.18s, filter 0.18s, opacity 0.18s;
+}
+
+.auth-screen__apple-btn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.auth-screen__apple-btn:active {
+  filter: brightness(0.94);
+  transform: translateY(0);
+}
+
+.auth-screen__apple-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring), 0 8px 22px color-mix(in srgb, #000 30%, transparent);
+}
+
+.auth-screen__apple-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+}
+
+.auth-screen__apple-btn__glyph {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.auth-screen__apple-btn__label {
+  line-height: 1.2;
+}
+
 .auth-screen__reset-form {
   display: flex;
   flex-direction: column;
