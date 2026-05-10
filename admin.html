@@ -2374,7 +2374,9 @@
           });
         }
         const note = String(data.searchBackendNote || "").trim();
-        if (statusEl) statusEl.textContent = results.length ? `Top ${results.length} resultaten` : "Geen resultaten";
+        const ms = Number(data.responseTimeMs);
+        const timing = Number.isFinite(ms) ? ` · ${ms} ms` : "";
+        if (statusEl) statusEl.textContent = `${results.length ? `Top ${results.length} resultaten` : "Geen resultaten"}${timing}`;
         renderChannelTestSearchResults(results, note);
       } catch (error) {
         if (statusEl) statusEl.textContent = "";
@@ -2496,7 +2498,9 @@
         if (!response.ok || !data.ok) throw new Error(data.error || "Search mislukt");
         const results = data.results || [];
         const tpl = data.usedSearchUrlTemplate ? `<br><small style="color:#666">Zoek-template: <code>${data.usedSearchUrlTemplate.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</code></small>` : "";
-        setNewChannelStatus((results.length ? `Top ${results.length} resultaten` : "Geen resultaten gevonden") + tpl);
+        const ms = Number(data.responseTimeMs);
+        const timing = Number.isFinite(ms) ? ` · ${ms} ms` : "";
+        setNewChannelStatus((results.length ? `Top ${results.length} resultaten` : "Geen resultaten gevonden") + timing + tpl);
         renderChannelTestSearchResults(results, String(data.searchBackendNote || ""), "newChannelSearchResults");
       } catch (err) {
         setNewChannelStatus(err.message, true);
@@ -2925,9 +2929,15 @@
         ? `${escapeHtml(entry.customUrl || "")}${entry.status ? ` · ${escapeHtml(entry.status)}` : ""}`
         : `${escapeHtml(entry.channelId || "")}`;
       const usedUrlHtml = usedUrl ? `<div class="admin-test__channel-sub"><strong>usedUrl</strong> <a class="admin-inventory__link" href="${escapeHtml(usedUrl)}" target="_blank" rel="noopener">${escapeHtml(usedUrl)}</a></div>` : `<div class="admin-test__channel-sub muted">usedUrl —</div>`;
+      const rt = entry.responseTimeMs;
+      const rtPill =
+        Number.isFinite(Number(rt)) && Number(rt) >= 0
+          ? `<span class="pill"><strong>response</strong> ${escapeHtml(String(rt))} ms</span>`
+          : "";
       const kpis = `<div class="admin-test__channel-kpis">
         <span class="pill"><strong>count</strong> ${escapeHtml(String(entry.resultCount ?? top.length ?? 0))}</span>
         <span class="pill"><strong>top</strong> ${escapeHtml(String(top.length))}</span>
+        ${rtPill}
       </div>`;
       const listHtml = top.length ? `
         <div class="admin-test__channel-list">
@@ -3017,6 +3027,7 @@
             resultCount: topResults.length,
             topResults,
             searchBackendNote: String(data.searchBackendNote || "").trim(),
+            responseTimeMs: data.responseTimeMs,
             error: "",
             channelName: ch.label || (ch.kind === "custom" ? ch.customChannel?.name : ch.channelId),
             channelId: ch.channelId || "",

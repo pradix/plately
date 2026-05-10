@@ -5933,7 +5933,19 @@ function parseWebsiteRecipe(html, url) {
   if (jsonLd || microdataRecipe || rdfaRecipe || embeddedRecipe) {
     const recipeSource = jsonLd || microdataRecipe || rdfaRecipe || embeddedRecipe;
     const recipeName = sanitizeText(recipeSource.name || metaTitle);
-    const recipeDescription = sanitizeText(stripTags(recipeSource.description || metaDescription));
+    const rawLdDesc = sanitizeText(stripTags(recipeSource.description || ""));
+    const rawMetaDesc = sanitizeText(stripTags(metaDescription || ""));
+    const recipeDescription = (() => {
+      if (rawLdDesc) return rawLdDesc;
+      try {
+        if (/(\.|^)ah\.nl$/i.test(new URL(url).hostname) && isLikelyAllerhandeSeoMicrocopy(rawMetaDesc)) {
+          return "";
+        }
+      } catch {
+        /* ignore */
+      }
+      return rawMetaDesc;
+    })();
     const recipeIngredients = Array.isArray(recipeSource.recipeIngredient)
       ? normalizeIngredientList(recipeSource.recipeIngredient.map(parseIngredientLine))
       : [];
@@ -6687,6 +6699,145 @@ function cleanAllerhandeInstructionSteps(steps) {
     .filter((x) => x.length > 0);
 }
 
+/** og:description / meta name=description op AH is vaak generieke SEO ("Zelf … maken? … Allerhande"). */
+function isLikelyAllerhandeSeoMicrocopy(text) {
+  const s = sanitizeText(String(text || "")).trim();
+  if (!s) return true;
+  const lower = s.toLowerCase();
+  if (/^zelf\s+.+\bmaken\?/i.test(s)) return true;
+  if (/met dit recept van allerhande/i.test(lower)) return true;
+  if (/bekijk ingrediënten en bereidingswijze/i.test(lower)) return true;
+  if (/zet je een feestje op tafel/i.test(lower) && /allerhande/i.test(lower)) return true;
+  if (/\|\s*albert\s*heijn\s*$/i.test(s.trim())) return true;
+  if (/\|\s*allerhande\s*$/i.test(s.trim())) return true;
+  if (/\brecept\s*-\s*allerhande\s*\|/i.test(s)) return true;
+  return false;
+}
+
+/**
+ * AH Next.js-bundle bevat vaak `"description":"…","keywords":"…"` voor het hoofdrecept
+ * vóór structured data laadt — betrouwbaarder dan og:description.
+ */
+function extractAllerhandeEmbeddedRecipeDescription(html) {
+  if (!html) return "";
+  const m = html.match(/"description"\s*:\s*"((?:[^"\\]|\\.){12,4000})"\s*,\s*"keywords"\s*:/i);
+  if (!m || !m[1]) return "";
+  let decoded;
+  try {
+    decoded = JSON.parse(`"${m[1].replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`);
+  } catch {
+    decoded = m[1].replace(/\\"/g, '"').replace(/\\n/g, "\n");
+  }
+  const plain = sanitizeText(stripTags(String(decoded || "")));
+  if (plain.length < 12 || isLikelyAllerhandeSeoMicrocopy(plain)) return "";
+  return plain;
+}
+
+function extractAllerhandeIntroParagraphFromDom(html) {
+  if (!html) return "";
+  const patterns = [
+    /data-testhook=["']recipe-introduction["'][^>]*>\s*<p[^>]*>([\s\S]*?)<\/p>/i,
+    /class=["'][^"']*(?:recipe[-_ ]?intro|recipe[-_ ]?introduction)[^"']*["'][^>]*>\s*<p[^>]*>([\s\S]*?)<\/p>/i,
+  ];
+  for (const re of patterns) {
+    const match = html.match(re);
+    if (match && match[1]) {
+      const t = sanitizeText(stripTags(match[1]));
+      if (t.length >= 20 && !isLikelyAllerhandeSeoMicrocopy(t)) return t;
+    }
+  }
+  return "";
+}
+
+/**
+ * Kies de beste omschrijving: geen vaste JSON-LD-voorrang (die ontbreekt soms);
+ * expliciet SEO-meta en lage kwaliteit naar beneden scoren.
+ */
+function pickAhDescription(candidates) {
+  const items = (Array.isArray(candidates) ? candidates : [])
+    .map((c) => {
+      if (c && typeof c === "object" && "text" in c) {
+        return { text: String(c.text || ""), source: String(c.source || "") };
+      }
+      return { text: String(c || ""), source: "" };
+    })
+    .filter((c) => sanitizeText(c.text));
+
+  const baseSourceWeight = (source) => {
+    switch (source) {
+      case "embeddedJson":
+        return 120;
+      case "introHtml":
+        return 110;
+      case "jsonLd":
+        return 95;
+      case "readerIntro":
+        return 100;
+      case "readerPrimary":
+        return 55;
+      case "primaryHtml":
+        return 50;
+      case "metaOg":
+        return 15;
+      default:
+        return 40;
+    }
+  };
+
+  const scoreAhDescriptionCandidate = (text, source) => {
+    const s = sanitizeText(text);
+    if (!s || s.length < 12) return -1e9;
+    if (isLikelyAllerhandeSeoMicrocopy(s)) return -1e9;
+    if (/^wij gebruiken cookies/i.test(s)) return -1e9;
+    if (/^published time:/i.test(s)) return -1e9;
+    let score = baseSourceWeight(source);
+    const lower = s.toLowerCase();
+    if (source === "metaOg" || source === "") {
+      score -= 35;
+    }
+    if (/\b(ingrediënten|ingredients)\b/i.test(s) && /\d+\s*(g|ml|el|tl)\b/i.test(s)) {
+      score -= 40;
+    }
+    if (s.length >= 40 && s.length <= 700) {
+      score += 25;
+    }
+    if (/\b(smaak|krokant|roer|snijd|verhit|oven|pan|bak)\b/i.test(lower)) {
+      score += 12;
+    }
+    return score;
+  };
+
+  const scored = items
+    .map(({ text, source }) => ({
+      text: sanitizeText(text),
+      source,
+      score: scoreAhDescriptionCandidate(text, source),
+    }))
+    .filter((x) => x.score > -1e8);
+
+  if (!scored.length) {
+    const normalized = items.map((x) => sanitizeText(x.text)).filter(Boolean);
+    const cleaned = normalized
+      .filter((s) => !isLikelyAllerhandeSeoMicrocopy(s))
+      .filter((s) => !/^zelf\b.+\bmaken\?/i.test(s))
+      .filter((s) => !/met dit recept van allerhande/i.test(s))
+      .filter((s) => !/bekijk ingrediënten/i.test(s))
+      .filter((s) => !/^dit\s+is\s+een\s+allerhande\s+box/i.test(String(s || "").trim()))
+      .filter((s) => !/^wat\s+vond\s+je\s+van\s+dit\s+recept/i.test(String(s || "").trim()))
+      .filter((s) => !/^published time:/i.test(s))
+      .filter((s) => !/^title:\s/i.test(s))
+      .filter((s) => !/^url source:\s/i.test(s));
+    cleaned.sort((a, b) => scoreRecipeText(b) - scoreRecipeText(a));
+    const fallback = cleanAllerhandeUiFluff(cleaned[0] || "");
+    return fallback.length >= 12 ? fallback : "";
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  const best = scored[0];
+  const polished = cleanAllerhandeUiFluff(best.text);
+  return polished.length >= 12 ? polished : best.text;
+}
+
 async function importWebsite(sourceUrl) {
   const parsedUrl = new URL(sourceUrl);
   const isAllerhande = /(^|\.)ah\.nl$/i.test(parsedUrl.hostname) && (/\/allerhande\//i.test(parsedUrl.pathname) || /\/r\/\d+/.test(parsedUrl.pathname));
@@ -6891,45 +7042,8 @@ async function importWebsite(sourceUrl) {
           )
         )
       : "";
-    // Attempt to pull a short "intro" paragraph from the page body when present.
-    const ahIntroFromHtml = (() => {
-      if (!html) return "";
-      const match =
-        html.match(/data-testhook=["']recipe-introduction["'][^>]*>\s*<p[^>]*>([\s\S]*?)<\/p>/i) ||
-        html.match(/class=["'][^"']*(?:recipe[-_ ]intro|introduction)[^"']*["'][^>]*>\s*([\s\S]*?)<\/p>/i);
-      return match ? sanitizeText(stripTags(match[1])) : "";
-    })();
-
-    const pickAhDescription = (candidates) => {
-      const normalized = candidates.map((s) => sanitizeText(s)).filter(Boolean);
-      // If JSON-LD description is present, trust it first.
-      const first = normalized[0] || "";
-      if (
-        first &&
-        first.length >= 20 &&
-        !/^wij gebruiken cookies/i.test(first) &&
-        !/^published time:/i.test(first)
-      ) {
-        const polished = cleanAllerhandeUiFluff(first);
-        if (polished.length >= 12) return polished;
-      }
-
-      const cleaned = normalized
-        // Drop Allerhande boilerplate lines that often outrank the real intro.
-        .filter((s) => !/^zelf\b.+\bmaken\?/i.test(s))
-        .filter((s) => !/met dit recept van allerhande/i.test(s))
-        .filter((s) => !/bekijk ingrediënten/i.test(s))
-        .filter((s) => !/bereidingswijze!?\s*$/i.test(s))
-        .filter((s) => !/^dit\s+is\s+een\s+allerhande\s+box/i.test(String(s || "").trim()))
-        .filter((s) => !/^wat\s+vond\s+je\s+van\s+dit\s+recept/i.test(String(s || "").trim()))
-        // Drop reader boilerplate
-        .filter((s) => !/^published time:/i.test(s))
-        .filter((s) => !/^title:\s/i.test(s))
-        .filter((s) => !/^url source:\s/i.test(s));
-      // Prefer the most "recipe-like" and non-boilerplate candidate.
-      cleaned.sort((a, b) => scoreRecipeText(b) - scoreRecipeText(a));
-      return cleanAllerhandeUiFluff(cleaned[0] || "");
-    };
+    // Intro uit echte DOM (testhooks) óf embedded JSON — niet alleen og:description (vaak SEO-microcopy).
+    const ahIntroFromHtml = extractAllerhandeIntroParagraphFromDom(html);
 
     // Extract image specifically from the HTML (before we process it further)
     const imageUrl = extractAhRecipeImage(document.body);
@@ -6951,12 +7065,13 @@ async function importWebsite(sourceUrl) {
         .replace(/\s+en$/i, "")
         .trim();
       const ahDescription = pickAhDescription([
-        ahJsonLdDescription,
-        ahIntroFromHtml,
-        ahMetaDescription,
-        ahReaderIntro,
-        ahReaderDescription,
-        primaryRecipe.description,
+        { text: extractAllerhandeEmbeddedRecipeDescription(html), source: "embeddedJson" },
+        { text: ahJsonLdDescription, source: "jsonLd" },
+        { text: ahIntroFromHtml, source: "introHtml" },
+        { text: ahMetaDescription, source: "metaOg" },
+        { text: ahReaderIntro, source: "readerIntro" },
+        { text: ahReaderDescription, source: "readerPrimary" },
+        { text: primaryRecipe.description, source: "primaryHtml" },
       ]);
       const pickBestList = (lists, minUseful = 2) => {
         const normalized = lists
@@ -6989,8 +7104,13 @@ async function importWebsite(sourceUrl) {
     }
 
     const ahHtmlDescription =
-      pickAhDescription([ahJsonLdDescription, ahIntroFromHtml, ahMetaDescription, primaryRecipe.description]) ||
-      primaryRecipe.description;
+      pickAhDescription([
+        { text: extractAllerhandeEmbeddedRecipeDescription(html), source: "embeddedJson" },
+        { text: ahJsonLdDescription, source: "jsonLd" },
+        { text: ahIntroFromHtml, source: "introHtml" },
+        { text: ahMetaDescription, source: "metaOg" },
+        { text: primaryRecipe.description, source: "primaryHtml" },
+      ]) || primaryRecipe.description;
     return {
       ...primaryRecipe,
       image: imageUrl || primaryRecipe.image,
@@ -10354,11 +10474,19 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   // for multi-channel variety. Otherwise Promise.race timeouts return [] before the
   // only requested channel finishes.
   const singleChannelMode = Boolean(allow && allow.size === 1);
-  // ch-mj / ch-ek only work from the server via Serper; give their Google round-trip time to land.
+  // ch-mj / ch-ek + custom/preview channels may need Serper; give their Google round-trip time to land.
   const allowNeedsSerperSlack =
-    !allow || [...allow].some((id) => CHANNEL_SEARCH_SERPER_FALLBACK_IDS.has(id));
+    !allow || [...allow].some((id) => channelIdUsesSerperFallback(id));
+  // Few channels selected: extra “variety” waits add latency without much benefit.
+  const tightMode = Boolean(allow && allow.size > 0 && allow.size <= 4);
   // First slice: keep snappy, but Serper + some store APIs often need 3–6s in multi-channel mode.
-  const GLOBAL_DEADLINE_MS = singleChannelMode ? 20_000 : allowNeedsSerperSlack ? 5200 : 1400;
+  const GLOBAL_DEADLINE_MS = singleChannelMode
+    ? 20_000
+    : allowNeedsSerperSlack
+      ? 5200
+      : tightMode
+        ? 1100
+        : 1200;
   await Promise.race([Promise.allSettled(instrumented), waitMs(GLOBAL_DEADLINE_MS)]);
 
   const countDistinctChannels = (lists) => {
@@ -10374,7 +10502,7 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   // If nothing has arrived yet: admin single-channel tests await the full stack, but here we
   // previously raced too short — Serper fallbacks (Miljuschka / Eef) often land after 2–8s.
   if (collected.length === 0 && !singleChannelMode) {
-    const lingerMs = allowNeedsSerperSlack ? 10_500 : 2400;
+    const lingerMs = allowNeedsSerperSlack ? 10_500 : tightMode ? 900 : 1600;
     await Promise.race([Promise.allSettled(instrumented), waitMs(lingerMs)]);
   }
 
@@ -10382,17 +10510,17 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   // This fixes cases where AH is slightly slower than other sources.
   const ahEnabled = !allow || allow.has("ch-ah");
   if (!singleChannelMode && ahEnabled && !hasChannel(collected, "ch-ah")) {
-    await Promise.race([Promise.allSettled(instrumented), waitMs(1200)]);
+    await Promise.race([Promise.allSettled(instrumented), waitMs(tightMode ? 450 : 1200)]);
   }
 
   // If we only have results from a single channel, wait a bit longer to improve variety.
   // (We still cap waiting so search stays snappy.) Skip when only one channel was
   // requested — distinct-channel variety does not apply.
-  if (!singleChannelMode) {
+  if (!singleChannelMode && !tightMode) {
     const MIN_DISTINCT_CHANNELS = 3;
     const distinct = countDistinctChannels(collected);
     if (collected.length > 0 && distinct < MIN_DISTINCT_CHANNELS) {
-      await Promise.race([Promise.allSettled(instrumented), waitMs(1100)]);
+      await Promise.race([Promise.allSettled(instrumented), waitMs(700)]);
     }
   }
 
@@ -11630,11 +11758,13 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/api/channel-search" && request.method === "GET") {
+      const searchStarted = Date.now();
+      const responseTimeMs = () => Date.now() - searchStarted;
       const queryRaw = sanitizeText(requestUrl.searchParams.get("q") || "");
       const query = queryRaw;
       const normalizedForAnalytics = normalizeSearchQuery(queryRaw);
       if (!query || query.length < 2) {
-        sendJson(response, 200, { ok: true, results: [] });
+        sendJson(response, 200, { ok: true, results: [], responseTimeMs: responseTimeMs() });
         return;
       }
       const channelsParamPresent = requestUrl.searchParams.has("channels");
@@ -11656,13 +11786,14 @@ const server = http.createServer(async (request, response) => {
       const cacheKey = getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam });
       const cached = getCachedChannelSearch(cacheKey);
       if (cached) {
-        sendJson(response, 200, { ok: true, results: cached });
+        sendJson(response, 200, { ok: true, results: cached, responseTimeMs: responseTimeMs() });
         return;
       }
 
-      const results = await searchChannelRecipes(query, allowedChannels);
-      if (customChannelsParam) {
-        const customChannelEntries = customChannelsParam.split(",")
+      const runCustomChannelExtras = async () => {
+        if (!customChannelsParam) return [];
+        const customChannelEntries = customChannelsParam
+          .split(",")
           .map((entry) => {
             const parts = entry.split("|");
             if (parts.length < 3) return null;
@@ -11677,39 +11808,45 @@ const server = http.createServer(async (request, response) => {
           .map((id) => SEED_CHANNEL_DEFAULTS[id]?.baseUrl || "")
           .filter(Boolean);
         const dedupedCustomChannelEntries = customChannelEntries.filter((ch) => {
-          // Prefer seed channels when a custom channel points to the same base domain/path.
           for (const seedBaseUrl of enabledSeedBaseUrls) {
             if (channelUrlsMatchByBaseOrPrefix(ch.url, seedBaseUrl)) return false;
           }
           return true;
         });
+        if (!dedupedCustomChannelEntries.length) return [];
 
-        if (dedupedCustomChannelEntries.length) {
-          const customSearches = await Promise.allSettled(
-            dedupedCustomChannelEntries.map((ch) =>
-              (() => {
-                const eff = getEffectiveCustomChannelConfig({ channelId: ch.id, url: ch.url }, channelOverrides);
-                const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
-                return scrapeOrRestPublic(eff.baseUrl, ch.name, ch.id, usedUrl, parseWPStandard, 4, query);
-              })()
-            )
-          );
-          for (const s of customSearches) {
-            if (s.status === "fulfilled" && Array.isArray(s.value)) {
-              results.push(
-                ...s.value.filter((r) => channelSearchResultTitleMatchesQuery(r.channelId, r.title, query)).slice(0, 4)
-              );
-            }
+        const customSearches = await Promise.allSettled(
+          dedupedCustomChannelEntries.map((ch) => {
+            const eff = getEffectiveCustomChannelConfig({ channelId: ch.id, url: ch.url }, channelOverrides);
+            const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+            return scrapeOrRestPublic(eff.baseUrl, ch.name, ch.id, usedUrl, parseWPStandard, 4, query);
+          })
+        );
+        const merged = [];
+        for (const s of customSearches) {
+          if (s.status === "fulfilled" && Array.isArray(s.value)) {
+            merged.push(
+              ...s.value
+                .filter((r) => channelSearchResultTitleMatchesQuery(r.channelId, r.title, query))
+                .slice(0, 4)
+            );
           }
         }
-      }
+        return merged;
+      };
+
+      const [seedResults, customResults] = await Promise.all([
+        searchChannelRecipes(query, allowedChannels),
+        runCustomChannelExtras(),
+      ]);
+      const results = [...(Array.isArray(seedResults) ? seedResults : []), ...customResults];
 
       // Never cache empty responses: a cold multi-channel race often returns [] once, then succeeds
       // a second later — caching [] poisons the app while admin "test channel" (no cache) works.
       if (Array.isArray(results) && results.length > 0) {
         setCachedChannelSearch(cacheKey, results);
       }
-      sendJson(response, 200, { ok: true, results });
+      sendJson(response, 200, { ok: true, results, responseTimeMs: responseTimeMs() });
       return;
     }
 
@@ -13277,6 +13414,8 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === "/api/admin/channel-test/search" && request.method === "POST") {
       console.log("🧪 /api/admin/channel-test/search called");
+      const adminSearchT0 = Date.now();
+      const adminSearchElapsedMs = () => Date.now() - adminSearchT0;
       try {
         await requireAdmin(request);
         const body = await readRequestBody(request);
@@ -13286,7 +13425,13 @@ const server = http.createServer(async (request, response) => {
         const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 30) : 10;
 
         if (!query || query.length < 2) {
-          return sendJson(response, 200, { ok: true, results: [], usedQuery: query, usedUrl: "" });
+          return sendJson(response, 200, {
+            ok: true,
+            results: [],
+            usedQuery: query,
+            usedUrl: "",
+            responseTimeMs: adminSearchElapsedMs(),
+          });
         }
 
         if (channelKind === "custom") {
@@ -13295,7 +13440,11 @@ const server = http.createServer(async (request, response) => {
           const name = sanitizeText(customChannel.name || "");
           const url = sanitizeText(customChannel.url || "");
           if (!id || !name || !url) {
-            return sendJson(response, 400, { ok: false, error: "customChannel (id,name,url) required" });
+            return sendJson(response, 400, {
+              ok: false,
+              error: "customChannel (id,name,url) required",
+              responseTimeMs: adminSearchElapsedMs(),
+            });
           }
           const channelOverrides = await getChannelOverrides();
           const eff = getEffectiveCustomChannelConfig({ channelId: id, url }, channelOverrides);
@@ -13311,12 +13460,17 @@ const server = http.createServer(async (request, response) => {
             usedSearchUrlTemplate: sanitizeText(eff.searchUrlTemplate || ""),
             usedBaseUrl: sanitizeText(eff.baseUrl || ""),
             channelId: id,
+            responseTimeMs: adminSearchElapsedMs(),
           });
         }
 
         const channelId = sanitizeText(body.channelId || "");
         if (!channelId) {
-          return sendJson(response, 400, { ok: false, error: "channelId required" });
+          return sendJson(response, 400, {
+            ok: false,
+            error: "channelId required",
+            responseTimeMs: adminSearchElapsedMs(),
+          });
         }
 
         const overrides = await getSeedChannelOverrides();
@@ -13391,10 +13545,15 @@ const server = http.createServer(async (request, response) => {
           usedSearchUrlTemplate: sanitizeText(eff.searchUrlTemplate || ""),
           usedBaseUrl: sanitizeText(eff.baseUrl || ""),
           channelId,
+          responseTimeMs: adminSearchElapsedMs(),
         });
       } catch (error) {
         console.error("❌ Error in /api/admin/channel-test/search:", error.message);
-        return sendJson(response, 500, { ok: false, error: error.message });
+        return sendJson(response, 500, {
+          ok: false,
+          error: error.message,
+          responseTimeMs: adminSearchElapsedMs(),
+        });
       }
     }
 

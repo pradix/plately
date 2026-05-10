@@ -4027,7 +4027,16 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
       } else {
         // Show "no results" message when actively searching but got nothing
         channelSearchSection.classList.remove("hidden");
-        channelSearchResults.innerHTML = `<p class="ch-result__loading" style="grid-column:1/-1;text-align:center;padding:2rem">Geen resultaten gevonden in de geselecteerde kanalen</p>`;
+        channelSearchResults.innerHTML = `
+          <div class="ch-search-empty" style="grid-column:1/-1;text-align:center;padding:2rem 1rem;max-width:26rem;margin:0 auto">
+            <p style="margin:0 0 .75rem;font-weight:650;color:var(--text,#2a2a28)">Geen resultaten gevonden in de geselecteerde kanalen</p>
+            <p style="margin:0 0 1.1rem;font-size:0.95rem;opacity:.88;line-height:1.45">
+              Zet meer receptenkanalen aan via <strong>Profiel</strong> → <strong>Gekoppelde kanalen</strong>.
+            </p>
+            <button type="button" class="profile-login-banner__btn profile-login-banner__btn--primary" data-open-channel-settings>
+              Kanalen beheren
+            </button>
+          </div>`;
       }
       return;
     }
@@ -8260,7 +8269,11 @@ async function runAdminNewChannelTest() {
     });
     const results = Array.isArray(res?.results) ? res.results : [];
     const note = String(res?.searchBackendNote || "").trim();
-    setAdminNewChannelStatus(results.length ? `✅ Test werkt: ${results.length} resultaten` : "Geen resultaten gevonden bij deze test.");
+    const ms = Number(res?.responseTimeMs);
+    const timing = Number.isFinite(ms) ? ` (${ms} ms)` : "";
+    setAdminNewChannelStatus(
+      (results.length ? `✅ Test werkt: ${results.length} resultaten` : "Geen resultaten gevonden bij deze test.") + timing
+    );
     renderAdminNewChannelResults(results, note);
     return results;
   } catch (err) {
@@ -8330,7 +8343,9 @@ async function runAdminChannelTestSearch() {
     });
     const results = Array.isArray(res?.results) ? res.results : [];
     const note = String(res?.searchBackendNote || "").trim();
-    if (statusEl) statusEl.textContent = results.length ? `Top ${results.length} resultaten` : "Geen resultaten";
+    const ms = Number(res?.responseTimeMs);
+    const timing = Number.isFinite(ms) ? ` · ${ms} ms` : "";
+    if (statusEl) statusEl.textContent = `${results.length ? `Top ${results.length} resultaten` : "Geen resultaten"}${timing}`;
     renderAdminChannelTestResults(results, note);
   } catch (err) {
     if (statusEl) statusEl.textContent = "";
@@ -10847,7 +10862,7 @@ bindEvent(servingsUp, "click", () => {
 });
 
 bindEvent(searchInput, "input", (event) => {
-  // Debounced channel search — fires after 900 ms of no typing (better results, fewer API calls)
+  // Debounced channel search — short pause after typing to batch requests
   clearTimeout(channelSearchTimeout);
   const query = event.target.value.trim();
   state.channelSearchQuery = query;
@@ -10867,7 +10882,7 @@ bindEvent(searchInput, "input", (event) => {
   // Reset filter when starting a new search so results aren't hidden by old filter
   state.channelSearchFilter = null;
 
-  channelSearchTimeout = setTimeout(() => searchChannels(query), 250);
+  channelSearchTimeout = setTimeout(() => searchChannels(query), 180);
 });
 
 bindEvent(searchInput, "keydown", (event) => {
@@ -10964,6 +10979,13 @@ bindEvent(document.getElementById("channelSearchClose"), "click", () => {
 });
 
 bindEvent(document.getElementById("channelSearchSection"), "click", (event) => {
+  const openCh = event.target.closest("[data-open-channel-settings]");
+  if (openCh instanceof HTMLElement) {
+    switchView("settings");
+    renderChannelSettings();
+    openProfileSubPanel("profileSubChannels");
+    return;
+  }
   const chip = event.target.closest("[data-ch-filter]");
   if (!(chip instanceof HTMLElement) || !chip.hasAttribute("data-ch-filter")) return;
   const filter = chip.dataset.chFilter || null;
