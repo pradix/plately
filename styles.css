@@ -12243,12 +12243,16 @@ body {
 
 .import-splash__stage {
   position: relative;
-  width: 260px;
-  height: 260px;
+  width: min(86vw, 360px);
+  height: min(86vw, 360px);
+  max-width: 360px;
+  max-height: 360px;
+  --import-orbit-r: min(104px, 28vw);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 4px 0 2px;
+  margin: 0 auto 32px;
+  isolation: isolate;
 }
 .import-splash__halo {
   position: absolute;
@@ -12268,13 +12272,29 @@ body {
   width: 124px;
   height: 124px;
   border-radius: 50%;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-3), inset 0 0 0 1px var(--color-border);
+  background: linear-gradient(165deg, rgba(255, 253, 249, 1) 0%, rgba(255, 251, 246, 1) 45%, var(--color-brand-soft) 160%);
+  box-shadow:
+    var(--shadow-3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -6px 14px rgba(120, 147, 111, 0.12);
+  outline: 1px solid color-mix(in srgb, var(--color-brand) 22%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: importSplashBob 3.0s ease-in-out infinite;
+  animation:
+    importSplashBob 3.4s ease-in-out infinite,
+    importSplashCatch 3.6s ease-in-out infinite 0.52s,
+    importBasketGlowPulse 3.6s ease-in-out infinite 0.08s;
   z-index: 2;
+}
+.import-splash__basket::after {
+  content: "";
+  position: absolute;
+  inset: 7px 10px auto;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse 90% 100%, rgba(120, 147, 111, 0.1), transparent 72%);
+  pointer-events: none;
 }
 .import-splash__basket img {
   width: 80px;
@@ -12542,7 +12562,7 @@ body {
 
 /* ─── Extra animation: rotating rings, orbiting chips, dropping items, sparkles ─── */
 
-/* Roterende decorerings-ringen rond het mandje */
+/* Duidelijke baan: één vaste cirkel + contrasterende boog (Plately sage/peach) */
 .import-splash__ring {
   position: absolute;
   inset: 0;
@@ -12551,57 +12571,101 @@ body {
   z-index: 1;
 }
 .import-splash__ring--1 {
-  border: 2px dashed var(--color-brand-soft);
-  animation: importSplashRingSpin 26s linear infinite;
+  border: 1.5px solid color-mix(in srgb, var(--color-brand) 38%, rgba(255, 255, 255, 0.65));
+  border-style: solid;
+  border-image: none;
+  opacity: 0.85;
+  animation: importSplashRingSpin 24s linear infinite;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
 .import-splash__ring--2 {
-  inset: 12%;
-  border: 1px dashed var(--color-accent);
-  opacity: 0.45;
-  animation: importSplashRingSpin 20s linear infinite reverse;
+  inset: 10%;
+  border: 2px dashed color-mix(in srgb, var(--color-brand) 55%, transparent);
+  opacity: 0.9;
+  animation: importSplashRingSpin 18s linear infinite reverse;
 }
 .import-splash__ring--3 {
-  inset: -8%;
-  border: 1px dotted rgba(246,182,157,0.26);
-  animation: importSplashRingSpin 32s linear infinite;
+  inset: -6%;
+  border: 1px dashed color-mix(in srgb, var(--color-accent) 65%, transparent);
+  opacity: 0.55;
+  animation: importSplashRingSpin 30s linear infinite;
 }
 
-/* Orbiting chips (6) */
-.import-splash__chip {
+/* Dunne baan-cirkel op chip-straal: maakt de orbit direct herkenbaar */
+.import-splash__orbit-ring {
   position: absolute;
-  top: 0;
   left: 50%;
-  width: 32px;
-  height: 32px;
-  margin-left: -16px;
+  top: 50%;
+  z-index: 2;
+  width: calc(2 * var(--import-orbit-r, 96px));
+  height: calc(2 * var(--import-orbit-r, 96px));
+  margin-left: calc(-1 * var(--import-orbit-r, 96px));
+  margin-top: calc(-1 * var(--import-orbit-r, 96px));
   border-radius: 50%;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-2);
-  border: 1px solid var(--color-border);
+  box-sizing: border-box;
+  border: 1.5px dashed color-mix(in srgb, var(--color-brand) 52%, rgba(255, 255, 255, 0.35));
+  background: radial-gradient(circle at 50% 50%, rgba(120, 147, 111, 0.04) 0%, transparent 62%);
+  pointer-events: none;
+  opacity: 0.72;
+  animation: importSplashOrbitRingPulse 4.2s ease-in-out infinite;
+}
+
+/* Orbiting chips: echte cirkelbaan (center pivot + translateX(straal)) */
+/* Draait om het midden van het podium; chip zit op vaste straal (--import-orbit-r) */
+.import-splash__orbit-track {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  z-index: 3;
+  animation: importSplashOrbitSpin 4.2s linear infinite;
+  will-change: transform;
+}
+.import-splash__orbit-track--1 { animation-delay: 0s; }
+.import-splash__orbit-track--2 { animation-delay: -1.05s; }
+.import-splash__orbit-track--3 { animation-delay: -2.1s; }
+.import-splash__orbit-track--4 { animation-delay: -3.15s; }
+
+.import-splash__orbit-track .import-splash__chip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  transform: translate(-50%, -50%) translateY(calc(-1 * var(--import-orbit-r, 96px)));
+  border-radius: 50%;
+  background: linear-gradient(180deg, #fffdf9 0%, rgba(255, 251, 246, 0.94) 100%);
+  box-shadow: var(--shadow-2), 0 0 0 1px color-mix(in srgb, var(--color-brand) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 22%, var(--color-border));
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 3;
-  transform-origin: 50% 92px;
 }
-.import-splash__chip img { width: 20px; height: 20px; object-fit: contain; }
-/* Snellere baan: 4s per ronde; 4 planeten */
-.import-splash__chip--1 { animation: importSplashOrbit 4s linear infinite 0s, importSplashChipIn 420ms ease-out 0ms both; }
-.import-splash__chip--2 { animation: importSplashOrbit 4s linear infinite -1s, importSplashChipIn 420ms ease-out 80ms both; }
-.import-splash__chip--3 { animation: importSplashOrbit 4s linear infinite -2s, importSplashChipIn 420ms ease-out 160ms both; }
-.import-splash__chip--4 { animation: importSplashOrbit 4s linear infinite -3s, importSplashChipIn 420ms ease-out 240ms both; }
+/* Intro alleen op img: conflicteert niet met chip-positionering op de baan */
+.import-splash__orbit-track--1 .import-splash__chip img { animation: importSplashChipImgIn 0.55s cubic-bezier(.22, 1, .36, 1) both; }
+.import-splash__orbit-track--2 .import-splash__chip img { animation: importSplashChipImgIn 0.55s cubic-bezier(.22, 1, .36, 1) 90ms both; }
+.import-splash__orbit-track--3 .import-splash__chip img { animation: importSplashChipImgIn 0.55s cubic-bezier(.22, 1, .36, 1) 180ms both; }
+.import-splash__orbit-track--4 .import-splash__chip img { animation: importSplashChipImgIn 0.55s cubic-bezier(.22, 1, .36, 1) 270ms both; }
 
-/* Items vallen het mandje in — 6 stappen, rustiger ritme */
+.import-splash__chip img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(36, 60, 43, 0.12));
+}
+
+/* Items vallen naar het midden van het mandje (diepte + verdwijnen “in” de kom) */
 .import-splash__drop {
   position: absolute;
-  top: -8px;
-  left: 50%;
-  width: 28px;
-  height: 28px;
-  margin-left: -14px;
+  top: -10px;
+  width: 30px;
+  height: 30px;
+  margin-left: -15px;
   border-radius: 50%;
-  background: var(--color-surface);
-  box-shadow: var(--shadow-2);
+  background: linear-gradient(180deg, #fff 0%, rgba(255, 253, 249, 0.95) 100%);
+  box-shadow: var(--shadow-2), 0 0 0 1px color-mix(in srgb, var(--color-brand) 12%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -12609,20 +12673,13 @@ body {
   opacity: 0;
 }
 .import-splash__drop img { width: 20px; height: 20px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(36, 60, 43, 0.15)); }
-.import-splash__drop--1 { animation: importSplashDrop 3.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite 0s; }
-.import-splash__drop--2 { animation: importSplashDrop 3.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite 0.55s; }
-.import-splash__drop--3 { animation: importSplashDrop 3.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite 1.1s; }
-.import-splash__drop--4 { animation: importSplashDrop 3.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite 1.65s; }
-.import-splash__drop--5 { animation: importSplashDrop 3.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite 2.2s; }
-.import-splash__drop--6 { animation: importSplashDrop 3.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite 2.75s; }
-
-/* Mandje: zachte wiebel + glow op “catch” (sync ~3,8s) */
-.import-splash__basket {
-  animation:
-    importSplashBob 3.4s ease-in-out infinite,
-    importSplashCatch 3.8s ease-in-out infinite 0.55s,
-    importBasketGlowPulse 3.8s ease-in-out infinite 0.2s !important;
-}
+/* Horizontaal licht verspreid voor “in het mandje”-diepte */
+.import-splash__drop--1 { left: calc(50% - 26px); animation: importSplashDrop 3.6s cubic-bezier(0.25, 0.46, 0.45, 1) infinite 0s; }
+.import-splash__drop--2 { left: calc(50% - 8px); animation: importSplashDrop 3.6s cubic-bezier(0.25, 0.46, 0.45, 1) infinite 0.48s; }
+.import-splash__drop--3 { left: calc(50% + 8px); animation: importSplashDrop 3.6s cubic-bezier(0.25, 0.46, 0.45, 1) infinite 0.96s; }
+.import-splash__drop--4 { left: calc(50% + 24px); animation: importSplashDrop 3.6s cubic-bezier(0.25, 0.46, 0.45, 1) infinite 1.44s; }
+.import-splash__drop--5 { left: calc(50% - 16px); animation: importSplashDrop 3.6s cubic-bezier(0.25, 0.46, 0.45, 1) infinite 1.92s; }
+.import-splash__drop--6 { left: calc(50% + 2px); animation: importSplashDrop 3.6s cubic-bezier(0.25, 0.46, 0.45, 1) infinite 2.4s; }
 
 .import-splash__sparkle {
   position: absolute;
@@ -12647,13 +12704,17 @@ body {
 }
 .import-splash__bar-fill { animation-duration: 1.4s; }
 
-@keyframes importSplashOrbit {
-  from { transform: rotate(0deg) translateX(0) rotate(0deg); }
-  to   { transform: rotate(360deg) translateX(0) rotate(-360deg); }
+@keyframes importSplashOrbitSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
-@keyframes importSplashChipIn {
-  from { opacity: 0; transform: rotate(var(--orbit-start, 0deg)) scale(0.4); }
-  to   { opacity: 1; }
+@keyframes importSplashChipImgIn {
+  from { opacity: 0; transform: scale(0.68); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes importSplashOrbitRingPulse {
+  0%, 100% { opacity: 0.58; filter: brightness(1); }
+  50% { opacity: 0.88; filter: brightness(1.03); }
 }
 @keyframes importSplashTwinkle {
   0%, 100% { opacity: 0; transform: scale(0.6); }
@@ -12671,13 +12732,15 @@ body {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
-/* In het mandje verdwijnen: duidelijke “plof” rond basket-rand */
+/* Door de kom: top t.o.v. 50% = centrummandje op elk podiumpformaat */
 @keyframes importSplashDrop {
-  0%   { top: -10px; opacity: 0; transform: scale(0.62) rotate(-8deg); }
-  12%  { opacity: 1; }
-  52%  { top: 52px; opacity: 1; transform: scale(1.04) rotate(6deg); }
-  62%  { top: 62px; opacity: 0.35; transform: scale(0.55) rotate(0deg); }
-  100% { top: 66px; opacity: 0; transform: scale(0.35) rotate(0deg); }
+  0%   { top: 1.5%; opacity: 0; transform: scale(0.56) rotate(-11deg); }
+  14%  { opacity: 1; }
+  38%  { top: calc(50% - 82px); opacity: 1; transform: scale(1.08) rotate(7deg); }
+  52%  { top: calc(50% - 52px); opacity: 1; transform: scale(0.95) rotate(2deg); }
+  68%  { top: calc(50% - 28px); opacity: 0.78; transform: scale(0.5) rotate(0deg); }
+  86%  { top: calc(50% - 10px); opacity: 0.32; transform: scale(0.2) rotate(0deg); }
+  100% { top: calc(50% - 2px); opacity: 0; transform: scale(0.08) rotate(0deg); }
 }
 /* Mandje veert licht op bij elke item-landing */
 @keyframes importSplashCatch {
@@ -12717,6 +12780,9 @@ body {
   .import-splash__bar-fill,
   .import-splash__phase-marker,
   .import-splash__chip,
+  .import-splash__chip img,
+  .import-splash__orbit-track,
+  .import-splash__orbit-ring,
   .import-splash__sparkle,
   .import-splash__ring,
   .import-splash__drop,
@@ -13438,88 +13504,6 @@ body {
   display: none;
 }
 
-.import-splash__stage {
-  width: min(86vw, 360px);
-  height: min(86vw, 360px);
-  max-width: 360px;
-  max-height: 360px;
-  margin: 0 auto 32px;
-  isolation: isolate;
-}
-
-/* Orbit-radius op grotere stage (360px), snellere baan blijft gecentreerd */
-.import-splash__stage .import-splash__chip {
-  transform-origin: 50% min(168px, 47%);
-}
-
-.import-splash__halo {
-  inset: 17%;
-  background: radial-gradient(circle, rgba(255, 242, 232, 0.82), rgba(255, 242, 232, 0) 72%);
-  animation: importMagicGlow 6.2s ease-in-out infinite;
-}
-
-.import-splash__halo--2 {
-  inset: 7%;
-  background: radial-gradient(circle, rgba(220, 232, 220, 0.55), rgba(220, 232, 220, 0) 72%);
-  opacity: 0.62;
-  animation: importMagicGlow 7.4s ease-in-out infinite reverse;
-}
-
-.import-splash__ring {
-  inset: 8%;
-  border-radius: 50%;
-  background: none;
-}
-
-.import-splash__ring--1 {
-  inset: 4%;
-  border: 2px dashed rgba(120, 147, 111, 0.24);
-  animation: importMagicRingSpin 48s linear infinite;
-}
-
-.import-splash__ring--2 {
-  inset: 12%;
-  border: 2px dashed rgba(246, 182, 157, 0.28);
-  opacity: 0.82;
-  animation: importMagicRingSpin 40s linear infinite reverse;
-}
-
-.import-splash__basket {
-  width: 148px;
-  height: 148px;
-  border-radius: 36px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(120, 147, 111, 0.2);
-  box-shadow:
-    0 24px 56px rgba(36, 60, 43, 0.14),
-    0 8px 24px rgba(36, 60, 43, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
-  animation:
-    importMagicCenterFloat 4s ease-in-out infinite,
-    importMagicBasketCatch 3.85s ease-in-out infinite,
-    importMagicBasketGlow 3.85s ease-in-out infinite 0.15s !important;
-}
-
-.import-splash__basket::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: 28px;
-  width: 64px;
-  height: 10px;
-  border-radius: var(--radius-pill);
-  background: rgba(120, 147, 111, 0.16);
-  transform: translateX(-50%);
-}
-
-.import-splash__basket img {
-  width: 70px;
-  height: 70px;
-  transform: translateY(-4px);
-  opacity: 0.97;
-  animation: none;
-}
-
 .import-splash__food {
   position: absolute;
   z-index: 5;
@@ -13995,7 +13979,9 @@ body {
   .import-splash__food,
   .import-splash__falling,
   .import-splash__catch-burst,
-  .import-splash__sparkle {
+  .import-splash__sparkle,
+  .import-splash__orbit-ring,
+  .import-splash__orbit-track {
     animation: none !important;
   }
 }

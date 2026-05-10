@@ -5936,9 +5936,18 @@ function parseWebsiteRecipe(html, url) {
     const rawLdDesc = sanitizeText(stripTags(recipeSource.description || ""));
     const rawMetaDesc = sanitizeText(stripTags(metaDescription || ""));
     const recipeDescription = (() => {
-      if (rawLdDesc) return rawLdDesc;
+      let ahHost = false;
       try {
-        if (/(\.|^)ah\.nl$/i.test(new URL(url).hostname) && isLikelyAllerhandeSeoMicrocopy(rawMetaDesc)) {
+        ahHost = /(\.|^)ah\.nl$/i.test(new URL(url).hostname);
+      } catch {
+        ahHost = false;
+      }
+      // Op AH komt marketing (o.a. Premium) soms in schema.description — dan overslaan en meta proberen.
+      if (rawLdDesc && !(ahHost && isLikelyAllerhandeSeoMicrocopy(rawLdDesc))) {
+        return rawLdDesc;
+      }
+      try {
+        if (ahHost && isLikelyAllerhandeSeoMicrocopy(rawMetaDesc)) {
           return "";
         }
       } catch {
@@ -6711,6 +6720,14 @@ function isLikelyAllerhandeSeoMicrocopy(text) {
   if (/\|\s*albert\s*heijn\s*$/i.test(s.trim())) return true;
   if (/\|\s*allerhande\s*$/i.test(s.trim())) return true;
   if (/\brecept\s*-\s*allerhande\s*\|/i.test(s)) return true;
+  // AH Premium / Plus-lidmaatschap / jaarprijs — géén recepttekst (staat soms in og:description of schema)
+  if (/\balbert\s*heijn\s+premium\b/i.test(lower)) return true;
+  if (/\bah\s+premium\b/i.test(lower) && /\b(per\s+jaar|jaarlijks|€|euro|\d{3,4}\s*(?:per|\/)\s*jaar)/i.test(lower)) return true;
+  if (/\bmijn\s+(ah\s+)?(?:albert\s*heijn\s+)?premium\b/i.test(lower)) return true;
+  if (/\bpremium\b/i.test(lower) && /\b(14\s*[,.]?\s*99|1499)\b/.test(lower) && /\b(per\s+jaar|jaar|jaarlijks|\/\s*jaar)\b/i.test(lower)) return true;
+  if (/\b(?:plus|premium)?\s*lidmaatschap\b/i.test(lower) && /(albert\s*heijn|\bah\b|ah\.nl|allerhande)/i.test(lower)) return true;
+  if (/\bvoor\s+niks\s+bezorgd\b/i.test(lower) && /(premium|plus|lid)/i.test(lower)) return true;
+  if (/\bword\s+(?:gratis\s+)?(?:plus|premium)?\s*(?:member|klant|lid)\b/i.test(lower) && /(ah|albert|allerhande)/i.test(lower)) return true;
   return false;
 }
 
@@ -7024,6 +7041,7 @@ async function importWebsite(sourceUrl) {
         if (/^kies producten\b/i.test(plain)) continue;
         if (/^ga naar\b/i.test(plain) || /ga naar hoofdinhoud/i.test(plain)) continue;
         if (/^toegankelijkheid\b/i.test(plain)) continue;
+        if (isLikelyAllerhandeSeoMicrocopy(plain)) continue;
         if (plain.length >= 30) return plain;
       }
       return "";
