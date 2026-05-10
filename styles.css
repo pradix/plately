@@ -1806,75 +1806,6 @@ button.ingredient-item {
   text-decoration-color: rgba(141, 164, 133, 0.45);
 }
 
-.step-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.step-timer-menu {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(120, 147, 111, 0.10);
-  background: rgba(255,255,255,0.96);
-  box-shadow: 0 6px 22px rgba(55,50,45,0.07);
-}
-
-.step-timer-menu__presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.step-timer-preset {
-  border: 1.5px solid rgba(141, 164, 133, 0.26);
-  background: rgba(220, 232, 220, 0.22);
-  color: #3a4a3a;
-  border-radius: 999px;
-  padding: 7px 12px;
-  font-size: 0.82rem;
-  font-weight: 800;
-}
-
-.step-timer-preset:hover {
-  background: rgba(220, 232, 220, 0.34);
-}
-
-.step-timer-preset--primary {
-  background: #8da485;
-  border-color: #8da485;
-  color: #fff;
-}
-
-.step-timer-menu__custom {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.step-timer-menu__label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.82rem;
-  font-weight: 800;
-  color: #6f6a63;
-}
-
-.step-timer-menu__input {
-  width: 88px;
-  height: 36px;
-  border-radius: 12px;
-  border: 1.5px solid rgba(120, 147, 111, 0.18);
-  padding: 0 10px;
-  background: rgba(255,255,255,0.98);
-}
 .step-body {
   display: flex;
   flex-direction: column;
@@ -1887,36 +1818,6 @@ button.ingredient-item {
   color: #4a4643;
   font-size: 0.94rem;
   line-height: 1.55;
-}
-
-/* ── Step timer button ───────────────────────────────────────────────────── */
-.step-timer {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  border-radius: 20px;
-  border: 1.5px solid #e0d5c8;
-  background: #faf7f4;
-  color: #7a6a5a;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-  width: fit-content;
-}
-.step-timer svg { width: 14px; height: 14px; flex-shrink: 0; }
-.step-timer:hover { background: #f0e8df; border-color: #c8b8a8; color: #5a4a3a; }
-.step-timer--running {
-  background: #fff4e6;
-  border-color: #f0a060;
-  color: #c06020;
-  font-variant-numeric: tabular-nums;
-}
-.step-timer--done {
-  background: #e8f5e9;
-  border-color: #81c784;
-  color: #388e3c;
 }
 
 /* ── Cookbook detail view ────────────────────────────────────────────────── */
@@ -6001,19 +5902,6 @@ button.ingredient-item {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
-}
-
-.kookstand-step__tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-
-#kookstandStepTimerMenu.step-timer-menu {
-  padding: 12px;
-  background: rgba(250, 252, 247, 0.96);
-  border-color: rgba(141, 164, 133, 0.16);
 }
 
 .kookstand-step__index {
@@ -13305,6 +13193,88 @@ body {
   white-space: nowrap;
 }
 
+.ah-match-splash {
+  --ah-blue: #00a0e2;
+  --ah-blue-dark: #0069b4;
+  --ah-yellow: #ffd200;
+}
+
+.ah-match-splash .import-splash__backdrop {
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.98), rgba(237, 248, 255, 0.95) 48%, rgba(250, 248, 242, 0.94) 100%);
+}
+
+.ah-match-splash .import-splash__halo {
+  background: radial-gradient(circle, rgba(0, 160, 226, 0.16), rgba(0, 160, 226, 0) 72%);
+}
+
+.ah-match-splash .import-splash__halo--2 {
+  background: radial-gradient(circle, rgba(255, 210, 0, 0.24), rgba(255, 210, 0, 0) 72%);
+}
+
+.ah-match-splash .import-splash__ring--1 {
+  border-color: rgba(0, 105, 180, 0.36);
+}
+
+.ah-match-splash .import-splash__ring--2 {
+  border-color: rgba(255, 210, 0, 0.58);
+}
+
+.ah-match-splash .import-splash__basket {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(0, 105, 180, 0.18);
+  box-shadow:
+    0 18px 46px rgba(0, 105, 180, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.ah-match-splash .import-splash__basket::after {
+  background: rgba(0, 105, 180, 0.14);
+}
+
+.ah-match-splash__logo svg {
+  width: 58px;
+  height: 58px;
+  display: block;
+  filter: drop-shadow(0 8px 14px rgba(0, 105, 180, 0.2));
+}
+
+.ah-match-splash .import-splash__orbit-step {
+  border-color: rgba(0, 105, 180, 0.16);
+  color: rgba(0, 105, 180, 0.62);
+  box-shadow: 0 10px 28px rgba(0, 105, 180, 0.08);
+}
+
+.ah-match-splash .import-splash__orbit-step[data-state="active"],
+.ah-match-splash .import-splash__orbit-step[data-state="done"] {
+  color: var(--ah-blue-dark);
+}
+
+.ah-match-splash .import-splash__sparkle--1 {
+  color: var(--ah-yellow);
+}
+
+.ah-match-splash .import-splash__sparkle--2,
+.ah-match-splash .import-splash__sparkle--3 {
+  color: var(--ah-blue);
+}
+
+.ah-match-splash .import-splash__bar {
+  background: rgba(0, 105, 180, 0.12);
+}
+
+.ah-match-splash .import-splash__bar-fill {
+  background: linear-gradient(90deg, var(--ah-yellow), var(--ah-blue));
+}
+
+.ah-match-splash .import-splash__title {
+  color: #073f70;
+}
+
+.ah-match-splash .import-splash__hint {
+  color: #4b789c;
+}
+
 @keyframes importMagicRingSpin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -13400,33 +13370,38 @@ body {
   }
 
   .import-splash__stage {
-    width: 342px;
-    height: 342px;
-    max-width: 88vw;
-    max-height: 88vw;
+    width: 330px;
+    height: 330px;
+    max-width: calc(100vw - 34px);
+    max-height: calc(100vw - 34px);
     margin-bottom: 34px;
   }
 
   .import-splash__orbit-step {
     min-height: 38px;
     padding-inline: 12px;
-    font-size: 0.82rem;
+    max-width: 158px;
+    font-size: 0.78rem;
   }
 
   .import-splash__orbit-step--url {
-    right: -18px;
+    top: 86px;
+    right: 0;
   }
 
   .import-splash__orbit-step--text {
-    right: -54px;
+    right: 0;
+    top: 54%;
   }
 
   .import-splash__orbit-step--products {
-    right: -14px;
+    right: 6px;
+    bottom: 20px;
   }
 
   .import-splash__orbit-step--done {
-    left: -58px;
+    left: 0;
+    top: 54%;
   }
 
   .import-splash__food img {

@@ -3,8 +3,8 @@
 // Important: do NOT intercept fetches or cache /api/*.
 // Previous SW versions caused stale auth state.
 
-self.__PLATELY_SW_VERSION__ = "2026-05-09-2";
-const CACHE_VERSION = "v2";
+self.__PLATELY_SW_VERSION__ = "2026-05-10-1";
+const CACHE_VERSION = "v3";
 const STATIC_CACHE = `plately-static-${CACHE_VERSION}`;
 const HTML_CACHE = `plately-html-${CACHE_VERSION}`;
 

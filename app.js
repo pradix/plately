@@ -4800,73 +4800,6 @@ function renderRecipeGrid() {
   }
 }
 
-// ── Step timer ────────────────────────────────────────────────────────────────
-const stepTimers = new Map(); // button el → intervalId
-
-function extractStepSeconds(text) {
-  const secMatch = text.match(/(\d+)\s*(?:seconden?|sec\.?)\b/i);
-  if (secMatch) return parseInt(secMatch[1], 10);
-  const minMatch = text.match(/(\d+(?:[.,]\d+)?)\s*(?:minuten?|min\.?)\b/i);
-  if (minMatch) return Math.round(parseFloat(minMatch[1].replace(",", ".")) * 60);
-  if (/\bhalf\s+uur\b/i.test(text)) return 1800;
-  if (/\b1\s*uur\b/i.test(text) || /\béén?\s+uur\b/i.test(text)) return 3600;
-  const hrMatch = text.match(/(\d+)\s*uur\b/i);
-  if (hrMatch) return parseInt(hrMatch[1], 10) * 3600;
-  return 0;
-}
-
-function formatTimerLabel(seconds) {
-  if (seconds >= 3600) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    return m > 0 ? `${h}u ${m}m` : `${h}u`;
-  }
-  if (seconds >= 60) {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return s > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${m} min`;
-  }
-  return `${seconds}s`;
-}
-
-function startStepTimer(btn, totalSeconds) {
-  // Cancel existing timer on this button
-  if (stepTimers.has(btn)) {
-    clearInterval(stepTimers.get(btn));
-    stepTimers.delete(btn);
-    btn.classList.remove("step-timer--running");
-    btn.dataset.timerOriginal && (btn.innerHTML = btn.dataset.timerOriginal);
-    return;
-  }
-
-  btn.dataset.timerOriginal = btn.innerHTML;
-  btn.classList.add("step-timer--running");
-  let remaining = totalSeconds;
-
-  const tick = () => {
-    remaining--;
-    if (remaining <= 0) {
-      clearInterval(stepTimers.get(btn));
-      stepTimers.delete(btn);
-      btn.classList.remove("step-timer--running");
-      btn.classList.add("step-timer--done");
-      btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg> Klaar!`;
-      showToast("⏰ Timer afgelopen!");
-      setTimeout(() => {
-        btn.classList.remove("step-timer--done");
-        btn.innerHTML = btn.dataset.timerOriginal || "";
-      }, 4000);
-      return;
-    }
-    btn.querySelector(".step-timer__time") && (btn.querySelector(".step-timer__time").textContent = formatTimerLabel(remaining));
-  };
-
-  btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4.5a1 1 0 0 1 3 0v.55A7.5 7.5 0 1 1 9 5.34v-.84Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 9v3.5l2 1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="step-timer__time">${formatTimerLabel(remaining)}</span>`;
-
-  const id = setInterval(tick, 1000);
-  stepTimers.set(btn, id);
-}
-
 function renderDetailRecipe(resetServings = false) {
   const recipe = getSelectedRecipe();
   if (!recipe) return;
@@ -4956,16 +4889,9 @@ function renderDetailRecipe(resetServings = false) {
 
   renderIngredientSwapSuggestions(recipe);
 
-  // Clear any running timers when recipe changes
-  stepTimers.forEach((id) => clearInterval(id));
-  stepTimers.clear();
-
   detailStepList.innerHTML = recipe.instructions
     .map((step, index) => {
-      const defaultSecs = extractStepSeconds(step);
       const checked = isStepChecked(recipe.id, index);
-      const presets = [60, 180, 300, 600];
-      const allPresets = defaultSecs > 0 && !presets.includes(defaultSecs) ? [defaultSecs, ...presets] : presets;
       return `
         <li class="step-item" data-step-row="${index}">
           <button class="step-index ${checked ? "is-checked" : ""}" type="button" data-step-check="${index}" aria-pressed="${checked ? "true" : "false"}">
@@ -4973,29 +4899,6 @@ function renderDetailRecipe(resetServings = false) {
           </button>
           <div class="step-body">
             <p class="step-copy ${checked ? "is-checked" : ""}">${escapeHtml(step)}</p>
-            <div class="step-actions">
-              <button class="step-timer" type="button" data-step-timer="${index}" data-step-default-seconds="${defaultSecs || 0}" aria-label="Timer voor stap ${index + 1}">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4.5a1 1 0 0 1 3 0v.55A7.5 7.5 0 1 1 9 5.34v-.84Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 9v3.5l2 1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                <span class="step-timer__time">${defaultSecs > 0 ? formatTimerLabel(defaultSecs) : "Timer"}</span>
-              </button>
-              <div class="step-timer-menu hidden" data-step-timer-menu="${index}">
-                <div class="step-timer-menu__presets">
-                  ${allPresets
-                    .map((secs) => {
-                      const label = secs === defaultSecs ? `${formatTimerLabel(secs)} (uit stap)` : formatTimerLabel(secs);
-                      return `<button class="step-timer-preset" type="button" data-step-timer-preset="${secs}" aria-label="Start timer ${escapeHtml(label)}">${escapeHtml(label)}</button>`;
-                    })
-                    .join("")}
-                </div>
-                <form class="step-timer-menu__custom" data-step-timer-custom-form="${index}">
-                  <label class="step-timer-menu__label">
-                    <span>Custom</span>
-                    <input class="step-timer-menu__input" type="number" inputmode="numeric" min="1" max="180" step="1" placeholder="min" aria-label="Custom timer in minuten" />
-                  </label>
-                  <button class="step-timer-preset step-timer-preset--primary" type="submit">Start</button>
-                </form>
-              </div>
-            </div>
           </div>
         </li>`;
     })
@@ -5217,41 +5120,6 @@ function renderKookstand() {
           })
           .join("")
       : "";
-  }
-
-  const kookstandTimerButton = document.getElementById("kookstandStepTimer");
-  const kookstandTimerMenu = document.getElementById("kookstandStepTimerMenu");
-  if (kookstandTimerButton) {
-    if (!hasSteps) {
-      kookstandTimerButton.setAttribute("disabled", "disabled");
-    } else {
-      kookstandTimerButton.removeAttribute("disabled");
-      const defaultSecs = extractStepSeconds(instructions[boundedIndex]);
-      kookstandTimerButton.dataset.stepDefaultSeconds = String(defaultSecs || 0);
-      const labelEl = kookstandTimerButton.querySelector(".step-timer__time");
-      if (labelEl) labelEl.textContent = defaultSecs > 0 ? formatTimerLabel(defaultSecs) : "Timer";
-      if (kookstandTimerMenu) {
-        const presets = [60, 180, 300, 600];
-        const allPresets = defaultSecs > 0 && !presets.includes(defaultSecs) ? [defaultSecs, ...presets] : presets;
-        kookstandTimerMenu.innerHTML = `
-          <div class="step-timer-menu__presets">
-            ${allPresets
-              .map((secs) => {
-                const label = secs === defaultSecs ? `${formatTimerLabel(secs)} (uit stap)` : formatTimerLabel(secs);
-                return `<button class="step-timer-preset" type="button" data-kookstand-timer-preset="${secs}">${escapeHtml(label)}</button>`;
-              })
-              .join("")}
-          </div>
-          <form class="step-timer-menu__custom" id="kookstandTimerCustomForm">
-            <label class="step-timer-menu__label">
-              <span>Custom</span>
-              <input class="step-timer-menu__input" type="number" inputmode="numeric" min="1" max="180" step="1" placeholder="min" aria-label="Custom timer in minuten" />
-            </label>
-            <button class="step-timer-preset step-timer-preset--primary" type="submit">Start</button>
-          </form>
-        `;
-      }
-    }
   }
 
   if (kookstandPrevButton) kookstandPrevButton.disabled = !hasSteps || boundedIndex <= 0;
@@ -7323,6 +7191,9 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
   if (destLabel) {
     destLabel.textContent = storeConfig.loadingLabel;
   }
+  if (storeSlug === "albert-heijn") {
+    showAhMatchSplash(activeItems.length);
+  }
 
   try {
     const payload = await fetchJson(`${state.apiBase}/api/store-basket`, {
@@ -7386,6 +7257,9 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
   } catch {
     showToast(`Kon ${storeName} niet voorbereiden.`);
   } finally {
+    if (storeSlug === "albert-heijn") {
+      hideAhMatchSplash();
+    }
     button.disabled = false;
     if (destLabel) {
       destLabel.textContent = originalLabel;
@@ -9625,6 +9499,119 @@ function hideImportSplash() {
   }
 }
 
+/* ─── AH match splash overlay ─── */
+const AH_MATCH_SPLASH_PHASE_COUNT = 4;
+const AH_MATCH_SPLASH_PHASE_LABELS = [
+  "Ingrediënten lezen",
+  "Albert Heijn doorzoeken",
+  "Beste producten kiezen",
+  "Lijst klaarzetten"
+];
+const AH_MATCH_SPLASH_MIN_MS = 2600;
+const AH_MATCH_SPLASH_MAX_MS = 30000;
+let _ahMatchSplashTimer = null;
+let _ahMatchSplashPhase = 0;
+let _ahMatchSplashShownAt = 0;
+let _ahMatchSplashHideTimeout = null;
+let _ahMatchSplashSafetyTimeout = null;
+let _ahMatchSplashExitTimeout = null;
+
+function _renderAhMatchSplashPhases(activeIdx) {
+  const splash = document.getElementById("ahMatchSplash");
+  const status = document.getElementById("ahMatchSplashStatus");
+  const items = splash ? splash.querySelectorAll(".import-splash__orbit-step") : [];
+  const phaseCount = items.length || AH_MATCH_SPLASH_PHASE_COUNT;
+  const safeIdx = Math.max(0, Math.min(activeIdx, phaseCount - 1));
+  if (splash) {
+    splash.dataset.phase = String(safeIdx);
+    splash.style.setProperty("--import-progress", `${((safeIdx + 1) / phaseCount) * 100}%`);
+  }
+  if (status) status.textContent = AH_MATCH_SPLASH_PHASE_LABELS[safeIdx] || "AH producten matchen";
+  items.forEach((el, i) => {
+    el.dataset.state = i < safeIdx ? "done" : i === safeIdx ? "active" : "pending";
+  });
+}
+
+function _doHideAhMatchSplash() {
+  const splash = document.getElementById("ahMatchSplash");
+  if (!splash) return;
+  if (_ahMatchSplashExitTimeout) {
+    clearTimeout(_ahMatchSplashExitTimeout);
+    _ahMatchSplashExitTimeout = null;
+  }
+  splash.classList.add("import-splash--leaving");
+  _ahMatchSplashExitTimeout = window.setTimeout(() => {
+    _ahMatchSplashExitTimeout = null;
+    splash.classList.add("hidden");
+    splash.classList.remove("import-splash--leaving", "import-splash--ready");
+    splash.setAttribute("aria-hidden", "true");
+    splash.style.removeProperty("--import-progress");
+    delete splash.dataset.phase;
+  }, 260);
+  if (_ahMatchSplashTimer) {
+    clearInterval(_ahMatchSplashTimer);
+    _ahMatchSplashTimer = null;
+  }
+  if (_ahMatchSplashSafetyTimeout) {
+    clearTimeout(_ahMatchSplashSafetyTimeout);
+    _ahMatchSplashSafetyTimeout = null;
+  }
+  _ahMatchSplashShownAt = 0;
+}
+
+function showAhMatchSplash(itemCount = 0) {
+  const splash = document.getElementById("ahMatchSplash");
+  if (!splash) return;
+  if (_ahMatchSplashHideTimeout) {
+    clearTimeout(_ahMatchSplashHideTimeout);
+    _ahMatchSplashHideTimeout = null;
+  }
+  if (_ahMatchSplashExitTimeout) {
+    clearTimeout(_ahMatchSplashExitTimeout);
+    _ahMatchSplashExitTimeout = null;
+  }
+  const hint = document.getElementById("ahMatchSplashHint");
+  if (hint) {
+    const count = Number(itemCount) || 0;
+    hint.textContent = count > 1
+      ? `We matchen ${count} ingrediënten met de beste Albert Heijn producten.`
+      : "We matchen je ingrediënt met het beste Albert Heijn product.";
+  }
+  _ahMatchSplashPhase = 0;
+  _renderAhMatchSplashPhases(0);
+  splash.classList.remove("hidden", "import-splash--leaving", "import-splash--ready");
+  splash.setAttribute("aria-hidden", "false");
+  _ahMatchSplashShownAt = Date.now();
+  if (_ahMatchSplashTimer) clearInterval(_ahMatchSplashTimer);
+  _ahMatchSplashTimer = setInterval(() => {
+    _ahMatchSplashPhase = Math.min(_ahMatchSplashPhase + 1, AH_MATCH_SPLASH_PHASE_COUNT - 1);
+    _renderAhMatchSplashPhases(_ahMatchSplashPhase);
+  }, 850);
+  if (_ahMatchSplashSafetyTimeout) clearTimeout(_ahMatchSplashSafetyTimeout);
+  _ahMatchSplashSafetyTimeout = setTimeout(() => {
+    _ahMatchSplashSafetyTimeout = null;
+    _doHideAhMatchSplash();
+  }, AH_MATCH_SPLASH_MAX_MS);
+}
+
+function hideAhMatchSplash() {
+  const elapsed = _ahMatchSplashShownAt ? Date.now() - _ahMatchSplashShownAt : AH_MATCH_SPLASH_MIN_MS;
+  const remaining = Math.max(0, AH_MATCH_SPLASH_MIN_MS - elapsed);
+  if (_ahMatchSplashHideTimeout) clearTimeout(_ahMatchSplashHideTimeout);
+  if (remaining === 0) {
+    _doHideAhMatchSplash();
+  } else {
+    _ahMatchSplashPhase = AH_MATCH_SPLASH_PHASE_COUNT - 1;
+    _renderAhMatchSplashPhases(AH_MATCH_SPLASH_PHASE_COUNT - 1);
+    const splash = document.getElementById("ahMatchSplash");
+    if (splash) splash.classList.add("import-splash--ready");
+    _ahMatchSplashHideTimeout = setTimeout(() => {
+      _ahMatchSplashHideTimeout = null;
+      _doHideAhMatchSplash();
+    }, remaining);
+  }
+}
+
 async function submitImport(url, note, setFeedback, setLoading, onDone) {
   if (!validateUrl(url)) {
     setFeedback("Gebruik een geldige TikTok-, Instagram- of website-link.");
@@ -10124,41 +10111,6 @@ bindEvent(document.getElementById("kookstandStepDone"), "click", () => {
   if (!recipe) return;
   toggleStepChecked(recipe.id, state.kookstandStepIndex);
   renderKookstand();
-});
-bindEvent(document.getElementById("kookstandStepTimer"), "click", (event) => {
-  const btn = event.target.closest("#kookstandStepTimer");
-  if (!(btn instanceof HTMLElement)) return;
-  if (stepTimers.has(btn)) {
-    startStepTimer(btn, 1);
-    return;
-  }
-  const menu = document.getElementById("kookstandStepTimerMenu");
-  if (menu) menu.classList.toggle("hidden");
-});
-bindEvent(document.getElementById("kookstandStepTimerMenu"), "click", (event) => {
-  const preset = event.target.closest("[data-kookstand-timer-preset]");
-  if (!(preset instanceof HTMLElement)) return;
-  const secs = parseInt(preset.dataset.kookstandTimerPreset || "0", 10);
-  const btn = document.getElementById("kookstandStepTimer");
-  if (btn instanceof HTMLElement && secs > 0) {
-    startStepTimer(btn, secs);
-    const menu = document.getElementById("kookstandStepTimerMenu");
-    menu && menu.classList.add("hidden");
-  }
-});
-bindEvent(document.getElementById("kookstandStepTimerMenu"), "submit", (event) => {
-  const form = event.target?.closest?.("#kookstandTimerCustomForm");
-  if (!(form instanceof HTMLFormElement)) return;
-  event.preventDefault();
-  const input = form.querySelector("input");
-  const mins = parseInt(String(input?.value || ""), 10);
-  const btn = document.getElementById("kookstandStepTimer");
-  if (btn instanceof HTMLElement && Number.isFinite(mins) && mins > 0) {
-    startStepTimer(btn, mins * 60);
-    const menu = document.getElementById("kookstandStepTimerMenu");
-    menu && menu.classList.add("hidden");
-    input && (input.value = "");
-  }
 });
 brandHomeButtons.forEach((button) => {
   button.addEventListener("click", goHome);
@@ -10910,50 +10862,6 @@ bindEvent(detailStepList, "click", (event) => {
     }
     return;
   }
-
-  const presetBtn = target.closest("[data-step-timer-preset]");
-  if (presetBtn instanceof HTMLElement) {
-    const secs = parseInt(presetBtn.dataset.stepTimerPreset || "0", 10);
-    const row = presetBtn.closest("[data-step-row]");
-    const timerBtn = row?.querySelector?.(".step-timer");
-    if (timerBtn instanceof HTMLElement && secs > 0) {
-      startStepTimer(timerBtn, secs);
-      const menu = row.querySelector?.(".step-timer-menu");
-      menu && menu.classList.add("hidden");
-    }
-    return;
-  }
-
-  const timerBtn = target.closest("[data-step-timer]");
-  if (timerBtn instanceof HTMLElement) {
-    if (stepTimers.has(timerBtn)) {
-      startStepTimer(timerBtn, 1);
-      return;
-    }
-    const row = timerBtn.closest("[data-step-row]");
-    const menu = row?.querySelector?.(".step-timer-menu");
-    if (menu instanceof HTMLElement) {
-      detailStepList.querySelectorAll(".step-timer-menu").forEach((el) => el !== menu && el.classList.add("hidden"));
-      menu.classList.toggle("hidden");
-    }
-    return;
-  }
-});
-
-bindEvent(detailStepList, "submit", (event) => {
-  const form = event.target?.closest?.("[data-step-timer-custom-form]");
-  if (!(form instanceof HTMLFormElement)) return;
-  event.preventDefault();
-  const row = form.closest("[data-step-row]");
-  const timerBtn = row?.querySelector?.(".step-timer");
-  const input = form.querySelector("input");
-  const mins = parseInt(String(input?.value || ""), 10);
-  if (timerBtn instanceof HTMLElement && Number.isFinite(mins) && mins > 0) {
-    startStepTimer(timerBtn, mins * 60);
-    const menu = row?.querySelector?.(".step-timer-menu");
-    menu && menu.classList.add("hidden");
-    input && (input.value = "");
-  }
 });
 
 // Basket servings controls
@@ -11273,7 +11181,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 });
 
 // "Over deze App" → about sub-panel
-const APP_VERSION = "3.0.0";
+const APP_VERSION = "3.0.4";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
@@ -13103,17 +13011,11 @@ if (adminUsersList) {
 // ────────────────────────────────────────────────────────────────────────────
 
 let installPrompt = null;
-const installAppBtn = document.getElementById("installAppBtn");
 const installAppSheet = document.getElementById("installAppSheet");
 const installAppBackdrop = document.getElementById("installAppBackdrop");
 
 // Detect iOS
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-
-// Always show install button (Android has beforeinstallprompt, iOS has manual method)
-if (installAppBtn) {
-  installAppBtn.style.display = "";
-}
 
 // Show install app modal once per session (after login)
 function showInstallAppModal() {
@@ -13147,32 +13049,21 @@ window.addEventListener("beforeinstallprompt", (event) => {
   installPrompt = event;
 });
 
-// Handle install button click (from Account > Plately section)
-if (installAppBtn) {
-  installAppBtn.addEventListener("click", async () => {
-    // Android: Show install prompt if available
-    if (installPrompt) {
-      installPrompt.prompt();
-      const { outcome } = await installPrompt.userChoice;
-      console.log(`User response to install prompt: ${outcome}`);
-      installPrompt = null;
-      installAppBtn.style.display = "none";
-      return;
-    }
+async function promptInstallApp() {
+  if (installPrompt) {
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    console.log(`User response to install prompt: ${outcome}`);
+    installPrompt = null;
+    return;
+  }
 
-    // iOS: Show instructions in a toast/modal
-    if (isIOS) {
-      showToast(
-        "📱 Op iPhone: Tik op Delen → Voeg toe aan startscherm"
-      );
-      return;
-    }
+  if (isIOS) {
+    showToast("📱 Op iPhone: Tik op Delen → Voeg toe aan startscherm");
+    return;
+  }
 
-    // Fallback for other browsers
-    showToast(
-      "📱 Uw browser ondersteunt app-installatie niet via deze knop"
-    );
-  });
+  showToast("📱 Uw browser ondersteunt app-installatie niet via deze knop");
 }
 
 // Handle modal buttons
@@ -13182,10 +13073,7 @@ const installAppSkipBtn = document.getElementById("installAppSkipBtn");
 if (installAppConfirmBtn) {
   installAppConfirmBtn.addEventListener("click", async () => {
     closeInstallAppModal();
-    // Trigger the same installation flow as the button
-    if (installAppBtn) {
-      installAppBtn.click();
-    }
+    promptInstallApp();
   });
 }
 
@@ -13202,7 +13090,4 @@ if (installAppBackdrop) {
 // Hide install button when app is already installed
 window.addEventListener("appinstalled", () => {
   console.log("✅ Plately installed successfully!");
-  if (installAppBtn) {
-    installAppBtn.style.display = "none";
-  }
 });
