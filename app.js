@@ -13653,11 +13653,18 @@ function renderOnboardingChannels() {
   list.innerHTML = seed
     .map((ch) => {
       const enabled = onboardingData.channels.includes(ch.id);
+      const faviconUrl = ch.url ? getSourceIconUrl(ch.url) : "";
+      const initials = escapeHtml(
+        String(ch.initials || "").trim() || (ch.name || "?").trim().slice(0, 2) || "?"
+      );
+      const logoMarkup = faviconUrl
+        ? `<img class="onboarding-channel-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none';var s=this.nextElementSibling;if(s) s.style.display='flex'"/><span class="onboarding-channel-avatar__initials">${initials}</span>`
+        : `<span class="onboarding-channel-avatar__initials onboarding-channel-avatar__initials--solo">${initials}</span>`;
       return `
         <label class="onboarding-channel-item ${enabled ? "selected" : ""}" data-onb-channel-id="${escapeHtml(ch.id)}">
           <input type="checkbox" ${enabled ? "checked" : ""} />
-          <span class="onboarding-channel-avatar" style="background:${escapeHtml(ch.color || "#8da485")}1a">
-            <span style="font-weight:900;font-size:.72rem">${escapeHtml((ch.name || "?")[0] || "?")}</span>
+          <span class="onboarding-channel-avatar">
+            ${logoMarkup}
           </span>
           <span>${escapeHtml(ch.name || "")}</span>
         </label>
