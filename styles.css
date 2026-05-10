@@ -13009,11 +13009,86 @@ body {
   max-width: 320px;
 }
 
+.about-app__legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 12px;
+  margin: 18px 0 10px;
+  font-size: 0.82rem;
+}
+
+.about-app__legal-link {
+  padding: 4px 2px;
+}
+
+.about-app__legal-dot {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
 .about-app__copyright {
   margin: 0;
   font-size: 0.78rem;
   color: var(--muted);
   letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.about-app__mail {
+  color: var(--color-brand);
+  font-weight: 650;
+  text-decoration: none;
+}
+.about-app__mail:hover,
+.about-app__mail:focus-visible {
+  text-decoration: underline;
+}
+
+/* Juridische blokken in profile sub-panels */
+.profile-legal .profile-legal__block {
+  margin-bottom: 18px;
+}
+
+.profile-legal .profile-legal__block:last-child {
+  margin-bottom: 4px;
+}
+
+.profile-legal__h {
+  margin: 0 0 8px;
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.profile-legal__p {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  line-height: 1.52;
+  color: var(--muted-strong);
+}
+
+.profile-legal__p:last-child {
+  margin-bottom: 0;
+}
+
+.profile-legal__inline-btn {
+  display: inline;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-brand);
+  font-weight: 750;
+  font-size: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.profile-legal__p a {
+  color: var(--color-brand);
+  font-weight: 650;
 }
 
 /* Profile hero avatar (above the name on the profile screen) */
@@ -15236,4 +15311,65 @@ body {
   .import-splash__orbit-track {
     animation: none !important;
   }
+}
+
+/* ── Statische juridische pagina’s (privacy.html, terms.html) ─────────────── */
+.legal-document-page {
+  min-height: 100vh;
+  margin: 0;
+  padding: 20px 16px 40px;
+  font-family: var(--font-body);
+  background: var(--app-body-bg);
+  color: var(--text);
+}
+
+.legal-document {
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.legal-document__back {
+  display: inline-block;
+  margin-bottom: 14px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--color-brand);
+  text-decoration: none;
+}
+
+.legal-document__back:hover,
+.legal-document__back:focus-visible {
+  text-decoration: underline;
+}
+
+.legal-document h1 {
+  margin: 0 0 6px;
+  font-size: 1.5rem;
+}
+
+.legal-document .legal-meta {
+  margin: 0 0 20px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.legal-document section {
+  margin-bottom: 20px;
+}
+
+.legal-document h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.legal-document p {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--muted-strong);
+}
+
+.legal-document a {
+  color: var(--color-brand);
 }

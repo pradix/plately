@@ -8,11 +8,16 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="3.1.12" />
+    <meta name="plately-build" content="3.1.13" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
     <meta name="theme-color" content="#8da485" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="dns-prefetch" href="https://static.ah.nl" />
+    <link rel="dns-prefetch" href="https://img.culy.nl" />
+    <link rel="dns-prefetch" href="https://i0.wp.com" />
     <meta property="og:site_name" content="Plately" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Plately" />
@@ -32,7 +37,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=3.1.12" />
+    <link rel="stylesheet" href="styles.css?v=3.1.13" />
     <script>
       (function () {
         try {
@@ -672,6 +677,14 @@
               <span class="profile2-row__label">Privacy</span>
               <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
             </button>
+            <div class="profile2-row-divider"></div>
+            <button class="profile2-row" type="button" id="goToTermsBtn">
+              <span class="profile2-row__icon" style="background:#faf5ff">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4v15.5A2.5 2.5 0 0 0 6.5 22H20V4"/><path d="M8 11h8M8 7h8M8 15h6"/></svg>
+              </span>
+              <span class="profile2-row__label">Algemene voorwaarden</span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
           </div>
 
           <!-- NOTIFICATIES section -->
@@ -916,7 +929,12 @@
                   </button>
                 </div>
 
-                <p class="about-app__copyright">© 2026 Plately</p>
+                <div class="about-app__legal-links">
+                  <button type="button" class="ghost-link about-app__legal-link" id="aboutOpenPrivacyBtn">Privacyverklaring</button>
+                  <span class="about-app__legal-dot" aria-hidden="true">·</span>
+                  <button type="button" class="ghost-link about-app__legal-link" id="aboutOpenTermsBtn">Algemene voorwaarden</button>
+                </div>
+                <p class="about-app__copyright">© 2026 Plately · <a href="mailto:support@plately.nl" class="about-app__mail">support@plately.nl</a></p>
               </div>
             </div>
           </div>
@@ -930,8 +948,58 @@
               <h1 class="topbar-title">Privacy</h1>
               <span class="topbar-spacer"></span>
             </header>
-            <div class="profile-subpanel__body">
-              <p class="profile2-privacy-note profile2-privacy-note--subpanel" lang="nl">Plately registreert beperkte, anonieme gebruiksdata (welke schermen je opent, of imports en koppelingen met de supermarkt slagen) om de app te verbeteren. Dit is gekoppeld aan je account als je bent ingelogd; anders wordt er een tijdelijk id op dit apparaat gebruikt. We verkopen deze gegevens niet.</p>
+            <div class="profile-subpanel__body profile-legal">
+              <section class="profile-legal__block">
+                <h3 class="profile-legal__h">Wat doet Plately met gegevens?</h3>
+                <p class="profile-legal__p">Plately registreert beperkte, anonieme gebruiksdata — zoals welke schermen je opent en of importeren of koppeling met de supermarkt lukt — om bugs te vinden en de app te verbeteren.</p>
+                <p class="profile-legal__p">Ben je ingelogd, dan wordt die activiteit gekoppeld aan je account-ID. Zo niet: er wordt een tijdelijk, lokaal opgeslagen pseudoniem gebruikt zoals verklaard bij het eerste gebruik.</p>
+                <p class="profile-legal__p">We verkopen persoonsgegevens niet en gebruiken ze niet voor advertenties van derden. Technische logs op de server kunnen foutmeldingen bevatten (bijv. mislukte import); die proberen we zo min mogelijk inhoudelijk te maken.</p>
+              </section>
+              <section class="profile-legal__block">
+                <h3 class="profile-legal__h">Uw receptinhoud</h3>
+                <p class="profile-legal__p">Recepten die je importeert, komen bij de aanbieder vandaan (websites of platforms). Dat is géén eigendom van Plately — zie ook de <button type="button" class="profile-legal__inline-btn" id="privacyToTermsInline">algemene voorwaarden</button>.</p>
+              </section>
+              <section class="profile-legal__block">
+                <h3 class="profile-legal__h">Jouw rechten & contact</h3>
+                <p class="profile-legal__p">Voor vragen, inzage of verwijderverzoeken: <a href="mailto:support@plately.nl">support@plately.nl</a>. Op de website zijn ook platte tekstpagina’s: <a href="privacy.html" target="_blank" rel="noopener noreferrer">privacy.html</a> · <a href="terms.html" target="_blank" rel="noopener noreferrer">terms.html</a>.</p>
+              </section>
+            </div>
+          </div>
+
+          <!-- ══ Sub-panel: Algemene voorwaarden ══ -->
+          <div class="profile-subpanel" id="profileSubTerms" aria-hidden="true">
+            <header class="topbar--sub">
+              <button class="topbar-back-btn" id="profileSubTermsBack" type="button" aria-label="Terug">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <h1 class="topbar-title">Voorwaarden</h1>
+              <span class="topbar-spacer"></span>
+            </header>
+            <div class="profile-subpanel__body profile-legal">
+              <section class="profile-legal__block">
+                <h3 class="profile-legal__h">Over de dienst</h3>
+                <p class="profile-legal__p">Plately is een digitale assistant om recept-links te bewaren, te organiseren en te gebruiken bij boodschappen en koken. Plately is géén receptuitgeverij: inhoud wordt geïmporteerd uit bronnen van derden en kan onvolledig of onjuist zijn.</p>
+              </section>
+              <section class="profile-legal__block">
+                <h3 class="profile-legal__h">Inhoud en intellectueel eigendom</h3>
+                <p class="profile-legal__p">Jij gebruikt eigen geïmporteerde inhoud onder de voorwaarden die bij de bron gelden (copyright, merk, databankrecht). Respecteer makers — link naar hun site waar dat redelijk is.</p>
+              </section>
+              <section class="profile-legal__block">
+                <h3 class="profile-legal__h">Gebruik voor eigen risico</h3>
+                <p class="profile-legal__p">Allergieën, allergenen en voeding: controleer altijd verpakkingen en labels — Plately geeft geen garantie op volledige of juiste labeling in geïmporteerde tekst.</p>
+              </section>
+              <section class="profile-legal__block">
+                <h3 class="profile-legal__h">Beschikbaarheid</h3>
+                <p class="profile-legal__p">De app wordt “zoals ze is” geleverd. We streven naar hoge uptime; onderhoud, storingen bij hosting of bij derde partijen (supermarktkoppelingen) kunnen de dienst beperken.</p>
+              </section>
+              <section class="profile-legal__block">
+                <h3 class="profile-legal__h">Aansprakelijkheid</h3>
+                <p class="profile-legal__p">Plately en haar bedrijfsvoering zijn niet aansprakelijk voor schade door gebruik van de app buiten het wettelijk noodzakelijke, tenzij er sprake is van opzet of grove schuld zoals voorzien door dwingend recht.</p>
+              </section>
+              <section class="profile-legal__block">
+                <h3 class="profile-legal__h">Volledige tekst online</h3>
+                <p class="profile-legal__p">De laatste weergave van deze tekst vind je ook op <a href="terms.html" target="_blank" rel="noopener noreferrer">terms.html</a>. Bij vragen: <a href="mailto:support@plately.nl">support@plately.nl</a>.</p>
+              </section>
             </div>
           </div>
 
@@ -2055,6 +2123,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=3.1.12"></script>
+    <script src="app.js?v=3.1.13"></script>
   </body>
 </html>

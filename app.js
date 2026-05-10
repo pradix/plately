@@ -10700,11 +10700,34 @@ bindEvent(document.getElementById("reportBugButton"), "click", () => {
     subtitle: `Iets niet goed gegaan bij het importeren van "${recipe.title}"? We sturen de details naar het Plately team zodat we het kunnen verbeteren.`,
     confirmLabel: "Melden",
     onConfirm: () => {
-      const subject = encodeURIComponent(`Importfout: ${recipe.title}`);
+      const subject = encodeURIComponent(`Import/recipe-issue: ${recipe.title}`);
       const body = encodeURIComponent(
-        `Hallo Plately team,\n\nIk had een probleem met het importeren van dit recept.\n\nRecept: ${recipe.title}\nBron: ${recipe.sourceUrl || "(onbekend)"}\nPlatform: ${recipe.platform || "(onbekend)"}\n\nWat ging er mis?\n(Beschrijf hier wat er niet klopt aan het geïmporteerde recept)\n\n--\nVerstuurd vanuit de Plately app`
+        `Hallo Plately-team,
+
+Ik meld een probleem met deze import of dit recept:
+
+Recept-ID: ${recipe.id}
+Titel: ${recipe.title}
+Bron-URL: ${recipe.sourceUrl || "(onbekend)"}
+Platform: ${recipe.platform || "(onbekend)"}
+Ingrediënten (aantal): ${Array.isArray(recipe.ingredients) ? recipe.ingredients.length : "?"}
+Stappen (aantal): ${Array.isArray(recipe.instructions) ? recipe.instructions.length : "?"}
+
+Type probleem — zet een x tussen de [ ] indien dit klopt:
+
+[ ] Titel of beschrijving klopt niet
+[ ] Ingrediënten kloppen niet / ontbreken
+[ ] Bereidings-/staptekst fout of incompleet
+[ ] Afbeelding klopt niet of ontbreekt
+[ ] Ander onderwerp (licht hier onder toe)
+
+Uw toelichting:
+…
+
+——
+Verstuurd vanuit de Plately-webapp (${typeof window !== "undefined" ? window.location?.origin || "" : ""})`
       );
-      window.location.href = `mailto:pradix@me.com?subject=${subject}&body=${body}`;
+      window.location.href = `mailto:support@plately.nl?subject=${subject}&body=${body}`;
       showToast("Bedankt! Je e-mailprogramma wordt geopend.");
     },
   });
@@ -11873,7 +11896,8 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 });
 
 // "Over deze App" → about sub-panel
-const APP_VERSION = "3.1.0";
+const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "3.1.13";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
@@ -11883,10 +11907,28 @@ bindEvent(document.getElementById("goToAboutBtn"), "click", () => {
 });
 bindEvent(document.getElementById("profileSubAboutBack"), "click", () => closeProfileSubPanel("profileSubAbout"));
 
+bindEvent(document.getElementById("aboutOpenPrivacyBtn"), "click", () => {
+  closeProfileSubPanel("profileSubAbout");
+  openProfileSubPanel("profileSubPrivacy");
+});
+bindEvent(document.getElementById("aboutOpenTermsBtn"), "click", () => {
+  closeProfileSubPanel("profileSubAbout");
+  openProfileSubPanel("profileSubTerms");
+});
+
 bindEvent(document.getElementById("goToPrivacyBtn"), "click", () => {
   openProfileSubPanel("profileSubPrivacy");
 });
 bindEvent(document.getElementById("profileSubPrivacyBack"), "click", () => closeProfileSubPanel("profileSubPrivacy"));
+
+bindEvent(document.getElementById("goToTermsBtn"), "click", () => {
+  openProfileSubPanel("profileSubTerms");
+});
+bindEvent(document.getElementById("profileSubTermsBack"), "click", () => closeProfileSubPanel("profileSubTerms"));
+bindEvent(document.getElementById("privacyToTermsInline"), "click", () => {
+  closeProfileSubPanel("profileSubPrivacy");
+  openProfileSubPanel("profileSubTerms");
+});
 
 // "Nieuw in Plately" → changelog sub-panel
 // Profile stat buttons → navigate to relevant screen/panel

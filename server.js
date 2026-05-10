@@ -2,20 +2,66 @@ const http = require("node:http");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
+const os = require("node:os");
 const crypto = require("node:crypto");
 
 const ROOT_DIR = __dirname;
-// Prefer DATA_DIR env (Render: koppel persistent disk op /data óf zet DATA_DIR naar een schrijfbare map).
-// Default production: /data. Development: ./data in project.
-const DATA_DIR = process.env.DATA_DIR
-  ? path.resolve(process.env.DATA_DIR)
-  : process.env.NODE_ENV === "production"
-    ? "/data"
-    : path.join(ROOT_DIR, "data");
-const DATA_FILE = path.join(DATA_DIR, "plately-db.json");
 
-console.log(`📁 DATA_DIR: ${DATA_DIR}`);
-console.log(`📄 DATA_FILE: ${DATA_FILE}`);
+function computeDefaultDataDir() {
+  if (process.env.DATA_DIR) return path.resolve(process.env.DATA_DIR);
+  if (process.env.NODE_ENV === "production") return "/data";
+  return path.join(ROOT_DIR, "data");
+}
+
+// Wordt na start gevalideerd / verplaatst als schrijven op /data niet lukt (Render zonder disk).
+let DATA_DIR = computeDefaultDataDir();
+let DATA_FILE = path.join(DATA_DIR, "plately-db.json");
+
+let resolveDataPathsPromise = null;
+
+async function resolveWritableDataPathsOnce() {
+  if (!resolveDataPathsPromise) {
+    resolveDataPathsPromise = (async () => {
+      const explicit = Boolean(process.env.DATA_DIR);
+      const primary = computeDefaultDataDir();
+      const fallbacks =
+        explicit
+          ? [primary]
+          : process.env.NODE_ENV === "production"
+            ? [primary, path.join(ROOT_DIR, "data"), path.join(os.tmpdir(), "plately-data")]
+            : [primary];
+
+      async function probe(dir) {
+        await fsp.mkdir(dir, { recursive: true });
+        const p = path.join(dir, `.plately-write-${process.pid}-${Date.now()}`);
+        await fsp.writeFile(p, "1", "utf8");
+        await fsp.unlink(p);
+        return dir;
+      }
+
+      let lastErr = null;
+      for (const dir of fallbacks) {
+        try {
+          await probe(dir);
+          if (!explicit && dir !== primary) {
+            console.warn(`📁 Primary data dir (${primary}) not usable — using ${dir}`);
+          }
+          DATA_DIR = dir;
+          DATA_FILE = path.join(DATA_DIR, "plately-db.json");
+          console.log(`📁 DATA_DIR: ${DATA_DIR}`);
+          console.log(`📄 DATA_FILE: ${DATA_FILE}`);
+          console.log(`🌍 NODE_ENV: ${process.env.NODE_ENV}`);
+          return;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      console.error(`❌ Geen beschrijfbaar DATA_DIR; laatste fout: ${lastErr?.message || lastErr}`);
+    })();
+  }
+  return resolveDataPathsPromise;
+}
+
 console.log(`🌍 NODE_ENV: ${process.env.NODE_ENV}`);
 
 loadEnvFile();
@@ -1216,6 +1262,7 @@ function isPostgresEnabled() {
 // Dev-only fallback: create auth session without database
 async function createDevAuthSession(response, userId, email) {
   const token = crypto.randomBytes(24).toString("hex");
+  await resolveWritableDataPathsOnce();
 
   // Wait for any pending writes to complete before modifying cache
   await databaseWriteQueue;
@@ -1260,6 +1307,8 @@ async function createDevAuthSession(response, userId, email) {
 
 // Dev-only fallback: get authenticated user from dev auth session
 async function getDevAuthenticatedUser(request) {
+  await resolveWritableDataPathsOnce();
+
   const authToken = extractAuthToken(request);
   if (!authToken) {
     console.log("🔍 getDevAuthenticatedUser: no auth token found");
@@ -1921,6 +1970,8 @@ function buildDefaultUserData(userId = generateId("user")) {
 }
 
 async function ensureDataFile() {
+  await resolveWritableDataPathsOnce();
+
   try {
     await fsp.mkdir(DATA_DIR, { recursive: true });
   } catch (err) {
@@ -11707,7 +11758,7 @@ const server = http.createServer(async (request, response) => {
     <meta name="twitter:description" content="${escapeHtml(desc)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
-    <link rel="stylesheet" href="/styles.css?v=3.1.12" />
+    <link rel="stylesheet" href="/styles.css?v=3.1.13" />
     <script>
       (function () {
         document.addEventListener(
@@ -11855,11 +11906,27 @@ const server = http.createServer(async (request, response) => {
       const db = await loadDatabase();
       if (!db.shareLinks || typeof db.shareLinks !== "object") db.shareLinks = {};
       db.shareLinks[token] = { payload: safePayload, createdAt: new Date().toISOString() };
+      let sharePersisted = false;
       try {
         await persistDatabase();
+        sharePersisted = true;
       } catch (persistErr) {
         // Shortlinks blijven in databaseCache maar overleven geen redeploy als schijf ontbreekt of /data niet schrijfbaar is.
         console.error("[share/create] persistDatabase failed:", persistErr?.message || persistErr);
+      }
+
+      const shareHost = sanitizeText(request.headers.host || "").slice(0, 160);
+      try {
+        console.log(
+          JSON.stringify({
+            evt: "plately_share_created",
+            host: shareHost,
+            persisted: sharePersisted,
+            titleLen: safePayload.title.length,
+          })
+        );
+      } catch {
+        /* ignore logging */
       }
 
       const shareUrl = new URL(`/share/${encodeURIComponent(token)}`, `http://${request.headers.host || "localhost"}`);
@@ -12998,6 +13065,18 @@ const server = http.createServer(async (request, response) => {
           httpStatus: statusCode,
           error: sanitizeText(rawMessage).slice(0, 280) || "import_failed",
         });
+        try {
+          console.log(
+            JSON.stringify({
+              evt: "plately_import_failed",
+              traceId,
+              httpStatus: statusCode,
+              err: sanitizeText(rawMessage).slice(0, 200),
+            })
+          );
+        } catch {
+          /* ignore logging */
+        }
         const errorMessage = rawMessage || "Import mislukt. Controleer de link en probeer opnieuw.";
         sendJson(response, statusCode, { ok: false, error: "import_failed", message: errorMessage });
       }
@@ -14740,9 +14819,13 @@ const server = http.createServer(async (request, response) => {
 });
 
 if (require.main === module) {
-  server.listen(PORT, () => {
-    console.log(`Plately draait op http://localhost:${PORT}`);
-  });
+  resolveWritableDataPathsOnce()
+    .catch((e) => console.error("[boot] DATA_DIR-resolve:", e?.message || e))
+    .finally(() => {
+      server.listen(PORT, () => {
+        console.log(`Plately draait op http://localhost:${PORT}`);
+      });
+    });
 }
 
 module.exports = {
