@@ -3206,6 +3206,15 @@ function runHomeSearchQuery(query) {
 }
 
 function switchView(view) {
+  if (state.view === "review" && view !== "review" && importReviewLeaveShouldWarn()) {
+    const ok = window.confirm(
+      "Dit recept staat nog niet in een kookboek. Ga je nu weg, dan blijft hij wel als concept bewaard (via Concepten). Toch doorgaan?"
+    );
+    if (!ok) {
+      return;
+    }
+  }
+
   // Enforce authentication for all protected views
   // Only enforce after session check is complete (state.session.ready)
   if (state.session.ready && !state.auth.authenticated && view !== "detail") {
@@ -5543,8 +5552,7 @@ function renderGroceryGroups() {
 
   if (!state.groceryItems.length) {
     closeBasketModal();
-    const candidateRecipes = (getSavedImportedRecipes()?.length ? getSavedImportedRecipes() : state.recipes) || [];
-    const recentRecipes = [...candidateRecipes].slice(-6).reverse();
+    const recentRecipes = getRecentImportedRecipesForEmptyGrocery(6);
     const recipeCardsHtml = recentRecipes
       .map((recipe) => {
         const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
@@ -5566,8 +5574,12 @@ function renderGroceryGroups() {
 
     groceryGroups.innerHTML = `
       <div class="grocery-empty-state">
-        <p class="grocery-empty">Je boodschappenlijst is nog leeg. Voeg eerst een recept toe.</p>
-        <p class="grocery-empty-hint">Kies een recept om te beginnen</p>
+        <p class="grocery-empty">Je boodschappenlijst is leeg.</p>
+        <p class="grocery-empty-hint">${
+          recipeCardsHtml
+            ? "Tik hieronder op een recent geïmporteerd recept om items toe te voegen."
+            : "Importeer eerst een recept om je lijst te vullen."
+        }</p>
         ${recipeCardsHtml ? `<div class="recipe-grid grocery-empty-recipes">${recipeCardsHtml}</div>` : ""}
       </div>
     `;
@@ -5923,6 +5935,49 @@ function updateIngredientImages() {
 
 function getReviewRecipe() {
   return getRecipeById(state.reviewRecipeId || state.selectedRecipeId);
+}
+
+/** Sort-key: nieuwere imports eerst (id bevat vaak timestamp; plus concept-timestamp). */
+function recipeImportRecencyMs(recipe) {
+  const id = String(recipe?.id || "");
+  const ms = id.match(/(\d{13,})/);
+  if (ms) return Number(ms[1]);
+  const sec = id.match(/(?:^|-)(\d{10})(?:\D|$)/);
+  if (sec) return Number(sec[1]) * 1000;
+  return Number(recipe?._previewCreatedAt || 0);
+}
+
+/**
+ * Bij lege boodschappenlijst: toon altijd tot 6 recentste geïmporteerde recepten
+ * (openstaande concepten eerst, daarna opgeslagen imports, nieuwste voorop).
+ */
+function getRecentImportedRecipesForEmptyGrocery(limit = 6) {
+  const previews = getImportPreviewList();
+  const savedImported = getImportedRecipes()
+    .slice()
+    .sort((a, b) => recipeImportRecencyMs(b) - recipeImportRecencyMs(a));
+  const out = [];
+  const seen = new Set();
+  for (const r of previews) {
+    if (r?.id && !seen.has(r.id) && out.length < limit) {
+      seen.add(r.id);
+      out.push(r);
+    }
+  }
+  for (const r of savedImported) {
+    if (r?.id && !seen.has(r.id) && out.length < limit) {
+      seen.add(r.id);
+      out.push(r);
+    }
+  }
+  return out;
+}
+
+function importReviewLeaveShouldWarn() {
+  if (state.view !== "review") return false;
+  const recipe = getReviewRecipe();
+  if (!recipe?.id) return false;
+  return !isRecipeSaved(recipe.id);
 }
 
 function openImportReview(recipeId) {
@@ -10836,6 +10891,13 @@ bindEvent(shareProfileButton, "click", async () => {
     showToast("Profiellink gekopieerd.");
   } catch {
     showToast("Profiel delen lukte niet.");
+  }
+});
+
+window.addEventListener("beforeunload", (e) => {
+  if (importReviewLeaveShouldWarn()) {
+    e.preventDefault();
+    e.returnValue = "";
   }
 });
 
