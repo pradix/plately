@@ -939,6 +939,7 @@ const kookstandToggleIngredientsButton = document.getElementById("kookstandToggl
 const kookstandIngredientsSection = document.getElementById("kookstandIngredients");
 const kookstandIngredientList = document.getElementById("kookstandIngredientList");
 const kookstandHideIngredientsButton = document.getElementById("kookstandHideIngredients");
+const kookstandWakeLockToggle = document.getElementById("kookstandWakeLockToggle");
 const detailStepCount = document.getElementById("detailStepCount");
 const detailIngredientCount = document.getElementById("detailIngredientCount");
 const servingsDisplay = document.getElementById("servingsDisplay");
@@ -5952,12 +5953,11 @@ async function openKookstand(recipeId) {
   document.addEventListener("keydown", onKookstandKeydown, true);
   kookstandCloseButton?.focus?.();
 
-  if (!state.wakeLockSentinel) {
+  state.kookstandWakeLockOwned = false;
+  // Keep-awake is user-controlled via the toggle. Don't force it on when opening Kookstand.
+  if (state.keepAwake && !state.wakeLockSentinel) {
     state.kookstandWakeLockOwned = true;
-    state.keepAwake = true;
     await requestWakeLock();
-  } else {
-    state.kookstandWakeLockOwned = false;
   }
 
   renderKookstand();
@@ -5980,7 +5980,6 @@ async function closeKookstand() {
 
   if (state.kookstandWakeLockOwned) {
     state.kookstandWakeLockOwned = false;
-    state.keepAwake = false;
     await releaseWakeLock();
   }
 
@@ -7884,6 +7883,38 @@ function closeShareCard() {
   document.body.style.overflow = "";
 }
 
+function base64UrlEncodeJson(obj) {
+  const json = JSON.stringify(obj || {});
+  const bytes = new TextEncoder().encode(json);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function buildPublicRecipeShareUrl(recipe) {
+  if (!recipe) return window.location.href;
+  try {
+    const payload = {
+      v: 1,
+      id: recipe.id || "",
+      title: recipe.title || "",
+      description: recipe.description || "",
+      time: recipe.time || "",
+      servings: recipe.servings || "",
+      mealTag: recipe.mealTag || "",
+      image: recipe.image || "",
+      sourceUrl: recipe.sourceUrl || "",
+      ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => ({ quantity: i.quantity || "", unit: i.unit || "", name: i.name || "" })) : [],
+      instructions: Array.isArray(recipe.instructions) ? recipe.instructions.map((s) => String(s || "")) : [],
+    };
+    const u = new URL("recipe.html", window.location.href);
+    u.hash = "r=" + encodeURIComponent(base64UrlEncodeJson(payload));
+    return u.toString();
+  } catch {
+    return recipe?.sourceUrl || window.location.href;
+  }
+}
+
 async function shareSelectedRecipe() {
   const recipe = getSelectedRecipe();
   openShareCard(recipe);
@@ -7893,7 +7924,7 @@ bindEvent(document.getElementById("shareCardClose"), "click", closeShareCard);
 
 bindEvent(document.getElementById("shareCardNativeShare"), "click", async () => {
   const recipe = getSelectedRecipe();
-  const url = recipe?.sourceUrl || window.location.href;
+  const url = buildPublicRecipeShareUrl(recipe);
   if (navigator.share) {
     try {
       await navigator.share({ title: recipe?.title || "Recept", url });
@@ -9325,6 +9356,16 @@ function updateWakeLockUI() {
         ? "Aan — scherm blijft helder tijdens koken."
         : "Uit — scherm mag dimmen of uit (spaart batterij).";
   }
+
+  if (kookstandWakeLockToggle) {
+    kookstandWakeLockToggle.classList.toggle("is-active", isActive);
+    kookstandWakeLockToggle.setAttribute("aria-checked", String(isActive));
+    if (unsupported) {
+      kookstandWakeLockToggle.setAttribute("disabled", "");
+    } else {
+      kookstandWakeLockToggle.removeAttribute("disabled");
+    }
+  }
 }
 
 async function registerServiceWorker() {
@@ -10261,6 +10302,7 @@ bindEvent(kookstandButton, "click", () => {
   if (recipe) openKookstand(recipe.id);
 });
 bindEvent(wakeLockButton, "click", toggleWakeLock);
+bindEvent(kookstandWakeLockToggle, "click", toggleWakeLock);
 bindEvent(cookModeButton, "click", toggleCookMode);
 bindEvent(cookModePrevButton, "click", () => {
   const recipe = getSelectedRecipe();

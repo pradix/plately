@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plately — Recept</title>
+    <meta name="description" content="Een recept gedeeld via Plately." />
+    <meta name="theme-color" content="#8da485" />
+    <link rel="icon" href="assets/favicon.ico?v=7" sizes="any" />
+    <link rel="stylesheet" href="styles.css?v=3.1.2" />
+  </head>
+  <body class="public-recipe-page">
+    <main class="public-recipe" id="publicRecipeRoot">
+      <header class="public-recipe__top">
+        <a class="public-recipe__brand" href="./index.html" aria-label="Open Plately">
+          <img src="assets/plately.png" alt="Plately" class="public-recipe__brand-logo" />
+          <span class="public-recipe__brand-name">Plately</span>
+        </a>
+        <div class="public-recipe__cta">
+          <a class="btn-secondary public-recipe__cta-btn" href="./index.html">Inloggen</a>
+          <a class="btn-primary public-recipe__cta-btn" href="./index.html">Account maken</a>
+        </div>
+      </header>
+
+      <section class="public-recipe__card" aria-live="polite">
+        <p class="section-kicker public-recipe__kicker" id="publicMealTag"></p>
+        <h1 class="public-recipe__title" id="publicTitle">Recept</h1>
+        <p class="public-recipe__sub" id="publicSub"></p>
+        <div class="public-recipe__meta" id="publicMeta"></div>
+
+        <div class="public-recipe__grid">
+          <section class="public-recipe__panel" aria-label="Ingrediënten">
+            <h2 class="public-recipe__h2">Ingrediënten</h2>
+            <ul class="public-recipe__list" id="publicIngredients"></ul>
+          </section>
+
+          <section class="public-recipe__panel" aria-label="Bereiding">
+            <h2 class="public-recipe__h2">Bereiding</h2>
+            <ol class="public-recipe__steps" id="publicSteps"></ol>
+          </section>
+        </div>
+
+        <footer class="public-recipe__footer">
+          <a class="public-recipe__source" id="publicSource" href="#" target="_blank" rel="noopener noreferrer">Bekijk originele bron</a>
+          <button class="btn-secondary public-recipe__copy" id="copyLinkBtn" type="button">Link kopiëren</button>
+        </footer>
+      </section>
+
+      <section class="public-recipe__note" id="publicError" hidden>
+        <h2 class="public-recipe__h2">Deze link is niet compleet</h2>
+        <p class="public-recipe__sub">Deel opnieuw vanuit Plately of open dit recept in de app.</p>
+        <div class="public-recipe__cta public-recipe__cta--center">
+          <a class="btn-primary public-recipe__cta-btn" href="./index.html">Open Plately</a>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function fromBase64Url(base64Url) {
+        const base64 = String(base64Url || "").replace(/-/g, "+").replace(/_/g, "/");
+        const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+        const bin = atob(base64 + padding);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return new TextDecoder().decode(bytes);
+      }
+
+      function getPayload() {
+        const hash = String(window.location.hash || "");
+        const m = hash.match(/(?:^#|&)r=([^&]+)/);
+        if (!m) return null;
+        try {
+          const json = fromBase64Url(decodeURIComponent(m[1]));
+          return JSON.parse(json);
+        } catch {
+          return null;
+        }
+      }
+
+      function render(payload) {
+        const error = document.getElementById("publicError");
+        const root = document.getElementById("publicRecipeRoot");
+        if (!payload || !payload.title) {
+          if (error) error.hidden = false;
+          if (root) root.classList.add("public-recipe--invalid");
+          return;
+        }
+
+        const title = document.getElementById("publicTitle");
+        const sub = document.getElementById("publicSub");
+        const tag = document.getElementById("publicMealTag");
+        const meta = document.getElementById("publicMeta");
+        const ing = document.getElementById("publicIngredients");
+        const steps = document.getElementById("publicSteps");
+        const source = document.getElementById("publicSource");
+
+        if (tag) tag.textContent = payload.mealTag || "Gedeeld recept";
+        if (title) title.textContent = payload.title || "Recept";
+        if (sub) sub.textContent = payload.description || "";
+
+        const metaParts = [];
+        if (payload.time) metaParts.push("⏱ " + payload.time);
+        if (payload.servings) metaParts.push("👥 " + payload.servings);
+        if (meta) meta.textContent = metaParts.join(" · ");
+
+        if (ing) {
+          const items = Array.isArray(payload.ingredients) ? payload.ingredients : [];
+          ing.innerHTML = items
+            .map((i) => {
+              const q = i && i.quantity ? String(i.quantity).trim() : "";
+              const u = i && i.unit ? String(i.unit).trim() : "";
+              const n = i && i.name ? String(i.name).trim() : "";
+              const left = [q, u].filter(Boolean).join(" ");
+              return "<li><strong>" + escapeHtml(n) + "</strong>" + (left ? "<span>" + escapeHtml(left) + "</span>" : "") + "</li>";
+            })
+            .join("");
+        }
+
+        if (steps) {
+          const items = Array.isArray(payload.instructions) ? payload.instructions : [];
+          steps.innerHTML = items.map((s) => "<li>" + escapeHtml(s) + "</li>").join("");
+        }
+
+        if (source) {
+          const url = payload.sourceUrl || "./index.html";
+          source.href = url;
+          source.textContent = payload.sourceUrl ? "Bekijk originele bron" : "Open Plately";
+        }
+      }
+
+      const payload = getPayload();
+      render(payload);
+
+      const copyBtn = document.getElementById("copyLinkBtn");
+      if (copyBtn) {
+        copyBtn.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(window.location.href);
+            copyBtn.textContent = "Gekopieerd";
+            setTimeout(() => (copyBtn.textContent = "Link kopiëren"), 1200);
+          } catch {
+            // ignore
+          }
+        });
+      }
+    </script>
+  </body>
+</html>
+

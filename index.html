@@ -1540,6 +1540,19 @@
           <div class="kookstand-quickbar" aria-label="Kookstand acties">
             <button class="soft-action soft-action--pill" id="kookstandJumpToggle" type="button">Ga naar stap</button>
             <button class="soft-action soft-action--pill" id="kookstandStepDone" type="button" aria-pressed="false">Markeer klaar</button>
+            <div class="kookstand-quickbar__switch" aria-label="Scherm tijdens koken">
+              <span class="kookstand-quickbar__switch-label" id="kookstandWakeLabel">Scherm aan</span>
+              <button
+                class="pl-toggle pl-toggle--sm"
+                id="kookstandWakeLockToggle"
+                type="button"
+                role="switch"
+                aria-checked="false"
+                aria-labelledby="kookstandWakeLabel"
+              >
+                <span class="pl-toggle__track" aria-hidden="true"><span class="pl-toggle__thumb"></span></span>
+              </button>
+            </div>
           </div>
           <section class="kookstand-jump-panel hidden" id="kookstandJumpPanel" aria-label="Ga naar stap">
             <div class="kookstand-jump-list" id="kookstandJumpList"></div>

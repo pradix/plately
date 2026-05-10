@@ -1681,6 +1681,23 @@ img { display: block; max-width: 100%; }
   position: relative;
 }
 
+.pl-toggle.pl-toggle--sm {
+  width: 46px;
+  height: 28px;
+}
+
+.pl-toggle.pl-toggle--sm .pl-toggle__thumb {
+  width: 22px;
+  height: 22px;
+  top: 3px;
+  left: 3px;
+}
+
+.pl-toggle.pl-toggle--sm[aria-checked="true"] .pl-toggle__thumb,
+.pl-toggle.pl-toggle--sm.is-active .pl-toggle__thumb {
+  transform: translateX(18px);
+}
+
 .pl-toggle:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -6633,6 +6650,25 @@ button.ingredient-item {
   margin: 0 0 14px;
 }
 
+.kookstand-quickbar__switch {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 78%, transparent);
+}
+
+.kookstand-quickbar__switch-label {
+  font-size: var(--font-size-sm);
+  font-weight: 850;
+  color: var(--muted-strong);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
 #kookstandStepDone.is-active {
   background: rgba(220, 232, 220, 0.92);
   border-color: rgba(84, 122, 88, 0.22);
@@ -6831,6 +6867,200 @@ button.ingredient-item {
   .kookstand-controls {
     padding-inline: 4px;
   }
+}
+
+/* ── Public recipe share page ─────────────────────────────────────────────── */
+.public-recipe-page {
+  background: var(--app-body-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+
+.public-recipe {
+  width: min(980px, calc(100% - 28px));
+  margin: 22px auto 44px;
+  display: grid;
+  gap: 16px;
+}
+
+.public-recipe__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: var(--card-radius);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-2);
+}
+
+.public-recipe__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: inherit;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.public-recipe__brand-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.public-recipe__cta {
+  display: inline-flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.public-recipe__cta-btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--btn-height);
+  padding: 0 14px;
+  border-radius: var(--btn-radius);
+  font-weight: 800;
+}
+
+.public-recipe__card {
+  padding: 18px 16px;
+  border-radius: var(--card-radius);
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 18%, var(--color-border));
+  box-shadow: var(--shadow-4);
+}
+
+.public-recipe__kicker {
+  margin-bottom: 10px;
+}
+
+.public-recipe__title {
+  margin: 0 0 8px;
+  font-size: clamp(1.8rem, 6.2vw, 2.8rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+}
+
+.public-recipe__sub {
+  margin: 0 0 10px;
+  color: var(--muted-strong);
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.public-recipe__meta {
+  color: var(--color-brand);
+  font-weight: 900;
+  margin-bottom: 14px;
+}
+
+.public-recipe__grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 860px) {
+  .public-recipe__grid {
+    grid-template-columns: 0.9fr 1.1fr;
+    align-items: start;
+  }
+}
+
+.public-recipe__panel {
+  border-radius: var(--radius-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-2);
+  padding: 14px;
+}
+
+.public-recipe__h2 {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+
+.public-recipe__list,
+.public-recipe__steps {
+  margin: 0;
+  padding: 0;
+}
+
+.public-recipe__list {
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.public-recipe__list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-3);
+  background: color-mix(in srgb, var(--color-surface-2) 86%, transparent);
+  border: 1px solid var(--color-border);
+}
+
+.public-recipe__list li strong {
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.public-recipe__list li span {
+  color: var(--muted-strong);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.public-recipe__steps {
+  padding-left: 20px;
+  display: grid;
+  gap: 10px;
+  color: var(--color-text);
+  font-weight: 650;
+  line-height: 1.6;
+}
+
+.public-recipe__footer {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.public-recipe__source {
+  color: var(--color-text);
+  font-weight: 850;
+  text-decoration: none;
+  border-bottom: 2px solid color-mix(in srgb, var(--color-brand) 55%, transparent);
+}
+
+.public-recipe__copy {
+  height: var(--btn-height);
+}
+
+.public-recipe__note {
+  padding: 18px 16px;
+  border-radius: var(--card-radius);
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-accent-soft));
+  box-shadow: var(--shadow-3);
+}
+
+.public-recipe__cta--center {
+  justify-content: center;
 }
 
 .modal-handle {
