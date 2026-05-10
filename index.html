@@ -20,7 +20,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=3.1.0" />
+    <link rel="stylesheet" href="styles.css?v=3.1.1" />
     <script>
       (function () {
         try {
@@ -1520,7 +1520,10 @@
       </section>
     </div>
 
-    <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+    <div class="toast hidden" id="toast" role="status" aria-live="polite" aria-atomic="true">
+      <span class="toast__text" id="toastText"></span>
+      <button type="button" class="toast__undo hidden" id="toastUndo" aria-label="Ongedaan maken">Ongedaan</button>
+    </div>
 
     <!-- Recept-import splash: gecentreerde kaart tijdens import -->
     <div class="import-splash hidden" id="importSplash" role="status" aria-live="polite" aria-hidden="true">

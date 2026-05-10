@@ -2585,6 +2585,7 @@ button.ingredient-item {
   display: flex;
   gap: 10px;
   align-items: center;
+  touch-action: pan-y;
 }
 
 .grocery-entry {
@@ -2601,7 +2602,14 @@ button.ingredient-item {
   background: var(--color-surface);
   box-shadow: var(--shadow-1);
   text-align: left;
+  touch-action: pan-y;
   transition: opacity 0.18s ease, transform 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grocery-entry {
+    transition: opacity 0.18s ease;
+  }
 }
 
 .grocery-entry-action {
@@ -7854,7 +7862,7 @@ button.ingredient-item {
   left: 50%;
   bottom: 96px;
   transform: translateX(-50%);
-  width: min(calc(100% - 28px), 340px);
+  width: min(calc(100% - 28px), 380px);
   padding: 12px 16px;
   border-radius: 16px;
   background: rgba(35,33,30,0.95);
@@ -7865,6 +7873,51 @@ button.ingredient-item {
   font-size: 0.93rem;
   line-height: 1.35;
   transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.toast__text {
+  flex: 1 1 180px;
+  text-align: center;
+  min-width: 0;
+}
+
+.toast__undo {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.toast__undo:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.toast__undo:focus-visible {
+  outline: 2px solid rgba(200, 230, 200, 0.95);
+  outline-offset: 2px;
+}
+
+.toast.toast--has-undo {
+  text-align: left;
+  justify-content: space-between;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    transition: none;
+  }
 }
 
 .toast.toast--success {

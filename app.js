@@ -861,6 +861,8 @@ const reviewScreen = document.getElementById("reviewScreen");
 const adminScreen = document.getElementById("adminScreen");
 const modal = document.getElementById("importModal");
 const toast = document.getElementById("toast");
+const toastText = document.getElementById("toastText");
+const toastUndo = document.getElementById("toastUndo");
 const importForm = document.getElementById("importForm");
 const importFeedback = document.getElementById("importFeedback");
 const quickRecipeGrid = document.getElementById("quickRecipeGrid");
@@ -1221,26 +1223,150 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-/** @param {string} message @param {{ variant?: 'default'|'success'|'error'|'info'; durationMs?: number }} [opts] */
+/** @param {string} message @param {{ variant?: 'default'|'success'|'error'|'info'; durationMs?: number; onUndo?: () => void; undoLabel?: string }} [opts] */
 function showToast(message, opts = {}) {
   if (!toast) return;
   const variant = opts.variant || "default";
+  const hasUndo = typeof opts.onUndo === "function";
   const durationMs =
-    opts.durationMs ?? (variant === "error" ? 3800 : variant === "success" ? 3000 : 2800);
+    opts.durationMs ??
+    (hasUndo ? 6000 : variant === "error" ? 3800 : variant === "success" ? 3000 : 2800);
 
-  toast.textContent = message;
-  toast.classList.remove("toast--success", "toast--error", "toast--info");
+  if (toastText) toastText.textContent = message;
+  else toast.textContent = message;
+
+  toast.classList.remove("toast--success", "toast--error", "toast--info", "toast--has-undo");
   if (variant === "success") toast.classList.add("toast--success");
   else if (variant === "error") toast.classList.add("toast--error");
   else if (variant === "info") toast.classList.add("toast--info");
+  if (hasUndo) toast.classList.add("toast--has-undo");
+
+  if (toastUndo) {
+    if (hasUndo) {
+      toastUndo.classList.remove("hidden");
+      toastUndo.textContent = String(opts.undoLabel || "Ongedaan").trim() || "Ongedaan";
+      toastUndo.onclick = () => {
+        try {
+          opts.onUndo();
+        } catch (err) {
+          console.error(err);
+        }
+        hideToast();
+      };
+    } else {
+      toastUndo.classList.add("hidden");
+      toastUndo.onclick = null;
+    }
+  }
 
   toast.classList.remove("hidden");
   window.clearTimeout(showToast.timeoutId);
   showToast.timeoutId = window.setTimeout(() => {
-    toast.classList.add("hidden");
-    toast.classList.remove("toast--success", "toast--error", "toast--info");
+    hideToast();
   }, durationMs);
 }
+
+function hideToast() {
+  if (!toast) return;
+  toast.classList.add("hidden");
+  toast.classList.remove("toast--success", "toast--error", "toast--info", "toast--has-undo");
+  if (toastUndo) {
+    toastUndo.classList.add("hidden");
+    toastUndo.onclick = null;
+  }
+}
+
+/* ── Modal focus trap (Escape + Tab cycle) ─────────────────────────────────── */
+const focusTrapStack = [];
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function focusTrapFocusableAll(root) {
+  return Array.from(root.querySelectorAll(FOCUSABLE_SELECTOR)).filter((el) => {
+    if (!(el instanceof HTMLElement)) return false;
+    if (el.hasAttribute("disabled") || el.getAttribute("aria-hidden") === "true") return false;
+    if (el.getClientRects().length === 0) return false;
+    try {
+      const st = window.getComputedStyle(el);
+      if (st.visibility === "hidden" || st.display === "none") return false;
+    } catch {
+      /* ignore */
+    }
+    return true;
+  });
+}
+
+function focusTrapDocumentKey(e) {
+  if (focusTrapStack.length === 0) return;
+  const top = focusTrapStack[focusTrapStack.length - 1];
+  const root = top.root;
+  if (root.classList.contains("hidden") || root.hidden) {
+    if (e.key === "Escape") top.onEscape();
+    return;
+  }
+
+  if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation();
+    top.onEscape();
+    return;
+  }
+  if (e.key !== "Tab") return;
+  const nodes = focusTrapFocusableAll(root);
+  if (nodes.length === 0) return;
+  const active = document.activeElement;
+  if (!root.contains(active)) return;
+  const idx = nodes.indexOf(active);
+  if (idx < 0) return;
+  if (e.shiftKey) {
+    if (idx === 0) {
+      e.preventDefault();
+      nodes[nodes.length - 1].focus();
+    }
+  } else if (idx === nodes.length - 1) {
+    e.preventDefault();
+    nodes[0].focus();
+  }
+}
+
+function pushFocusTrap(root, { onEscape }) {
+  if (!root) return () => {};
+  const previousActive = document.activeElement;
+  const layer = { root, onEscape, previousActive };
+  focusTrapStack.push(layer);
+  if (focusTrapStack.length === 1) {
+    document.addEventListener("keydown", focusTrapDocumentKey, true);
+  }
+  requestAnimationFrame(() => {
+    const nodes = focusTrapFocusableAll(root);
+    const first = nodes[0];
+    if (first) first.focus();
+  });
+  return () => {
+    popFocusTrapLayer(layer);
+  };
+}
+
+function popFocusTrapLayer(layer) {
+  const idx = focusTrapStack.indexOf(layer);
+  if (idx < 0) return;
+  focusTrapStack.splice(idx, 1);
+  if (focusTrapStack.length === 0) {
+    document.removeEventListener("keydown", focusTrapDocumentKey, true);
+  }
+  try {
+    if (layer.previousActive && typeof layer.previousActive.focus === "function") {
+      layer.previousActive.focus();
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+let confirmTrapDisposer = null;
+let basketTrapDisposer = null;
+let altTrapDisposer = null;
+let iosSetupTrapDisposer = null;
 
 let confirmCallback = null;
 let confirmAltCallback = null;
@@ -1266,6 +1392,8 @@ function showConfirm({ title, subtitle, confirmLabel = "Bevestigen", destructive
   confirmAltCallback = typeof onAlt === "function" ? onAlt : null;
   sheet.classList.remove("hidden");
   document.getElementById("confirmSheetBackdrop")?.classList.remove("hidden");
+  confirmTrapDisposer?.();
+  confirmTrapDisposer = pushFocusTrap(sheet, { onEscape: () => closeConfirmSheet() });
 }
 
 // Backwards-compatible wrapper used by newer features.
@@ -1281,6 +1409,8 @@ function openConfirmDialog({ title, message, confirmLabel = "Bevestigen", cancel
   });
 }
 function closeConfirmSheet() {
+  confirmTrapDisposer?.();
+  confirmTrapDisposer = null;
   const sheet = document.getElementById("confirmSheet");
   sheet?.classList.add("hidden");
   document.getElementById("confirmSheetBackdrop")?.classList.add("hidden");
@@ -1294,9 +1424,13 @@ function showIosSetupModal() {
   if (!sheet) return;
   sheet.classList.remove("hidden");
   backdrop?.classList.remove("hidden");
+  iosSetupTrapDisposer?.();
+  iosSetupTrapDisposer = pushFocusTrap(sheet, { onEscape: () => closeIosSetupModal() });
 }
 
 function closeIosSetupModal() {
+  iosSetupTrapDisposer?.();
+  iosSetupTrapDisposer = null;
   const sheet = document.getElementById("iosSetupSheet");
   const backdrop = document.getElementById("iosSetupBackdrop");
   sheet?.classList.add("hidden");
@@ -1819,16 +1953,13 @@ function buildStoreSearchUrl(storeSlug, items) {
 }
 
 function closeBasketModal() {
+  closeAlternativesSheet();
+  basketTrapDisposer?.();
+  basketTrapDisposer = null;
   const overlay = document.getElementById("basketOverlay");
   if (overlay) {
     overlay.classList.add("hidden");
     overlay.hidden = true;
-  }
-  // Also dismiss the per-item alternatives sheet if it happens to be open.
-  const altOverlay = document.getElementById("altOverlay");
-  if (altOverlay && !altOverlay.hidden) {
-    altOverlay.classList.add("hidden");
-    altOverlay.hidden = true;
   }
   state.basketPreview = null;
   state.altSheetItemIndex = null;
@@ -2606,6 +2737,10 @@ function openBasketModal(preview) {
     overlay.hidden = false;
     overlay.classList.remove("hidden");
   }
+  basketTrapDisposer?.();
+  basketTrapDisposer = overlay
+    ? pushFocusTrap(overlay, { onEscape: () => closeBasketModal() })
+    : () => {};
 }
 
 // ── Alternatives sheet ("Kies een alternatief") ─────────────────────────────
@@ -2966,15 +3101,14 @@ function openAlternativesSheet(itemIndex) {
 
   const listEl = document.getElementById("altOverlayList");
   if (listEl) listEl.scrollTop = 0;
-  // Move focus inside the dialog for accessibility and to avoid iOS losing the
-  // click transition.
-  requestAnimationFrame(() => {
-    const backBtn = document.getElementById("altOverlayBack");
-    if (backBtn instanceof HTMLElement) backBtn.focus();
-  });
+
+  altTrapDisposer?.();
+  altTrapDisposer = pushFocusTrap(overlay, { onEscape: () => closeAlternativesSheet() });
 }
 
 function closeAlternativesSheet() {
+  altTrapDisposer?.();
+  altTrapDisposer = null;
   const overlay = document.getElementById("altOverlay");
   if (!overlay) return;
   overlay.classList.add("hidden");
@@ -10937,6 +11071,49 @@ bindEvent(reviewSuggestions, "click", (event) => {
   applyReviewSuggestion(action.dataset.reviewApply, action.dataset.reviewValue || "");
 });
 
+function groceryPrefersReducedMotion() {
+  try {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
+
+function removeGroceryItemByIdWithUndo(groceryId) {
+  const itemIndex = state.groceryItems.findIndex((item) => item.id === groceryId);
+  if (itemIndex === -1) return;
+  const removed = state.groceryItems[itemIndex];
+  let snapshot;
+  try {
+    snapshot = structuredClone(removed);
+  } catch {
+    snapshot = JSON.parse(JSON.stringify(removed));
+  }
+  const insertAt = itemIndex;
+  state.groceryItems.splice(itemIndex, 1);
+  renderGroceryGroups();
+  schedulePersistAppState();
+  showToast(`"${String(snapshot.title || "Item").slice(0, 48)}" verwijderd.`, {
+    variant: "info",
+    onUndo: () => {
+      state.groceryItems.splice(insertAt, 0, snapshot);
+      renderGroceryGroups();
+      schedulePersistAppState();
+    },
+  });
+}
+
+function toggleGroceryEntryChecked(entry, groceryId) {
+  const groceryItem = state.groceryItems.find((item) => item.id === groceryId);
+  if (!groceryItem || !(entry instanceof HTMLElement)) return;
+  entry.classList.add("is-checking");
+  window.setTimeout(() => {
+    groceryItem.checked = !groceryItem.checked;
+    renderGroceryGroups();
+    schedulePersistAppState();
+  }, 160);
+}
+
 bindEvent(groceryGroups, "click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) {
@@ -10947,13 +11124,7 @@ bindEvent(groceryGroups, "click", (event) => {
   const actionBtn = target.closest(".grocery-entry-action");
   if (actionBtn instanceof HTMLElement) {
     const groceryId = actionBtn.dataset.groceryId;
-    const itemIndex = state.groceryItems.findIndex((item) => item.id === groceryId);
-
-    if (itemIndex === -1) return;
-
-    state.groceryItems.splice(itemIndex, 1);
-    renderGroceryGroups();
-    schedulePersistAppState();
+    removeGroceryItemByIdWithUndo(groceryId);
     return;
   }
 
@@ -10961,20 +11132,89 @@ bindEvent(groceryGroups, "click", (event) => {
   if (!(entry instanceof HTMLElement)) {
     return;
   }
+  if (entry.dataset.suppressTap) return;
 
-  const groceryItem = state.groceryItems.find((item) => item.id === entry.dataset.groceryId);
-  if (!groceryItem) {
-    return;
-  }
-
-  // Animate before toggle
-  entry.classList.add("is-checking");
-  setTimeout(() => {
-    groceryItem.checked = !groceryItem.checked;
-    renderGroceryGroups();
-    schedulePersistAppState();
-  }, 160);
+  toggleGroceryEntryChecked(entry, entry.dataset.groceryId);
 });
+
+/** Horizontale veeg: rechts = vink, links = verwijderen (met ongedaan) */
+let grocerySwipeState = null;
+if (groceryGroups) {
+  const SWIPE_THRESHOLD = 52;
+  groceryGroups.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      const entry = e.target.closest(".grocery-entry");
+      if (!entry || !(entry instanceof HTMLElement)) return;
+      if (e.target.closest(".grocery-entry-action")) return;
+      grocerySwipeState = {
+        entry,
+        id: entry.dataset.groceryId || "",
+        x0: e.clientX,
+        y0: e.clientY,
+        pointerId: e.pointerId,
+        vertical: false,
+      };
+      try {
+        entry.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    },
+    true
+  );
+
+  groceryGroups.addEventListener(
+    "pointermove",
+    (e) => {
+      if (!grocerySwipeState || e.pointerId !== grocerySwipeState.pointerId) return;
+      const st = grocerySwipeState;
+      const dx = e.clientX - st.x0;
+      const dy = e.clientY - st.y0;
+      if (Math.abs(dy) > Math.abs(dx) * 1.12 && Math.abs(dy) > 12) {
+        st.vertical = true;
+        st.entry.style.transform = "";
+        return;
+      }
+      if (st.vertical) return;
+      if (!groceryPrefersReducedMotion()) {
+        const c = Math.max(-68, Math.min(68, dx * 0.32));
+        st.entry.style.transform = `translateX(${c}px)`;
+      }
+    },
+    true
+  );
+
+  const finishGrocerySwipe = (e) => {
+    if (!grocerySwipeState || e.pointerId !== grocerySwipeState.pointerId) return;
+    const st = grocerySwipeState;
+    grocerySwipeState = null;
+    const { entry, id, x0, vertical } = st;
+    try {
+      entry.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    entry.style.transform = "";
+    if (!id || vertical) return;
+    const dx = e.clientX - x0;
+    if (Math.abs(dx) > 18) {
+      entry.dataset.suppressTap = "1";
+      window.setTimeout(() => {
+        delete entry.dataset.suppressTap;
+      }, 420);
+    }
+    if (dx >= SWIPE_THRESHOLD) {
+      toggleGroceryEntryChecked(entry, id);
+    } else if (dx <= -SWIPE_THRESHOLD) {
+      removeGroceryItemByIdWithUndo(id);
+    }
+  };
+
+  groceryGroups.addEventListener("pointerup", finishGrocerySwipe, true);
+  groceryGroups.addEventListener("pointercancel", finishGrocerySwipe, true);
+}
 
 bindEvent(detailStepList, "click", (event) => {
   const target = event.target;
@@ -11064,9 +11304,41 @@ bindEvent(document.getElementById("basketSheetList"), "click", async (e) => {
   // Delete item
   if (btn.dataset.basketDelete !== undefined) {
     const idx = parseInt(btn.dataset.basketDelete, 10);
+    const removed = state.basketPreview.items[idx];
+    if (!removed) return;
+    let itemSnap;
+    try {
+      itemSnap = structuredClone(removed);
+    } catch {
+      itemSnap = JSON.parse(JSON.stringify(removed));
+    }
+    let previewBackup;
+    try {
+      previewBackup = structuredClone(state.basketPreview);
+    } catch {
+      previewBackup = JSON.parse(JSON.stringify(state.basketPreview));
+    }
+    const insertAt = idx;
     state.basketPreview.items.splice(idx, 1);
-    if (!state.basketPreview.items.length) { closeBasketModal(); return; }
+    if (!state.basketPreview.items.length) {
+      showToast("Laatste product uit mandje gehaald.", {
+        variant: "info",
+        onUndo: () => {
+          state.basketPreview = previewBackup;
+          openBasketModal(state.basketPreview);
+        },
+      });
+      closeBasketModal();
+      return;
+    }
     renderBasketPreview();
+    showToast("Product uit mandje gehaald.", {
+      variant: "info",
+      onUndo: () => {
+        state.basketPreview.items.splice(insertAt, 0, itemSnap);
+        renderBasketPreview();
+      },
+    });
     return;
   }
 
@@ -11388,10 +11660,22 @@ function confirmRemoveRecipeFromOpenCookbook(recipeId) {
     confirmLabel: "Verwijderen",
     cancelLabel: "Annuleren",
     onConfirm: () => {
+      const at = cb.recipeIds.indexOf(recipeId);
+      if (at === -1) return;
       cb.recipeIds = cb.recipeIds.filter((id) => id !== recipeId);
       renderCookbookDetail(state.openCookbookId);
       schedulePersistAppState();
-      showToast("Recept verwijderd uit kookboek.");
+      showToast("Recept verwijderd uit kookboek.", {
+        variant: "info",
+        onUndo: () => {
+          if (cb.recipeIds.includes(recipeId)) return;
+          const next = [...cb.recipeIds];
+          next.splice(Math.min(at, next.length), 0, recipeId);
+          cb.recipeIds = next;
+          renderCookbookDetail(state.openCookbookId);
+          schedulePersistAppState();
+        },
+      });
     },
   });
 }
