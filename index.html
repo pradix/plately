@@ -8,7 +8,7 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="3.1.9" />
+    <meta name="plately-build" content="3.1.10" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -32,7 +32,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=3.1.9" />
+    <link rel="stylesheet" href="styles.css?v=3.1.10" />
     <script>
       (function () {
         try {
@@ -1383,7 +1383,7 @@
     <div class="share-card-overlay hidden" id="shareCardOverlay" aria-hidden="true">
       <div class="share-card" id="shareCard">
         <div class="share-card__image-wrap">
-          <img class="share-card__image" id="shareCardImage" src="" alt="" />
+          <img class="share-card__image" id="shareCardImage" src="" alt="" draggable="false" />
           <div class="share-card__image-fade"></div>
           <div class="share-card__overlay-text">
             <span class="share-card__tag" id="shareCardTag"></span>
@@ -1396,9 +1396,8 @@
             <span class="share-card__servings" id="shareCardServings"></span>
           </div>
           <ul class="share-card__ingredients" id="shareCardIngredients"></ul>
-          <div class="share-card__brand">
-            <img src="assets/plately.png" alt="Plately" class="share-card__brand-logo" />
-            <span class="share-card__brand-url">app.plately.nl</span>
+          <div class="share-card__brand" aria-hidden="true">
+            <img src="assets/plately.png" alt="" width="34" height="34" decoding="async" draggable="false" class="share-card__brand-logo" />
           </div>
         </div>
       </div>
@@ -2038,6 +2037,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=3.1.9"></script>
+    <script src="app.js?v=3.1.10"></script>
   </body>
 </html>
