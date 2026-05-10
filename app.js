@@ -4592,14 +4592,34 @@ function renderChannelSettings() {
       </label>`;
   }).join("");
 
-  // Separate custom channels section
+  // Global admin-managed channels → render with Plately channels (not in "MIJN KANALEN")
+  const managedChannels = state.customChannels.filter((ch) => Boolean(ch.managedByAdmin));
+  const managedRows = managedChannels
+    .filter((ch) => isCustomChannelEnabled(ch.id))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((ch) => {
+      const followed = state.followedChannelIds.includes(ch.id);
+      const faviconUrl = getSourceIconUrl(ch.url);
+      return `
+        <label class="channel-toggle-row" data-channel-id="${escapeHtml(ch.id)}">
+          <span class="channel-toggle-avatar">
+            ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
+          </span>
+          <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
+          <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>
+        </label>`;
+    }).join("");
+
+  // Separate custom channels section — only personal (non-managed) channels
   let customHTML = "";
 
-  if (state.customChannels.length > 0) {
+  const personalChannels = state.customChannels.filter((ch) => !ch.managedByAdmin);
+
+  if (personalChannels.length > 0) {
     customHTML += `<div class="channel-section-label">MIJN KANALEN</div>`;
 
     // Show custom channels: approved first, then pending, then rejected (sorted A-Z within each)
-    const customRows = state.customChannels
+    const customRows = personalChannels
       .sort((a, b) => {
         // Approved channels first, then pending, then rejected
         const aStatus = a.status || "approved";
@@ -4673,7 +4693,7 @@ function renderChannelSettings() {
       Kanaal toevoegen
     </button>`;
 
-  container.innerHTML = seedRows + customHTML + addButton;
+  container.innerHTML = seedRows + managedRows + customHTML + addButton;
 
   // Reset form and hide it
   const form = document.getElementById("customChannelForm");
