@@ -1580,7 +1580,8 @@ function updateAuthUI() {
 
   if (!state.auth.enabled) {
     accountTitle.textContent = "Account volgt zodra Postgres is gekoppeld";
-    accountCopy.textContent = "De app werkt nu als guest. Voeg straks DATABASE_URL toe om echte login en synchronisatie te activeren.";
+    accountCopy.textContent =
+      "De app werkt nu als gast. Voeg straks DATABASE_URL toe om inloggen en accounts met online opslag te activeren.";
     openRegisterButton.classList.add("hidden");
     openLoginButton.classList.add("hidden");
     logoutButton.classList.add("hidden");
@@ -1590,16 +1591,16 @@ function updateAuthUI() {
   if (state.auth.authenticated) {
     accountTitle.textContent = `Ingelogd als ${state.profile.name}`;
     accountCopy.textContent = state.auth.email
-      ? `Je account ${state.auth.email} synchroniseert nu recepten, kookboeken, planning en lijstjes.`
-      : "Je account synchroniseert nu recepten, kookboeken, planning en lijstjes.";
+      ? `Je recepten en kookboeken worden bewaard voor dit account (${state.auth.email}).`
+      : "Je recepten en kookboeken worden bewaard voor dit account.";
     openRegisterButton.classList.add("hidden");
     openLoginButton.classList.add("hidden");
     logoutButton.classList.remove("hidden");
     return;
   }
 
-  accountTitle.textContent = "Gebruik Plately op al je apparaten";
-  accountCopy.textContent = "Maak een account aan of log in om recepten, kookboeken en lijstjes te synchroniseren.";
+  accountTitle.textContent = "Account voor Plately";
+  accountCopy.textContent = "Maak een account aan of log in om recepten en kookboeken online te bewaren.";
   openRegisterButton.classList.remove("hidden");
   openLoginButton.classList.remove("hidden");
   logoutButton.classList.add("hidden");
@@ -11915,7 +11916,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "3.1.14";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "3.1.15";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
@@ -13326,7 +13327,7 @@ const ONBOARDING_STEPS = [
   },
   {
     selector: '[data-view="cookbooks"].nav-item',
-    text: "Maak kookboeken om recepten te sorteren — handig voor weekmenu's of speciale gelegenheden. 📚",
+    text: "Maak kookboeken om recepten te sorteren — bijvoorbeeld per thema of gelegenheid. 📚",
     dir: "above",
   },
   {

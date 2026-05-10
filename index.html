@@ -8,7 +8,7 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="3.1.14" />
+    <meta name="plately-build" content="3.1.15" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -37,7 +37,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=3.1.14" />
+    <link rel="stylesheet" href="styles.css?v=3.1.15" />
   </head>
   <body>
     <main class="page">
@@ -556,7 +556,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="#b8c9b8" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.58-7 8-7s8 3 8 7"/></svg>
             </div>
             <h2 class="profile-login-banner__title">Welkom bij Plately</h2>
-            <p class="profile-login-banner__sub">Log in om je recepten en kookboeken op elk apparaat te bewaren.</p>
+            <p class="profile-login-banner__sub">Log in om recepten en kookboeken aan je account te koppelen.</p>
             <button class="profile-login-banner__btn profile-login-banner__btn--primary" id="profileLoginBtn" type="button">Inloggen</button>
             <p class="profile-login-banner__register-line">
               <button type="button" class="profile-login-banner__link" id="profileRegisterBtn" data-i18n="auth.switchRegister">
@@ -1775,7 +1775,7 @@
             <img class="auth-screen__logo" src="assets/plately.png" alt="Plately" />
           </div>
           <h1 class="auth-screen__title" id="authKicker">Welkom terug</h1>
-          <p class="auth-screen__subtitle" id="authSubtitle">Log in om je recepten en lijstjes te bekijken.</p>
+          <p class="auth-screen__subtitle" id="authSubtitle">Log in om je opgeslagen recepten en kookboeken te bekijken.</p>
         </div>
 
         <div class="auth-screen__surface">
@@ -2129,6 +2129,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=3.1.14"></script>
+    <script src="app.js?v=3.1.15"></script>
   </body>
 </html>
