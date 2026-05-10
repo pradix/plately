@@ -34,27 +34,33 @@
       </header>
 
       <section class="public-recipe__card" aria-live="polite">
-        <p class="section-kicker public-recipe__kicker" id="publicMealTag"></p>
-        <h1 class="public-recipe__title" id="publicTitle">Recept</h1>
-        <p class="public-recipe__sub" id="publicSub"></p>
-        <div class="public-recipe__meta" id="publicMeta"></div>
-
-        <div class="public-recipe__grid">
-          <section class="public-recipe__panel" aria-label="Ingrediënten">
-            <h2 class="public-recipe__h2">Ingrediënten</h2>
-            <ul class="public-recipe__list" id="publicIngredients"></ul>
-          </section>
-
-          <section class="public-recipe__panel" aria-label="Bereiding">
-            <h2 class="public-recipe__h2">Bereiding</h2>
-            <ol class="public-recipe__steps" id="publicSteps"></ol>
-          </section>
+        <div class="public-recipe__hero" id="publicHero" hidden>
+          <img id="publicHeroImg" src="" alt="" loading="lazy" decoding="async" />
+          <div class="public-recipe__hero-fade" aria-hidden="true"></div>
         </div>
+        <div class="public-recipe__card-inner">
+          <p class="section-kicker public-recipe__kicker" id="publicMealTag"></p>
+          <h1 class="public-recipe__title" id="publicTitle">Recept</h1>
+          <p class="public-recipe__sub" id="publicSub"></p>
+          <div class="public-recipe__meta" id="publicMeta"></div>
 
-        <footer class="public-recipe__footer">
-          <a class="public-recipe__source" id="publicSource" href="#" target="_blank" rel="noopener noreferrer">Bekijk originele bron</a>
-          <button class="btn-secondary public-recipe__copy" id="copyLinkBtn" type="button">Link kopiëren</button>
-        </footer>
+          <div class="public-recipe__grid">
+            <section class="public-recipe__panel" aria-label="Ingrediënten">
+              <h2 class="public-recipe__h2">Ingrediënten</h2>
+              <ul class="public-recipe__list" id="publicIngredients"></ul>
+            </section>
+
+            <section class="public-recipe__panel" aria-label="Bereiding">
+              <h2 class="public-recipe__h2">Bereiding</h2>
+              <ol class="public-recipe__steps" id="publicSteps"></ol>
+            </section>
+          </div>
+
+          <footer class="public-recipe__footer">
+            <a class="public-recipe__source" id="publicSource" href="#" target="_blank" rel="noopener noreferrer">Bekijk originele bron</a>
+            <button class="btn-secondary public-recipe__copy" id="copyLinkBtn" type="button">Link kopiëren</button>
+          </footer>
+        </div>
       </section>
 
       <section class="public-recipe__note" id="publicError" hidden>
@@ -110,6 +116,8 @@
         const sub = document.getElementById("publicSub");
         const tag = document.getElementById("publicMealTag");
         const meta = document.getElementById("publicMeta");
+        const hero = document.getElementById("publicHero");
+        const heroImg = document.getElementById("publicHeroImg");
         const ing = document.getElementById("publicIngredients");
         const steps = document.getElementById("publicSteps");
         const source = document.getElementById("publicSource");
@@ -122,6 +130,19 @@
         if (payload.time) metaParts.push("⏱ " + payload.time);
         if (payload.servings) metaParts.push("👥 " + payload.servings);
         if (meta) meta.textContent = metaParts.join(" · ");
+
+        if (hero && heroImg) {
+          const imgUrl = payload.image || "";
+          if (imgUrl) {
+            hero.hidden = false;
+            heroImg.src = imgUrl;
+            heroImg.alt = payload.title || "Recept";
+          } else {
+            hero.hidden = true;
+            heroImg.src = "";
+            heroImg.alt = "";
+          }
+        }
 
         if (ing) {
           const items = Array.isArray(payload.ingredients) ? payload.ingredients : [];

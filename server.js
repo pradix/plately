@@ -11671,7 +11671,19 @@ const server = http.createServer(async (request, response) => {
       const payload = record.payload || {};
       const title = sanitizeText(payload.title || "Recept");
       const desc = sanitizeText(payload.description || "Een recept gedeeld via Plately.");
-      const image = sanitizeText(payload.image || "") || "/assets/icon-512.png?v=7";
+      const rawImage = sanitizeText(payload.image || "");
+      const image = /^https?:\/\//i.test(rawImage) ? rawImage : "/assets/icon-512.png?v=7";
+      const canonicalUrl = `${requestUrl.origin}${requestUrl.pathname}`;
+
+      // Track basic share views (anonymous aggregate)
+      try {
+        record.views = Number(record.views || 0) + 1;
+        record.lastViewedAt = new Date().toISOString();
+        if (db.shareLinks && safeToken) db.shareLinks[safeToken] = record;
+        await persistDatabase();
+      } catch {
+        // ignore
+      }
 
       const html = `<!DOCTYPE html>
 <html lang="nl">
@@ -11681,10 +11693,12 @@ const server = http.createServer(async (request, response) => {
     <title>${escapeHtml(title)} — Plately</title>
     <meta name="description" content="${escapeHtml(desc)}" />
     <meta name="theme-color" content="#8da485" />
+    <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
     <meta property="og:site_name" content="Plately" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="${escapeHtml(title)}" />
     <meta property="og:description" content="${escapeHtml(desc)}" />
+    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
     <meta property="og:image" content="${escapeHtml(image)}" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
@@ -11707,6 +11721,8 @@ const server = http.createServer(async (request, response) => {
       </header>
 
       <section class="public-recipe__card" aria-live="polite">
+        ${/^https?:\/\//i.test(rawImage) ? `<div class="public-recipe__hero"><img src="${escapeHtml(rawImage)}" alt="${escapeHtml(title)}" loading="lazy" decoding="async"/><div class="public-recipe__hero-fade" aria-hidden="true"></div></div>` : ""}
+        <div class="public-recipe__card-inner">
         <p class="section-kicker public-recipe__kicker">${escapeHtml(payload.mealTag || "Gedeeld recept")}</p>
         <h1 class="public-recipe__title">${escapeHtml(title)}</h1>
         <p class="public-recipe__sub">${escapeHtml(desc)}</p>
@@ -11744,6 +11760,7 @@ const server = http.createServer(async (request, response) => {
           <a class="public-recipe__source" href="${escapeHtml(sanitizeText(payload.sourceUrl || "/index.html"))}" target="_blank" rel="noopener noreferrer">Bekijk originele bron</a>
           <button class="btn-secondary public-recipe__copy" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(location.href)">Link kopiëren</button>
         </footer>
+        </div>
       </section>
     </main>
   </body>
