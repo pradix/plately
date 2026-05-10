@@ -13557,8 +13557,8 @@ function showOnboarding() {
 }
 
 function showOnboardingStep(step) {
-  const safe = Math.min(Math.max(Number(step) || 1, 1), 5);
-  ["onboardingStep1", "onboardingStep2", "onboardingStep3", "onboardingStep4", "onboardingStep5"].forEach((id) => {
+  const safe = Math.min(Math.max(Number(step) || 1, 1), 4);
+  ["onboardingStep1", "onboardingStep2", "onboardingStep3", "onboardingStep4"].forEach((id) => {
     document.getElementById(id)?.classList.add("hidden");
   });
   document.getElementById(`onboardingStep${safe}`)?.classList.remove("hidden");
@@ -13754,10 +13754,10 @@ function finishOnboarding() {
   if (onboardingData.gender) state.profile.gender = onboardingData.gender;
 
   onboardingScreen.classList.add("hidden");
-  switchView("import");
+  switchView("home");
   renderAll();
   persistAppState();
-  showToast("Klaar! Importeer nu je eerste recept.");
+  showToast("Je bent klaar — veel plezier met Plately!");
   setTimeout(() => startOnboarding(), 800);
 }
 
@@ -13813,19 +13813,10 @@ bindEvent(document.getElementById("onboardingStep3Next"), "click", () => {
 });
 
 bindEvent(document.getElementById("onboardingStep4Skip"), "click", () => {
-  showOnboardingStep(5);
-});
-
-bindEvent(document.getElementById("onboardingStep4Next"), "click", () => {
-  // Move to supermarkets, then we'll finish and route to import screen.
-  showOnboardingStep(5);
-});
-
-bindEvent(document.getElementById("onboardingStep5Skip"), "click", () => {
   finishOnboarding();
 });
 
-bindEvent(document.getElementById("onboardingStep5Next"), "click", () => {
+bindEvent(document.getElementById("onboardingStep4Next"), "click", () => {
   finishOnboarding();
 });
 
