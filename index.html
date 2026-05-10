@@ -20,7 +20,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=3.1.1" />
+    <link rel="stylesheet" href="styles.css?v=3.1.2" />
     <script>
       (function () {
         try {
@@ -234,17 +234,65 @@
                 </button>
               </div>
             </div>
-            <div class="cook-tools">
-              <button class="cook-toggle cook-toggle--kookstand" id="kookstandButton" type="button">Kookstand</button>
-              <button class="cook-toggle" id="cookModeButton" type="button" aria-pressed="false">Kookmodus: uit</button>
-              <button class="cook-toggle" id="wakeLockButton" type="button" aria-pressed="false">Scherm tijdens koken: uit</button>
-            </div>
+            <section class="cook-tools-card" aria-label="Kookhulp">
+              <p class="cook-tools-card__kicker">Tijdens koken</p>
+              <button class="cook-kookstand-cta" id="kookstandButton" type="button">
+                <span class="cook-kookstand-cta__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3s-4 3.2-4 8.2c0 2.8 1.6 5.2 4 6.3 2.4-1.1 4-3.5 4-6.3C16 6.2 12 3 12 3Z"/>
+                    <path d="M9.8 14.8c.8 1.4 2.2 2.2 2.2 2.2s1.4-.8 2.2-2.2"/>
+                  </svg>
+                </span>
+                <span class="cook-kookstand-cta__copy">
+                  <span class="cook-kookstand-cta__title">Kookstand</span>
+                  <span class="cook-kookstand-cta__sub">Vol scherm · grote stappen · ingrediënten erbij</span>
+                </span>
+                <svg class="cook-kookstand-cta__chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <path d="M9 6l6 6-6 6"/>
+                </svg>
+              </button>
+              <div class="cook-tools-card__divider" aria-hidden="true"></div>
+              <div class="cook-toggle-row">
+                <div class="cook-toggle-row__label-block">
+                  <span class="cook-toggle-row__label" id="cookModeLabelText">Kookmodus</span>
+                  <span class="cook-toggle-row__hint" id="cookModeHint">Uit — stappen vind je onderaan bij Bereiding.</span>
+                </div>
+                <button
+                  class="pl-toggle"
+                  id="cookModeButton"
+                  type="button"
+                  role="switch"
+                  aria-checked="false"
+                  aria-labelledby="cookModeLabelText"
+                  aria-describedby="cookModeHint"
+                >
+                  <span class="pl-toggle__track" aria-hidden="true"><span class="pl-toggle__thumb"></span></span>
+                </button>
+              </div>
+              <div class="cook-toggle-row">
+                <div class="cook-toggle-row__label-block">
+                  <span class="cook-toggle-row__label" id="wakeLockLabelText">Scherm tijdens koken</span>
+                  <span class="cook-toggle-row__hint" id="wakeLockHint">Uit — scherm mag dimmen of uit (spaart batterij).</span>
+                </div>
+                <button
+                  class="pl-toggle"
+                  id="wakeLockButton"
+                  type="button"
+                  role="switch"
+                  aria-checked="false"
+                  aria-labelledby="wakeLockLabelText"
+                  aria-describedby="wakeLockHint"
+                >
+                  <span class="pl-toggle__track" aria-hidden="true"><span class="pl-toggle__thumb"></span></span>
+                </button>
+              </div>
+            </section>
 
             <section class="detail-assist" id="detailAssist"></section>
 
             <section class="cook-mode-panel hidden" id="cookModePanel">
               <div class="cook-mode-panel__head">
-                <p class="section-kicker">STAP VOOR STAP</p>
+                <p class="section-kicker">KOOKMODUS</p>
                 <p class="cook-mode-panel__progress" id="cookModeProgress">Stap 1 van 4</p>
               </div>
               <article class="cook-mode-card">
@@ -1471,7 +1519,10 @@
       <div class="kookstand-backdrop" id="kookstandBackdrop" data-kookstand-close="true"></div>
       <section class="kookstand-sheet" aria-describedby="kookstandProgress">
         <header class="kookstand-head">
-          <p class="section-kicker">KOOKSTAND</p>
+          <div class="kookstand-head__brand">
+            <p class="section-kicker kookstand-head__kicker">Kookstand</p>
+            <p class="kookstand-head__tagline">Plately · groot en rustig koken</p>
+          </div>
           <button class="icon-button kookstand-close" id="kookstandClose" type="button" aria-label="Sluiten">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M6.7 5.3L12 10.58l5.3-5.29l1.4 1.41L13.42 12l5.29 5.3l-1.41 1.4L12 13.42l-5.3 5.29l-1.4-1.41L10.58 12l-5.29-5.3l1.41-1.4Z"/>

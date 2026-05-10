@@ -820,7 +820,6 @@ img { display: block; max-width: 100%; }
 .btn-secondary,
 .btn-ghost,
 .detail-cta,
-.cook-toggle,
 .servings-btn,
 .platform-card {
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
@@ -840,7 +839,6 @@ img { display: block; max-width: 100%; }
 .btn-secondary:hover,
 .btn-ghost:hover,
 .detail-cta:hover,
-.cook-toggle:hover,
 .servings-btn:hover,
 .platform-card:hover {
   transform: translateY(-1px);
@@ -1537,11 +1535,211 @@ img { display: block; max-width: 100%; }
   color: var(--text);
 }
 
-.cook-tools {
+/* ── Receptdetail: kookkaart (Kookstand + toggles) ────────────────────────── */
+.cook-tools-card {
+  margin-top: 6px;
+  padding: 14px 16px 12px;
+  border-radius: var(--card-radius);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 14%, var(--color-border));
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-brand-soft));
+  box-shadow: var(--card-shadow);
+}
+
+.cook-tools-card__kicker {
+  margin: 0 0 12px;
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-strong);
+}
+
+.cook-kookstand-cta {
+  width: 100%;
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 4px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-4);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow-2);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.cook-kookstand-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-3);
+  border-color: color-mix(in srgb, var(--color-brand) 28%, var(--color-border));
+}
+
+.cook-kookstand-cta:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring), var(--shadow-3);
+}
+
+.cook-kookstand-cta__icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--color-brand-soft) 80%, transparent);
+  color: var(--color-brand);
+}
+
+.cook-kookstand-cta__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.cook-kookstand-cta__copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cook-kookstand-cta__title {
+  font-size: var(--font-size-lg);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.cook-kookstand-cta__sub {
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+  color: var(--muted-strong);
+  line-height: 1.35;
+}
+
+.cook-kookstand-cta__chev {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  opacity: 0.45;
+}
+
+.cook-tools-card__divider {
+  height: 1px;
+  margin: 14px 0 12px;
+  background: linear-gradient(90deg, transparent, var(--color-border), transparent);
+}
+
+.cook-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.cook-toggle-row + .cook-toggle-row {
+  border-top: 1px solid var(--color-border);
+  margin-top: 2px;
+  padding-top: 12px;
+}
+
+.cook-toggle-row__label-block {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cook-toggle-row__label {
+  font-size: var(--font-size-md);
+  font-weight: 850;
+  color: var(--color-text);
+  letter-spacing: -0.015em;
+}
+
+.cook-toggle-row__hint {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--muted-strong);
+  line-height: 1.4;
+}
+
+/* Aan/uit schakelaar (Plately) */
+.pl-toggle {
+  flex: none;
+  width: 52px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+}
+
+.pl-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pl-toggle__track {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-text) 12%, transparent);
+  position: relative;
+  transition: background 180ms ease;
+}
+
+.pl-toggle[aria-checked="true"] .pl-toggle__track,
+.pl-toggle.is-active .pl-toggle__track {
+  background: color-mix(in srgb, var(--color-brand) 92%, #3a4a38);
+}
+
+.pl-toggle__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+  transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pl-toggle[aria-checked="true"] .pl-toggle__thumb,
+.pl-toggle.is-active .pl-toggle__thumb {
+  transform: translateX(20px);
+}
+
+.pl-toggle:focus-visible {
+  outline: none;
+}
+
+.pl-toggle:focus-visible .pl-toggle__track {
+  box-shadow: var(--focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pl-toggle__thumb,
+  .pl-toggle__track {
+    transition: none;
+  }
+}
+
+[data-theme="dark"] .cook-tools-card {
+  background: color-mix(in srgb, var(--color-surface-2) 94%, var(--color-brand) 8%);
+  border-color: color-mix(in srgb, var(--color-brand) 22%, var(--color-border));
+}
+
+[data-theme="dark"] .cook-kookstand-cta {
+  background: var(--color-surface-3);
 }
 
 .detail-assist {
@@ -1594,43 +1792,11 @@ img { display: block; max-width: 100%; }
   line-height: 1.45;
 }
 
-.cook-toggle,
 .cook-link {
   border-radius: 16px;
   padding: 11px 14px;
   font-size: 0.9rem;
   font-weight: 700;
-}
-
-.cook-toggle {
-  border: 1px solid rgba(34, 32, 29, 0.08);
-  background: rgba(255,255,255,0.86);
-  color: #485247;
-  box-shadow: 0 6px 16px rgba(76,85,69,0.05);
-}
-
-.cook-toggle--kookstand {
-  border-color: rgba(120, 147, 111, 0.22);
-  background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(237, 244, 236, 0.96));
-  color: #243c2b;
-  font-weight: 900;
-}
-
-.cook-toggle--kookstand:hover {
-  box-shadow: 0 10px 26px rgba(76,85,69,0.10);
-}
-
-.cook-toggle.is-active {
-  background: #dce8dc;
-  color: #29422b;
-  border-color: rgba(84, 122, 88, 0.18);
-}
-
-.cook-toggle:disabled {
-  opacity: 0.55;
-}
-
-.cook-link {
   text-decoration: none;
   background: #fff;
   color: #7f977f;
@@ -1638,12 +1804,16 @@ img { display: block; max-width: 100%; }
 }
 
 .cook-mode-panel {
-  margin-top: 6px;
-  padding: 16px;
-  border-radius: 28px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(246, 248, 243, 0.96));
-  border: 1px solid rgba(141, 164, 133, 0.12);
-  box-shadow: 0 10px 30px rgba(76,85,69,0.06);
+  margin-top: 12px;
+  padding: 16px 16px 14px;
+  border-radius: var(--card-radius);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--color-surface) 96%, var(--color-brand-soft)),
+    color-mix(in srgb, var(--color-surface-3) 88%, var(--color-brand-soft))
+  );
+  border: 1px solid color-mix(in srgb, var(--color-brand) 18%, var(--color-border));
+  box-shadow: var(--card-shadow);
 }
 
 .cook-mode-panel__head {
@@ -1651,24 +1821,26 @@ img { display: block; max-width: 100%; }
   justify-content: space-between;
   align-items: baseline;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .cook-mode-panel__progress {
   margin: 0;
-  color: #7d8f77;
-  font-size: 0.9rem;
-  font-weight: 700;
+  color: var(--muted-strong);
+  font-size: var(--font-size-sm);
+  font-weight: 800;
 }
 
 .cook-mode-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
-  padding: 16px;
-  border-radius: 24px;
-  background: rgba(250, 252, 247, 0.98);
-  box-shadow: inset 0 0 0 1px rgba(225, 233, 221, 0.9);
+  padding: 16px 14px;
+  border-radius: var(--radius-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-1);
+  border-left: 4px solid var(--color-brand);
 }
 
 .cook-mode-card__index {
@@ -1677,17 +1849,17 @@ img { display: block; max-width: 100%; }
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background: #dce8dc;
-  color: #29422b;
+  background: color-mix(in srgb, var(--color-brand-soft) 92%, transparent);
+  color: color-mix(in srgb, var(--color-brand) 55%, #1a2a1c);
   font-weight: 900;
   font-size: 1rem;
 }
 
 .cook-mode-card__text {
   margin: 0;
-  color: #3f3b36;
-  line-height: 1.58;
-  font-size: 0.98rem;
+  color: var(--color-text);
+  line-height: 1.55;
+  font-size: var(--font-size-md);
   font-weight: 700;
 }
 
@@ -6338,7 +6510,7 @@ button.ingredient-item {
 .kookstand-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(24,26,22,0.34);
+  background: var(--color-overlay);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
@@ -6348,7 +6520,12 @@ button.ingredient-item {
   z-index: 1;
   width: 100%;
   height: 100%;
-  background: #f8f7f2;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-surface-2) 94%, var(--color-brand-soft)) 0%,
+    var(--color-surface-2) 32%,
+    var(--color-bg) 100%
+  );
   display: flex;
   flex-direction: column;
   padding: calc(12px + env(safe-area-inset-top)) 14px calc(10px + env(safe-area-inset-bottom));
@@ -6376,6 +6553,22 @@ button.ingredient-item {
   margin-bottom: 10px;
 }
 
+.kookstand-head__brand {
+  min-width: 0;
+}
+
+.kookstand-head__kicker {
+  margin: 0 0 4px;
+}
+
+.kookstand-head__tagline {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+  color: var(--muted-strong);
+  letter-spacing: -0.01em;
+}
+
 .kookstand-close {
   width: 44px;
   height: 44px;
@@ -6398,6 +6591,7 @@ button.ingredient-item {
   font-size: clamp(1.7rem, 7vw, 2.6rem);
   line-height: 0.96;
   letter-spacing: -0.02em;
+  color: var(--color-text);
 }
 
 .kookstand-servings {
@@ -6406,9 +6600,9 @@ button.ingredient-item {
   gap: 6px;
   padding: 8px 12px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.80);
-  border: 1px solid rgba(36, 60, 43, 0.08);
-  color: #516250;
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  border: 1px solid var(--color-border);
+  color: var(--muted-strong);
   font-weight: 800;
   font-size: 0.92rem;
   white-space: nowrap;
@@ -6425,9 +6619,10 @@ button.ingredient-item {
 
 .kookstand-progress {
   margin: 0 0 12px;
-  color: #7d8f77;
-  font-size: 0.98rem;
-  font-weight: 800;
+  color: var(--color-brand);
+  font-size: var(--font-size-md);
+  font-weight: 900;
+  letter-spacing: -0.02em;
 }
 
 .kookstand-quickbar {
@@ -6484,11 +6679,12 @@ button.ingredient-item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
-  padding: 18px;
-  border-radius: 26px;
-  background: rgba(255,255,255,0.92);
-  border: 1px solid rgba(141, 164, 133, 0.14);
-  box-shadow: 0 14px 36px rgba(55,50,45,0.08);
+  padding: 18px 16px 18px 14px;
+  border-radius: var(--radius-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 5px solid var(--color-brand);
+  box-shadow: var(--shadow-3);
 }
 
 .kookstand-step__content {
@@ -6505,18 +6701,18 @@ button.ingredient-item {
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background: #dce8dc;
-  color: #29422b;
+  background: color-mix(in srgb, var(--color-brand-soft) 90%, transparent);
+  color: color-mix(in srgb, var(--color-brand) 50%, #142018);
   font-weight: 950;
   font-size: 1.12rem;
 }
 
 .kookstand-step__text {
   margin: 0;
-  color: #2f2b27;
-  font-size: clamp(1.15rem, 4.4vw, 1.55rem);
-  line-height: 1.55;
-  font-weight: 850;
+  color: var(--color-text);
+  font-size: clamp(1.12rem, 4.2vw, 1.48rem);
+  line-height: 1.52;
+  font-weight: 750;
 }
 
 .kookstand-ingredients {
@@ -6588,8 +6784,12 @@ button.ingredient-item {
   gap: 10px;
   padding: 12px 0 calc(10px + env(safe-area-inset-bottom));
   margin-top: 12px;
-  background: linear-gradient(to top, rgba(248, 247, 242, 0.98) 65%, rgba(248, 247, 242, 0.70));
-  border-top: 1px solid rgba(36, 60, 43, 0.08);
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--color-surface-2) 96%, transparent) 55%,
+    transparent
+  );
+  border-top: 1px solid var(--color-border);
 }
 
 .kookstand-controls__row {

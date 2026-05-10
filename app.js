@@ -913,7 +913,9 @@ const topbarFavoriteButton = document.getElementById("topbarFavoriteButton");
 const saveRecipeButton = document.getElementById("saveRecipeButton");
 const kookstandButton = document.getElementById("kookstandButton");
 const cookModeButton = document.getElementById("cookModeButton");
+const cookModeHint = document.getElementById("cookModeHint");
 const wakeLockButton = document.getElementById("wakeLockButton");
+const wakeLockHint = document.getElementById("wakeLockHint");
 const detailAssist = document.getElementById("detailAssist");
 const cookModePanel = document.getElementById("cookModePanel");
 const cookModeProgress = document.getElementById("cookModeProgress");
@@ -5754,8 +5756,13 @@ function renderCookMode(recipe, recipeProgress = getRecipeProgress(recipe.id)) {
   recipeProgress.currentStep = boundedStepIndex;
 
   cookModeButton.classList.toggle("is-active", recipeProgress.cookMode);
-  cookModeButton.setAttribute("aria-pressed", String(recipeProgress.cookMode));
-  cookModeButton.textContent = recipeProgress.cookMode ? "Kookmodus: aan" : "Kookmodus: uit";
+  cookModeButton.setAttribute("aria-checked", String(recipeProgress.cookMode));
+
+  if (cookModeHint) {
+    cookModeHint.textContent = recipeProgress.cookMode
+      ? "Aan — stap-voor-stap hierboven (compact in dit scherm)."
+      : "Uit — stappen staan onderaan bij Bereiding.";
+  }
 
   cookModePanel.classList.toggle("hidden", !recipeProgress.cookMode);
   cookModeProgress.textContent = hasSteps ? `Stap ${boundedStepIndex + 1} van ${instructions.length}` : "Nog geen stappen";
@@ -9301,10 +9308,23 @@ async function releaseWakeLock() {
 }
 
 function updateWakeLockUI() {
-  const isActive = Boolean(state.keepAwake && state.wakeLockSentinel);
+  if (!wakeLockButton) return;
+  const unsupported = typeof navigator !== "undefined" && !("wakeLock" in navigator);
+  const isActive = !unsupported && Boolean(state.keepAwake && state.wakeLockSentinel);
   wakeLockButton.classList.toggle("is-active", isActive);
-  wakeLockButton.setAttribute("aria-pressed", String(isActive));
-  wakeLockButton.textContent = isActive ? "Scherm tijdens koken: aan" : "Scherm tijdens koken: uit";
+  wakeLockButton.setAttribute("aria-checked", String(isActive));
+  if (unsupported) {
+    wakeLockButton.setAttribute("disabled", "");
+  } else {
+    wakeLockButton.removeAttribute("disabled");
+  }
+  if (wakeLockHint) {
+    wakeLockHint.textContent = unsupported
+      ? "Niet beschikbaar op dit apparaat."
+      : isActive
+        ? "Aan — scherm blijft helder tijdens koken."
+        : "Uit — scherm mag dimmen of uit (spaart batterij).";
+  }
 }
 
 async function registerServiceWorker() {
@@ -9665,6 +9685,9 @@ function bindPushTriggerToggles() {
 }
 
 async function toggleWakeLock() {
+  if (typeof navigator !== "undefined" && !("wakeLock" in navigator)) {
+    return;
+  }
   if (state.keepAwake && state.wakeLockSentinel) {
     state.keepAwake = false;
     await releaseWakeLock();
