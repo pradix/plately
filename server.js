@@ -8511,6 +8511,86 @@ function buildJumboDirectAddUrl(results) {
   return "https://www.jumbo.com/mandje/";
 }
 
+function parseAhBasketPriceEuro(value) {
+  const raw = sanitizeText(value || "");
+  if (!raw) return Number.POSITIVE_INFINITY;
+  const cleaned = raw
+    .replace(/[^\d,.\-]/g, "")
+    .replace(/\.(?=\d{3}\b)/g, "")
+    .replace(",", ".");
+  const n = Number.parseFloat(cleaned);
+  return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+}
+
+/** Te zwakke semantic match of zware AH-penalty → niet als standaard bij AH-lijst/mandje. */
+function ahProductPassesListAddQualityBar(product) {
+  if (!product) return false;
+  const meta = product.matchMeta;
+  if (!meta || meta.score === null || meta.score === undefined || !Number.isFinite(Number(meta.score))) {
+    return true;
+  }
+  const score = Number(meta.score);
+  if (score > 56) return false;
+  const penalties = Array.isArray(meta.appliedPenalties) ? meta.appliedPenalties : [];
+  if (penalties.some((p) => Number(p.delta) >= 92)) return false;
+  return true;
+}
+
+function isAhProductBioLabeled(product) {
+  return Array.isArray(product?.labels) && product.labels.some((l) => /\b(biologisch|bio)\b/i.test(String(l || "")));
+}
+
+/**
+ * Standaard AH-productkeuze: beste match-score eerst, tie-break prijs, strakkere cutoff dan voorheen.
+ * prefs.bio: kies biologisch variant binnen dezelfde kwaliteitsband indien mogelijk.
+ */
+function pickAhBasketDefaultProduct(products, prefs) {
+  const list = Array.isArray(products) ? products.filter(Boolean) : [];
+  if (!list.length) return null;
+
+  const scored = list
+    .map((p, idx) => ({
+      idx,
+      product: p,
+      score: Number.isFinite(Number(p?.matchMeta?.score)) ? Number(p.matchMeta.score) : null,
+      price: parseAhBasketPriceEuro(p?.price),
+      bio: isAhProductBioLabeled(p),
+    }))
+    .filter((x) => x.product);
+
+  if (!scored.length) return list[0] || null;
+
+  const finiteScores = scored.map((s) => s.score).filter((s) => Number.isFinite(s));
+  const bestScore = finiteScores.length ? Math.min(...finiteScores) : null;
+  const cutoff = bestScore === null ? null : Math.min(bestScore + 32, 76);
+  const good = cutoff === null ? scored : scored.filter((s) => s.score === null || s.score <= cutoff);
+
+  const goodSorted = [...good].sort((a, b) => {
+    const sa = Number.isFinite(a.score) ? a.score : Infinity;
+    const sb = Number.isFinite(b.score) ? b.score : Infinity;
+    if (sa !== sb) return sa - sb;
+    if (a.price !== b.price) return a.price - b.price;
+    return a.idx - b.idx;
+  });
+
+  if (prefs?.bio) {
+    const bioGood = goodSorted.filter((s) => s.bio);
+    if (bioGood.length) return bioGood[0].product;
+  }
+  return goodSorted[0].product;
+}
+
+/**
+ * Voor mandje + add-multiple: liever een product binnen de kwaliteitsdrempel als de pool dat toelaat,
+ * anders best effort (zelfde gedrag als eerder voor moeilijke ingrediënten).
+ */
+function selectAhProductForGroceryHandoff(products, prefs) {
+  const picked = pickAhBasketDefaultProduct(products, prefs);
+  const strictPool = (Array.isArray(products) ? products : []).filter(ahProductPassesListAddQualityBar);
+  if (!strictPool.length) return picked;
+  return pickAhBasketDefaultProduct(strictPool, prefs) || picked;
+}
+
 function buildStoreSearchUrl(store, items) {
   const query = encodeURIComponent(
     items
@@ -11216,58 +11296,6 @@ async function buildStoreBasket(body) {
   const recipeTitle = sanitizeText(body.recipeTitle || "Boodschappenlijst");
   const sourceUrl = sanitizeText(body.sourceUrl || "");
 
-  const parseEuroPriceNumber = (value) => {
-    const raw = sanitizeText(value || "");
-    if (!raw) return Number.POSITIVE_INFINITY;
-    const cleaned = raw
-      .replace(/[^\d,.\-]/g, "")
-      .replace(/\.(?=\d{3}\b)/g, "") // thousands separators like 1.234,56
-      .replace(",", ".");
-    const n = Number.parseFloat(cleaned);
-    return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
-  };
-
-  const isBioProduct = (p) =>
-    Array.isArray(p?.labels) && p.labels.some((l) => /\b(biologisch|bio)\b/i.test(String(l || "")));
-
-  const pickCheapestAmongGoodMatches = (products, prefs) => {
-    const list = Array.isArray(products) ? products.filter(Boolean) : [];
-    if (!list.length) return null;
-
-    const scored = list
-      .map((p, idx) => ({
-        idx,
-        product: p,
-        score: Number.isFinite(Number(p?.matchMeta?.score)) ? Number(p.matchMeta.score) : null,
-        price: parseEuroPriceNumber(p?.price),
-        bio: isBioProduct(p),
-      }))
-      .filter((x) => x.product);
-
-    if (!scored.length) return list[0] || null;
-
-    const finiteScores = scored.map((s) => s.score).filter((s) => Number.isFinite(s));
-    const bestScore = finiteScores.length ? Math.min(...finiteScores) : null;
-    // "Good match" window: keep relevance primary, then pick cheapest within that window.
-    // Score is a distance/penalty where lower is better (can be negative).
-    const cutoff = bestScore === null ? null : Math.min(bestScore + 48, 88);
-    const good = cutoff === null ? scored : scored.filter((s) => s.score === null || s.score <= cutoff);
-
-    const goodSorted = [...good].sort((a, b) => {
-      const sa = Number.isFinite(a.score) ? a.score : Infinity;
-      const sb = Number.isFinite(b.score) ? b.score : Infinity;
-      if (sa !== sb) return sa - sb;
-      if (a.price !== b.price) return a.price - b.price;
-      return a.idx - b.idx;
-    });
-
-    if (prefs?.bio) {
-      const bioGood = goodSorted.filter((s) => s.bio);
-      if (bioGood.length) return bioGood[0].product;
-    }
-    return goodSorted[0].product;
-  };
-
   if (sourceUrl) {
     try {
       const html = await fetchHtml(sourceUrl);
@@ -11324,12 +11352,12 @@ async function buildStoreBasket(body) {
         // query so the basket is never empty for that item.
         if (!products || products.length === 0) {
           const searchQuery = buildAHSearchQuery(ingredientName, preferences);
-          products = await findAHProducts(searchQuery || ingredientName, 3);
+          products = await findAHProducts(searchQuery || ingredientName, 14);
           if ((!products || products.length === 0) && searchQuery && searchQuery !== ingredientName) {
-            products = await findAHProducts(ingredientName, 3);
+            products = await findAHProducts(ingredientName, 14);
           }
         }
-        const picked = pickCheapestAmongGoodMatches(products, preferences);
+        const picked = selectAhProductForGroceryHandoff(products, preferences);
 
         // Ensure the selected product is also the first choice shown in the UI.
         // The basket UI assumes `choices[0]` is the current pick (selectedChoiceIndex = 0).
@@ -11432,7 +11460,12 @@ async function researchAHChoices(body) {
     products = await findAHProducts(ingredientTitle, 30);
   }
 
-  const filtered = (Array.isArray(products) ? products : []).filter((p) => !exclude.has(String(p?.id || "")));
+  let filtered = (Array.isArray(products) ? products : []).filter((p) => !exclude.has(String(p?.id || "")));
+  const best = selectAhProductForGroceryHandoff(filtered, preferences);
+  if (best && filtered.length > 1) {
+    filtered = [best, ...filtered.filter((p) => String(p?.id || "") !== String(best?.id || ""))];
+  }
+
   const item = { title: ingredientTitle, amount: sanitizeText(body.amount || "1 verpakking") };
   const choices = filtered
     .map((product, i) => buildMatchedChoiceFromProduct("albert-heijn", item, product, i === 0 ? "Beste match" : "Alternatief"))
@@ -12424,10 +12457,14 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 200, { ok: true, suggestions: [] });
         return;
       }
-      const products = await findAHProducts(raw, 5);
+      let products = await findAHProducts(raw, 14);
+      const best = pickAhBasketDefaultProduct(products, {});
+      if (best && products.length > 1) {
+        products = [best, ...products.filter((p) => String(p?.id || "") !== String(best?.id || ""))];
+      }
       sendJson(response, 200, {
         ok: true,
-        suggestions: products.map((p) => ({
+        suggestions: products.slice(0, 5).map((p) => ({
           id: p.id,
           name: p.name,
           price: p.price,
@@ -12538,8 +12575,9 @@ const server = http.createServer(async (request, response) => {
       const items = Array.isArray(body.items) ? body.items.slice(0, 20) : [];
       const photoResults = await Promise.allSettled(
         items.map(async (item) => {
-          const products = await findAHProducts(sanitizeText(item.title || ""), 1);
-          return { id: item.id, imageUrl: products[0]?.imageUrl || "" };
+          const parsed = await findAHProducts(sanitizeText(item.title || ""), 12);
+          const best = pickAhBasketDefaultProduct(parsed, {});
+          return { id: item.id, imageUrl: best?.imageUrl || parsed[0]?.imageUrl || "" };
         })
       );
       const photos = {};

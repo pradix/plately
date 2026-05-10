@@ -2048,7 +2048,7 @@ function getBasketItemCategory(item, choice) {
 function getBasketMatchQuality(choice) {
   const score = Number(choice?.matchMeta?.score);
   if (!Number.isFinite(score)) return "unknown";
-  return score > 45 ? "low" : "good";
+  return score > 42 ? "low" : "good";
 }
 
 function renderBasketPreview() {
