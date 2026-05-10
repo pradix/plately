@@ -7932,14 +7932,18 @@ async function buildShortShareUrl(recipe) {
       ingredients: Array.isArray(recipe?.ingredients) ? recipe.ingredients : [],
       instructions: Array.isArray(recipe?.instructions) ? recipe.instructions : [],
     };
-    const resp = await fetch("/api/share/create", {
+    const resp = await fetch(`${state.apiBase}/api/share/create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ payload }),
     });
     const data = await resp.json().catch(() => null);
     if (resp.ok && data?.ok && data?.url) {
+      // Always return a short URL on the app origin (not the API origin).
       return new URL(String(data.url), window.location.origin).toString();
+    }
+    if (resp.ok && data?.ok && data?.token) {
+      return new URL(`/share/${encodeURIComponent(String(data.token))}`, window.location.origin).toString();
     }
   } catch {
     // fall back below
