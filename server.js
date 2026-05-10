@@ -5070,103 +5070,116 @@ function flattenJsonLd(node) {
   return items;
 }
 
-// Extract recipe using HTML5 Microdata (itemscope/itemtype/itemprop)
+// Lightweight HTML helpers — no jsdom/cheerio needed
+function _htmlStripTags(s) {
+  return String(s || "").replace(/<[^>]*>/g, " ").replace(/\s{2,}/g, " ").trim();
+}
+function _htmlAttr(tag, attr) {
+  const m = new RegExp(`\\b${attr}=["']([^"']*?)["']`, "i").exec(tag);
+  return m ? m[1].trim() : "";
+}
+/** Return all HTML tags (opening + self-closing) that match a predicate on the raw tag string. */
+function _htmlFindTags(html, predicate) {
+  const results = [];
+  const re = /<([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const full = m[0];
+    if (predicate(full)) results.push({ tag: full, index: m.index, tagName: m[1].toLowerCase() });
+  }
+  return results;
+}
+/** Extract inner text of the first occurrence of a tag that has a given attribute value. */
+function _htmlInnerText(html, attrName, attrValue) {
+  // Find opening tag
+  const escapedVal = attrValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`<([a-zA-Z][a-zA-Z0-9]*)\\b[^>]*\\b${attrName}=["'][^"']*${escapedVal}[^"']*["'][^>]*>`, "i");
+  const m = re.exec(html);
+  if (!m) return "";
+  const tagName = m[1];
+  const start = m.index + m[0].length;
+  // Find matching closing tag (simple non-nested scan)
+  const closeRe = new RegExp(`</${tagName}>`, "i");
+  const closeM = closeRe.exec(html.slice(start));
+  if (!closeM) return _htmlStripTags(html.slice(start, start + 400));
+  return _htmlStripTags(html.slice(start, start + closeM.index));
+}
+/** Extract all inner texts of tags that have an attribute containing attrValue. */
+function _htmlInnerTexts(html, attrName, attrValue) {
+  const results = [];
+  const escapedVal = attrValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`<([a-zA-Z][a-zA-Z0-9]*)\\b[^>]*\\b${attrName}=["'][^"']*${escapedVal}[^"']*["']([^>]*)>`, "gi");
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const tagName = m[1];
+    const attrs = m[0];
+    // Check for content= attribute (meta tags)
+    const contentM = /\bcontent=["']([^"']+)["']/.exec(attrs);
+    if (contentM) { results.push(contentM[1].trim()); continue; }
+    const start = m.index + m[0].length;
+    const closeRe = new RegExp(`</${tagName}>`, "i");
+    const closeM = closeRe.exec(html.slice(start));
+    const inner = closeM ? html.slice(start, start + closeM.index) : html.slice(start, start + 800);
+    const text = _htmlStripTags(inner);
+    if (text) results.push(text);
+  }
+  return results;
+}
+
+// Extract recipe using HTML5 Microdata (itemscope/itemtype/itemprop) — regex-based, no jsdom
 function extractMicrodataRecipe(html) {
-  const doc = new JSDOM(html).window.document;
+  // Quick bail if page has no microdata recipe marker
+  if (!/itemtype=["'][^"']*Recipe["']/i.test(html)) return null;
 
-  // Find recipe element with itemscope itemtype="*Recipe"
-  const recipeElement = doc.querySelector('[itemscope][itemtype*="Recipe"]');
-  if (!recipeElement) return null;
+  const recipe = { title: "", image: "", ingredients: [], instructions: [] };
 
-  const recipe = {
-    title: '',
-    image: '',
-    ingredients: [],
-    instructions: []
-  };
+  // Title
+  recipe.title = _htmlInnerText(html, "itemprop", "name");
 
-  // Extract title
-  const titleEl = recipeElement.querySelector('[itemprop="name"]');
-  if (titleEl) recipe.title = titleEl.textContent.trim();
-
-  // Extract image
-  const imageEl = recipeElement.querySelector('[itemprop="image"]');
-  if (imageEl) {
-    recipe.image = imageEl.getAttribute('src') || imageEl.getAttribute('content') || imageEl.textContent.trim();
+  // Image — look for itemprop="image" src= or content=
+  const imgTagM = /<[^>]+\bitemprop=["']image["'][^>]*>/i.exec(html);
+  if (imgTagM) {
+    recipe.image = _htmlAttr(imgTagM[0], "src") || _htmlAttr(imgTagM[0], "content") || _htmlAttr(imgTagM[0], "href");
   }
 
-  // Extract ingredients
-  const ingredientEls = recipeElement.querySelectorAll('[itemprop="recipeIngredient"]');
-  ingredientEls.forEach(el => {
-    const text = el.textContent?.trim();
-    if (text && text.length > 2) {
-      recipe.ingredients.push(text);
-    }
-  });
+  // Ingredients
+  recipe.ingredients = _htmlInnerTexts(html, "itemprop", "recipeIngredient").filter((t) => t.length > 2);
 
-  // Extract instructions
-  const instructionEls = recipeElement.querySelectorAll('[itemprop="recipeInstructions"]');
-  instructionEls.forEach(el => {
-    const text = el.textContent?.trim();
-    if (text && text.length > 5) {
-      recipe.instructions.push(text);
-    }
-  });
+  // Instructions
+  recipe.instructions = _htmlInnerTexts(html, "itemprop", "recipeInstructions").filter((t) => t.length > 5);
 
-  // Return null if we didn't extract enough data
   if (!recipe.title && recipe.ingredients.length < 2) return null;
-
   return recipe.ingredients.length > 0 || recipe.instructions.length > 0 ? recipe : null;
 }
 
-// Extract recipe using RDFa (typeof/property attributes)
+// Extract recipe using RDFa (typeof/property attributes) — regex-based, no jsdom
 function extractRdfaRecipe(html) {
-  const doc = new JSDOM(html).window.document;
+  if (!/typeof=["'][^"']*Recipe["']/i.test(html)) return null;
 
-  // Find recipe element with typeof="*Recipe"
-  const recipeElement = doc.querySelector('[typeof*="Recipe"]');
-  if (!recipeElement) return null;
+  const recipe = { title: "", image: "", ingredients: [], instructions: [] };
 
-  const recipe = {
-    title: '',
-    image: '',
-    ingredients: [],
-    instructions: []
-  };
+  // Title
+  recipe.title = _htmlInnerText(html, "property", "name") || _htmlInnerText(html, "property", "schema:name");
 
-  // Extract title (property="schema:name" or property="name")
-  const titleEl = recipeElement.querySelector('[property*="name"]');
-  if (titleEl) {
-    recipe.title = titleEl.getAttribute('content') || titleEl.textContent.trim();
+  // Image
+  const imgTagM = /<[^>]+\bproperty=["'][^"']*image[^"']*["'][^>]*>/i.exec(html);
+  if (imgTagM) {
+    recipe.image = _htmlAttr(imgTagM[0], "src") || _htmlAttr(imgTagM[0], "content") || _htmlAttr(imgTagM[0], "href");
   }
 
-  // Extract image
-  const imageEl = recipeElement.querySelector('[property*="image"]');
-  if (imageEl) {
-    recipe.image = imageEl.getAttribute('src') || imageEl.getAttribute('content') || imageEl.textContent.trim();
-  }
+  // Ingredients
+  recipe.ingredients = [
+    ..._htmlInnerTexts(html, "property", "recipeIngredient"),
+    ..._htmlInnerTexts(html, "property", "schema:recipeIngredient"),
+  ].filter((t) => t.length > 2);
 
-  // Extract ingredients (property="schema:recipeIngredient")
-  const ingredientEls = recipeElement.querySelectorAll('[property*="recipeIngredient"]');
-  ingredientEls.forEach(el => {
-    const text = el.getAttribute('content') || el.textContent?.trim();
-    if (text && text.length > 2) {
-      recipe.ingredients.push(text);
-    }
-  });
+  // Instructions
+  recipe.instructions = [
+    ..._htmlInnerTexts(html, "property", "recipeInstructions"),
+    ..._htmlInnerTexts(html, "property", "schema:recipeInstructions"),
+  ].filter((t) => t.length > 5);
 
-  // Extract instructions (property="schema:recipeInstructions")
-  const instructionEls = recipeElement.querySelectorAll('[property*="recipeInstructions"]');
-  instructionEls.forEach(el => {
-    const text = el.getAttribute('content') || el.textContent?.trim();
-    if (text && text.length > 5) {
-      recipe.instructions.push(text);
-    }
-  });
-
-  // Return null if we didn't extract enough data
   if (!recipe.title && recipe.ingredients.length < 2) return null;
-
   return recipe.ingredients.length > 0 || recipe.instructions.length > 0 ? recipe : null;
 }
 
