@@ -9709,6 +9709,35 @@ function channelSearchBackendNote(channelId, resultCount) {
 }
 
 /**
+ * Allerhande-zoek HTML bevat geserialiseerde GraphQL/Flight-data met RecipeSummary + RecipeRating
+ * (gemiddelde 1–5 en aantal waarderingen). We mappen op recept-id (r-r…).
+ */
+function extractAhSearchRatingsFromAllerhandeHtml(html) {
+  const map = new Map();
+  if (!html || typeof html !== "string" || html.length < 800) return map;
+  const delim = '\\"__typename\\":\\"RecipeSummary\\"';
+  if (!html.includes("RecipeSummary")) return map;
+  const parts = html.split(delim);
+  const reId = /\\"id\\":(\d+)/;
+  const reRating =
+    /\\"rating\\":\{\\"__typename\\":\\"RecipeRating\\",\\"average\\":(\d+|null),\\"count\\":(\d+)/;
+  for (let i = 1; i < parts.length; i++) {
+    const segment = parts[i];
+    const idMatch = segment.match(reId);
+    const ratingMatch = segment.match(reRating);
+    if (!idMatch || !ratingMatch) continue;
+    const averageRaw = ratingMatch[1];
+    if (averageRaw === "null") continue;
+    const ratingValue = Number(averageRaw);
+    if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) continue;
+    const ratingCount = Number(ratingMatch[2]);
+    if (!Number.isFinite(ratingCount) || ratingCount < 0) continue;
+    map.set(`r-r${idMatch[1]}`.toLowerCase(), { ratingValue, ratingCount });
+  }
+  return map;
+}
+
+/**
  * Search AH Allerhande — tries the API with anonymous token.
  */
 async function searchAHRecipes(query, count = 4, opts = {}) {
@@ -9760,6 +9789,8 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
         }
       }
       console.log(`✅ Jina returned ${markdown.length} chars, HTML: ${html.length} chars`);
+
+      const ahRatingByRecipeId = extractAhSearchRatingsFromAllerhandeHtml(html);
 
       // Extract recipe links from Jina output — alleen `/recept/…` met Allerhande-id `r-r123…/slug`.
       const allRecipeUrls = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recept\/([^\s\)]+)/g)];
@@ -10025,6 +10056,8 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
           }
 
           console.log(`  📄 Mapping: "${title}" (ID: ${recipeId || 'none'}) - Image: ${thumbnail ? 'found' : 'missing'}`);
+          const rid = String(recipeId || "").toLowerCase();
+          const ratingEntry = rid ? ahRatingByRecipeId.get(rid) : null;
           return {
             title,
             url: linkItem.url,
@@ -10033,6 +10066,9 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
             channelId: "ch-ah",
             description: "",
             time: "",
+            ...(ratingEntry
+              ? { ratingValue: ratingEntry.ratingValue, ratingCount: ratingEntry.ratingCount }
+              : {}),
           };
         }).filter((r) => {
           const pass = r.title && r.url && r.title.length > 2;
@@ -10086,6 +10122,8 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
     });
 
     console.log(`Got ${html.length} chars of HTML`);
+
+    const ahRatingByRecipeId = extractAhSearchRatingsFromAllerhandeHtml(html);
 
     // Look for recipe links in the HTML (both /recept/ and /recepten/)
     const recipeUrls = new Set();
@@ -10158,6 +10196,10 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
             const thumbnail = extractAhRecipeImage(recipeHtml);
             console.log(`  ✅ ${title} - Image: ${thumbnail ? "YES" : "NO"}`);
 
+            const urlIdMatch = url.match(/\/(R-R\d+)\//i);
+            const rid = urlIdMatch ? urlIdMatch[1].toLowerCase() : "";
+            const ratingEntry = rid ? ahRatingByRecipeId.get(rid) : null;
+
             return {
               title,
               url,
@@ -10166,6 +10208,9 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
               channelId: "ch-ah",
               description: "",
               time: "",
+              ...(ratingEntry
+                ? { ratingValue: ratingEntry.ratingValue, ratingCount: ratingEntry.ratingCount }
+                : {}),
             };
           } catch (err) {
             console.log(`  ❌ Error: ${err.message}`);

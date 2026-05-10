@@ -3210,14 +3210,23 @@ function runHomeSearchQuery(query) {
   }
 }
 
-function switchView(view) {
-  if (state.view === "review" && view !== "review" && importReviewLeaveShouldWarn()) {
-    const ok = window.confirm(
-      "Dit recept staat nog niet in een kookboek. Ga je nu weg, dan blijft hij wel als concept bewaard (via Concepten). Toch doorgaan?"
-    );
-    if (!ok) {
-      return;
-    }
+function switchView(view, opts = {}) {
+  const skipImportReviewLeaveGuard = opts.skipImportReviewLeaveGuard === true;
+
+  if (
+    !skipImportReviewLeaveGuard &&
+    state.view === "review" &&
+    view !== "review" &&
+    importReviewLeaveShouldWarn()
+  ) {
+    showConfirm({
+      title: "Importeren verlaten?",
+      subtitle:
+        "Dit recept staat nog niet in een kookboek. Het blijft als concept zichtbaar bij Concepten.",
+      confirmLabel: "Toch doorgaan",
+      onConfirm: () => switchView(view, { skipImportReviewLeaveGuard: true }),
+    });
+    return;
   }
 
   // Enforce authentication for all protected views
@@ -4101,6 +4110,24 @@ function getChannelImportLoadingMarkup() {
   return `<svg class="spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Plately is bezig...</span>`;
 }
 
+/** @param {{ ratingValue?: number; ratingCount?: number }} r */
+function formatChannelSearchRatingHtml(r) {
+  const raw = r?.ratingValue;
+  if (raw == null || raw === "") return "";
+  const num = Math.min(5, Math.max(1, Math.round(Number(raw))));
+  if (!Number.isFinite(num)) return "";
+  const cnt = Number(r?.ratingCount);
+  const cntOk = Number.isFinite(cnt) && cnt > 0;
+  const stars = "★".repeat(num) + "☆".repeat(5 - num);
+  const label = cntOk
+    ? `Gemiddeld ${num} van 5 sterren, ${cnt} ${cnt === 1 ? "waardering" : "waarderingen"}`
+    : `Gemiddeld ${num} van 5 sterren`;
+  const countHtml = cntOk
+    ? `<span class="ch-card__rating-count">${cnt}×</span>`
+    : "";
+  return `<div class="ch-card__rating" aria-label="${escapeHtml(label)}"><span class="ch-card__rating-stars" aria-hidden="true">${stars}</span><span class="ch-card__rating-meta"><span class="ch-card__rating-score">${num}/5</span>${countHtml}</span></div>`;
+}
+
 function renderChannelSearchResults(results, filter = state.channelSearchFilter) {
   if (!channelSearchSection || !channelSearchResults) return;
 
@@ -4165,6 +4192,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
         </div>
         <div class="ch-card__body">
           <p class="ch-card__title">${escapeHtml(r.title)}</p>
+          ${formatChannelSearchRatingHtml(r)}
           ${r.description ? `<p class="ch-card__desc">${escapeHtml(r.description)}</p>` : ""}
           ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
         </div>
