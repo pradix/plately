@@ -550,6 +550,7 @@
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channels">Kanalen</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="users">Gebruikers</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="search-terms">Zoekwoorden</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="activity">Activiteit</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="notifications">Notificaties</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Kanaal test</button>
       </div>
@@ -916,6 +917,31 @@
           </div>
           <div id="searchTermsStatus" class="muted" style="margin-top:-6px">Laden…</div>
           <div id="searchTermsTableWrap" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <div class="admin-tab-section" id="adminTabActivity" data-tab="activity">
+        <div class="section" id="activitySection">
+          <div class="section-header">
+            <h2>Activiteit in de app</h2>
+            <div class="muted">Client-tracking (UI) + server-events (import, zoeken). Alleen zichtbaar met PostgreSQL.</div>
+          </div>
+          <div class="stats-grid" style="margin:0 0 14px">
+            <div class="stat-card">
+              <div class="stat-value" id="actClient7d">—</div>
+              <div class="stat-label">Client-events (7d)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="actActors7d">—</div>
+              <div class="stat-label">Unieke gebruikers/anon (7d)</div>
+            </div>
+          </div>
+          <h3 class="subhead">Alle eventtypes (7 dagen)</h3>
+          <div id="actByType7d" style="font-size:12px;color:rgba(0,0,0,0.82);margin-bottom:16px"></div>
+          <h3 class="subhead">Server-events (7 dagen, zonder client_*)</h3>
+          <div id="actServer7d" style="font-size:12px;color:rgba(0,0,0,0.82);margin-bottom:16px"></div>
+          <h3 class="subhead">Recente events</h3>
+          <div id="actRecent" style="overflow:auto;max-height:520px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)"></div>
         </div>
       </div>
     </div>
@@ -1454,6 +1480,62 @@
           topPlatformsEl.innerHTML = topPlatforms.length
             ? `<ol style="padding-left:18px">${topPlatforms.map((r) => `<li>${escapeHtml(r.platform)} <span style="color:#666">(${r.count})</span></li>`).join("")}</ol>`
             : `<p style="color:#999">Nog geen data</p>`;
+        }
+
+        const activity = data.analytics?.activity || {};
+        setText("actClient7d", formatNumber(activity.clientEvents7d ?? 0));
+        setText("actActors7d", formatNumber(activity.uniqueActors7d ?? 0));
+
+        const act7 = document.getElementById("actByType7d");
+        const actSrv = document.getElementById("actServer7d");
+        const actRecent = document.getElementById("actRecent");
+        const rows7 = Array.isArray(activity.byType7d) ? activity.byType7d : [];
+        const rowsSrv = Array.isArray(activity.serverTypes7d) ? activity.serverTypes7d : [];
+        if (act7) {
+          act7.innerHTML = rows7.length
+            ? `<table class="users-table"><thead><tr><th>type</th><th class="sortable" style="text-align:right">7d</th></tr></thead><tbody>${rows7.map((r) => `<tr><td><code>${escapeHtml(String(r.type || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`).join("")}</tbody></table>`
+            : `<p class="muted">Geen events in de laatste 7 dagen (of database uit).</p>`;
+        }
+        if (actSrv) {
+          actSrv.innerHTML = rowsSrv.length
+            ? `<table class="users-table"><thead><tr><th>type</th><th class="sortable" style="text-align:right">7d</th></tr></thead><tbody>${rowsSrv.map((r) => `<tr><td><code>${escapeHtml(String(r.type || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`).join("")}</tbody></table>`
+            : `<p class="muted">Geen server-events.</p>`;
+        }
+        const recent = Array.isArray(activity.recent) ? activity.recent : [];
+        if (actRecent) {
+          if (!recent.length) {
+            actRecent.innerHTML = `<p class="muted" style="padding:12px">Nog geen eventlog.</p>`;
+          } else {
+            actRecent.innerHTML = `
+              <table class="users-table">
+                <thead>
+                  <tr>
+                    <th>Tijd</th>
+                    <th>Type</th>
+                    <th>User</th>
+                    <th>Meta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${recent.map((row) => {
+                    const ts = row.created_at ? new Date(row.created_at).toLocaleString('nl-NL') : "—";
+                    const rawId = String(row.user_id || "");
+                    const uid = rawId
+                      ? `<code title="${escapeHtml(rawId)}">${escapeHtml(rawId.length > 12 ? `${rawId.slice(0, 10)}…` : rawId)}</code>`
+                      : `<span class="muted">—</span>`;
+                    let metaStr = "";
+                    try {
+                      metaStr = JSON.stringify(row.meta || {});
+                    } catch {
+                      metaStr = "{}";
+                    }
+                    if (metaStr.length > 220) metaStr = metaStr.slice(0, 217) + "…";
+                    return `<tr><td style="white-space:nowrap;font-size:11px">${escapeHtml(ts)}</td><td><code>${escapeHtml(String(row.type || ""))}</code></td><td>${uid}</td><td style="font-size:11px;word-break:break-all">${escapeHtml(metaStr)}</td></tr>`;
+                  }).join("")}
+                </tbody>
+              </table>
+            `;
+          }
         }
       } catch (error) {
         // keep admin usable even if analytics fails
@@ -2870,6 +2952,9 @@
 
       if (persist) {
         try { localStorage.setItem(ADMIN_TABS_STORAGE_KEY, next); } catch {}
+      }
+      if (next === "activity") {
+        loadAnalytics();
       }
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     }

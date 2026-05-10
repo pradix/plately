@@ -7545,6 +7545,122 @@ async function recordEvent(type, userId, meta = {}) {
   }
 }
 
+const CLIENT_INGEST_EVENT_TYPES = new Set([
+  "client_navigation",
+  "client_grocery_add",
+  "client_ah_basket_open",
+  "client_kookstand",
+  "client_cookbook_save",
+  "client_import_success",
+]);
+
+const clientIngestBudget = new Map();
+
+function getRequestClientIp(request) {
+  const raw = sanitizeText(request.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  if (raw.length >= 3 && raw.length < 96) return raw;
+  const ra = sanitizeText(request.socket?.remoteAddress || "");
+  return ra.slice(0, 96) || "unknown";
+}
+
+function checkClientIngestBudget(ip, eventCount) {
+  const now = Date.now();
+  const key = ip || "unknown";
+  const windowMs = 60 * 60 * 1000;
+  const maxEventsPerHour = 4000;
+  let row = clientIngestBudget.get(key);
+  if (!row || now - row.started > windowMs) {
+    row = { started: now, used: 0 };
+    clientIngestBudget.set(key, row);
+  }
+  row.used += eventCount;
+  if (clientIngestBudget.size > 5000) {
+    for (const [k, v] of clientIngestBudget) {
+      if (now - v.started > windowMs) clientIngestBudget.delete(k);
+    }
+  }
+  return row.used <= maxEventsPerHour;
+}
+
+function sanitizeAnonId(raw) {
+  const s = String(raw || "").trim();
+  if (!/^[\w.-]{8,48}$/.test(s)) return "";
+  return s;
+}
+
+function sanitizeClientIngestMeta(input, depth = 0) {
+  if (!input || typeof input !== "object" || Array.isArray(input) || depth > 4) return {};
+  const out = {};
+  for (const [k, v] of Object.entries(input)) {
+    const key = String(k)
+      .replace(/[^\w.-]/g, "")
+      .slice(0, 32);
+    if (!key) continue;
+    if (v == null) continue;
+    if (typeof v === "boolean") {
+      out[key] = v;
+      continue;
+    }
+    if (typeof v === "number" && Number.isFinite(v)) {
+      out[key] = Math.round(v * 1000) / 1000;
+      continue;
+    }
+    if (typeof v === "string") {
+      let s = v.replace(/\s+/g, " ").trim();
+      s = s.replace(/https?:\/\/[^\s]+/gi, (m) => {
+        try {
+          return new URL(m).hostname.replace(/^www\./i, "");
+        } catch {
+          return "[url]";
+        }
+      });
+      if (s.length > 180) s = `${s.slice(0, 177)}…`;
+      out[key] = s;
+    }
+  }
+  return out;
+}
+
+async function ingestClientEvents(request, bodyPayload) {
+  if (!isPostgresEnabled()) {
+    return { ok: true, accepted: 0, skipped: true };
+  }
+  const ip = getRequestClientIp(request);
+  let body = bodyPayload;
+  if (!body || typeof body !== "object") {
+    body = {};
+  }
+  const eventsIn = Array.isArray(body.events) ? body.events.slice(0, 25) : [];
+  if (!eventsIn.length) {
+    return { ok: true, accepted: 0 };
+  }
+  const eventCount = eventsIn.length;
+  if (!checkClientIngestBudget(ip, eventCount)) {
+    throw new HttpError(429, "Te veel activiteits-events (rate limit).");
+  }
+
+  const authUser = await getAuthenticatedUser(request).catch(() => null);
+  const userId = authUser?.id ? sanitizeText(authUser.id) : null;
+  const bodyAnon = sanitizeAnonId(body.anonId);
+
+  let accepted = 0;
+  for (const ev of eventsIn) {
+    const type = sanitizeText(ev?.type || "");
+    if (!CLIENT_INGEST_EVENT_TYPES.has(type)) continue;
+    const rawMeta = ev?.meta && typeof ev.meta === "object" ? ev.meta : {};
+    const meta = sanitizeClientIngestMeta(rawMeta);
+    const ts = Number(ev?.ts);
+    if (Number.isFinite(ts) && ts > 1e12 && ts < Date.now() + 60_000) {
+      meta.clientTs = Math.round(ts);
+    }
+    if (bodyAnon) meta.anonId = bodyAnon;
+    await recordEvent(type, userId, meta);
+    accepted += 1;
+  }
+
+  return { ok: true, accepted };
+}
+
 function normalizeSearchQuery(raw) {
   const text = String(raw || "")
     .replace(/\s+/g, " ")
@@ -11778,6 +11894,25 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/client-events" && request.method === "POST") {
+      try {
+        const body = await readRequestBody(request);
+        const result = await ingestClientEvents(request, body);
+        sendJson(response, 200, result);
+      } catch (error) {
+        if (error instanceof HttpError) {
+          sendJson(response, error.statusCode || 400, {
+            ok: false,
+            error: error.message || "Request mislukt",
+          });
+        } else {
+          console.error("/api/client-events error:", error?.message || error);
+          sendJson(response, 400, { ok: false, error: "Ongeldige payload" });
+        }
+      }
+      return;
+    }
+
     if (requestUrl.pathname === "/api/app-state" && request.method === "PUT") {
       const body = await readRequestBody(request);
       const authUser = await getAuthenticatedUser(request);
@@ -13092,7 +13227,21 @@ const server = http.createServer(async (request, response) => {
       try {
         await requireAdmin(request);
         if (!isPostgresEnabled()) {
-          return sendJson(response, 200, { ok: true, analytics: { imports: { last30Days: [], total30d: 0, total7d: 0, topSources: [], topPlatforms: [] } } });
+          const emptyActivity = {
+            clientEvents7d: 0,
+            uniqueActors7d: 0,
+            byType7d: [],
+            byType30d: [],
+            serverTypes7d: [],
+            recent: [],
+          };
+          return sendJson(response, 200, {
+            ok: true,
+            analytics: {
+              imports: { last30Days: [], total30d: 0, total7d: 0, topSources: [], topPlatforms: [] },
+              activity: emptyActivity,
+            },
+          });
         }
 
         await ensurePostgresSchema();
@@ -13146,6 +13295,71 @@ const server = http.createServer(async (request, response) => {
           `
         );
 
+        const clientEvents7dRes = await pool.query(
+          `
+          SELECT COUNT(*)::int AS n
+          FROM plately_events
+          WHERE type ~ '^client_'
+            AND created_at >= NOW() - INTERVAL '7 days'
+          `
+        );
+
+        const activityByType7d = await pool.query(
+          `
+          SELECT type, COUNT(*)::int AS count
+          FROM plately_events
+          WHERE created_at >= NOW() - INTERVAL '7 days'
+          GROUP BY type
+          ORDER BY count DESC
+          LIMIT 50
+          `
+        );
+
+        const activityByType30d = await pool.query(
+          `
+          SELECT type, COUNT(*)::int AS count
+          FROM plately_events
+          WHERE created_at >= NOW() - INTERVAL '30 days'
+          GROUP BY type
+          ORDER BY count DESC
+          LIMIT 50
+          `
+        );
+
+        const serverOnlyTypes7d = await pool.query(
+          `
+          SELECT type, COUNT(*)::int AS count
+          FROM plately_events
+          WHERE created_at >= NOW() - INTERVAL '7 days'
+            AND type !~ '^client_'
+          GROUP BY type
+          ORDER BY count DESC
+          LIMIT 30
+          `
+        );
+
+        const uniqueActors7dRes = await pool.query(
+          `
+          SELECT COUNT(*)::int AS n
+          FROM (
+            SELECT DISTINCT COALESCE(user_id::text, meta->>'anonId', '') AS actor
+            FROM plately_events
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+              AND ((user_id IS NOT NULL) OR ((meta->>'anonId') <> ''))
+          ) s
+          WHERE COALESCE(actor,'') <> ''
+          `
+        );
+
+        const recentEventsRes = await pool.query(
+          `
+          SELECT type, user_id, meta, created_at
+          FROM plately_events
+          ORDER BY created_at DESC
+          LIMIT 150
+          `
+        );
+
         return sendJson(response, 200, {
           ok: true,
           analytics: {
@@ -13155,6 +13369,19 @@ const server = http.createServer(async (request, response) => {
               total30d: totals.rows[0]?.total30d || 0,
               topSources: topSources.rows,
               topPlatforms: topPlatforms.rows,
+            },
+            activity: {
+              clientEvents7d: clientEvents7dRes.rows[0]?.n || 0,
+              uniqueActors7d: uniqueActors7dRes.rows[0]?.n || 0,
+              byType7d: activityByType7d.rows || [],
+              byType30d: activityByType30d.rows || [],
+              serverTypes7d: serverOnlyTypes7d.rows || [],
+              recent: (recentEventsRes.rows || []).map((r) => ({
+                type: r.type,
+                user_id: r.user_id || null,
+                created_at: r.created_at,
+                meta: r.meta && typeof r.meta === "object" ? r.meta : {},
+              })),
             },
           },
         });

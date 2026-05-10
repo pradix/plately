@@ -572,6 +572,83 @@ const state = {
   },
 };
 
+const PLATELY_CLIENT_ANON_KEY = "plately-client-anon-v1";
+const CLIENT_TRACK_FLUSH_MS = 3200;
+const CLIENT_TRACK_ALLOWED = new Set([
+  "client_navigation",
+  "client_grocery_add",
+  "client_ah_basket_open",
+  "client_kookstand",
+  "client_cookbook_save",
+  "client_import_success",
+]);
+const __clientEventQueue = [];
+let __clientEventFlushTimer = null;
+
+function getOrCreateClientAnonId() {
+  try {
+    let id = localStorage.getItem(PLATELY_CLIENT_ANON_KEY);
+    if (!id || id.length < 10) {
+      const rand = crypto.randomUUID?.().replace(/-/g, "") || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      id = `a-${rand}`.slice(0, 40);
+      localStorage.setItem(PLATELY_CLIENT_ANON_KEY, id);
+    }
+    return String(id).slice(0, 44);
+  } catch {
+    return "";
+  }
+}
+
+function flushClientEventsBatch() {
+  if (!__clientEventQueue.length || typeof fetch !== "function") return;
+  const events = __clientEventQueue.splice(0, 20);
+  const url = `${state.apiBase}/api/client-events`;
+  const body = JSON.stringify({
+    anonId: getOrCreateClientAnonId(),
+    events,
+  });
+  fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body,
+    keepalive: true,
+  }).catch(() => {});
+}
+
+function scheduleClientEventsFlush() {
+  if (__clientEventFlushTimer) return;
+  __clientEventFlushTimer = setTimeout(() => {
+    __clientEventFlushTimer = null;
+    flushClientEventsBatch();
+  }, CLIENT_TRACK_FLUSH_MS);
+}
+
+/** Best-effort product analytics; falen wordt genegeerd. */
+function trackClientEvent(type, meta = {}) {
+  if (!CLIENT_TRACK_ALLOWED.has(type)) return;
+  __clientEventQueue.push({
+    type,
+    meta: meta && typeof meta === "object" ? meta : {},
+    ts: Date.now(),
+  });
+  if (__clientEventQueue.length >= 10) flushClientEventsBatch();
+  else scheduleClientEventsFlush();
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushClientEventsBatch();
+  });
+  window.addEventListener(
+    "pagehide",
+    () => {
+      flushClientEventsBatch();
+    },
+    { capture: true }
+  );
+}
+
 function getInitials(name, email) {
   const n = String(name || "").trim();
   if (n) {
@@ -3352,6 +3429,10 @@ function switchView(view, opts = {}) {
     // Hide focus panel any time we leave home
     hideHomeFocusPanel();
   }
+
+  if (state.session.ready && view !== prevView) {
+    trackClientEvent("client_navigation", { view, from: prevView });
+  }
 }
 
 function parseBaseServings(value) {
@@ -5670,6 +5751,7 @@ async function openKookstand(recipeId) {
   }
 
   renderKookstand();
+  trackClientEvent("client_kookstand", { recipeSteps: recipe.instructions?.length || 0 });
 }
 
 async function closeKookstand() {
@@ -7303,9 +7385,13 @@ function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId, o
   if (!cookbook) {
     return;
   }
+  const wasNewToBook = Boolean(id && !cookbook.recipeIds.includes(id));
   state.selectedCookbookId = cookbook.id;
   if (id && !cookbook.recipeIds.includes(id)) {
     cookbook.recipeIds.unshift(id);
+  }
+  if (wasNewToBook) {
+    trackClientEvent("client_cookbook_save", { cookbookIdSuffix: String(cookbookId).slice(-12) });
   }
 
   // Keep the home screen in sync immediately after saving:
@@ -7627,6 +7713,9 @@ function addRecipeToGrocery(recipe) {
 
   renderGroceryGroups();
   schedulePersistAppState();
+  if (added || merged) {
+    trackClientEvent("client_grocery_add", { added: added || 0, merged: merged || 0 });
+  }
   if (added && merged) {
     showToast(`${recipe.title} toegevoegd. ${merged} ingrediënten zijn samengevoegd.`);
     return;
@@ -7839,6 +7928,10 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
       storeLabel: storeName,
     };
     openBasketModal(state.basketPreview);
+    trackClientEvent("client_ah_basket_open", {
+      store: storeSlug,
+      itemCount: activeItems.length,
+    });
     showToast(`Selectie klaar voor ${storeName}.`);
 
     // Optional push trigger (per-user) when basket is ready.
@@ -10353,6 +10446,7 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
           state.currentServings = parseBaseServings(existing.servings);
           renderDetailRecipe(true);
           switchView("detail");
+          trackClientEvent("client_import_success", { platform: inferredPlatform, mode: "overwrite" });
           onDone(existing);
           showToast("Bestaand recept is bijgewerkt.");
           return;
@@ -10382,6 +10476,10 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
       }
     }
 
+    trackClientEvent("client_import_success", {
+      platform: inferredPlatform,
+      mode: importedRecipe.needsReview ? "needs_review" : "ok",
+    });
     onDone(importedRecipe);
   } catch (error) {
     const message = normalizeUiErrorMessage(error?.message || "");
