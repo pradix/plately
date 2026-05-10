@@ -1168,7 +1168,8 @@ const authForm = document.getElementById("authForm");
 const authEmail = document.getElementById("authEmail");
 const authPassword = document.getElementById("authPassword");
 const submitAuthButton = document.getElementById("submitAuthButton");
-const switchAuthModeButton = document.getElementById("switchAuthModeButton");
+const authTabLogin = document.getElementById("authTabLogin");
+const authTabRegister = document.getElementById("authTabRegister");
 const authFeedback = document.getElementById("authFeedback");
 const cookbookSaveModal = document.getElementById("cookbookSaveModal");
 const cookbookSaveList = document.getElementById("cookbookSaveList");
@@ -1623,15 +1624,36 @@ function openAuthModal(mode = "login") {
 
   authModal.classList.remove("hidden");
   authModal.setAttribute("aria-hidden", "false");
+  authModal.dataset.authMode = mode;
   console.log("✅ Auth modal opened, hidden class:", authModal.classList.contains("hidden"));
+
+  // Leave password-reset view when (re)opening the modal or switching mode
+  const mainAuthForm = document.getElementById("authForm");
+  const resetForm = document.getElementById("passwordResetForm");
+  if (mainAuthForm) mainAuthForm.style.display = "";
+  if (resetForm) resetForm.classList.add("hidden");
 
   // Title and subtitle
   if (authKicker) authKicker.textContent = isRegister ? "Account aanmaken" : "Welkom terug";
 
   const subtitleEl = document.getElementById("authSubtitle");
-  if (subtitleEl) subtitleEl.textContent = isRegister
-    ? "Bewaar recepten, kookboeken en boodschappenlijsten in je account."
-    : "Log in om je recepten en lijstjes te bekijken.";
+  if (subtitleEl) {
+    subtitleEl.textContent = isRegister
+      ? "Vul je naam en e-mail in, kies een wachtwoord. Daarna stel je Plately in een paar stappen voor je in."
+      : "Log in om je recepten en lijstjes te bekijken.";
+  }
+
+  // Mode tabs
+  if (authTabLogin) {
+    authTabLogin.classList.toggle("auth-screen__mode-tab--active", !isRegister);
+    authTabLogin.setAttribute("aria-selected", isRegister ? "false" : "true");
+    authTabLogin.tabIndex = isRegister ? -1 : 0;
+  }
+  if (authTabRegister) {
+    authTabRegister.classList.toggle("auth-screen__mode-tab--active", isRegister);
+    authTabRegister.setAttribute("aria-selected", isRegister ? "true" : "false");
+    authTabRegister.tabIndex = isRegister ? 0 : -1;
+  }
 
   // Show/hide name field
   const nameField = document.getElementById("authNameField");
@@ -1647,13 +1669,6 @@ function openAuthModal(mode = "login") {
 
   // Submit button text
   if (submitAuthButton) submitAuthButton.textContent = isRegister ? "Account aanmaken" : "Inloggen";
-
-  // Switch button
-  if (switchAuthModeButton) {
-    switchAuthModeButton.innerHTML = isRegister
-      ? 'Al een account? <strong>Inloggen</strong>'
-      : 'Nog geen account? <strong>Account aanmaken</strong>';
-  }
 
   // Clear feedback
   if (authFeedback) authFeedback.textContent = "";
@@ -9375,7 +9390,7 @@ async function bootstrapSession() {
   }
 }
 
-async function submitAuth(mode, email, password) {
+async function submitAuth(mode, email, password, registerOpts = {}) {
   const endpoint = mode === "register" ? "/api/auth/register" : "/api/auth/login";
   const body = {
     email,
@@ -9383,9 +9398,14 @@ async function submitAuth(mode, email, password) {
   };
 
   // For login, sync the current client state with server
-  // For registration, create a clean account without inheriting old data
+  // For registration, send only profile basics (no guest recipes/lists) so the name is stored server-side
   if (mode === "login") {
     body.currentState = buildPersistedAppState();
+  } else if (mode === "register") {
+    const regName = String(registerOpts.name || "").trim();
+    if (regName) {
+      body.currentState = { profile: { name: regName, email } };
+    }
   }
 
   const payload = await fetchJson(`${state.apiBase}${endpoint}`, {
@@ -12596,9 +12616,13 @@ bindEvent(document.getElementById("customChannelForm"), "submit", async (event) 
   }
 });
 
-bindEvent(switchAuthModeButton, "click", () => {
-  openAuthModal(state.auth.mode === "register" ? "login" : "register");
-});
+function bindAuthModeTab(el, mode) {
+  if (!el) return;
+  bindEvent(el, "click", () => openAuthModal(mode));
+}
+
+bindAuthModeTab(authTabLogin, "login");
+bindAuthModeTab(authTabRegister, "register");
 
 // Instagram link button (opens in new tab — handled by anchor href)
 
@@ -12630,7 +12654,7 @@ bindEvent(authForm, "submit", async (event) => {
   if (authFeedback) authFeedback.textContent = "";
 
   try {
-    await submitAuth(state.auth.mode, email, password);
+    await submitAuth(state.auth.mode, email, password, state.auth.mode === "register" ? { name } : {});
   } catch (error) {
     if (authFeedback) authFeedback.textContent = error.message;
   } finally {

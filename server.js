@@ -12589,8 +12589,12 @@ const server = http.createServer(async (request, response) => {
         }
 
         const userId = generateId("user");
-        const user = buildDefaultUserData(userId);
+        const { salt, hash } = createPasswordHash(password);
+        let user = buildDefaultUserData(userId);
         user.email = email;
+        user.password_hash = hash;
+        user.password_salt = salt;
+        user = sanitizeUserStatePayload(body.currentState || {}, user);
         db.users[userId] = user;
         await persistDatabase();
 

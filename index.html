@@ -1767,21 +1767,35 @@
 
     <!-- ══ Auth screen ══ -->
     <div class="auth-screen hidden" id="authModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="authKicker">
+      <div class="plately-ambient" aria-hidden="true">
+        <span class="plately-ambient__blob plately-ambient__blob--sage"></span>
+        <span class="plately-ambient__blob plately-ambient__blob--peach"></span>
+        <span class="plately-ambient__blob plately-ambient__blob--mist"></span>
+        <span class="plately-ambient__grain"></span>
+      </div>
       <button class="auth-screen__close-btn" type="button" data-close-auth="true" aria-label="Sluiten">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
 
       <div class="auth-screen__inner">
         <div class="auth-screen__brand">
-          <img class="auth-screen__logo" src="assets/plately.png" alt="Plately" />
+          <div class="auth-screen__logo-wrap">
+            <img class="auth-screen__logo" src="assets/plately.png" alt="Plately" />
+          </div>
           <h1 class="auth-screen__title" id="authKicker" data-i18n="auth.welcome">Welkom terug</h1>
           <p class="auth-screen__subtitle" id="authSubtitle">Recepten, kookboeken en lijstjes altijd bij je.</p>
         </div>
 
+        <div class="auth-screen__surface">
+        <div class="auth-screen__mode-tabs" role="tablist" aria-label="Inloggen of registreren">
+          <button type="button" class="auth-screen__mode-tab auth-screen__mode-tab--active" id="authTabLogin" role="tab" aria-selected="true" aria-controls="authForm" data-auth-mode="login" data-i18n="auth.login">Inloggen</button>
+          <button type="button" class="auth-screen__mode-tab" id="authTabRegister" role="tab" aria-selected="false" aria-controls="authForm" data-auth-mode="register" data-i18n="auth.tabRegister">Nieuw account</button>
+        </div>
+
         <form id="authForm" class="auth-screen__form">
           <div class="auth-field" id="authNameField" style="display:none">
-            <label class="auth-field__label" for="authName">Voornaam</label>
-            <input class="auth-field__input" id="authName" name="name" type="text" placeholder="Jouw naam" autocomplete="given-name" />
+            <label class="auth-field__label" for="authName" data-i18n="auth.name">Naam</label>
+            <input class="auth-field__input" id="authName" name="name" type="text" data-i18n-placeholder="auth.namePlaceholder" placeholder="Hoe mogen we je noemen?" autocomplete="name" />
           </div>
 
           <div class="auth-field">
@@ -1804,12 +1818,6 @@
 
           <button class="auth-screen__submit" id="submitAuthButton" type="submit">Inloggen</button>
         </form>
-
-        <div class="auth-screen__switch">
-          <button class="auth-screen__switch-btn" id="switchAuthModeButton" type="button">
-            Nog geen account? <strong data-i18n="auth.register">Account aanmaken</strong>
-          </button>
-        </div>
 
         <!-- Password reset form (hidden, shown when user clicks forgot) -->
         <div class="auth-screen__reset-form hidden" id="passwordResetForm">
@@ -1838,11 +1846,18 @@
             </svg>
           </a>
         </div>
+        </div><!-- /.auth-screen__surface -->
       </div>
     </div>
 
     <!-- ══ Onboarding screen (after registration) ══ -->
     <div class="onboarding-screen hidden" id="onboardingScreen">
+      <div class="plately-ambient plately-ambient--onboarding" aria-hidden="true">
+        <span class="plately-ambient__blob plately-ambient__blob--sage"></span>
+        <span class="plately-ambient__blob plately-ambient__blob--peach"></span>
+        <span class="plately-ambient__blob plately-ambient__blob--mist"></span>
+        <span class="plately-ambient__grain"></span>
+      </div>
       <header class="topbar--sub">
         <button class="topbar-back-btn" type="button" id="onboardingClose" aria-label="Sluiten">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
