@@ -621,7 +621,7 @@
         <div id="newChannelError" class="error" style="display:none"></div>
         <div class="admin-test__row" style="flex-wrap:wrap;gap:8px">
           <input id="newChannelName" class="admin-test__input" type="text" placeholder="Naam (bijv. Lekker en Simpel)" style="min-width:180px;flex:1" />
-          <input id="newChannelUrl" class="admin-test__input" type="text" placeholder="Website URL (bijv. https://lekkersimpel.nl)" style="min-width:220px;flex:2" />
+          <input id="newChannelUrl" class="admin-test__input" type="text" placeholder="URL of zoek-URL (bijv. https://brendakookt.nl of …/?_zoeken=pasta)" style="min-width:260px;flex:2" />
           <input id="newChannelQuery" class="admin-test__input" type="text" placeholder="Testzoekterm (bijv. pasta)" style="min-width:140px;flex:1" />
         </div>
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
@@ -2495,7 +2495,8 @@
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || "Search mislukt");
         const results = data.results || [];
-        setNewChannelStatus(results.length ? `Top ${results.length} resultaten` : "Geen resultaten gevonden");
+        const tpl = data.usedSearchUrlTemplate ? `<br><small style="color:#666">Zoek-template: <code>${data.usedSearchUrlTemplate.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</code></small>` : "";
+        setNewChannelStatus((results.length ? `Top ${results.length} resultaten` : "Geen resultaten gevonden") + tpl);
         renderChannelTestSearchResults(results, String(data.searchBackendNote || ""), "newChannelSearchResults");
       } catch (err) {
         setNewChannelStatus(err.message, true);

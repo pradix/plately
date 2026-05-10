@@ -1771,10 +1771,72 @@ function getEffectiveChannelOverride(channelId, overrides) {
     : { baseUrl: "", searchUrlTemplate: "" };
 }
 
+// Known search parameter names used by recipe sites (checked case-insensitively).
+const SEARCH_PARAM_NAMES = new Set([
+  "s", "q", "query", "search", "zoeken", "_zoeken", "zoekterm", "zoekwoord",
+  "_search", "_search_keyword", "keyword", "searchterms", "searchwp", "term",
+  "terms", "tekst", "text", "input", "name",
+]);
+
+/**
+ * Given a URL (possibly a live search URL with a concrete query term), return a
+ * search-URL template with `{q}` in place of the search term.
+ *
+ * Examples:
+ *   "https://brendakookt.nl/recepten/resultaten/?_zoeken=pasta%20pesto"
+ *     → "https://brendakookt.nl/recepten/resultaten/?_zoeken={q}"
+ *   "https://www.example.nl" (no query params)
+ *     → "https://www.example.nl/?s={q}"
+ *   "https://example.nl/?s={q}" (already a template)
+ *     → "https://example.nl/?s={q}"
+ */
+function guessSearchTemplateFromUrl(urlStr) {
+  const s = sanitizeText(urlStr || "").trim();
+  if (!s) return "";
+  // Already a template — return as-is.
+  if (s.includes("{q}") || s.includes("<zoekwoord>")) return s;
+  try {
+    const parsed = new URL(s);
+    const params = [...parsed.searchParams.entries()];
+    // First pass: known search param names (highest confidence).
+    for (const [key, val] of params) {
+      if (SEARCH_PARAM_NAMES.has(key.toLowerCase())) {
+        parsed.searchParams.set(key, "{q}");
+        return parsed.toString();
+      }
+    }
+    // Second pass: any param with a non-trivial, non-boolean, non-integer value
+    // that could reasonably be a search term.
+    for (const [key, val] of params) {
+      const v = val.trim();
+      if (
+        v.length >= 2 &&
+        !/^\d+$/.test(v) &&
+        !/^(?:true|false|yes|no|1|0|asc|desc|[a-z]{2})$/i.test(v)
+      ) {
+        parsed.searchParams.set(key, "{q}");
+        return parsed.toString();
+      }
+    }
+    // No recognizable search param — use as base URL with standard WP ?s={q}.
+    const base = `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, "");
+    return `${base}/?s={q}`;
+  } catch {
+    return `${s.replace(/\/+$/, "")}/?s={q}`;
+  }
+}
+
 function getEffectiveCustomChannelConfig({ channelId, url }, channelOverrides) {
   const id = sanitizeText(channelId || "");
-  const baseUrlDefault = sanitizeText(url || "").replace(/\/+$/, "");
-  const templateDefault = baseUrlDefault ? `${baseUrlDefault}/?s={q}` : "";
+  const rawUrl = sanitizeText(url || "").trim();
+  // Template: auto-detect from URL (handles full search URLs with embedded query term).
+  const templateDefault = guessSearchTemplateFromUrl(rawUrl);
+  // Base URL: origin only (for WP REST API fallback and de-dup logic).
+  let baseUrlDefault = rawUrl.replace(/\/+$/, "");
+  try {
+    const parsed = new URL(rawUrl);
+    baseUrlDefault = parsed.origin;
+  } catch { /* keep rawUrl */ }
   const over = getEffectiveChannelOverride(id, channelOverrides);
   const baseUrl = sanitizeText(over.baseUrl || baseUrlDefault);
   const searchUrlTemplate = sanitizeText(over.searchUrlTemplate || templateDefault);
