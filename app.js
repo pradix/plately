@@ -3886,6 +3886,10 @@ let channelSearchTimeout = null;
 /** Abort lopende /api/channel-search als de gebruiker verder typt of het paneel sluit */
 let channelSearchAbortController = null;
 let importChannelSearchAbortController = null;
+/** Tijd na laatste toets voordat de zoekrequest start (lager = sneller na stoppen met typen) */
+const CHANNEL_SEARCH_DEBOUNCE_MS = 100;
+const CHANNEL_SEARCH_SKELETON_MS = 50;
+const IMPORT_CHANNEL_SEARCH_DEBOUNCE_MS = 240;
 
 function getActiveFollowedSeedChannelIds() {
   // Only seed channels can be toggled; custom channels are passed separately via customChannels param.
@@ -4146,7 +4150,7 @@ async function searchChannels(query) {
         `).join("")}
       </div>
     `;
-  }, 120);
+  }, CHANNEL_SEARCH_SKELETON_MS);
   try {
     const channels = getSeedChannelIdsForRecipeSearch().join(",");
     // Only include approved custom channels in search
@@ -4231,7 +4235,7 @@ async function searchChannelsOnImportScreen(query) {
         `).join("")}
       </div>
     `;
-  }, 120);
+  }, CHANNEL_SEARCH_SKELETON_MS);
   if (orRow) orRow.classList.add("hidden");
   try {
     const channels = getSeedChannelIdsForRecipeSearch().join(",");
@@ -10903,7 +10907,7 @@ bindEvent(searchInput, "input", (event) => {
   // Reset filter when starting a new search so results aren't hidden by old filter
   state.channelSearchFilter = null;
 
-  channelSearchTimeout = setTimeout(() => searchChannels(query), 180);
+  channelSearchTimeout = setTimeout(() => searchChannels(query), CHANNEL_SEARCH_DEBOUNCE_MS);
 });
 
 bindEvent(searchInput, "keydown", (event) => {
@@ -12719,6 +12723,8 @@ if (importSearchInput) {
     const section = document.getElementById("importChannelSearchSection");
     const results = document.getElementById("importChannelSearchResults");
     if (q.length < 2) {
+      importChannelSearchAbortController?.abort();
+      importChannelSearchAbortController = null;
       if (section) section.classList.add("hidden");
       if (orRow) orRow.classList.remove("hidden");
       return;
@@ -12727,7 +12733,7 @@ if (importSearchInput) {
     if (results) results.innerHTML = `<div style="padding:12px 14px"><div class="skeleton" style="height:12px;width:50%"></div></div>`;
     if (section) section.classList.remove("hidden");
     if (orRow) orRow.classList.add("hidden");
-    importSearchTimeout = setTimeout(() => searchChannelsOnImportScreen(q), 600);
+    importSearchTimeout = setTimeout(() => searchChannelsOnImportScreen(q), IMPORT_CHANNEL_SEARCH_DEBOUNCE_MS);
   });
 }
 
