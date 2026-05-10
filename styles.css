@@ -2616,7 +2616,54 @@ button.ingredient-item {
 
 .grocery-empty-state {
   display: grid;
-  gap: 14px;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+  padding: 8px 0 20px;
+}
+
+.grocery-empty-state__icon {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 22px;
+  background: rgba(141, 164, 133, 0.12);
+  color: #78936f;
+}
+
+.grocery-empty-state__icon svg {
+  width: 40px;
+  height: 40px;
+}
+
+.grocery-empty-state__title {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.grocery-empty-state__hint {
+  margin: 0;
+  max-width: 320px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--muted-strong);
+}
+
+.grocery-empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.grocery-empty-state__btn {
+  min-width: min(200px, 100%);
 }
 
 .grocery-empty-hint {
@@ -5888,13 +5935,18 @@ button.ingredient-item {
   background: rgba(141, 164, 133, 0.04);
   border-radius: 20px;
   overflow: hidden;
-  cursor: pointer;
+  cursor: default;
   text-align: center;
 }
 
-.home-empty-state:hover {
+.home-empty-state--welcome:hover {
   border-color: #8da485;
   background: rgba(141, 164, 133, 0.08);
+}
+
+.home-empty-state--static:hover {
+  border-color: rgba(141, 164, 133, 0.35);
+  background: rgba(141, 164, 133, 0.04);
 }
 
 .home-empty-state__icon {
@@ -5930,8 +5982,24 @@ button.ingredient-item {
   font-weight: 500;
 }
 
-.home-empty-state__btn {
-  display: none;
+.home-empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 4px 16px 18px;
+  box-sizing: border-box;
+}
+
+.home-empty-state__actions--solo {
+  padding-top: 2px;
+}
+
+.home-empty-state__action {
+  flex: 0 1 auto;
+  min-width: min(200px, 100%);
 }
 
 .hidden { display: none !important; }
@@ -7674,8 +7742,28 @@ button.ingredient-item {
   color: #fffdf8;
   text-align: center;
   box-shadow: 0 14px 28px rgba(22,24,20,0.22);
-  z-index: 50;
+  z-index: 400;
   font-size: 0.93rem;
+  line-height: 1.35;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.toast.toast--success {
+  background: linear-gradient(180deg, rgba(58, 92, 64, 0.98), rgba(44, 72, 50, 0.98));
+  color: #f4fff6;
+  box-shadow: 0 14px 32px rgba(36, 60, 43, 0.28);
+}
+
+.toast.toast--error {
+  background: linear-gradient(180deg, rgba(118, 42, 42, 0.98), rgba(86, 28, 28, 0.98));
+  color: #fff8f6;
+  box-shadow: 0 14px 32px rgba(62, 22, 22, 0.25);
+}
+
+.toast.toast--info {
+  background: rgba(42, 48, 66, 0.96);
+  color: #f4f7ff;
+  box-shadow: 0 14px 28px rgba(26, 32, 48, 0.22);
 }
 
 @media (min-width: 900px) {
@@ -13193,8 +13281,13 @@ body {
 .recipe-picker__empty,
 .alt-sheet__empty,
 .grocery-empty,
-.grocery-empty-hint {
+.grocery-empty-hint,
+.grocery-empty-state__hint {
   color: #7d8f77;
+}
+
+.grocery-empty-state__title {
+  color: #243c2b;
 }
 
 .suggest-loading::before,

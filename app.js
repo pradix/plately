@@ -1221,13 +1221,25 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function showToast(message) {
+/** @param {string} message @param {{ variant?: 'default'|'success'|'error'|'info'; durationMs?: number }} [opts] */
+function showToast(message, opts = {}) {
+  if (!toast) return;
+  const variant = opts.variant || "default";
+  const durationMs =
+    opts.durationMs ?? (variant === "error" ? 3800 : variant === "success" ? 3000 : 2800);
+
   toast.textContent = message;
+  toast.classList.remove("toast--success", "toast--error", "toast--info");
+  if (variant === "success") toast.classList.add("toast--success");
+  else if (variant === "error") toast.classList.add("toast--error");
+  else if (variant === "info") toast.classList.add("toast--info");
+
   toast.classList.remove("hidden");
   window.clearTimeout(showToast.timeoutId);
   showToast.timeoutId = window.setTimeout(() => {
     toast.classList.add("hidden");
-  }, 2800);
+    toast.classList.remove("toast--success", "toast--error", "toast--info");
+  }, durationMs);
 }
 
 let confirmCallback = null;
@@ -2297,10 +2309,10 @@ async function researchBasketItem(itemIndex, { excludeCurrent = true } = {}) {
       });
       renderBasketPreview();
     } else {
-      showToast("Geen betere match gevonden.");
+      showToast("Geen betere match gevonden.", { variant: "info" });
     }
   } catch {
-    showToast("Herzoeken lukte niet.");
+    showToast("Herzoeken lukte niet.", { variant: "error" });
   }
 }
 
@@ -5176,13 +5188,15 @@ function renderRecipeGrid() {
     if (isNewUser && state.auth.authenticated) {
       // New authenticated user - show import prompt
       recipeGrid.innerHTML = `
-        <div class="home-empty-state">
+        <div class="home-empty-state home-empty-state--welcome">
           <div class="home-empty-state__icon">
             <svg viewBox="0 0 48 48" aria-hidden="true" fill="none"><circle cx="24" cy="24" r="22" stroke="currentColor" stroke-width="1.5" opacity=".18"/><path d="M16 30c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="20" cy="20" r="2" fill="currentColor"/><circle cx="28" cy="20" r="2" fill="currentColor"/><path d="M24 10v4M10 24h4M34 24h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
           </div>
           <h3 class="home-empty-state__title">Welkom bij Plately 👋</h3>
           <p class="home-empty-state__text">Importeer een recept van internet en begin je collectie</p>
-          <button class="home-empty-state__btn" type="button" id="homeImportFirstRecipeBtn">Importeer recept</button>
+          <div class="home-empty-state__actions home-empty-state__actions--solo">
+          <button class="primary-button home-empty-state__action" type="button" id="homeImportFirstRecipeBtn">Importeer recept</button>
+          </div>
         </div>
       `;
       bindEvent(document.getElementById("homeImportFirstRecipeBtn"), "click", () => {
@@ -5197,15 +5211,43 @@ function renderRecipeGrid() {
       recipeGrid.innerHTML = "";
     } else {
       // Search or filter with no results
+      const hasSearch = isSearching;
+      const hasFilter = Boolean(state.activeCookbookFilter);
       recipeGrid.innerHTML = `
-        <div class="home-empty-state" style="grid-column:1/-1">
+        <div class="home-empty-state home-empty-state--static" style="grid-column:1/-1">
           <div class="home-empty-state__icon">
             <svg viewBox="0 0 48 48" aria-hidden="true" fill="none"><circle cx="20" cy="20" r="13" stroke="currentColor" stroke-width="2"/><path d="M30 30l10 10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M16 20h8M20 16v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".4"/></svg>
           </div>
           <h3 class="home-empty-state__title">Niets gevonden</h3>
-          <p class="home-empty-state__text">Probeer een andere zoekterm of importeer een nieuw recept</p>
+          <p class="home-empty-state__text">Pas je zoekterm of filter aan, of importeer een nieuw recept.</p>
+          <div class="home-empty-state__actions">
+            ${hasSearch ? `<button type="button" class="secondary-button home-empty-state__action" id="homeEmptyClearSearchBtn">Wis zoekveld</button>` : ""}
+            ${hasFilter ? `<button type="button" class="secondary-button home-empty-state__action" id="homeEmptyClearFilterBtn">Toon alle recepten</button>` : ""}
+            <button type="button" class="primary-button home-empty-state__action" id="homeEmptyGoImportBtn">Importeer recept</button>
+          </div>
         </div>
       `;
+      const goImport = () => {
+        if (!state.auth.authenticated) {
+          openAuthModal("login");
+          return;
+        }
+        switchView("import");
+      };
+      bindEvent(document.getElementById("homeEmptyGoImportBtn"), "click", goImport);
+      bindEvent(document.getElementById("homeEmptyClearSearchBtn"), "click", () => {
+        if (searchInput) searchInput.value = "";
+        state.searchQuery = "";
+        renderQuickRecipeGrid();
+        renderRecipeGrid();
+        hideHomeFocusPanel();
+      });
+      bindEvent(document.getElementById("homeEmptyClearFilterBtn"), "click", () => {
+        state.activeCookbookFilter = null;
+        renderCookbookFilterBar();
+        renderQuickRecipeGrid();
+        renderRecipeGrid();
+      });
     }
     return;
   }
@@ -5928,15 +5970,31 @@ function renderGroceryGroups() {
 
     groceryGroups.innerHTML = `
       <div class="grocery-empty-state">
-        <p class="grocery-empty">Je boodschappenlijst is leeg.</p>
-        <p class="grocery-empty-hint">${
+        <div class="grocery-empty-state__icon" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none"><path d="M8 14h32v22a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4V14z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 14 16 8h16l8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 26h12M24 22v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".45"/></svg>
+        </div>
+        <h3 class="grocery-empty-state__title">Je boodschappenlijst is leeg</h3>
+        <p class="grocery-empty-state__hint">${
           recipeCardsHtml
-            ? "Tik hieronder op een recent geïmporteerd recept om items toe te voegen."
-            : "Importeer eerst een recept om je lijst te vullen."
+            ? "Kies hieronder een recent recept of ga naar je collectie om items toe te voegen."
+            : "Importeer een recept of open een bestaand recept om ingrediënten op je lijst te zetten."
         }</p>
+        <div class="grocery-empty-state__actions">
+          <button type="button" class="secondary-button grocery-empty-state__btn" id="groceryEmptyBrowseRecipesBtn">Naar recepten</button>
+          <button type="button" class="primary-button grocery-empty-state__btn" id="groceryEmptyImportRecipeBtn">Importeer recept</button>
+        </div>
         ${recipeCardsHtml ? `<div class="recipe-grid grocery-empty-recipes">${recipeCardsHtml}</div>` : ""}
       </div>
     `;
+
+    bindEvent(document.getElementById("groceryEmptyBrowseRecipesBtn"), "click", () => switchView("home"));
+    bindEvent(document.getElementById("groceryEmptyImportRecipeBtn"), "click", () => {
+      if (!state.auth.authenticated) {
+        openAuthModal("login");
+        return;
+      }
+      switchView("import");
+    });
 
     groceryGroups
       .querySelectorAll("[data-grocery-add-recipe-id]")
@@ -6779,7 +6837,7 @@ function saveImportReview() {
   renderAll();
   schedulePersistAppState();
   reviewFeedback.textContent = "Recept bijgewerkt.";
-  showToast(`${recipe.title} is opgeslagen.`);
+  showToast(`${recipe.title} is opgeslagen.`, { variant: "success" });
   trackClientEvent("client_import_review_saved", {
     ingredients: nextIngredients.length,
     steps: nextInstructions.length,
@@ -7909,7 +7967,7 @@ function setStoreButtonLoading(button, isLoading) {
 async function openStoreBasket(storeSlug = "albert-heijn") {
   const activeItems = getActiveGroceryItems();
   if (!activeItems.length) {
-    showToast("Voeg eerst ingrediënten toe aan je lijst.");
+    showToast("Voeg eerst ingrediënten toe aan je lijst.", { variant: "info" });
     return;
   }
 
@@ -7961,7 +8019,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
       store: storeSlug,
       itemCount: activeItems.length,
     });
-    showToast(`Selectie klaar voor ${storeName}.`);
+    showToast(`Selectie klaar voor ${storeName}.`, { variant: "success" });
 
     // Optional push trigger (per-user) when basket is ready.
     try {
@@ -7993,7 +8051,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
       // ignore
     }
   } catch {
-    showToast(`Kon ${storeName} niet voorbereiden.`);
+    showToast(`Kon ${storeName} niet voorbereiden.`, { variant: "error" });
   } finally {
     button.disabled = false;
     if (destLabel) {
@@ -8092,6 +8150,7 @@ async function refetchBasketWithPreferences(preferences) {
       };
     }
   } catch {
+    showToast("Voorkeuren konden niet worden toegepast. Probeer opnieuw.", { variant: "error" });
     // Keep existing items on failure — renderBasketPreview will show them
   }
 
@@ -8101,15 +8160,15 @@ async function refetchBasketWithPreferences(preferences) {
 async function copyGroceryList() {
   const text = getGroceryText();
   if (!text) {
-    showToast("Geen items om te kopiëren.");
+    showToast("Geen items om te kopiëren.", { variant: "info" });
     return;
   }
 
   try {
     await navigator.clipboard.writeText(text);
-    showToast("Boodschappenlijst gekopieerd.");
+    showToast("Boodschappenlijst gekopieerd.", { variant: "success" });
   } catch {
-    showToast("Kopiëren lukte niet in deze browser.");
+    showToast("Kopiëren lukte niet in deze browser.", { variant: "error" });
   }
 }
 
@@ -10477,7 +10536,7 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
           switchView("detail");
           trackClientEvent("client_import_success", { platform: inferredPlatform, mode: "overwrite" });
           onDone(existing);
-          showToast("Bestaand recept is bijgewerkt.");
+          showToast("Bestaand recept is bijgewerkt.", { variant: "success" });
           return;
         }
       }
@@ -10509,13 +10568,15 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
       platform: inferredPlatform,
       mode: importedRecipe.needsReview ? "needs_review" : "ok",
     });
+    showToast(
+      importedRecipe.needsReview ? "Import klaar — nog even nalopen." : "Recept geïmporteerd.",
+      { variant: "success" }
+    );
     onDone(importedRecipe);
   } catch (error) {
     const message = normalizeUiErrorMessage(error?.message || "");
     setFeedback(message);
-    if (error?.code === "not_recipe" || /Je probeert een blog te importeren/i.test(message)) {
-      showToast(message);
-    }
+    showToast(message.trim() || "Importeren mislukt.", { variant: "error" });
   } finally {
     setLoading(false);
     hideImportSplash();
@@ -10998,7 +11059,7 @@ bindEvent(document.getElementById("deleteRecipeButton"), "click", () => {
       schedulePersistAppState();
       renderAll();
       switchView("home");
-      showToast(`"${recipe.title}" is verwijderd.`);
+      showToast(`"${recipe.title}" is verwijderd.`, { variant: "success" });
     },
   });
 });
@@ -11556,7 +11617,7 @@ bindEvent(channelSearchResults, "click", async (event) => {
       host: hostnameForAnalytics(url),
     });
     openImportReview(recipe.id);
-    showToast(`${recipe.title} klaar om na te lopen.`);
+    showToast(`${recipe.title} klaar om na te lopen.`, { variant: "success" });
     // Clear search and force-close the channel-search panel so it isn't
     // left visible when the user navigates back to home after the import.
     if (searchInput) searchInput.value = "";
@@ -11564,7 +11625,7 @@ bindEvent(channelSearchResults, "click", async (event) => {
     ensureChannelSearchClosed();
     hideHomeFocusPanel();
   } catch (err) {
-    showToast(err.message || "Importeren mislukt");
+    showToast(err.message || "Importeren mislukt", { variant: "error" });
     btn.disabled = false;
     btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`;
   } finally {
@@ -13313,8 +13374,9 @@ bindEvent(document.getElementById("importChannelSearchResults"), "click", async 
       host: hostnameForAnalytics(url),
     });
     openImportReview(recipe.id);
+    showToast(`${recipe.title} klaar om na te lopen.`, { variant: "success" });
   } catch (err) {
-    showToast(err.message || "Importeren mislukt");
+    showToast(err.message || "Importeren mislukt", { variant: "error" });
     btn.disabled = false;
     btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg> Importeer`;
   } finally {
