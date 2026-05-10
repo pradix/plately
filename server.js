@@ -11834,7 +11834,12 @@ const server = http.createServer(async (request, response) => {
       const db = await loadDatabase();
       if (!db.shareLinks || typeof db.shareLinks !== "object") db.shareLinks = {};
       db.shareLinks[token] = { payload: safePayload, createdAt: new Date().toISOString() };
-      await persistDatabase();
+      try {
+        await persistDatabase();
+      } catch (persistErr) {
+        // Shortlinks blijven in databaseCache maar overleven geen redeploy als schijf ontbreekt of /data niet schrijfbaar is.
+        console.error("[share/create] persistDatabase failed:", persistErr?.message || persistErr);
+      }
 
       const shareUrl = new URL(`/share/${encodeURIComponent(token)}`, `http://${request.headers.host || "localhost"}`);
       sendJson(response, 200, { ok: true, token, url: shareUrl.pathname });
