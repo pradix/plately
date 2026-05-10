@@ -90,34 +90,6 @@
   --basket-sheet-bg: #f0ebe4;
 }
 
-[data-theme="dark"] {
-  color-scheme: dark;
-  --color-bg: #121614;
-  --color-surface: #1a201d;
-  --color-surface-2: #151b18;
-  --color-surface-3: #242b27;
-  --color-text: #e8ebe7;
-  --color-text-muted: #94a398;
-  --color-text-muted-2: #b4c4b4;
-  --color-brand: #9eb896;
-  --color-brand-soft: #2a3d32;
-  --color-accent: #c9a08a;
-  --color-accent-soft: #2f2420;
-  --color-border: rgba(255, 255, 255, 0.09);
-  --color-overlay: rgba(0, 0, 0, 0.55);
-  --shadow-1: 0 1px 4px rgba(0, 0, 0, 0.35);
-  --shadow-2: 0 10px 28px rgba(0, 0, 0, 0.38);
-  --shadow-3: 0 12px 30px rgba(0, 0, 0, 0.42);
-  --shadow-4: 0 14px 36px rgba(0, 0, 0, 0.35);
-  --shadow-5: 0 -16px 44px rgba(0, 0, 0, 0.42);
-  --focus-ring: 0 0 0 3px rgba(158, 184, 150, 0.38);
-
-  --app-body-bg:
-    radial-gradient(circle at 18% 12%, rgba(100, 140, 110, 0.18), transparent 22%),
-    radial-gradient(circle at 82% 8%, rgba(200, 140, 100, 0.1), transparent 20%),
-    linear-gradient(180deg, #161c19 0%, #0e1210 100%);
-  --basket-sheet-bg: #1a201d;
-}
 
 * { box-sizing: border-box; }
 
@@ -1851,24 +1823,6 @@ img {
   }
 }
 
-[data-theme="dark"] .cook-tools-card {
-  background: color-mix(in srgb, var(--color-surface-2) 94%, var(--color-brand) 8%);
-  border-color: color-mix(in srgb, var(--color-brand) 22%, var(--color-border));
-}
-
-[data-theme="dark"] .cook-kookstand-cta {
-  background: var(--color-surface-3);
-}
-
-[data-theme="dark"] .detail-chip {
-  background: color-mix(in srgb, var(--color-surface-2) 92%, var(--color-brand) 10%);
-  border-color: color-mix(in srgb, var(--color-brand) 24%, var(--color-border));
-}
-
-[data-theme="dark"] .detail-trust-note {
-  background: color-mix(in srgb, var(--color-surface-2) 70%, transparent);
-  color: var(--muted);
-}
 
 .detail-assist {
   margin-top: 12px;
@@ -3835,10 +3789,6 @@ button.ingredient-item {
   font-weight: 550;
 }
 
-[data-theme="dark"] .home-growth-panel {
-  background: color-mix(in srgb, var(--color-surface-2) 88%, var(--color-brand) 8%);
-  border-color: color-mix(in srgb, var(--color-brand) 22%, var(--color-border));
-}
 
 .recent-card__img {
   width: 100%;
@@ -5698,9 +5648,6 @@ button.ingredient-item {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   mix-blend-mode: overlay;
 }
-[data-theme="dark"] .plately-ambient__grain {
-  opacity: 0.07;
-}
 
 .plately-ambient__blob {
   position: absolute;
@@ -5889,12 +5836,6 @@ button.ingredient-item {
     0 1px 0 color-mix(in srgb, #fff 35%, transparent) inset;
 }
 
-[data-theme="dark"] .auth-screen__logo-wrap {
-  box-shadow:
-    0 24px 50px rgba(0, 0, 0, 0.45),
-    0 0 0 1px color-mix(in srgb, var(--color-surface) 12%, transparent) inset,
-    0 1px 0 color-mix(in srgb, #fff 10%, transparent) inset;
-}
 
 .auth-screen__logo {
   height: clamp(92px, 26vw, 112px);
@@ -5927,13 +5868,6 @@ button.ingredient-item {
     0 0 40px color-mix(in srgb, var(--color-brand) 8%, transparent);
 }
 
-[data-theme="dark"] .auth-screen__surface {
-  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
-  box-shadow:
-    var(--shadow-3),
-    0 1px 0 color-mix(in srgb, #fff 8%, transparent) inset,
-    0 0 0 1px color-mix(in srgb, var(--color-brand) 12%, transparent);
-}
 
 /* Register flow — extra Plately polish (hidden for login) */
 .auth-screen__register-hero {
@@ -5969,10 +5903,6 @@ button.ingredient-item {
     0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset;
 }
 
-[data-theme="dark"] .auth-screen__register-badge {
-  color: color-mix(in srgb, var(--color-surface) 88%, var(--color-brand));
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 1px 0 color-mix(in srgb, #fff 8%, transparent) inset;
-}
 
 .auth-screen__register-badge__dot {
   width: 7px;
@@ -6031,10 +5961,6 @@ button.ingredient-item {
   box-shadow: 0 1px 0 color-mix(in srgb, #fff 40%, transparent) inset;
 }
 
-[data-theme="dark"] .auth-screen__register-perks li {
-  background: color-mix(in srgb, var(--color-surface-3) 55%, transparent);
-  box-shadow: none;
-}
 
 .auth-screen__register-perk-icon {
   flex-shrink: 0;
@@ -6093,14 +6019,6 @@ button.ingredient-item {
     0 0 56px color-mix(in srgb, var(--color-brand) 10%, transparent);
 }
 
-[data-theme="dark"] .auth-screen[data-auth-mode="register"] .auth-screen__surface {
-  background: color-mix(in srgb, var(--color-surface) 76%, transparent);
-  box-shadow:
-    var(--shadow-3),
-    0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset,
-    0 0 0 1px color-mix(in srgb, var(--color-accent) 18%, transparent),
-    0 0 48px color-mix(in srgb, var(--color-brand) 14%, transparent);
-}
 
 .auth-screen[data-auth-mode="register"] .auth-screen__subtitle {
   font-size: 0.98rem;
@@ -6243,9 +6161,6 @@ button.ingredient-item {
   transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
 }
 
-[data-theme="dark"] .auth-field__input {
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.22);
-}
 
 .auth-field__input:hover {
   border-color: color-mix(in srgb, var(--color-brand) 35%, var(--color-border));
@@ -6816,13 +6731,6 @@ button.ingredient-item {
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s;
 }
 
-[data-theme="dark"] .onboarding-avatar-studio__disc {
-  border-color: color-mix(in srgb, var(--color-brand) 35%, var(--color-border));
-  box-shadow:
-    var(--shadow-3),
-    0 1px 0 color-mix(in srgb, #fff 12%, transparent) inset,
-    0 -24px 50px rgba(0, 0, 0, 0.35) inset;
-}
 
 .onboarding-avatar-studio__shine {
   position: absolute;
@@ -7325,9 +7233,6 @@ button.ingredient-item {
   box-shadow: var(--shadow-3), 0 1px 0 color-mix(in srgb, #fff 42%, transparent) inset;
 }
 
-[data-theme="dark"] .onboarding-hero-icon {
-  box-shadow: var(--shadow-2), 0 1px 0 color-mix(in srgb, #fff 10%, transparent) inset;
-}
 
 .onboarding-hero-icon svg {
   width: 44px;
@@ -9812,7 +9717,6 @@ body {
 #detailScreen {
   padding: 0;
 }
-
 
 
 .topbar-actions {
@@ -12816,30 +12720,6 @@ body {
   opacity: 0.28;
 }
 
-[data-theme="dark"] .onboarding-bubble {
-  background: var(--color-surface);
-  box-shadow: var(--shadow-4);
-}
-
-[data-theme="dark"] .onboarding-bubble__text {
-  color: var(--color-text);
-}
-
-[data-theme="dark"] .onboarding-bubble[data-arrow="up"]::before {
-  border-bottom-color: var(--color-surface);
-}
-
-[data-theme="dark"] .onboarding-bubble[data-arrow="down"]::before {
-  border-top-color: var(--color-surface);
-}
-
-[data-theme="dark"] .onboarding-skip-btn {
-  color: var(--muted);
-}
-
-[data-theme="dark"] .onboarding-next-btn {
-  background: var(--color-brand);
-}
 
 .onboarding-bubble__text {
   margin: 0 0 16px;
@@ -12905,9 +12785,6 @@ body {
   animation: basket-slide-up 0.3s cubic-bezier(.4,0,.2,1) both;
 }
 
-[data-theme="dark"] .basket-sheet {
-  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.55);
-}
 
 @keyframes basket-slide-up {
   from { transform: translateY(100%); opacity: 0.6; }

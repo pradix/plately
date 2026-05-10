@@ -7401,66 +7401,6 @@ function updateLanguagePanel() {
   if (metaEl) metaEl.textContent = LANG_LABELS[active] || "Nederlands";
 }
 
-const PLATELY_THEME_KEY = "plately-theme";
-const THEME_LABELS = { light: "Licht", dark: "Donker", system: "Systeem" };
-
-function getStoredThemePref() {
-  try {
-    const v = localStorage.getItem(PLATELY_THEME_KEY);
-    if (v === "light" || v === "dark" || v === "system") return v;
-  } catch {}
-  return "system";
-}
-
-function getEffectiveTheme() {
-  const pref = getStoredThemePref();
-  if (pref === "dark") return "dark";
-  if (pref === "light") return "light";
-  try {
-    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) return "dark";
-  } catch {}
-  return "light";
-}
-
-function applyPlatelyTheme() {
-  const pref = getStoredThemePref();
-  const effective = getEffectiveTheme();
-  document.documentElement.setAttribute("data-theme", effective);
-  document.documentElement.setAttribute("data-theme-pref", pref);
-
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) {
-    meta.setAttribute("content", effective === "dark" ? "#1a1f1c" : "#8da485");
-  }
-
-  try {
-    const iframe = document.getElementById("adminDashboardFrame");
-    if (iframe && iframe instanceof HTMLIFrameElement && iframe.contentWindow) {
-      iframe.contentWindow.postMessage({ type: "plately-theme", theme: effective, pref }, "*");
-    }
-  } catch {}
-}
-
-function updateThemePanel() {
-  // Weergave/thema UI removed for now; keep no-op.
-  void THEME_LABELS;
-}
-
-let _platelyThemeMediaQuery = null;
-function initPlatelyThemeListener() {
-  if (_platelyThemeMediaQuery || !window.matchMedia) return;
-  _platelyThemeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-  const onChange = () => {
-    if (getStoredThemePref() !== "system") return;
-    applyPlatelyTheme();
-  };
-  try {
-    _platelyThemeMediaQuery.addEventListener("change", onChange);
-  } catch {
-    _platelyThemeMediaQuery.addListener(onChange);
-  }
-}
-
 function renderProfileSummary() {
   const isAuth = state.auth.authenticated;
 
@@ -7506,7 +7446,6 @@ function renderProfileSummary() {
     supermarketMetaEl.textContent = sm.name;
   }
   updateLanguagePanel();
-  updateThemePanel();
   renderAvatars();
   refreshFeaturePushState().catch(() => {});
 }
@@ -9379,9 +9318,6 @@ async function bootstrapSession() {
 
     console.log("🔄 Bootstrap session finally block - authenticated:", state.auth.authenticated, "sessionCheckSucceeded:", sessionCheckSucceeded);
     state.session.ready = true;
-
-    applyPlatelyTheme();
-    initPlatelyThemeListener();
 
     renderAll();
 
@@ -14165,18 +14101,6 @@ if (adminDashboardBtn) {
 const adminBackBtn = document.getElementById("adminBackBtn");
 if (adminBackBtn) {
   adminBackBtn.addEventListener("click", () => switchView("settings"));
-}
-
-const adminDashboardFrame = document.getElementById("adminDashboardFrame");
-if (adminDashboardFrame) {
-  adminDashboardFrame.addEventListener("load", () => {
-    try {
-      adminDashboardFrame.contentWindow?.postMessage(
-        { type: "plately-theme", theme: getEffectiveTheme(), pref: getStoredThemePref() },
-        "*"
-      );
-    } catch {}
-  });
 }
 
 // ────────────────────────────────────────────────────────────────────────────
