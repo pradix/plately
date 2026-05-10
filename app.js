@@ -11950,7 +11950,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.06";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.07";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
@@ -13882,39 +13882,37 @@ function renderOnboardingChannels() {
     .map((ch) => {
       const enabled = onboardingData.channels.includes(ch.id);
       const faviconUrl = ch.url ? getSourceIconUrl(ch.url) : "";
-      const initials = escapeHtml(
-        String(ch.initials || "").trim() || (ch.name || "?").trim().slice(0, 2) || "?"
-      );
-      const logoMarkup = faviconUrl
-        ? `<img class="onboarding-channel-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none';var s=this.nextElementSibling;if(s) s.style.display='flex'"/><span class="onboarding-channel-avatar__initials">${initials}</span>`
-        : `<span class="onboarding-channel-avatar__initials onboarding-channel-avatar__initials--solo">${initials}</span>`;
+      const initials = escapeHtml(String(ch.initials || "").trim() || "?");
+      const avatarInner = faviconUrl
+        ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${initials}</span>`
+        : `<span style="font-weight:800;font-size:.65rem">${initials}</span>`;
       return `
-        <label class="onboarding-channel-item ${enabled ? "selected" : ""}" data-onb-channel-id="${escapeHtml(ch.id)}">
-          <input type="checkbox" ${enabled ? "checked" : ""} />
-          <span class="onboarding-channel-avatar">
-            ${logoMarkup}
-          </span>
-          <span>${escapeHtml(ch.name || "")}</span>
-        </label>
-      `;
+        <label class="channel-toggle-row" data-onb-channel-id="${escapeHtml(ch.id)}">
+          <span class="channel-toggle-avatar">${avatarInner}</span>
+          <span class="channel-toggle-name">${escapeHtml(ch.name || "")}</span>
+          <span class="toggle-switch ${enabled ? "toggle-switch--on" : ""}" role="switch" aria-checked="${enabled}" tabindex="0" data-onb-toggle="${escapeHtml(ch.id)}"></span>
+        </label>`;
     })
     .join("");
 
-  list.querySelectorAll("[data-onb-channel-id]").forEach((row) => {
-    row.addEventListener("click", (e) => {
-      // allow checkbox click to work naturally
-      const id = row.getAttribute("data-onb-channel-id") || "";
-      const input = row.querySelector("input[type=checkbox]");
-      if (!(input instanceof HTMLInputElement)) return;
-      if (!(e.target instanceof HTMLInputElement)) input.checked = !input.checked;
-      if (input.checked) {
-        if (!onboardingData.channels.includes(id)) onboardingData.channels.push(id);
-      } else {
-        onboardingData.channels = onboardingData.channels.filter((x) => x !== id);
-      }
-      row.classList.toggle("selected", input.checked);
-    });
-  });
+  list.onclick = (e) => {
+    const row = e.target.closest("[data-onb-channel-id]");
+    if (!(row instanceof HTMLElement)) return;
+    const id = row.getAttribute("data-onb-channel-id") || "";
+    if (!id) return;
+    const wasOn = onboardingData.channels.includes(id);
+    if (wasOn) {
+      onboardingData.channels = onboardingData.channels.filter((x) => x !== id);
+    } else if (!onboardingData.channels.includes(id)) {
+      onboardingData.channels.push(id);
+    }
+    const nowOn = onboardingData.channels.includes(id);
+    const sw = row.querySelector(".toggle-switch");
+    if (sw) {
+      sw.classList.toggle("toggle-switch--on", nowOn);
+      sw.setAttribute("aria-checked", String(nowOn));
+    }
+  };
 }
 
 function renderOnboardingSupermarkets() {
