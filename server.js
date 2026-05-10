@@ -5269,6 +5269,26 @@ function findRecipeJsonLd(html) {
   );
 }
 
+/** Gemiddelde score + aantal uit schema.org Recipe (zoals op kanaal-receptpagina's). */
+function extractAggregateRatingFromRecipeHtml(html) {
+  if (!html || typeof html !== "string") return null;
+  const recipe = findRecipeJsonLd(html);
+  const agg = recipe?.aggregateRating;
+  if (!agg || typeof agg !== "object") return null;
+  let ratingValue = Number(agg.ratingValue);
+  if (!Number.isFinite(ratingValue)) return null;
+  const best = Number(agg.bestRating);
+  if (Number.isFinite(best) && best > 5 && ratingValue <= 10) {
+    ratingValue = Math.round((ratingValue / best) * 5);
+  } else if (!Number.isFinite(best) && ratingValue > 5 && ratingValue <= 10) {
+    ratingValue = Math.round(ratingValue / 2);
+  }
+  ratingValue = Math.min(5, Math.max(1, Math.round(ratingValue)));
+  let ratingCount = Number(agg.ratingCount ?? agg.reviewCount ?? 0);
+  if (!Number.isFinite(ratingCount) || ratingCount < 0) ratingCount = 0;
+  return { ratingValue, ratingCount };
+}
+
 function extractBalancedJsonValue(source, key, startIndex = 0) {
   const keyPattern = `"${key}"`;
   const keyIndex = source.indexOf(keyPattern, startIndex);
@@ -9449,7 +9469,7 @@ function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam 
   }
   const custom = String(customChannelsParam || "").trim();
   // Bump when API-resultaatscherm wijzigt (bijv. ratingvelden) — oude cache mist die velden.
-  const schema = "cs-v3";
+  const schema = "cs-v4";
   return `${q}||${channels}||${custom}||${schema}`;
 }
 
@@ -9711,27 +9731,101 @@ function channelSearchBackendNote(channelId, resultCount) {
 }
 
 /**
- * Allerhande-zoek HTML bevat geserialiseerde GraphQL/Flight-data met RecipeSummary + RecipeRating
- * (gemiddelde 1–5 en aantal waarderingen). We mappen op recept-id (r-r…).
- * Eén regex-blok koppelt id + rating zodat we geen verkeerde \"id\" uit nested velden pakken.
+ * Allerhande-zoek HTML bevat GraphQL/Flight-data met RecipeSummary + RecipeRating.
+ * We indexeren op recept-id (r-r…) én op `slug:` + url-pad voor betere match met Jina-links.
  */
 function extractAhSearchRatingsFromAllerhandeHtml(html) {
   const map = new Map();
   if (!html || typeof html !== "string" || html.length < 800) return map;
   if (!html.includes("RecipeSummary") || !html.includes("RecipeRating")) return map;
-  const row =
-    /\\"__typename\\":\\"RecipeSummary\\",\\"id\\":(\d+)[\s\S]{0,32000}?\\"rating\\":\{\\"__typename\\":\\"RecipeRating\\",\\"average\\":(\d+|null),\\"count\\":(\d+)/g;
+
+  function put(entryKey, entry) {
+    if (!entryKey || !entry) return;
+    if (!map.has(entryKey)) map.set(entryKey, entry);
+  }
+
+  const rowSlug =
+    /\\"__typename\\":\\"RecipeSummary\\",\\"id\\":(\d+),\\"title\\":[\s\S]{0,8000}?\\"slug\\":\\"([^"\\]+)\\"[\s\S]{0,32000}?\\"rating\\":\{\\"__typename\\":\\"RecipeRating\\",\\"average\\":(\d+|null),\\"count\\":(\d+)/g;
   let m;
-  while ((m = row.exec(html)) !== null) {
-    const averageRaw = m[2];
+  while ((m = rowSlug.exec(html)) !== null) {
+    const averageRaw = m[3];
     if (averageRaw === "null") continue;
     const ratingValue = Number(averageRaw);
     if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) continue;
-    const ratingCount = Number(m[3]);
+    const ratingCount = Number(m[4]);
     if (!Number.isFinite(ratingCount) || ratingCount < 0) continue;
-    map.set(`r-r${m[1]}`.toLowerCase(), { ratingValue, ratingCount });
+    const entry = { ratingValue, ratingCount };
+    put(`r-r${m[1]}`.toLowerCase(), entry);
+    const sl = String(m[2] || "").trim().toLowerCase();
+    if (sl) put(`slug:${sl}`, entry);
   }
+
+  if (map.size === 0) {
+    const rowLegacy =
+      /\\"__typename\\":\\"RecipeSummary\\",\\"id\\":(\d+)[\s\S]{0,32000}?\\"rating\\":\{\\"__typename\\":\\"RecipeRating\\",\\"average\\":(\d+|null),\\"count\\":(\d+)/g;
+    while ((m = rowLegacy.exec(html)) !== null) {
+      const averageRaw = m[2];
+      if (averageRaw === "null") continue;
+      const ratingValue = Number(averageRaw);
+      if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) continue;
+      const ratingCount = Number(m[3]);
+      if (!Number.isFinite(ratingCount) || ratingCount < 0) continue;
+      put(`r-r${m[1]}`.toLowerCase(), { ratingValue, ratingCount });
+    }
+  }
+
   return map;
+}
+
+function lookupAhSearchRating(ratingMap, url, recipeId) {
+  if (!ratingMap || !(ratingMap instanceof Map) || ratingMap.size === 0) return null;
+  const rid = String(recipeId || "").trim().toLowerCase();
+  if (rid && ratingMap.has(rid)) return ratingMap.get(rid);
+  const u = String(url || "");
+  const urlId = u.match(/\/(R-R|r-r)(\d+)\//i);
+  if (urlId) {
+    const k = `r-r${urlId[2]}`.toLowerCase();
+    if (ratingMap.has(k)) return ratingMap.get(k);
+  }
+  let pathSlug = "";
+  try {
+    pathSlug = (new URL(u).pathname.split("/").filter(Boolean).pop() || "").toLowerCase();
+  } catch {
+    pathSlug = "";
+  }
+  if (pathSlug && ratingMap.has(`slug:${pathSlug}`)) return ratingMap.get(`slug:${pathSlug}`);
+  return null;
+}
+
+/** Als zoek-HTML geen ratings oplevert: haal ze van de receptpagina (JSON-LD), parallel. */
+async function attachAhRatingsFromRecipePages(results) {
+  if (!Array.isArray(results) || !results.length) return results;
+  const filled = new Map();
+  await Promise.all(
+    results.map(async (r) => {
+      if (!r || r.channelId !== "ch-ah" || r.ratingValue != null || !r.url) return;
+      try {
+        const resp = await fetch(String(r.url), {
+          headers: {
+            ...FETCH_HEADERS,
+            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "nl-NL,nl;q=0.9",
+            Referer: "https://www.ah.nl/allerhande/",
+          },
+          signal: AbortSignal.timeout(6000),
+          redirect: "follow",
+        });
+        if (!resp.ok) return;
+        const pageHtml = await resp.text();
+        const rt = extractAggregateRatingFromRecipeHtml(pageHtml);
+        if (rt) filled.set(r.url, { ...r, ...rt });
+      } catch {
+        /* ignore */
+      }
+    })
+  );
+  if (!filled.size) return results;
+  return results.map((r) => (r && filled.has(r.url) ? filled.get(r.url) : r));
 }
 
 /** AH zoek-HTML voor datacenters die 403/lege body geven op de eerste fetch. */
@@ -10109,8 +10203,7 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
           }
 
           console.log(`  📄 Mapping: "${title}" (ID: ${recipeId || 'none'}) - Image: ${thumbnail ? 'found' : 'missing'}`);
-          const rid = String(recipeId || "").toLowerCase();
-          const ratingEntry = rid ? ahRatingByRecipeId.get(rid) : null;
+          const ratingEntry = lookupAhSearchRating(ahRatingByRecipeId, linkItem.url, recipeId);
           return {
             title,
             url: linkItem.url,
@@ -10130,6 +10223,8 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
           }
           return pass;
         });
+
+        results = await attachAhRatingsFromRecipePages(results);
 
         if (results.some((r) => !r.thumbnail)) {
           results = await Promise.all(results.map(async (result) => {
@@ -10249,9 +10344,9 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
             const thumbnail = extractAhRecipeImage(recipeHtml);
             console.log(`  ✅ ${title} - Image: ${thumbnail ? "YES" : "NO"}`);
 
-            const urlIdMatch = url.match(/\/(R-R\d+)\//i);
-            const rid = urlIdMatch ? urlIdMatch[1].toLowerCase() : "";
-            const ratingEntry = rid ? ahRatingByRecipeId.get(rid) : null;
+            const fromSearch = lookupAhSearchRating(ahRatingByRecipeId, url, "");
+            const fromPageLd = extractAggregateRatingFromRecipeHtml(recipeHtml);
+            const ratingEntry = fromSearch || fromPageLd;
 
             return {
               title,
@@ -10374,7 +10469,17 @@ async function searchJumboRecipes(query, count = 4, opts = {}) {
       if (time) break;
     }
 
-    return { title, url, thumbnail, channel: channelName, channelId, description, time };
+    const ldRating = extractAggregateRatingFromRecipeHtml(recipeHtml);
+    return {
+      title,
+      url,
+      thumbnail,
+      channel: channelName,
+      channelId,
+      description,
+      time,
+      ...(ldRating ? { ratingValue: ldRating.ratingValue, ratingCount: ldRating.ratingCount } : {}),
+    };
   }
 
   try {
