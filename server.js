@@ -11707,14 +11707,31 @@ const server = http.createServer(async (request, response) => {
     <meta name="twitter:description" content="${escapeHtml(desc)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
-    <link rel="stylesheet" href="/styles.css?v=3.1.3" />
+    <link rel="stylesheet" href="/styles.css?v=3.1.9" />
+    <script>
+      (function () {
+        document.addEventListener(
+          "contextmenu",
+          function (ev) {
+            if (ev.target && ev.target.closest && ev.target.closest("img")) ev.preventDefault();
+          },
+          true
+        );
+        document.addEventListener(
+          "dragstart",
+          function (ev) {
+            if (ev.target && ev.target.closest && ev.target.closest("img")) ev.preventDefault();
+          },
+          true
+        );
+      })();
+    </script>
   </head>
   <body class="public-recipe-page">
     <main class="public-recipe" id="publicRecipeRoot">
       <header class="public-recipe__top">
         <a class="public-recipe__brand" href="/index.html" aria-label="Open Plately">
-          <img src="/assets/plately.png" alt="Plately" class="public-recipe__brand-logo" />
-          <span class="public-recipe__brand-name">Plately</span>
+          <img src="/assets/plately.png" alt="" width="34" height="34" decoding="async" class="public-recipe__brand-logo" />
         </a>
         <div class="public-recipe__cta">
           <a class="btn-secondary public-recipe__cta-btn" href="/index.html">Inloggen</a>
@@ -11723,7 +11740,7 @@ const server = http.createServer(async (request, response) => {
       </header>
 
       <section class="public-recipe__card" aria-live="polite">
-        ${/^https?:\/\//i.test(rawImage) ? `<div class="public-recipe__hero"><img src="${escapeHtml(rawImage)}" alt="${escapeHtml(title)}" loading="lazy" decoding="async"/><div class="public-recipe__hero-fade" aria-hidden="true"></div></div>` : ""}
+        ${/^https?:\/\//i.test(rawImage) ? `<div class="public-recipe__hero"><img src="${escapeHtml(rawImage)}" alt="" draggable="false" loading="lazy" decoding="async"/><div class="public-recipe__hero-fade" aria-hidden="true"></div></div>` : ""}
         <div class="public-recipe__card-inner">
         <p class="section-kicker public-recipe__kicker">${escapeHtml(payload.mealTag || "Gedeeld recept")}</p>
         <h1 class="public-recipe__title">${escapeHtml(title)}</h1>

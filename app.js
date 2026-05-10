@@ -473,6 +473,25 @@ if (getNavigationType() === "reload") {
   try { sessionStorage.removeItem(HOME_RECIPE_LIMIT_SESSION_KEY); } catch {}
 }
 
+function installImageSaveGuards() {
+  if (installImageSaveGuards._done) return;
+  installImageSaveGuards._done = true;
+  document.addEventListener(
+    "contextmenu",
+    (ev) => {
+      if (ev.target?.closest?.("img")) ev.preventDefault();
+    },
+    true
+  );
+  document.addEventListener(
+    "dragstart",
+    (ev) => {
+      if (ev.target?.closest?.("img")) ev.preventDefault();
+    },
+    true
+  );
+}
+
 function normalizeHttpOrigin(origin) {
   return String(origin || "").trim().replace(/\/+$/, "").toLowerCase();
 }
@@ -13276,6 +13295,8 @@ try {
     history.scrollRestoration = "manual";
   }
 } catch { /* ignore */ }
+
+installImageSaveGuards();
 
 // Bootstrap session - this will render the app AFTER checking authentication
 bootstrapSession();
