@@ -1279,9 +1279,18 @@ img { display: block; max-width: 100%; }
 
 .detail-hero img {
   width: 100%;
-  height: 320px;
+  height: clamp(300px, 54vw, 430px);
   object-fit: cover;
   display: block;
+}
+
+.detail-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 38%;
+  background: linear-gradient(180deg, rgba(251, 247, 241, 0), rgba(251, 247, 241, 0.96));
+  pointer-events: none;
 }
 
 .detail-hero__actions {
@@ -1772,7 +1781,10 @@ button.ingredient-item {
   grid-template-columns: 34px minmax(0, 1fr);
   gap: 12px;
   align-items: flex-start;
-  padding: 0;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.72);
+  border: 1px solid rgba(35,33,30,0.05);
 }
 
 .step-index {
@@ -3196,12 +3208,14 @@ button.ingredient-item {
 .nav-item {
   border: 0;
   background: transparent;
-  color: #a2a099;
+  color: #8c9b86;
   display: grid;
   justify-items: center;
   gap: 5px;
-  padding: 12px 4px;
-  border-radius: 24px;
+  min-height: 62px;
+  padding: 8px 6px;
+  border-radius: 18px;
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
 }
 
 .nav-item span {
@@ -3210,11 +3224,27 @@ button.ingredient-item {
 }
 
 .nav-item--active {
-  color: #9ab59d;
-  background: #eef5ef;
+  color: #2f5238;
+  background: rgba(220, 232, 220, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(120, 147, 111, 0.16);
 }
 
-.nav-item--active svg { fill: #9ab59d; }
+.nav-item--active svg {
+  fill: rgba(141, 164, 133, 0.22);
+  stroke: currentColor;
+}
+
+.nav-item--profile.nav-item--active {
+  background: transparent;
+  box-shadow: none;
+}
+
+.nav-item--profile.nav-item--active .profile2-avatar--nav {
+  box-shadow:
+    0 0 0 3px rgba(220, 232, 220, 0.95),
+    0 0 0 5px rgba(120, 147, 111, 0.24),
+    0 10px 20px rgba(36, 60, 43, 0.12);
+}
 
 /* Nav badge (grocery count) */
 .nav-icon-wrap {
@@ -4076,6 +4106,44 @@ button.ingredient-item {
   gap: 8px;
 }
 
+.admin-channel-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(120, 147, 111, 0.16);
+  background: rgba(220, 232, 220, 0.48);
+}
+
+.admin-channel-preview__favicon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  box-shadow: 0 6px 14px rgba(36, 60, 43, 0.08);
+  overflow: hidden;
+}
+
+.admin-channel-preview__favicon img {
+  width: 20px;
+  height: 20px;
+}
+
+.admin-channel-preview strong {
+  display: block;
+  color: #2f5238;
+  font-size: 0.92rem;
+}
+
+.admin-channel-preview p {
+  margin: 2px 0 0;
+  color: #78936f;
+  font-size: 0.8rem;
+}
+
 @media (max-width: 760px) {
   .admin-channel-create__grid {
     grid-template-columns: 1fr;
@@ -4651,7 +4719,10 @@ button.ingredient-item {
   aspect-ratio: 1 / 1;
   border-radius: var(--card-radius);
   overflow: hidden;
-  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+  background:
+    radial-gradient(circle at 18% 12%, rgba(246, 182, 157, 0.24), transparent 34%),
+    radial-gradient(circle at 82% 24%, rgba(220, 232, 220, 0.72), transparent 36%),
+    color-mix(in srgb, var(--color-surface) 90%, transparent);
   box-shadow: var(--card-shadow);
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
@@ -4684,6 +4755,9 @@ button.ingredient-item {
   font-size: 2.8rem;
   border: 1px dashed rgba(170, 181, 166, 0.45);
   box-shadow: none;
+  background:
+    radial-gradient(circle at 50% 24%, rgba(220, 232, 220, 0.78), transparent 34%),
+    rgba(255,255,255,0.68);
 }
 
 .cookbook-collection--add .cookbook-collection__cover--empty {
@@ -4713,6 +4787,20 @@ button.ingredient-item {
   font-weight: 800;
   font-size: 0.86rem;
   box-shadow: var(--shadow-1);
+}
+
+.cookbook-collection-wrap:nth-child(3n + 1) .cookbook-collection__cover {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(246, 182, 157, 0.22), transparent 34%),
+    radial-gradient(circle at 80% 28%, rgba(220, 232, 220, 0.8), transparent 38%),
+    #fff;
+}
+
+.cookbook-collection-wrap:nth-child(3n + 2) .cookbook-collection__cover {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(220, 232, 220, 0.82), transparent 34%),
+    radial-gradient(circle at 82% 82%, rgba(255, 241, 231, 0.92), transparent 36%),
+    #fff;
 }
 
 .cookbook-collection__head {
@@ -7163,6 +7251,10 @@ button.ingredient-item {
   color: #b55050;
 }
 .review-draft__btn:active { transform: scale(0.98); }
+
+.review-screen .review-drafts {
+  display: none !important;
+}
 
 .review-suggestion {
   display: grid;
@@ -10515,6 +10607,14 @@ body {
   gap: 10px;
 }
 
+.basket-product__aisle {
+  background: rgba(120, 147, 111, 0.11);
+  color: #5f7a5a;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-weight: 800;
+}
+
 /* Product card */
 .basket-product {
   background: var(--color-surface);
@@ -13037,15 +13137,15 @@ body {
 
 .import-splash__ring--1 {
   inset: 4%;
-  border: 3px dashed rgba(120, 147, 111, 0.42);
-  animation: importMagicRingSpin 26s linear infinite;
+  border: 2px dashed rgba(120, 147, 111, 0.28);
+  animation: importMagicRingSpin 34s linear infinite;
 }
 
 .import-splash__ring--2 {
   inset: 12%;
-  border: 3px dashed rgba(246, 182, 157, 0.52);
+  border: 2px dashed rgba(246, 182, 157, 0.32);
   opacity: 0.9;
-  animation: importMagicRingSpin 22s linear infinite reverse;
+  animation: importMagicRingSpin 30s linear infinite reverse;
 }
 
 .import-splash__basket {
@@ -13110,6 +13210,7 @@ body {
   right: 36px;
   bottom: 64px;
   animation-delay: 1.05s;
+  opacity: 0.72;
 }
 
 .import-splash__falling {
@@ -13126,7 +13227,7 @@ body {
   box-shadow: 0 14px 28px rgba(36, 60, 43, 0.18);
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.6);
-  animation-duration: 5.2s;
+  animation-duration: 6.4s;
   animation-timing-function: cubic-bezier(.22,.88,.28,1);
   animation-iteration-count: infinite;
   will-change: transform, opacity;
@@ -13145,22 +13246,22 @@ body {
 
 .import-splash__falling--2 {
   animation-name: importMagicDropFromRight;
-  animation-delay: 1.04s;
+  animation-delay: 1.28s;
 }
 
 .import-splash__falling--3 {
   animation-name: importMagicDropFromLeft;
-  animation-delay: 2.08s;
+  animation-delay: 2.56s;
 }
 
 .import-splash__falling--4 {
   animation-name: importMagicDropFromBottomRight;
-  animation-delay: 3.12s;
+  animation-delay: 3.84s;
 }
 
 .import-splash__falling--5 {
   animation-name: importMagicDropFromTopLeft;
-  animation-delay: 4.16s;
+  animation-delay: 5.12s;
 }
 
 .import-splash__catch-burst {
@@ -13174,17 +13275,17 @@ body {
   border: 2px solid rgba(246, 182, 157, 0.72);
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.2);
-  animation: importMagicCatchBurst 5.2s ease-out infinite;
+  animation: importMagicCatchBurst 6.4s ease-out infinite;
   pointer-events: none;
 }
 
 .import-splash__catch-burst--2 {
   border-color: rgba(120, 147, 111, 0.6);
-  animation-delay: 1.04s;
+  animation-delay: 1.28s;
 }
 
 .import-splash__catch-burst--3 {
-  animation-delay: 2.08s;
+  animation-delay: 2.56s;
 }
 
 .import-splash__orbit-step {
@@ -13351,6 +13452,23 @@ body {
   text-align: center;
 }
 
+.import-splash__status {
+  position: static;
+  width: auto;
+  height: auto;
+  clip: auto;
+  overflow: visible;
+  margin: -2px auto 0;
+  color: #78936f;
+  font-size: 0.82rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+  white-space: normal;
+  animation: importStatusPulse 1.8s ease-in-out infinite;
+}
+
 .import-splash__hint {
   max-width: 340px;
   margin: 0 auto;
@@ -13365,18 +13483,14 @@ body {
   display: none;
 }
 
-.import-splash__status {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
 @keyframes importMagicRingSpin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@keyframes importStatusPulse {
+  0%, 100% { opacity: 0.62; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-1px); }
 }
 
 @keyframes importMagicGlow {

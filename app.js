@@ -2069,6 +2069,7 @@ function renderBasketPreview() {
     const matchBadge = matchQuality === "low"
       ? `<span class="basket-product__attention">Check match</span>`
       : "";
+    const aisleBadge = `<span class="basket-product__aisle">${escapeHtml(category.label)}</span>`;
 
     const html = `
       <div class="basket-product ${matchQuality === "low" ? "basket-product--attention" : ""}" data-basket-item="${itemIndex}">
@@ -2080,6 +2081,7 @@ function renderBasketPreview() {
           <p class="basket-product__meta">
             ${renderChoicePriceHtml(choice)}
             ${promotionBadge}
+            ${aisleBadge}
             ${matchBadge}
             ${choice.subtitle ? `<span>${escapeHtml(choice.subtitle)}</span>` : ""}
           </p>
@@ -5768,11 +5770,7 @@ function openDraftsFromImport() {
     showToast("Geen concepten gevonden.");
     return;
   }
-  // Open the most recent draft in review, then scroll to the drafts section.
   openImportReview(previews[0].id);
-  setTimeout(() => {
-    document.getElementById("reviewDrafts")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, 60);
 }
 
 function renderImportDrafts() {
@@ -5857,7 +5855,6 @@ function renderImportReview() {
   reviewIngredientsInput.value = serializeIngredientsForReview(recipe);
   reviewInstructionsInput.value = (recipe.instructions || []).join("\n");
   renderReviewAnalysis();
-  renderImportDrafts();
   reviewFeedback.textContent = "Pas de import aan en sla hem daarna op.";
 }
 
@@ -8036,6 +8033,19 @@ function renderAdminNewChannelResults(results, backendNote = "") {
       : "";
     return;
   }
+  const hosts = new Set(list.map((r) => getSourceHost(r?.url || "")).filter(Boolean));
+  const quality = list.length >= 3 ? "Sterk" : list.length >= 1 ? "Oké" : "Zwak";
+  const summary = `
+    <div class="admin-channel-preview">
+      <span class="admin-channel-preview__favicon" aria-hidden="true">
+        ${hosts.size ? `<img src="${escapeHtml(getSourceIconUrl(`https://${[...hosts][0]}`))}" alt="" loading="lazy" />` : ""}
+      </span>
+      <div>
+        <strong>${list.length} recepten gevonden</strong>
+        <p>${escapeHtml([...hosts][0] || "Nieuw kanaal")} · importkwaliteit: ${quality}</p>
+      </div>
+    </div>
+  `;
   wrap.innerHTML = list.slice(0, 5).map((r) => {
     const title = escapeHtml(r?.title || "—");
     const url = escapeHtml(r?.url || "");
@@ -8050,6 +8060,7 @@ function renderAdminNewChannelResults(results, backendNote = "") {
       </div>
     `;
   }).join("");
+  wrap.innerHTML = summary + wrap.innerHTML;
 }
 
 async function runAdminNewChannelTest() {
@@ -11279,7 +11290,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 });
 
 // "Over deze App" → about sub-panel
-const APP_VERSION = "3.0.7";
+const APP_VERSION = "3.0.8";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;

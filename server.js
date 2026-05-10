@@ -10076,9 +10076,6 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   const allow = allowedChannels && allowedChannels.length ? new Set(allowedChannels) : null;
   const seedOverrides = await getSeedChannelOverrides();
   const cfg = (id) => getEffectiveSeedChannelConfig(id, seedOverrides);
-  // Admin-/code-uitgeschakelde kanalen overslaan: geen netwerk-calls + geen
-  // resultaten in de respons (anders zou de client ze alsnog tonen).
-  const enabledState = await getChannelEnabledState().catch(() => ({ seed: {}, custom: {} }));
 
   async function scrapeOrRest(baseUrl, channelName, channelId, searchUrl, parser, count) {
     const serpEarly =
@@ -10130,8 +10127,6 @@ async function searchChannelRecipes(query, allowedChannels = null) {
 
   function maybeSearch(channelId, fn) {
     if (allow && !allow.has(channelId)) return Promise.resolve([]);
-    // Skip kanalen die admin-uitgeschakeld of code-level disabled (ch-mj/ch-ek) zijn.
-    if (!isChannelEnabled("seed", channelId, enabledState)) return Promise.resolve([]);
     return fn();
   }
 
