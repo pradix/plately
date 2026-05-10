@@ -4118,14 +4118,23 @@ function formatChannelSearchRatingHtml(r) {
   if (!Number.isFinite(num)) return "";
   const cnt = Number(r?.ratingCount);
   const cntOk = Number.isFinite(cnt) && cnt > 0;
-  const stars = "★".repeat(num) + "☆".repeat(5 - num);
   const label = cntOk
     ? `Gemiddeld ${num} van 5 sterren, ${cnt} ${cnt === 1 ? "waardering" : "waarderingen"}`
     : `Gemiddeld ${num} van 5 sterren`;
+  const starSvg =
+    '<svg class="ch-card__rating-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27z"/></svg>';
   const countHtml = cntOk
-    ? `<span class="ch-card__rating-count">${cnt}×</span>`
+    ? `<span class="ch-card__rating-sep" aria-hidden="true">·</span><span class="ch-card__rating-count">${cnt}×</span>`
     : "";
-  return `<div class="ch-card__rating" aria-label="${escapeHtml(label)}"><span class="ch-card__rating-stars" aria-hidden="true">${stars}</span><span class="ch-card__rating-meta"><span class="ch-card__rating-score">${num}/5</span>${countHtml}</span></div>`;
+  return `<div class="ch-card__rating">
+    <span class="ch-card__rating-pill" aria-label="${escapeHtml(label)}">
+      ${starSvg}
+      <span class="ch-card__rating-score">
+        <span class="ch-card__rating-num">${num}</span><span class="ch-card__rating-suffix">/5</span>
+      </span>
+      ${countHtml}
+    </span>
+  </div>`;
 }
 
 function renderChannelSearchResults(results, filter = state.channelSearchFilter) {
@@ -4399,6 +4408,7 @@ async function searchChannelsOnImportScreen(query) {
             </div>
             <div class="ch-card__body">
               <p class="ch-card__title">${escapeHtml(r.title)}</p>
+              ${formatChannelSearchRatingHtml(r)}
               ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
             </div>
             <div class="ch-card__actions">
