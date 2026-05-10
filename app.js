@@ -4111,26 +4111,74 @@ function getChannelImportLoadingMarkup() {
   return `<svg class="spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Plately is bezig...</span>`;
 }
 
-/** @param {{ ratingValue?: number; ratingCount?: number }} r */
-function formatChannelSearchRatingHtml(r) {
+function sanitizeRatingSourceLabel(raw) {
+  const s = String(raw ?? "").trim().replace(/[\u0000-\u001f<>]/g, "");
+  return s.slice(0, 48);
+}
+
+/** @param {{ ratingValue?: number; ratingCount?: number; channel?: string; ratingNormalizedFromWideScale?: boolean }} r */
+function formatChannelSearchRatingHtml(r, options = {}) {
   const cnt = Number(r?.ratingCount);
   if (!Number.isFinite(cnt) || cnt < 1) return "";
   const raw = r?.ratingValue;
   if (raw == null || raw === "") return "";
   const num = Math.min(5, Math.max(1, Math.round(Number(raw))));
   if (!Number.isFinite(num) || num < 1) return "";
-  const label = `Gemiddeld ${num} van 5 sterren, ${cnt} ${cnt === 1 ? "waardering" : "waarderingen"}`;
+
+  const showSource =
+    Boolean(options.showRatingSource) &&
+    sanitizeRatingSourceLabel(String(r?.channel || "").trim()).length > 0;
+  let chipSrc = sanitizeRatingSourceLabel(String(r.channel || "").trim());
+  if (chipSrc.length > 14) chipSrc = `${chipSrc.slice(0, 13)}…`;
+
+  let confidenceLine = "";
+  if (cnt >= 150) {
+    const approx = Math.round(cnt / 50) * 50;
+    confidenceLine = `Gebaseerd op ca. ${approx} waarderingen op de bronwebsite.`;
+  } else if (cnt >= 35) {
+    const approx = Math.round(cnt / 5) * 5;
+    confidenceLine = `Gebaseerd op ca. ${approx} waarderingen op de bronwebsite.`;
+  } else if (cnt >= 15) {
+    confidenceLine = `Gebaseerd op ${cnt} waarderingen op de bronwebsite.`;
+  }
+
+  const scaleNote = r?.ratingNormalizedFromWideScale
+    ? "De bron gebruikt een hogere scoreschaal; hier getoond als sterren op 5. "
+    : "";
+
+  const ariaPieces = [
+    scaleNote,
+    chipSrc && showSource ? `${chipSrc}. ` : "",
+    `Gemiddeld ${num} van 5 sterren, ${cnt} ${cnt === 1 ? "waardering" : "waarderingen"}`,
+    confidenceLine ? ` ${confidenceLine}` : "",
+  ];
+  const ariaLabel = ariaPieces.join("").trim();
+
   const starSvg =
     '<svg class="ch-card__rating-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27z"/></svg>';
   const countHtml = `<span class="ch-card__rating-sep" aria-hidden="true">·</span><span class="ch-card__rating-count">${cnt}×</span>`;
+  const sourceHtml =
+    showSource ?
+      `<span class="ch-card__rating-source">${escapeHtml(chipSrc)}</span>`
+    : "";
+  const confidenceHtml = confidenceLine
+    ? `<span class="ch-card__rating-confidence">${escapeHtml(confidenceLine)}</span>`
+    : "";
+  const scaleHtml = r?.ratingNormalizedFromWideScale ?
+    `<span class="ch-card__rating-scale-note" title="De bron geeft scores op een hogere schaal dan 5; Plately toont het gemiddelde hier als sterren op 5.">10→5</span>`
+  : "";
+
   return `<div class="ch-card__rating">
-    <span class="ch-card__rating-pill" aria-label="${escapeHtml(label)}">
+    <span class="ch-card__rating-pill" aria-label="${escapeHtml(ariaLabel)}">
+      ${sourceHtml}
       ${starSvg}
       <span class="ch-card__rating-score">
         <span class="ch-card__rating-num">${num}</span><span class="ch-card__rating-suffix">/5</span>
       </span>
       ${countHtml}
+      ${scaleHtml}
     </span>
+    ${confidenceHtml}
   </div>`;
 }
 
@@ -4179,6 +4227,8 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
     const allCh = getAllChannels();
     const channelById = new Map(allCh.map((ch) => [ch.id, ch]));
 
+    const showRatingSourceInPill = !effectiveFilter && presentChannelIds.length > 1;
+
     const rows = filtered.length ? filtered : all;
     if (!filtered.length && effectiveFilter) {
       state.channelSearchFilter = null;
@@ -4198,7 +4248,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
         </div>
         <div class="ch-card__body">
           <p class="ch-card__title">${escapeHtml(r.title)}</p>
-          ${formatChannelSearchRatingHtml(r)}
+          ${formatChannelSearchRatingHtml(r, { showRatingSource: showRatingSourceInPill })}
           ${r.description ? `<p class="ch-card__desc">${escapeHtml(r.description)}</p>` : ""}
           ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
         </div>
@@ -4390,6 +4440,9 @@ async function searchChannelsOnImportScreen(query) {
       if (orRow) orRow.classList.remove("hidden");
       return;
     }
+    const importSearchMultiChannel =
+      new Set(all.map((r) => r.channelId).filter(Boolean)).size > 1;
+
     if (results) {
       results.innerHTML = `<div class="ch-result-grid">${all.map((r) => {
         const allCh = getAllChannels();
@@ -4405,7 +4458,7 @@ async function searchChannelsOnImportScreen(query) {
             </div>
             <div class="ch-card__body">
               <p class="ch-card__title">${escapeHtml(r.title)}</p>
-              ${formatChannelSearchRatingHtml(r)}
+              ${formatChannelSearchRatingHtml(r, { showRatingSource: importSearchMultiChannel })}
               ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
             </div>
             <div class="ch-card__actions">

@@ -5273,6 +5273,7 @@ function findRecipeJsonLd(html) {
  * Gemiddelde score + aantal uit schema.org Recipe.
  * Geen minimum naar 1 afdwingen — ontbrekende of placeholdertoontjes (vaak 1/5) worden genegeerd.
  * Zonder minstens 1 waardering tonen we geen score (eist consistentie met UI).
+ * `ratingNormalizedFromWideScale` als de bron expliciet een schaal >5 gebruikte en we naar /5 rekenden.
  */
 function extractAggregateRatingFromRecipeHtml(html) {
   if (!html || typeof html !== "string") return null;
@@ -5284,14 +5285,21 @@ function extractAggregateRatingFromRecipeHtml(html) {
   let ratingCount = Number(agg.ratingCount ?? agg.reviewCount ?? 0);
   if (!Number.isFinite(ratingCount) || ratingCount < 1) return null;
   const best = Number(agg.bestRating);
+  let normalizedFromWideScale = false;
   if (Number.isFinite(best) && best > 5 && ratingValue <= 10) {
     ratingValue = (ratingValue / best) * 5;
+    normalizedFromWideScale = true;
   } else if (!Number.isFinite(best) && ratingValue > 5 && ratingValue <= 10) {
     ratingValue = ratingValue / 2;
+    normalizedFromWideScale = true;
   }
   ratingValue = Math.round(ratingValue);
   if (ratingValue < 1 || ratingValue > 5) return null;
-  return { ratingValue, ratingCount };
+  return {
+    ratingValue,
+    ratingCount,
+    ...(normalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}),
+  };
 }
 
 function extractBalancedJsonValue(source, key, startIndex = 0) {
@@ -9460,6 +9468,14 @@ const CHANNEL_SEARCH_CACHE_TTL_MS = 3 * 60_000;
 const CHANNEL_SEARCH_CACHE_MAX_ENTRIES = 250;
 const channelSearchCache = new Map(); // key -> { at:number, results:any[] }
 
+/** Succesvolle JSON-LD-rating per recept-URL (enrich); verlaagt dubbele fetches. */
+const RECIPE_RATING_LD_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
+const RECIPE_RATING_LD_CACHE_MAX_ENTRIES = 600;
+const recipeRatingLdCache = new Map(); // normalizedUrl -> { at, value }
+
+/** Cumulatieve statistieken JSON-LD enrich (per hostname, voor logs/monitoring). */
+const ratingEnrichHostStats = new Map();
+
 function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam }) {
   const q = String(query || "").trim().toLowerCase();
   let channels;
@@ -9474,7 +9490,7 @@ function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam 
   }
   const custom = String(customChannelsParam || "").trim();
   // Bump when API-resultaatscherm wijzigt (bijv. ratingvelden) — oude cache mist die velden.
-  const schema = "cs-v6";
+  const schema = "cs-v7";
   return `${q}||${channels}||${custom}||${schema}`;
 }
 
@@ -9802,6 +9818,46 @@ function lookupAhSearchRating(ratingMap, url, recipeId) {
   return null;
 }
 
+function normalizeRecipeRatingCacheUrl(url) {
+  try {
+    const u = new URL(String(url || "").trim());
+    u.hash = "";
+    return u.href;
+  } catch {
+    return String(url || "").trim();
+  }
+}
+
+function getCachedRecipeLdRating(url) {
+  const key = normalizeRecipeRatingCacheUrl(url);
+  const e = recipeRatingLdCache.get(key);
+  if (!e) return undefined;
+  if (Date.now() - e.at > RECIPE_RATING_LD_CACHE_TTL_MS) {
+    recipeRatingLdCache.delete(key);
+    return undefined;
+  }
+  return e.value;
+}
+
+function setCachedRecipeLdRating(url, value) {
+  const key = normalizeRecipeRatingCacheUrl(url);
+  if (recipeRatingLdCache.size >= RECIPE_RATING_LD_CACHE_MAX_ENTRIES) {
+    const drop = recipeRatingLdCache.keys().next().value;
+    if (drop) recipeRatingLdCache.delete(drop);
+  }
+  recipeRatingLdCache.set(key, { at: Date.now(), value });
+}
+
+function bumpRatingEnrichHostStat(host, field) {
+  if (!host) return;
+  let o = ratingEnrichHostStats.get(host);
+  if (!o) {
+    o = { cacheHit: 0, fetch: 0, schemaHit: 0, schemaMiss: 0, httpErr: 0 };
+    ratingEnrichHostStats.set(host, o);
+  }
+  o[field] = (o[field] || 0) + 1;
+}
+
 /** URLs waar JSON-LD Recipe-snippets zelden zinvol zijn (niet-HTML / geen schema). */
 function urlEligibleForChannelSearchRatingFetch(url) {
   const u = String(url || "").trim().toLowerCase();
@@ -9841,13 +9897,44 @@ async function enrichChannelSearchResultsWithRatings(results) {
 
   const ratingByUrl = new Map();
   let next = 0;
+  const batch = {
+    queued: candidates.length,
+    cacheHitsWithRating: 0,
+    fetches: 0,
+    jsonLdRatingsNew: 0,
+    jsonLdMiss: 0,
+    httpErr: 0,
+  };
+
   async function worker() {
     for (;;) {
       const i = next++;
       if (i >= candidates.length) return;
       const row = candidates[i];
+      const uKey = normalizeRecipeRatingCacheUrl(row.url);
+
+      let host = "";
       try {
-        const resp = await fetch(row.url, {
+        host = new URL(uKey).hostname;
+      } catch {
+        /* ignore */
+      }
+
+      const cached = getCachedRecipeLdRating(uKey);
+      if (cached !== undefined) {
+        bumpRatingEnrichHostStat(host, "cacheHit");
+        if (cached && typeof cached === "object") {
+          batch.cacheHitsWithRating++;
+          bumpRatingEnrichHostStat(host, "schemaHit");
+          ratingByUrl.set(String(row.url).trim(), cached);
+        }
+        continue;
+      }
+
+      try {
+        batch.fetches++;
+        bumpRatingEnrichHostStat(host, "fetch");
+        const resp = await fetch(uKey, {
           headers: {
             ...FETCH_HEADERS,
             Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -9856,18 +9943,44 @@ async function enrichChannelSearchResultsWithRatings(results) {
           signal: AbortSignal.timeout(TIMEOUT_MS),
           redirect: "follow",
         });
-        if (!resp.ok) continue;
+        if (!resp.ok) {
+          batch.httpErr++;
+          bumpRatingEnrichHostStat(host, "httpErr");
+          continue;
+        }
         const html = await resp.text();
         const rt = extractAggregateRatingFromRecipeHtml(html);
-        if (rt) ratingByUrl.set(String(row.url).trim(), rt);
+        if (rt) {
+          batch.jsonLdRatingsNew++;
+          bumpRatingEnrichHostStat(host, "schemaHit");
+          ratingByUrl.set(String(row.url).trim(), rt);
+          setCachedRecipeLdRating(uKey, rt);
+        } else {
+          batch.jsonLdMiss++;
+          bumpRatingEnrichHostStat(host, "schemaMiss");
+        }
       } catch {
-        /* ignore */
+        batch.httpErr++;
+        bumpRatingEnrichHostStat(host, "httpErr");
       }
     }
   }
   await Promise.all(
     Array.from({ length: Math.min(CONCURRENCY, candidates.length) }, () => worker())
   );
+
+  if (candidates.length > 0) {
+    batch.urlsWithRatingMerged = ratingByUrl.size;
+    const totals = [...ratingEnrichHostStats.entries()]
+      .map(([h, v]) => ({ h, n: (v.fetch || 0) + (v.cacheHit || 0), v }))
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 12);
+    console.log(
+      `[rating-enrich] batch ${JSON.stringify(batch)} cumulative_by_host=${JSON.stringify(
+        Object.fromEntries(totals.map(({ h, v }) => [h, v]))
+      )}`
+    );
+  }
 
   if (!ratingByUrl.size) return results;
   return results.map((r) => {
@@ -10526,7 +10639,7 @@ async function searchJumboRecipes(query, count = 4, opts = {}) {
       channelId,
       description,
       time,
-      ...(ldRating ? { ratingValue: ldRating.ratingValue, ratingCount: ldRating.ratingCount } : {}),
+      ...(ldRating || {}),
     };
   }
 
