@@ -4574,41 +4574,36 @@ function renderChannelSettings() {
   const container = document.getElementById("channelSettingsList");
   if (!container) return;
 
-  const seedRows = getSeedChannelsSortedByName()
+  // Merge seed + global admin-managed channels, sorted A-Z
+  const NEW_CHANNEL_DAYS = 14;
+  const nowMs = Date.now();
+  const seedEntries = getSeedChannelsSortedByName()
     .filter((ch) => isSeedChannelEnabled(ch.id))
-    .map((ch) => {
+    .map((ch) => ({ ...ch, _kind: "seed" }));
+  const managedEntries = state.customChannels
+    .filter((ch) => Boolean(ch.managedByAdmin) && isCustomChannelEnabled(ch.id))
+    .map((ch) => ({ ...ch, _kind: "managed" }));
+  const allPlatelyChannels = [...seedEntries, ...managedEntries]
+    .sort((a, b) => a.name.localeCompare(b.name, "nl", { sensitivity: "base" }));
+
+  const seedRows = allPlatelyChannels.map((ch) => {
     const followed = state.followedChannelIds.includes(ch.id);
-    const enabled = isSeedChannelEnabled(ch.id);
     const faviconUrl = getSourceIconUrl(ch.url);
-    const disabledBadge = "";
-    const toggleDisabled = "";
+    const isNew = ch._kind === "managed" && ch.createdAt
+      ? (nowMs - new Date(ch.createdAt).getTime()) < NEW_CHANNEL_DAYS * 86400_000
+      : false;
+    const newBadge = isNew ? `<span class="channel-new-badge">Nieuw</span>` : "";
     return `
       <label class="channel-toggle-row" data-channel-id="${escapeHtml(ch.id)}">
         <span class="channel-toggle-avatar">
           ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
         </span>
-        <span class="channel-toggle-name">${escapeHtml(ch.name)}${disabledBadge}</span>
-        <span class="toggle-switch ${followed ? "toggle-switch--on" : ""} ${toggleDisabled}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}" ${toggleDisabled}></span>
+        <span class="channel-toggle-name">${escapeHtml(ch.name)}${newBadge}</span>
+        <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>
       </label>`;
   }).join("");
 
-  // Global admin-managed channels → render with Plately channels (not in "MIJN KANALEN")
-  const managedChannels = state.customChannels.filter((ch) => Boolean(ch.managedByAdmin));
-  const managedRows = managedChannels
-    .filter((ch) => isCustomChannelEnabled(ch.id))
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map((ch) => {
-      const followed = state.followedChannelIds.includes(ch.id);
-      const faviconUrl = getSourceIconUrl(ch.url);
-      return `
-        <label class="channel-toggle-row" data-channel-id="${escapeHtml(ch.id)}">
-          <span class="channel-toggle-avatar">
-            ${faviconUrl ? `<img class="channel-toggle-avatar__favicon" src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><span style="display:none;font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>` : `<span style="font-weight:800;font-size:.65rem">${escapeHtml(ch.initials)}</span>`}
-          </span>
-          <span class="channel-toggle-name">${escapeHtml(ch.name)}</span>
-          <span class="toggle-switch ${followed ? "toggle-switch--on" : ""}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${escapeHtml(ch.id)}"></span>
-        </label>`;
-    }).join("");
+  const managedRows = ""; // merged into seedRows above
 
   // Separate custom channels section — only personal (non-managed) channels
   let customHTML = "";
