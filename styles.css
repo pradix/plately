@@ -6266,9 +6266,53 @@ button.ingredient-item {
 
 .auth-screen__social-buttons {
   display: flex;
-  justify-content: center;
-  gap: 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
   margin-top: 8px;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+}
+
+.auth-screen__ig-follow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: var(--shadow-1);
+  transition: transform 0.2s, box-shadow 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.auth-screen__ig-follow:hover {
+  background: var(--color-surface);
+  border-color: color-mix(in srgb, #e4405f 35%, var(--color-border));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+}
+
+.auth-screen__ig-follow:active {
+  transform: scale(0.98);
+}
+
+.auth-screen__ig-follow__icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  color: #e4405f;
+  fill: #e4405f;
 }
 
 .auth-screen__social-buttons--single {
@@ -6315,20 +6359,6 @@ button.ingredient-item {
 
 .auth-screen__social-btn--tiktok:hover {
   background: var(--color-surface-3);
-}
-
-.auth-screen__social-btn--instagram {
-  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
-}
-
-.auth-screen__social-btn--instagram:hover {
-  background: var(--color-accent-soft);
-  border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border));
-}
-
-.auth-screen__social-btn--instagram svg {
-  color: #e4405f;
-  fill: #e4405f;
 }
 
 /* ══ Onboarding screen ════════════════════════════════════════════════════════ */
