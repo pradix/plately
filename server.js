@@ -6635,7 +6635,7 @@ async function fetchAhRecipeThumbnail(recipeUrl) {
 }
 
 /**
- * Verwijdert vaste Allerhande UI-/marketingregels (Box-label, review-CTA) uit importtekst.
+ * Verwijdert vaste Allerhande UI-/marketingregels (Box-label, review-CTA, artikel-CTA's) uit importtekst.
  */
 function cleanAllerhandeUiFluff(raw) {
   let s = String(raw ?? "").replace(/\r\n/g, "\n");
@@ -6645,6 +6645,13 @@ function cleanAllerhandeUiFluff(raw) {
     let t = String(text ?? "");
     t = t.replace(/\bDit\s+is\s+een\s+Allerhande\s+Box(?:\s*[-–]?\s*)?recept\.?\b/gi, "");
     t = t.replace(/\bWat\s+vond\s+je\s+van\s+dit\s+recept\??\b/gi, "");
+    // "algemeen Meer weten over [kooktechnieken](https://www.ah.nl/allerhande/...)?"
+    t = t.replace(
+      /\balgemeen\s+meer\s+weten\s+over\s*\[[^\]]*]\([^)]*(?:ah\.nl|albert\s*heijn)[^)]*\)\??/gi,
+      ""
+    );
+    t = t.replace(/\bmeer\s+weten\s+over\s*\[[^\]]*]\([^)]*(?:ah\.nl|allerhande)[^)]*\)\??/gi, "");
+    t = t.replace(/\bmeer\s+weten\s+over\s+https?:\/\/[^\s)\]]+(?:allerhande|ah\.nl)[^\s)]*/gi, "");
     t = t.replace(/\s{2,}/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
     return t;
   };
@@ -6654,9 +6661,12 @@ function cleanAllerhandeUiFluff(raw) {
   const isJunkLine = (line) => {
     const x = String(line || "").trim();
     if (!x) return false;
+    if (/^\?\s*$/.test(x)) return true;
     if (/^dit\s+is\s+een\s+allerhande\s+box/i.test(x)) return true;
     if (/^wat\s+vond\s+je\s+van\s+dit\s+recept/i.test(x)) return true;
     if (/^allerhande\s+box(?:\s*[-–]?\s*)?recept\.?$/i.test(x)) return true;
+    if (/^algemeen\s+/i.test(x) && /meer\s+weten\s+over/i.test(x)) return true;
+    if (/meer\s+weten\s+over\s*\[/i.test(x) && /(?:ah\.nl|allerhande)/i.test(x)) return true;
     return false;
   };
 

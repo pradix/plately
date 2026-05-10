@@ -12472,11 +12472,14 @@ body {
   50% { box-shadow: 0 0 0 6px rgba(246, 182, 157, 0); }
 }
 
-/* ─── Falling ingredient drops raining into the basket ─── */
+/* ─── Falling ingredient drops: smalle kolom boven mandje, rustige val ─── */
 .import-splash__drops {
   position: absolute;
-  inset: 0;
-  /* Boven de card — anders verdwijnt de regen achter de (bijna) fullscreen import-kaart */
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: min(300px, 78vw);
+  transform: translateX(-50%);
   z-index: 6;
   pointer-events: none;
   overflow: hidden;
@@ -12484,18 +12487,21 @@ body {
 
 .isp-drop {
   position: absolute;
-  top: -72px;
+  top: -64px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.12);
-  padding: 9px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 10px 26px rgba(36, 60, 43, 0.16),
+    0 3px 10px rgba(0, 0, 0, 0.1);
+  padding: 8px;
   animation-name: ispFall;
-  animation-timing-function: cubic-bezier(0.28, 0, 0.5, 1);
+  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
   animation-iteration-count: infinite;
+  will-change: transform, opacity;
 }
 .isp-drop img {
   width: 100%;
@@ -12504,38 +12510,36 @@ body {
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.18));
 }
 
-/* 20 drops — spread across full width, bigger sizes, varied speed & stagger */
-.isp-drop--1  { left:  3%; width:58px; height:58px; animation-duration:1.3s;  animation-delay:0.0s;  }
-.isp-drop--2  { left:  9%; width:50px; height:50px; animation-duration:1.05s; animation-delay:0.55s; }
-.isp-drop--3  { left: 16%; width:64px; height:64px; animation-duration:1.5s;  animation-delay:0.2s;  }
-.isp-drop--4  { left: 23%; width:48px; height:48px; animation-duration:1.0s;  animation-delay:1.0s;  }
-.isp-drop--5  { left: 30%; width:56px; height:56px; animation-duration:1.2s;  animation-delay:0.4s;  }
-.isp-drop--6  { left: 37%; width:66px; height:66px; animation-duration:1.4s;  animation-delay:1.4s;  }
-.isp-drop--7  { left: 43%; width:52px; height:52px; animation-duration:0.95s; animation-delay:0.8s;  }
-.isp-drop--8  { left: 50%; width:60px; height:60px; animation-duration:1.25s; animation-delay:0.1s;  }
-.isp-drop--9  { left: 57%; width:46px; height:46px; animation-duration:1.1s;  animation-delay:1.7s;  }
-.isp-drop--10 { left: 63%; width:58px; height:58px; animation-duration:1.2s;  animation-delay:0.5s;  }
-.isp-drop--11 { left: 70%; width:64px; height:64px; animation-duration:1.45s; animation-delay:1.2s;  }
-.isp-drop--12 { left: 77%; width:50px; height:50px; animation-duration:1.0s;  animation-delay:0.3s;  }
-.isp-drop--13 { left: 83%; width:54px; height:54px; animation-duration:1.3s;  animation-delay:2.0s;  }
-.isp-drop--14 { left: 89%; width:66px; height:66px; animation-duration:1.1s;  animation-delay:0.7s;  }
-.isp-drop--15 { left: 95%; width:48px; height:48px; animation-duration:1.4s;  animation-delay:1.5s;  }
-.isp-drop--16 { left: 13%; width:52px; height:52px; animation-duration:1.2s;  animation-delay:2.3s;  }
-.isp-drop--17 { left: 47%; width:58px; height:58px; animation-duration:1.0s;  animation-delay:1.9s;  }
-.isp-drop--18 { left: 60%; width:50px; height:50px; animation-duration:1.6s;  animation-delay:0.9s;  }
-.isp-drop--19 { left: 26%; width:62px; height:62px; animation-duration:1.3s;  animation-delay:2.6s;  }
-.isp-drop--20 { left: 74%; width:52px; height:52px; animation-duration:1.1s;  animation-delay:1.1s;  }
-.isp-drop--21 { left: 39%; width:55px; height:55px; animation-duration:1.18s; animation-delay:1.45s; }
-.isp-drop--22 { left: 52%; width:53px; height:53px; animation-duration:1.28s; animation-delay:0.72s; }
+/* 8 drops — gecentreerd boven mandje, langzamere volgorde */
+.isp-drop--1 { left:  8%; width: 52px; height: 52px; animation-duration: 2.35s; animation-delay: 0s; }
+.isp-drop--2 { left: 28%; width: 46px; height: 46px; animation-duration: 2.1s;  animation-delay: 0.45s; }
+.isp-drop--3 { left: 48%; width: 56px; height: 56px; animation-duration: 2.45s; animation-delay: 0.2s; }
+.isp-drop--4 { left: 68%; width: 48px; height: 48px; animation-duration: 2.05s; animation-delay: 0.9s; }
+.isp-drop--5 { left: 18%; width: 50px; height: 50px; animation-duration: 2.25s; animation-delay: 1.15s; }
+.isp-drop--6 { left: 82%; width: 52px; height: 52px; animation-duration: 2.15s; animation-delay: 0.65s; }
+.isp-drop--7 { left: 38%; width: 44px; height: 44px; animation-duration: 2.5s;  animation-delay: 1.4s; }
+.isp-drop--8 { left: 58%; width: 50px; height: 50px; animation-duration: 2.2s;  animation-delay: 1.75s; }
 
 @keyframes ispFall {
-  0%   { transform: translateY(0)    scale(0.75) rotate(-8deg); opacity: 0;   }
-  6%   { transform: translateY(3vh)  scale(1.05) rotate(4deg);  opacity: 1;   }
-  20%  { transform: translateY(14vh) scale(1)    rotate(-2deg); opacity: 1;   }
-  60%  { transform: translateY(48vh) scale(1)    rotate(3deg);  opacity: 1;   }
-  76%  { transform: translateY(52vh) scale(0.6)  rotate(-4deg); opacity: 0.5; }
-  86%  { transform: translateY(54vh) scale(0.2)  rotate(0deg);  opacity: 0;   }
-  100% { transform: translateY(54vh) scale(0.2)  rotate(0deg);  opacity: 0;   }
+  0% {
+    transform: translateY(0) scale(0.88) rotate(-3deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(min(40vh, 340px)) scale(1) rotate(1deg);
+    opacity: 1;
+  }
+  86% {
+    transform: translateY(min(44vh, 380px)) scale(0.42) rotate(0deg);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(min(45vh, 400px)) scale(0.18) rotate(0deg);
+    opacity: 0;
+  }
 }
 
 /* ─── Extra animation: rotating rings, orbiting chips, dropping items, sparkles ─── */
@@ -12550,18 +12554,18 @@ body {
 }
 .import-splash__ring--1 {
   border: 2px dashed var(--color-brand-soft);
-  animation: importSplashRingSpin 14s linear infinite;
+  animation: importSplashRingSpin 26s linear infinite;
 }
 .import-splash__ring--2 {
   inset: 12%;
   border: 1px dashed var(--color-accent);
-  opacity: 0.5;
-  animation: importSplashRingSpin 10s linear infinite reverse;
+  opacity: 0.45;
+  animation: importSplashRingSpin 20s linear infinite reverse;
 }
 .import-splash__ring--3 {
   inset: -8%;
-  border: 1px dotted rgba(246,182,157,0.3);
-  animation: importSplashRingSpin 20s linear infinite;
+  border: 1px dotted rgba(246,182,157,0.26);
+  animation: importSplashRingSpin 32s linear infinite;
 }
 
 /* Orbiting chips (6) */
@@ -12583,14 +12587,13 @@ body {
   transform-origin: 50% 92px;
 }
 .import-splash__chip img { width: 20px; height: 20px; object-fit: contain; }
-.import-splash__chip--1 { animation: importSplashOrbit 7s linear infinite 0s,    importSplashChipIn 360ms ease-out 0ms   both; }
-.import-splash__chip--2 { animation: importSplashOrbit 7s linear infinite -1.17s, importSplashChipIn 360ms ease-out 60ms  both; }
-.import-splash__chip--3 { animation: importSplashOrbit 7s linear infinite -2.33s, importSplashChipIn 360ms ease-out 120ms both; }
-.import-splash__chip--4 { animation: importSplashOrbit 7s linear infinite -3.5s,  importSplashChipIn 360ms ease-out 180ms both; }
-.import-splash__chip--5 { animation: importSplashOrbit 7s linear infinite -4.67s, importSplashChipIn 360ms ease-out 240ms both; }
-.import-splash__chip--6 { animation: importSplashOrbit 7s linear infinite -5.83s, importSplashChipIn 360ms ease-out 300ms both; }
+/* Snellere baan: 4s per ronde; 4 planeten */
+.import-splash__chip--1 { animation: importSplashOrbit 4s linear infinite 0s, importSplashChipIn 420ms ease-out 0ms both; }
+.import-splash__chip--2 { animation: importSplashOrbit 4s linear infinite -1s, importSplashChipIn 420ms ease-out 80ms both; }
+.import-splash__chip--3 { animation: importSplashOrbit 4s linear infinite -2s, importSplashChipIn 420ms ease-out 160ms both; }
+.import-splash__chip--4 { animation: importSplashOrbit 4s linear infinite -3s, importSplashChipIn 420ms ease-out 240ms both; }
 
-/* Items "vallen" in het mandje — 8 drops, gespreide timing */
+/* Items vallen het mandje in — 6 stappen, rustiger ritme */
 .import-splash__drop {
   position: absolute;
   top: -8px;
@@ -12607,19 +12610,20 @@ body {
   z-index: 4;
   opacity: 0;
 }
-.import-splash__drop img { width: 18px; height: 18px; object-fit: contain; }
-.import-splash__drop--1 { animation: importSplashDrop 3.2s cubic-bezier(.55,.06,.68,.19) infinite 0.0s; }
-.import-splash__drop--2 { animation: importSplashDrop 3.2s cubic-bezier(.55,.06,.68,.19) infinite 0.4s; }
-.import-splash__drop--3 { animation: importSplashDrop 3.2s cubic-bezier(.55,.06,.68,.19) infinite 0.8s; }
-.import-splash__drop--4 { animation: importSplashDrop 3.2s cubic-bezier(.55,.06,.68,.19) infinite 1.2s; }
-.import-splash__drop--5 { animation: importSplashDrop 3.2s cubic-bezier(.55,.06,.68,.19) infinite 1.6s; }
-.import-splash__drop--6 { animation: importSplashDrop 3.2s cubic-bezier(.55,.06,.68,.19) infinite 2.0s; }
-.import-splash__drop--7 { animation: importSplashDrop 3.2s cubic-bezier(.55,.06,.68,.19) infinite 2.4s; }
-.import-splash__drop--8 { animation: importSplashDrop 3.2s cubic-bezier(.55,.06,.68,.19) infinite 2.8s; }
+.import-splash__drop img { width: 20px; height: 20px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(36, 60, 43, 0.15)); }
+.import-splash__drop--1 { animation: importSplashDrop 3.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite 0s; }
+.import-splash__drop--2 { animation: importSplashDrop 3.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite 0.55s; }
+.import-splash__drop--3 { animation: importSplashDrop 3.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite 1.1s; }
+.import-splash__drop--4 { animation: importSplashDrop 3.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite 1.65s; }
+.import-splash__drop--5 { animation: importSplashDrop 3.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite 2.2s; }
+.import-splash__drop--6 { animation: importSplashDrop 3.8s cubic-bezier(0.22, 0.61, 0.36, 1) infinite 2.75s; }
 
-/* Mandje wiebelt licht wanneer een item erin valt */
+/* Mandje: zachte wiebel + glow op “catch” (sync ~3,8s) */
 .import-splash__basket {
-  animation: importSplashBob 3.0s ease-in-out infinite, importSplashCatch 3.6s ease-in-out infinite 0.7s !important;
+  animation:
+    importSplashBob 3.4s ease-in-out infinite,
+    importSplashCatch 3.8s ease-in-out infinite 0.55s,
+    importBasketGlowPulse 3.8s ease-in-out infinite 0.2s !important;
 }
 
 .import-splash__sparkle {
@@ -12632,11 +12636,9 @@ body {
   z-index: 2;
   opacity: 0;
 }
-.import-splash__sparkle--1 { top: 22%; right: 18%;  animation: importSplashTwinkle 2.6s ease-in-out infinite 0.2s; }
-.import-splash__sparkle--2 { bottom: 26%; left: 16%; background: var(--color-brand); box-shadow: 0 0 10px var(--color-brand); animation: importSplashTwinkle 2.6s ease-in-out infinite 1.1s; }
-.import-splash__sparkle--3 { top: 32%; left: 8%;    animation: importSplashTwinkle 2.6s ease-in-out infinite 1.7s; }
-.import-splash__sparkle--4 { top: 14%; left: 38%;   animation: importSplashTwinkle 2.2s ease-in-out infinite 0.6s; background: var(--color-brand); box-shadow: 0 0 8px var(--color-brand); }
-.import-splash__sparkle--5 { bottom: 18%; right: 22%; animation: importSplashTwinkle 2.2s ease-in-out infinite 1.4s; width: 4px; height: 4px; }
+.import-splash__sparkle--1 { top: 22%; right: 18%;  animation: importSplashTwinkle 3.4s ease-in-out infinite 0.2s; }
+.import-splash__sparkle--2 { bottom: 26%; left: 16%; background: var(--color-brand); box-shadow: 0 0 10px var(--color-brand); animation: importSplashTwinkle 3.4s ease-in-out infinite 1.05s; }
+.import-splash__sparkle--3 { top: 32%; left: 8%;    animation: importSplashTwinkle 3.4s ease-in-out infinite 1.9s; }
 
 /* Phase row slide-in als state verandert */
 .import-splash__phase[data-state="active"] {
@@ -12671,14 +12673,13 @@ body {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
-/* Item valt vanaf de bovenkant in het mandje, schaalt licht op vanwege diepte,
-   en verdwijnt bij landing — herhaalt na pauze zodat het eindeloos lijkt. */
+/* In het mandje verdwijnen: duidelijke “plof” rond basket-rand */
 @keyframes importSplashDrop {
-  0%   { top: -8px;  opacity: 0; transform: scale(0.6) rotate(-12deg); }
-  10%  { opacity: 1; }
-  55%  { top: 56px;  opacity: 1; transform: scale(1) rotate(20deg); }
-  62%  { top: 60px;  opacity: 0; transform: scale(0.8) rotate(28deg); }
-  100% { top: 60px;  opacity: 0; transform: scale(0.8) rotate(28deg); }
+  0%   { top: -10px; opacity: 0; transform: scale(0.62) rotate(-8deg); }
+  12%  { opacity: 1; }
+  52%  { top: 52px; opacity: 1; transform: scale(1.04) rotate(6deg); }
+  62%  { top: 62px; opacity: 0.35; transform: scale(0.55) rotate(0deg); }
+  100% { top: 66px; opacity: 0; transform: scale(0.35) rotate(0deg); }
 }
 /* Mandje veert licht op bij elke item-landing */
 @keyframes importSplashCatch {
@@ -12686,6 +12687,19 @@ body {
   10%      { transform: translateY(2px) scale(1.04, 0.96); }
   14%      { transform: translateY(0) scale(1); }
   100%     { transform: translateY(0) scale(1); }
+}
+@keyframes importBasketGlowPulse {
+  0%, 68%, 100% {
+    box-shadow:
+      var(--shadow-3, 0 8px 24px rgba(0, 0, 0, 0.08)),
+      inset 0 0 0 rgba(120, 147, 111, 0);
+  }
+  76%, 90% {
+    box-shadow:
+      0 0 0 10px rgba(120, 147, 111, 0.12),
+      0 14px 36px rgba(36, 60, 43, 0.14),
+      0 0 32px rgba(246, 182, 157, 0.22);
+  }
 }
 @keyframes importSplashReadyPop {
   0%   { transform: translateY(0) scale(1); }
@@ -13435,17 +13449,22 @@ body {
   isolation: isolate;
 }
 
+/* Orbit-radius op grotere stage (360px), snellere baan blijft gecentreerd */
+.import-splash__stage .import-splash__chip {
+  transform-origin: 50% min(168px, 47%);
+}
+
 .import-splash__halo {
   inset: 17%;
-  background: radial-gradient(circle, rgba(255, 242, 232, 0.88), rgba(255, 242, 232, 0) 72%);
-  animation: importMagicGlow 4.5s ease-in-out infinite;
+  background: radial-gradient(circle, rgba(255, 242, 232, 0.82), rgba(255, 242, 232, 0) 72%);
+  animation: importMagicGlow 6.2s ease-in-out infinite;
 }
 
 .import-splash__halo--2 {
   inset: 7%;
-  background: radial-gradient(circle, rgba(220, 232, 220, 0.6), rgba(220, 232, 220, 0) 72%);
-  opacity: 0.68;
-  animation: importMagicGlow 5.4s ease-in-out infinite reverse;
+  background: radial-gradient(circle, rgba(220, 232, 220, 0.55), rgba(220, 232, 220, 0) 72%);
+  opacity: 0.62;
+  animation: importMagicGlow 7.4s ease-in-out infinite reverse;
 }
 
 .import-splash__ring {
@@ -13456,30 +13475,31 @@ body {
 
 .import-splash__ring--1 {
   inset: 4%;
-  border: 2px dashed rgba(120, 147, 111, 0.28);
-  animation: importMagicRingSpin 34s linear infinite;
+  border: 2px dashed rgba(120, 147, 111, 0.24);
+  animation: importMagicRingSpin 48s linear infinite;
 }
 
 .import-splash__ring--2 {
   inset: 12%;
-  border: 2px dashed rgba(246, 182, 157, 0.32);
-  opacity: 0.9;
-  animation: importMagicRingSpin 30s linear infinite reverse;
+  border: 2px dashed rgba(246, 182, 157, 0.28);
+  opacity: 0.82;
+  animation: importMagicRingSpin 40s linear infinite reverse;
 }
 
 .import-splash__basket {
   width: 148px;
   height: 148px;
   border-radius: 36px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(120, 147, 111, 0.18);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(120, 147, 111, 0.2);
   box-shadow:
     0 24px 56px rgba(36, 60, 43, 0.14),
     0 8px 24px rgba(36, 60, 43, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.95);
   animation:
-    importMagicCenterFloat 3.6s ease-in-out infinite,
-    importMagicBasketCatch 5.2s ease-in-out infinite !important;
+    importMagicCenterFloat 4s ease-in-out infinite,
+    importMagicBasketCatch 3.85s ease-in-out infinite,
+    importMagicBasketGlow 3.85s ease-in-out infinite 0.15s !important;
 }
 
 .import-splash__basket::after {
@@ -13731,14 +13751,14 @@ body {
   top: 35%;
   left: 16%;
   color: #f2a986;
-  animation: importMagicTwinkle 2.8s ease-in-out infinite;
+  animation: importMagicTwinkle 3.6s ease-in-out infinite;
 }
 
 .import-splash__sparkle--2 {
   bottom: 25%;
   left: 22%;
   color: #78936f;
-  animation: importMagicTwinkle 2.8s ease-in-out infinite 0.65s;
+  animation: importMagicTwinkle 3.6s ease-in-out infinite 0.75s;
 }
 
 .import-splash__sparkle--3 {
@@ -13746,7 +13766,7 @@ body {
   right: 22%;
   color: #78936f;
   transform: scale(0.72);
-  animation: importMagicTwinkle 2.8s ease-in-out infinite 1.2s;
+  animation: importMagicTwinkle 3.6s ease-in-out infinite 1.5s;
 }
 
 .import-splash__bar {
@@ -13830,6 +13850,22 @@ body {
   }
   15%, 35%, 55%, 75%, 95% {
     filter: drop-shadow(0 10px 18px rgba(246, 182, 157, 0.2));
+  }
+}
+
+@keyframes importMagicBasketGlow {
+  0%, 66%, 100% {
+    box-shadow:
+      0 24px 56px rgba(36, 60, 43, 0.14),
+      0 8px 24px rgba(36, 60, 43, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  }
+  74%, 88% {
+    box-shadow:
+      0 0 0 12px rgba(120, 147, 111, 0.11),
+      0 28px 64px rgba(36, 60, 43, 0.16),
+      0 0 36px rgba(246, 182, 157, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.98);
   }
 }
 
