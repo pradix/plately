@@ -473,8 +473,62 @@ if (getNavigationType() === "reload") {
   try { sessionStorage.removeItem(HOME_RECIPE_LIMIT_SESSION_KEY); } catch {}
 }
 
+function normalizeHttpOrigin(origin) {
+  return String(origin || "").trim().replace(/\/+$/, "").toLowerCase();
+}
+
+/**
+ * Basis-URL voor /api/*. Leeg string = hetzelfde als de pagina-origin.
+ * Voor SPA op statisch hosting kun je dit zetten via <meta name="plately-api-base" content="https://..." />.
+ */
+function resolvePlatelyApiBase() {
+  try {
+    if (window.location.protocol === "file:") {
+      return "http://localhost:3000";
+    }
+    const meta = document.querySelector('meta[name="plately-api-base"]');
+    const raw = String(meta?.getAttribute("content") ?? "").trim();
+    if (raw && /^https?:\/\//i.test(raw)) {
+      return raw.replace(/\/+$/, "");
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Origin voor gekopieerde/deelde “/share/token”–links (GET /share moet daar draaien).
+ * Optioneel overschrijven met <meta name="plately-share-link-origin" content="https://..." /> (bij proxy op eigen domein).
+ * Anders: zelfde als de pagina, of — als een aparte apiBase wordt gebruikt — zelfde origin als apiBase.
+ */
+function resolvePlatelyShareLinkOrigin(apiBase) {
+  try {
+    const meta = document.querySelector('meta[name="plately-share-link-origin"]');
+    const raw = String(meta?.getAttribute("content") ?? "").trim();
+    if (raw && /^https?:\/\//i.test(raw)) {
+      return raw.replace(/\/+$/, "");
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    const pageOrigin = window.location.origin || "";
+    const api = String(apiBase || "").trim();
+    if (api && pageOrigin && normalizeHttpOrigin(api) !== normalizeHttpOrigin(pageOrigin)) {
+      return api;
+    }
+    return pageOrigin;
+  } catch {
+    return "";
+  }
+}
+
+const __resolvedApiBase = resolvePlatelyApiBase();
+
 const state = {
-  apiBase: window.location.protocol === "file:" ? "http://localhost:3000" : "",
+  apiBase: __resolvedApiBase,
+  shareLinkOrigin: resolvePlatelyShareLinkOrigin(__resolvedApiBase),
   selectedPlatform: "tiktok",
   view: "home",
   recipes: [],
@@ -7919,6 +7973,7 @@ function buildPublicRecipeShareUrl(recipe) {
 
 async function buildShortShareUrl(recipe) {
   // Prefer a real short link (server stores payload) when the backend is available.
+  const shareOrigin = state.shareLinkOrigin || window.location.origin;
   try {
     const payload = {
       id: recipe?.id || "",
@@ -7934,16 +7989,16 @@ async function buildShortShareUrl(recipe) {
     };
     const resp = await fetch(`${state.apiBase}/api/share/create`, {
       method: "POST",
+      mode: "cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ payload }),
     });
     const data = await resp.json().catch(() => null);
     if (resp.ok && data?.ok && data?.url) {
-      // Always return a short URL on the app origin (not the API origin).
-      return new URL(String(data.url), window.location.origin).toString();
+      return new URL(String(data.url), shareOrigin).toString();
     }
     if (resp.ok && data?.ok && data?.token) {
-      return new URL(`/share/${encodeURIComponent(String(data.token))}`, window.location.origin).toString();
+      return new URL(`/share/${encodeURIComponent(String(data.token))}`, shareOrigin).toString();
     }
   } catch {
     // fall back below
