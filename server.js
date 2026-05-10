@@ -9469,7 +9469,7 @@ function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam 
   }
   const custom = String(customChannelsParam || "").trim();
   // Bump when API-resultaatscherm wijzigt (bijv. ratingvelden) — oude cache mist die velden.
-  const schema = "cs-v4";
+  const schema = "cs-v5";
   return `${q}||${channels}||${custom}||${schema}`;
 }
 
@@ -9797,35 +9797,80 @@ function lookupAhSearchRating(ratingMap, url, recipeId) {
   return null;
 }
 
-/** Als zoek-HTML geen ratings oplevert: haal ze van de receptpagina (JSON-LD), parallel. */
-async function attachAhRatingsFromRecipePages(results) {
+/** URLs waar JSON-LD Recipe-snippets zelden zinvol zijn (niet-HTML / geen schema). */
+function urlEligibleForChannelSearchRatingFetch(url) {
+  const u = String(url || "").trim().toLowerCase();
+  if (!/^https?:\/\//.test(u)) return false;
+  if (
+    /tiktok\.com|instagram\.com|facebook\.com|pinterest\.com\/pin|youtu\.be|youtube\.com\/(watch|shorts|embed)/i.test(
+      u
+    )
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Voor alle kanalen: ontbrekende beoordeling aanvullen via schema.org op de receptpagina.
+ * Limiet + parallel om zoektijd te cappen.
+ */
+async function enrichChannelSearchResultsWithRatings(results) {
+  const MAX_URLS = 20;
+  const CONCURRENCY = 6;
+  const TIMEOUT_MS = 5000;
   if (!Array.isArray(results) || !results.length) return results;
-  const filled = new Map();
-  await Promise.all(
-    results.map(async (r) => {
-      if (!r || r.channelId !== "ch-ah" || r.ratingValue != null || !r.url) return;
+
+  const candidates = [];
+  const seen = new Set();
+  for (const r of results) {
+    if (!r || r.ratingValue != null) continue;
+    const u = String(r.url || "").trim();
+    if (!urlEligibleForChannelSearchRatingFetch(u)) continue;
+    if (seen.has(u)) continue;
+    seen.add(u);
+    candidates.push(r);
+    if (candidates.length >= MAX_URLS) break;
+  }
+  if (!candidates.length) return results;
+
+  const ratingByUrl = new Map();
+  let next = 0;
+  async function worker() {
+    for (;;) {
+      const i = next++;
+      if (i >= candidates.length) return;
+      const row = candidates[i];
       try {
-        const resp = await fetch(String(r.url), {
+        const resp = await fetch(row.url, {
           headers: {
             ...FETCH_HEADERS,
             Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "nl-NL,nl;q=0.9",
-            Referer: "https://www.ah.nl/allerhande/",
+            "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
           },
-          signal: AbortSignal.timeout(6000),
+          signal: AbortSignal.timeout(TIMEOUT_MS),
           redirect: "follow",
         });
-        if (!resp.ok) return;
-        const pageHtml = await resp.text();
-        const rt = extractAggregateRatingFromRecipeHtml(pageHtml);
-        if (rt) filled.set(r.url, { ...r, ...rt });
+        if (!resp.ok) continue;
+        const html = await resp.text();
+        const rt = extractAggregateRatingFromRecipeHtml(html);
+        if (rt) ratingByUrl.set(String(row.url).trim(), rt);
       } catch {
         /* ignore */
       }
-    })
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, candidates.length) }, () => worker())
   );
-  if (!filled.size) return results;
-  return results.map((r) => (r && filled.has(r.url) ? filled.get(r.url) : r));
+
+  if (!ratingByUrl.size) return results;
+  return results.map((r) => {
+    if (!r || r.ratingValue != null) return r;
+    const u = String(r.url || "").trim();
+    const rt = ratingByUrl.get(u);
+    return rt ? { ...r, ...rt } : r;
+  });
 }
 
 /** AH zoek-HTML voor datacenters die 403/lege body geven op de eerste fetch. */
@@ -10223,8 +10268,6 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
           }
           return pass;
         });
-
-        results = await attachAhRatingsFromRecipePages(results);
 
         if (results.some((r) => !r.thumbnail)) {
           results = await Promise.all(results.map(async (result) => {
@@ -12061,7 +12104,9 @@ const server = http.createServer(async (request, response) => {
         searchChannelRecipes(query, allowedChannels),
         runCustomChannelExtras(),
       ]);
-      const results = [...(Array.isArray(seedResults) ? seedResults : []), ...customResults];
+      const merged = [...(Array.isArray(seedResults) ? seedResults : []), ...customResults];
+      const results =
+        merged.length > 0 ? await enrichChannelSearchResultsWithRatings(merged) : merged;
 
       // Never cache empty responses: a cold multi-channel race often returns [] once, then succeeds
       // a second later — caching [] poisons the app while admin "test channel" (no cache) works.
@@ -13673,10 +13718,12 @@ const server = http.createServer(async (request, response) => {
           const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
           const results = await scrapeOrRestPublic(eff.baseUrl, name, id, usedUrl, parseWPStandard, Math.min(limit, 15), query);
           const slicedCustom = (results || []).slice(0, limit);
+          const enrichedCustom =
+            slicedCustom.length > 0 ? await enrichChannelSearchResultsWithRatings(slicedCustom) : slicedCustom;
           return sendJson(response, 200, {
             ok: true,
-            results: slicedCustom,
-            searchBackendNote: channelSearchBackendNote(id, slicedCustom.length),
+            results: enrichedCustom,
+            searchBackendNote: channelSearchBackendNote(id, enrichedCustom.length),
             usedQuery: query,
             usedUrl,
             usedSearchUrlTemplate: sanitizeText(eff.searchUrlTemplate || ""),
@@ -13758,10 +13805,12 @@ const server = http.createServer(async (request, response) => {
         }
 
         const slicedSeed = (results || []).slice(0, limit);
+        const enrichedSeed =
+          slicedSeed.length > 0 ? await enrichChannelSearchResultsWithRatings(slicedSeed) : slicedSeed;
         return sendJson(response, 200, {
           ok: true,
-          results: slicedSeed,
-          searchBackendNote: channelSearchBackendNote(channelId, slicedSeed.length),
+          results: enrichedSeed,
+          searchBackendNote: channelSearchBackendNote(channelId, enrichedSeed.length),
           usedQuery: query,
           usedUrl,
           usedSearchUrlTemplate: sanitizeText(eff.searchUrlTemplate || ""),
