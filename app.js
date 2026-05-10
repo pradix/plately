@@ -5409,12 +5409,21 @@ function renderGroceryGroups() {
 
   function renderGroceryItem(item) {
     const displayTitle = escapeHtml(splitCompoundIngredientWords(item.title || ""));
+    const groupKey = String(item.group || "").trim();
+    const groupMeta = groupKey ? getGroupMeta(groupKey) : null;
+    // In multi-recipe view tonen we per item de categorie-badge — bij single-recipe
+    // groeperen we al op categorie dus zou de badge enkel ruis zijn.
+    const showCategoryBadge = multiRecipe && groupMeta && groupMeta.title && groupMeta.title !== "Overig";
+    const categoryBadge = showCategoryBadge
+      ? `<span class="grocery-entry__cat grocery-entry__cat--${escapeHtml(groupKey)}">${escapeHtml(groupMeta.title)}</span>`
+      : "";
     return `
       <div class="grocery-entry-wrapper">
         <button class="grocery-entry ${item.checked ? "is-checked" : ""}" type="button" data-grocery-id="${item.id}">
           <span class="grocery-check"></span>
           <span class="grocery-entry__content">
             <p class="grocery-entry__title">${displayTitle}</p>
+            ${categoryBadge}
             ${multiRecipe && item.recipeTitle && item.recipeTitle.includes(",")
               ? `<p class="grocery-entry__overlap">Gedeeld ingrediënt</p>` : ""}
           </span>

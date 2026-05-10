@@ -8422,6 +8422,26 @@ body {
   line-height: 1.2;
 }
 
+.grocery-entry__cat {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(141, 164, 133, 0.10);
+  color: #5f7f58;
+  border: 1px solid rgba(141, 164, 133, 0.18);
+  line-height: 1.4;
+}
+.grocery-entry__cat--produce { background: rgba(141, 164, 133, 0.12); color: #4d6b46; border-color: rgba(141, 164, 133, 0.24); }
+.grocery-entry__cat--protein { background: rgba(195, 102, 89, 0.10); color: #a14b3f; border-color: rgba(195, 102, 89, 0.20); }
+.grocery-entry__cat--fish    { background: rgba(95, 144, 178, 0.10); color: #426885; border-color: rgba(95, 144, 178, 0.20); }
+.grocery-entry__cat--flavour { background: rgba(220, 159, 96, 0.12); color: #8a5a25; border-color: rgba(220, 159, 96, 0.24); }
+.grocery-entry__cat--pantry  { background: rgba(120, 110, 95, 0.10); color: #6a5e4d; border-color: rgba(120, 110, 95, 0.18); }
+.grocery-entry.is-checked .grocery-entry__cat { opacity: 0.55; }
+
 .grocery-group__progress,
 .group-icon,
 .grocery-entry__meta,
