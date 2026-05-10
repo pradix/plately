@@ -3793,6 +3793,21 @@ function getVisibleRecipes() {
     return recipes;
   }
 
+  // Ingredient search: "met kip en citroen" or "met kip, ui"
+  const ingredientSearchMatch = /^met\s+(.+)/i.exec(query);
+  if (ingredientSearchMatch) {
+    const terms = ingredientSearchMatch[1]
+      .split(/\s+en\s+|,\s*/)
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+    if (terms.length) {
+      return recipes.filter((recipe) => {
+        const ingText = (recipe.ingredients || []).map((i) => (i.name || "").toLowerCase()).join(" ");
+        return terms.every((term) => ingText.includes(term));
+      });
+    }
+  }
+
   return recipes.filter((recipe) => {
     const haystack = [
       recipe.title,
@@ -4722,9 +4737,10 @@ function renderCookbookFilterBar() {
   const active = state.activeCookbookFilter;
   const chips = [
     { id: null, label: "Alles" },
-    { id: "favorites", label: "Favorieten" },
-    { id: "easy", label: "Makkelijk" },
-    { id: "recent", label: "Meest recent" },
+    { id: "favorites", label: "❤️ Favorieten" },
+    { id: "easy", label: "⏱ Snel" },
+    { id: "veggie", label: "🥦 Vegetarisch" },
+    { id: "in-cookbook", label: "📚 In kookboek" },
   ];
 
   bar.innerHTML = chips
@@ -4743,6 +4759,9 @@ function renderCookbookFilterBar() {
 function renderRecipeGrid() {
   const isSearching = !!state.searchQuery.trim();
   const gridSection = document.getElementById("recipeGridSection");
+
+  // Always render filter bar so chips are visible on home screen
+  renderCookbookFilterBar();
 
   // Show grid section when actively searching/filtering OR when displaying recipes
   if (isSearching || state.activeCookbookFilter) {
@@ -4767,6 +4786,15 @@ function renderRecipeGrid() {
     recipes = recipes.filter((recipe) => parseMinutesLabel(recipe.time) <= 30);
   } else if (state.activeCookbookFilter === "recent") {
     recipes = [...recipes].reverse();
+  } else if (state.activeCookbookFilter === "veggie") {
+    const MEAT_TERMS = ["kip","rund","varken","lam","spek","bacon","worst","gehakt","vis","zalm","tonijn","garnalen","ham","biefstuk","kalkoen","eend","konijn","vlees","kipfilet","kippenborst"];
+    recipes = recipes.filter((recipe) => {
+      const ingText = (recipe.ingredients || []).map((i) => (i.name || "").toLowerCase()).join(" ");
+      return !MEAT_TERMS.some((term) => ingText.includes(term));
+    });
+  } else if (state.activeCookbookFilter === "in-cookbook") {
+    const cbIds = new Set(state.cookbooks.flatMap((cb) => cb.recipeIds || []));
+    recipes = recipes.filter((recipe) => cbIds.has(recipe.id));
   }
 
   const totalRecipeCount = recipes.length;
@@ -9753,7 +9781,7 @@ const IMPORT_SPLASH_PHASE_LABELS = [
   "URL analyseren",
   "Tekst lezen",
   "Producten matchen",
-  "Afronden"
+  "Ingrediënten klaarzetten"
 ];
 const IMPORT_SPLASH_MIN_MS = 3500; // splash blijft minimaal 3.5s zichtbaar voor visueel comfort
 const IMPORT_SPLASH_MAX_MS = 30000; // safety: forceer dichtklap als import hangt

@@ -46,7 +46,7 @@
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M10.5 4.75a5.75 5.75 0 1 0 0 11.5a5.75 5.75 0 0 0 0-11.5Zm0 13.5a7.75 7.75 0 1 1 5.01-13.66a7.75 7.75 0 0 1-5.01 13.66Zm10.04 1.38l-4.42-4.42l1.41-1.41l4.42 4.42l-1.41 1.41Z"/>
               </svg>
-              <input id="searchInput" type="search" placeholder="Waar heb je zin in? Zoek pasta, kip of avocado..." title="Zoek naar recepten in je gevolgde kanalen. Typ minimaal 2 letters om te zoeken." />
+              <input id="searchInput" type="search" placeholder="Zoek recept of 'met kip citroen'…" title="Zoek naar recepten in je gevolgde kanalen. Typ minimaal 2 letters om te zoeken. Gebruik 'met kip' om op ingrediënt te zoeken." />
             </div>
             <div class="home-search-chips-head">
               <p class="home-search-chips-label">Suggesties</p>
@@ -1431,10 +1431,12 @@
         <div class="share-card__image-wrap">
           <img class="share-card__image" id="shareCardImage" src="" alt="" />
           <div class="share-card__image-fade"></div>
+          <div class="share-card__overlay-text">
+            <span class="share-card__tag" id="shareCardTag"></span>
+            <h2 class="share-card__title" id="shareCardTitle"></h2>
+          </div>
         </div>
         <div class="share-card__body">
-          <span class="share-card__tag" id="shareCardTag"></span>
-          <h2 class="share-card__title" id="shareCardTitle"></h2>
           <div class="share-card__meta">
             <span class="share-card__time" id="shareCardTime"></span>
             <span class="share-card__servings" id="shareCardServings"></span>
@@ -1442,18 +1444,15 @@
           <ul class="share-card__ingredients" id="shareCardIngredients"></ul>
           <div class="share-card__brand">
             <img src="assets/plately.png" alt="Plately" class="share-card__brand-logo" />
-            <span>plately.app</span>
+            <span class="share-card__brand-url">app.plately.nl</span>
           </div>
         </div>
       </div>
       <div class="share-card__actions">
-        <p class="share-card__hint">📸 Maak een screenshot om dit te delen</p>
+        <p class="share-card__hint">📸 Screenshot voor Instagram of WhatsApp</p>
         <div class="share-card__buttons">
           <button class="secondary-button" type="button" id="shareCardClose">Sluiten</button>
-          <button class="primary-button" type="button" id="shareCardNativeShare">
-            <svg viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;vertical-align:-3px;margin-right:5px"><path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z" fill="currentColor"/></svg>
-            Delen
-          </button>
+          <button class="primary-button" type="button" id="shareCardNativeShare">Delen</button>
         </div>
       </div>
     </div>
@@ -1626,7 +1625,7 @@
           </span>
           <span class="import-splash__orbit-step import-splash__orbit-step--done" data-phase="3">
             <span class="import-splash__orbit-check"></span>
-            <span>Afronden</span>
+            <span>✨ Klaar</span>
           </span>
           <div class="import-splash__basket">
             <img src="assets/grocery.svg" alt="" />
@@ -1637,8 +1636,6 @@
           <span class="import-splash__bar-fill"></span>
         </div>
 
-        <h2 class="import-splash__title">Magie aan het werk...</h2>
-        <p class="import-splash__hint">We lezen het recept en zoeken de lekkerste ingrediënten voor je bij elkaar.</p>
         <p class="import-splash__source" id="importSplashSource"></p>
         <p class="import-splash__status" id="importSplashStatus">URL analyseren</p>
       </div>
