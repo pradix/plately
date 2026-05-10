@@ -2691,6 +2691,49 @@ function splitCompoundIngredientWords(text) {
     .join(" ");
 }
 
+function mapEnglishIngredientPhraseForNlStore(phrase) {
+  const s = sanitizeText(String(phrase || ""))
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!s) return phrase;
+  const exact = new Map([
+    ["cilantro", "koriander"],
+    ["coriander", "koriander"],
+    ["green onions", "bosui"],
+    ["green onion", "bosui"],
+    ["spring onions", "bosui"],
+    ["spring onion", "bosui"],
+    ["scallions", "bosui"],
+    ["scallion", "bosui"],
+    ["arugula", "rucola"],
+    ["eggplants", "aubergine"],
+    ["eggplant", "aubergine"],
+    ["zucchinis", "courgette"],
+    ["zucchini", "courgette"],
+    ["ground beef", "rundgehakt"],
+    ["minced beef", "rundgehakt"],
+    ["ground pork", "varkensgehakt"],
+    ["minced pork", "varkensgehakt"],
+    ["heavy cream", "slagroom"],
+    ["sour cream", "zure room"],
+    ["all-purpose flour", "bloem"],
+    ["confectioners sugar", "poedersuiker"],
+    ["powdered sugar", "poedersuiker"],
+  ]);
+  if (exact.has(s)) return exact.get(s);
+  // Alleen hele begintermen (geen losse substring → vermijdt “lime & cilantro”-verkeerde hits).
+  const prefixPairs = [
+    ["coriander leaves", "koriander"],
+    ["fresh coriander", "koriander"],
+    ["rocket salad", "rucola"],
+  ];
+  for (const [pref, nl] of prefixPairs) {
+    if (s === pref || s.startsWith(`${pref} `)) return nl;
+  }
+  return phrase;
+}
+
 function canonicalizeIngredientForStoreSearch(value) {
   let scrubbed = sanitizeText(value || "");
   const lowScr = scrubbed.toLowerCase();
@@ -2699,30 +2742,33 @@ function canonicalizeIngredientForStoreSearch(value) {
   } else if (/\bkom\s+kom+m?er\b/i.test(lowScr)) {
     scrubbed = scrubbed.replace(/\bkom\s+kom+m?er\b/gi, "komkommer");
   }
-  const raw = splitCompoundIngredientWords(scrubbed);
-  if (!raw) return "";
+  const compound = splitCompoundIngredientWords(scrubbed);
+  if (!compound) return "";
 
-  const singular = singularizeDutchIngredientPhraseForSearch(raw.toLowerCase().trim());
+  // Gebruik dezelfde normalisatie als ingredient-zoek (AH): hoeveelheden eraf, pasta/olie/etc.
+  let core = normalizeIngredientForSearch(compound);
+  core = mapEnglishIngredientPhraseForNlStore(core || compound);
 
-  const key = singular
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  // Cheese-focused canonicalization for more reliable store matches.
-  // Keep this intentionally small and conservative.
-  if (/\b(parmigiano|reggiano|parmigiana)\b/.test(key) || /\bparmezaan(se)?\b/.test(key)) {
-    return "parmezaanse kaas";
+  if (!core || !String(core).trim()) {
+    const singular = singularizeDutchIngredientPhraseForSearch(compound.toLowerCase().trim());
+    const key = singular
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (/\b(parmigiano|reggiano|parmigiana)\b/.test(key) || /\bparmezaan(se)?\b/.test(key)) {
+      return "Parmezaanse kaas";
+    }
+    if (/\bgrana\s*padano\b/.test(key) || (/\bgrana\b/.test(key) && /\bpadano\b/.test(key))) {
+      return "Grana padano";
+    }
+    return singular ? singular.charAt(0).toLocaleUpperCase("nl-NL") + singular.slice(1) : "";
   }
-  if (/\bgrana\s*padano\b/.test(key) || (/\bgrana\b/.test(key) && /\bpadano\b/.test(key))) {
-    return "grana padano";
-  }
 
-  // Leesbare titel: enkelvoud is voor zoeken; eerste letter netjes voor UI
-  return singular ? singular.charAt(0).toLocaleUpperCase("nl-NL") + singular.slice(1) : "";
+  const cleaned = String(core).trim();
+  return cleaned ? cleaned.charAt(0).toLocaleUpperCase("nl-NL") + cleaned.slice(1) : "";
 }
 
 function decodeHtml(value) {

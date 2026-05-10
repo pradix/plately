@@ -851,7 +851,6 @@ const checkAllIngredientsButton = document.getElementById("checkAllIngredientsBu
 const uncheckAllIngredientsButton = document.getElementById("uncheckAllIngredientsButton");
 const detailStepList = document.getElementById("detailStepList");
 const addSelectedToGroceriesButton = document.getElementById("addSelectedToGroceriesButton");
-const grocerySubtitle = document.getElementById("grocerySubtitle");
 const groceryGroups = document.getElementById("groceryGroups");
 const grocerySummaryChips = document.getElementById("grocerySummaryChips");
 const groceryQuickInput = document.getElementById("groceryQuickInput");
@@ -1952,9 +1951,17 @@ function renderBasketPreview() {
   const listEl = document.getElementById("basketSheetList");
   const totalEl = document.getElementById("basketSheetTotal");
   const ctaBtn = document.getElementById("basketSheetCta");
+  const trustEl = document.getElementById("basketSheetTrust");
   if (!preview || !listEl) return;
 
   if (nameEl) nameEl.textContent = preview.recipeTitle || "Boodschappenlijst";
+
+  if (trustEl) {
+    trustEl.textContent =
+      preview.store === "albert-heijn"
+        ? "Elk product komt uit de AH-zoek-API als voorstel. Controleer rood gemarkeerde regels (‘Even controleren’); het totaal is een indicatie vóór je naar ah.nl gaat."
+        : "Supermarktkoppeling zoekt automatisch; controleer de matches en hoeveelheden vóór je afrekent.";
+  }
 
   // Optional/pantry items ("in huis"): informational only and do not include them
   // in the store basket URL/payload.
@@ -4146,11 +4153,14 @@ function formatChannelSearchRatingHtml(r, options = {}) {
     ? "De bron gebruikt een hogere scoreschaal; hier getoond als sterren op 5. "
     : "";
 
+  const trustNote = "Sterren komen uit gestructureerde gegevens op de bronwebsite, niet van Plately.";
+
   const ariaPieces = [
     scaleNote,
     chipSrc && showSource ? `${chipSrc}. ` : "",
     `Gemiddeld ${num} van 5 sterren, ${cnt} ${cnt === 1 ? "waardering" : "waarderingen"}`,
     confidenceLine ? ` ${confidenceLine}` : "",
+    ` ${trustNote}`,
   ];
   const ariaLabel = ariaPieces.join("").trim();
 
@@ -4168,6 +4178,8 @@ function formatChannelSearchRatingHtml(r, options = {}) {
     `<span class="ch-card__rating-scale-note" title="De bron geeft scores op een hogere schaal dan 5; Plately toont het gemiddelde hier als sterren op 5.">10→5</span>`
   : "";
 
+  const trustHtml = `<span class="ch-card__rating-trust">${escapeHtml(trustNote)}</span>`;
+
   return `<div class="ch-card__rating">
     <span class="ch-card__rating-pill" aria-label="${escapeHtml(ariaLabel)}">
       ${sourceHtml}
@@ -4179,6 +4191,7 @@ function formatChannelSearchRatingHtml(r, options = {}) {
       ${scaleHtml}
     </span>
     ${confidenceHtml}
+    ${trustHtml}
   </div>`;
 }
 
@@ -5698,6 +5711,44 @@ function renderGrocerySummary() {
   grocerySummaryChips.innerHTML = "";
 }
 
+function updateGroceryIntroCopy() {
+  const sub = document.getElementById("grocerySubtitle");
+  const hint = document.getElementById("groceryContextHint");
+  if (!sub || !hint) return;
+
+  const unchecked = state.groceryItems.filter((x) => x && !x.checked);
+  if (!state.groceryItems.length) {
+    sub.textContent = "";
+    sub.classList.add("hidden");
+    hint.textContent = "";
+    hint.classList.add("hidden");
+    return;
+  }
+
+  sub.classList.remove("hidden");
+  hint.classList.remove("hidden");
+
+  const n = unchecked.length;
+  const recipeTitles = [...new Set(unchecked.map((i) => i.recipeTitle || "").filter(Boolean))];
+  let line = `${n} ${n === 1 ? "item" : "items"} te gaan`;
+  if (recipeTitles.length === 1 && recipeTitles[0]) {
+    line += ` · ${recipeTitles[0]}`;
+  } else if (recipeTitles.length > 1) {
+    line += ` · ${recipeTitles.length} recepten`;
+  }
+  sub.textContent = line;
+
+  const bits = [
+    "Hoeveelheden zijn omgerekend naar de porties in je recept(en).",
+    "Bij Albert Heijn zijn dit automatische productvoorstellen — tik Wissel bij twijfel of controleer de sectie ‘Even controleren’.",
+  ];
+  const hasConcept = unchecked.some((i) => i.recipeId && getRecipeById(i.recipeId)?.needsReview);
+  if (hasConcept) {
+    bits.push("Er staan nog concept-imports op je lijst; controleer die even voordat je bestelt.");
+  }
+  hint.textContent = bits.join(" ");
+}
+
 // Pantry/optional items (informational): detect common "in huis" ingredients in a recipe
 // and show them as a separate section (not part of store basket matching).
 const PANTRY_OPTIONAL_POOL = [
@@ -5731,11 +5782,8 @@ function getPantryOptionalSuggestionsForRecipe(recipe, existingKeySet) {
 function renderGroceryGroups() {
   consolidateUncheckedGroceryDuplicates();
   persistGroceryItemsLocally();
+  updateGroceryIntroCopy();
   const uncheckedCount = state.groceryItems.filter((item) => !item.checked).length;
-  if (grocerySubtitle) {
-    grocerySubtitle.textContent = `${uncheckedCount} items te gaan`;
-    grocerySubtitle.classList.toggle("hidden", !state.groceryItems.length);
-  }
   if (groceryToolbar) {
     groceryToolbar.classList.toggle("hidden", !state.groceryItems.length);
   }
@@ -5838,32 +5886,44 @@ function renderGroceryGroups() {
   let html = "";
 
   if (multiRecipe) {
-    // Group by recipe, then sort unchecked first
+    const shared = state.groceryItems.filter((i) => i.recipeTitle && i.recipeTitle.includes(","));
+    const sharedTitleSet = new Set(shared.map((i) => i.recipeTitle || ""));
+    // Group by recipe; samengevoegde titels (“A, B”) alleen onder Gedeelde ingrediënten
     for (const recipeTitle of uniqueRecipes) {
+      if (sharedTitleSet.has(recipeTitle)) continue;
       const items = state.groceryItems
         .filter((i) => (i.recipeTitle || "Overig") === recipeTitle)
         .sort((a, b) => Number(a.checked) - Number(b.checked));
+      const headId = items.find((i) => i.recipeId)?.recipeId || "";
+      const headRecipe = headId ? getRecipeById(headId) : null;
+      const conceptBadge =
+        headRecipe?.needsReview ?
+          `<span class="grocery-group__pill grocery-group__pill--concept">Concept</span>`
+        : "";
       html += `
         <section class="grocery-group">
           <div class="grocery-group__header grocery-group__header--recipe">
-            <h2>${escapeHtml(recipeTitle)}</h2>
+            <h2>${escapeHtml(recipeTitle)}${conceptBadge}</h2>
             <span class="grocery-group__count">${items.filter((i) => !i.checked).length} over</span>
           </div>
           ${items.map(renderGroceryItem).join("")}
         </section>
       `;
     }
-    // Shared/overlap items (recipeTitle contains ",")
-    const shared = state.groceryItems.filter((i) => i.recipeTitle && i.recipeTitle.includes(","));
     if (shared.length) {
-      html = `
+      const sharedConcept =
+        shared.some((i) => i.recipeId && getRecipeById(i.recipeId)?.needsReview) ?
+          `<span class="grocery-group__pill grocery-group__pill--concept">Concept</span>`
+        : "";
+      html =
+        `
         <section class="grocery-group">
           <div class="grocery-group__header grocery-group__header--shared">
-            <h2>Gedeelde ingrediënten</h2>
+            <h2>Gedeelde ingrediënten${sharedConcept}</h2>
           </div>
           ${shared.sort((a, b) => Number(a.checked) - Number(b.checked)).map(renderGroceryItem).join("")}
         </section>
-      ` + html.replace(shared.map((i) => `data-grocery-id="${i.id}"`).join("|____|"), ""); // keep shared items only in shared section
+      ` + html;
     }
   } else {
     // Single recipe — group by ingredient category as before
@@ -5873,14 +5933,22 @@ function renderGroceryGroups() {
       return acc;
     }, {});
 
+    const soloId = state.groceryItems.find((i) => i.recipeId)?.recipeId || "";
+    const soloRecipe = soloId ? getRecipeById(soloId) : null;
+    const soloConceptPill =
+      soloRecipe?.needsReview ?
+        `<span class="grocery-group__pill grocery-group__pill--concept">Concept</span>`
+      : "";
+
     html = Object.entries(groups)
-      .map(([group, items]) => {
+      .map(([group, items], gi) => {
         const meta = getGroupMeta(group);
         const sortedItems = [...items].sort((l, r) => Number(l.checked) - Number(r.checked));
+        const conceptInHeading = gi === 0 ? soloConceptPill : "";
         return `
           <section class="grocery-group">
             <div class="grocery-group__header">
-              <h2>${meta.title}</h2>
+              <h2>${meta.title}${conceptInHeading}</h2>
             </div>
             ${sortedItems.map(renderGroceryItem).join("")}
           </section>

@@ -387,6 +387,11 @@
             </div>
           </header>
 
+          <div class="grocery-intro" aria-live="polite">
+            <p class="grocery-intro__summary hidden" id="grocerySubtitle"></p>
+            <p class="grocery-intro__hint hidden" id="groceryContextHint"></p>
+          </div>
+
           <!-- Compact search/add input -->
           <div class="grocery-input-wrap">
             <div class="grocery-input-row">
@@ -1405,6 +1410,7 @@
             <span class="basket-sheet__total" id="basketSheetTotal">€ 0,00</span>
             <span class="basket-sheet__total-note">Prijzen kunnen lokaal afwijken</span>
           </div>
+          <p class="basket-sheet__trust" id="basketSheetTrust"></p>
           <button class="basket-sheet__cta" id="basketSheetCta" type="button">
             <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:28px;height:28px;flex-shrink:0">
               <path d="M28,8 Q8,10 6,30 L6,155 Q6,192 43,192 L157,192 Q194,192 194,155 L194,78 Q194,56 178,42 L112,8 Q96,-1 80,4 Z" fill="#fff" fill-opacity="0.3"/>

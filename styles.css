@@ -400,9 +400,25 @@ img { display: block; max-width: 100%; }
   text-transform: uppercase;
 }
 
-/* Green tagline for grocery subtitle */
-#grocerySubtitle {
-  color: #b8cfbc;
+/* Boodschappen: samenvatting + uitleg porties / AH / concept */
+.grocery-intro {
+  padding: 4px 16px 4px;
+}
+
+.grocery-intro__summary {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text, #2e2c29);
+}
+
+.grocery-intro__hint {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--color-text-muted-2, #8a877f);
 }
 
 .topbar-actions,
@@ -8657,6 +8673,25 @@ body {
   font-weight: 600;
   color: #95a393;
   text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.grocery-group__pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.grocery-group__pill--concept {
+  background: rgba(235, 160, 120, 0.28);
+  color: #7a4424;
 }
 
 .grocery-group__header--recipe h2 {
@@ -9922,6 +9957,15 @@ body {
   border: 1px solid var(--color-border);
   cursor: help;
   white-space: nowrap;
+}
+
+.ch-card__rating-trust {
+  display: block;
+  font-size: 0.61rem;
+  line-height: 1.35;
+  font-weight: 500;
+  color: var(--color-text-muted-2);
+  max-width: 100%;
 }
 
 .ch-card__actions {
@@ -11294,6 +11338,13 @@ body {
   color: #a6a299;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.basket-sheet__trust {
+  margin: 0 0 14px;
+  font-size: 0.73rem;
+  line-height: 1.42;
+  color: #817b72;
 }
 
 .basket-sheet__cta {
