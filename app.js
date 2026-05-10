@@ -6654,9 +6654,18 @@ function renderCookbookList() {
         .map((recipeId) => getRecipeById(recipeId))
         .filter(Boolean);
       const coverRecipes = recipes.slice(0, 4);
+      // Subtiele cover-tint per kookboek: hash naam → vast kleurnummer (1..6).
+      // Zo krijgt elk kookboek een eigen herkenbare wash zonder dat we per
+      // kookboek apart een kleur hoeven op te slaan.
+      const tintIdx = (() => {
+        let h = 0;
+        const s = String(cookbook.name || cookbook.id || "");
+        for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+        return (Math.abs(h) % 6) + 1;
+      })();
       const coverMarkup = coverRecipes.length
         ? `
-            <div class="cookbook-collection__cover ${coverRecipes.length > 1 ? "cookbook-collection__cover--grid" : ""}">
+            <div class="cookbook-collection__cover cookbook-collection__cover--tint-${tintIdx} ${coverRecipes.length > 1 ? "cookbook-collection__cover--grid" : ""}">
               ${coverRecipes
                 .map(
                   (recipe) => `
@@ -6672,7 +6681,7 @@ function renderCookbookList() {
             </div>
           `
         : `
-            <div class="cookbook-collection__cover cookbook-collection__cover--empty">
+            <div class="cookbook-collection__cover cookbook-collection__cover--empty cookbook-collection__cover--tint-${tintIdx}">
               <span>＋</span>
             </div>
           `;
