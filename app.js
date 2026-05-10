@@ -1161,8 +1161,7 @@ const authForm = document.getElementById("authForm");
 const authEmail = document.getElementById("authEmail");
 const authPassword = document.getElementById("authPassword");
 const submitAuthButton = document.getElementById("submitAuthButton");
-const authTabLogin = document.getElementById("authTabLogin");
-const authTabRegister = document.getElementById("authTabRegister");
+const switchAuthModeButton = document.getElementById("switchAuthModeButton");
 const authFeedback = document.getElementById("authFeedback");
 const cookbookSaveModal = document.getElementById("cookbookSaveModal");
 const cookbookSaveList = document.getElementById("cookbookSaveList");
@@ -1636,16 +1635,8 @@ function openAuthModal(mode = "login") {
       : "Log in om je recepten en lijstjes te bekijken.";
   }
 
-  // Mode tabs
-  if (authTabLogin) {
-    authTabLogin.classList.toggle("auth-screen__mode-tab--active", !isRegister);
-    authTabLogin.setAttribute("aria-selected", isRegister ? "false" : "true");
-    authTabLogin.tabIndex = isRegister ? -1 : 0;
-  }
-  if (authTabRegister) {
-    authTabRegister.classList.toggle("auth-screen__mode-tab--active", isRegister);
-    authTabRegister.setAttribute("aria-selected", isRegister ? "true" : "false");
-    authTabRegister.tabIndex = isRegister ? 0 : -1;
+  if (switchAuthModeButton) {
+    switchAuthModeButton.textContent = isRegister ? t("auth.switchLogin") : t("auth.switchRegister");
   }
 
   // Show/hide name field
@@ -12610,13 +12601,9 @@ bindEvent(document.getElementById("customChannelForm"), "submit", async (event) 
   }
 });
 
-function bindAuthModeTab(el, mode) {
-  if (!el) return;
-  bindEvent(el, "click", () => openAuthModal(mode));
-}
-
-bindAuthModeTab(authTabLogin, "login");
-bindAuthModeTab(authTabRegister, "register");
+bindEvent(switchAuthModeButton, "click", () => {
+  openAuthModal(state.auth.mode === "register" ? "login" : "register");
+});
 
 // Instagram link button (opens in new tab — handled by anchor href)
 

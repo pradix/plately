@@ -1787,11 +1787,6 @@
         </div>
 
         <div class="auth-screen__surface">
-        <div class="auth-screen__mode-tabs" role="tablist" aria-label="Inloggen of registreren">
-          <button type="button" class="auth-screen__mode-tab auth-screen__mode-tab--active" id="authTabLogin" role="tab" aria-selected="true" aria-controls="authForm" data-auth-mode="login" data-i18n="auth.login">Inloggen</button>
-          <button type="button" class="auth-screen__mode-tab" id="authTabRegister" role="tab" aria-selected="false" aria-controls="authForm" data-auth-mode="register" data-i18n="auth.tabRegister">Nieuw account</button>
-        </div>
-
         <form id="authForm" class="auth-screen__form">
           <div class="auth-field" id="authNameField" style="display:none">
             <label class="auth-field__label" for="authName" data-i18n="auth.name">Naam</label>
@@ -1818,6 +1813,12 @@
 
           <button class="auth-screen__submit" id="submitAuthButton" type="submit">Inloggen</button>
         </form>
+
+        <p class="auth-screen__alt-action">
+          <button type="button" class="auth-screen__alt-link" id="switchAuthModeButton">
+            Nog geen account? Maak er eentje aan
+          </button>
+        </p>
 
         <!-- Password reset form (hidden, shown when user clicks forgot) -->
         <div class="auth-screen__reset-form hidden" id="passwordResetForm">
