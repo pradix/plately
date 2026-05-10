@@ -531,6 +531,7 @@ const state = {
   selectedCookbookId: "",
   pendingCookbookSaveRecipeId: "",
   pendingCookbookSaveCookbookId: "",
+  _moveFromCookbookId: "",
   mealPlan: {
     maandag: null,
     dinsdag: null,
@@ -1555,8 +1556,11 @@ function openCookbookSaveModal(recipeId) {
 
   state.pendingCookbookSaveRecipeId = recipe.id;
   state.pendingCookbookSaveCookbookId = state.selectedCookbookId || state.cookbooks?.[0]?.id || "";
+  const isMoving = Boolean(state._moveFromCookbookId);
   if (cookbookSaveRecipeTitle) {
-    cookbookSaveRecipeTitle.textContent = `${recipe.title} opslaan in welk kookboek?`;
+    cookbookSaveRecipeTitle.textContent = isMoving
+      ? `${recipe.title} verplaatsen naar…`
+      : `${recipe.title} opslaan in welk kookboek?`;
   }
   renderCookbookSaveList(recipe.id);
   syncCookbookSaveConfirmButton();
@@ -1572,6 +1576,7 @@ function closeCookbookSaveModal() {
 
   cookbookSaveModal.classList.add("hidden");
   cookbookSaveModal.setAttribute("aria-hidden", "true");
+  state._moveFromCookbookId = "";
   state.pendingCookbookSaveRecipeId = "";
   state.pendingCookbookSaveCookbookId = "";
   syncCookbookSaveConfirmButton();
@@ -3253,6 +3258,17 @@ function switchView(view) {
     debouncedFetchGroceryPhotos();
   }
 
+  // When opening import screen: auto-fill from clipboard if it contains a URL
+  if (view === "import" && recipeUrlInput && !recipeUrlInput.value.trim()) {
+    navigator.clipboard.readText().then((text) => {
+      const trimmed = (text || "").trim();
+      if (trimmed && /^https?:\/\//i.test(trimmed) && recipeUrlInput && !recipeUrlInput.value.trim()) {
+        recipeUrlInput.value = trimmed;
+        showToast("📋 Link uit klembord geplakt");
+      }
+    }).catch(() => {});
+  }
+
   // When entering cookbooks screen, re-render the list
   if (view === "cookbooks") {
     renderCookbookList();
@@ -4787,10 +4803,10 @@ function renderRecipeGrid() {
       recipeGrid.innerHTML = `
         <div class="home-empty-state">
           <div class="home-empty-state__icon">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <svg viewBox="0 0 48 48" aria-hidden="true" fill="none"><circle cx="24" cy="24" r="22" stroke="currentColor" stroke-width="1.5" opacity=".18"/><path d="M16 30c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="20" cy="20" r="2" fill="currentColor"/><circle cx="28" cy="20" r="2" fill="currentColor"/><path d="M24 10v4M10 24h4M34 24h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
           </div>
-          <h3 class="home-empty-state__title">Je recepten</h3>
-          <p class="home-empty-state__text">Importeer je eerste recept</p>
+          <h3 class="home-empty-state__title">Welkom bij Plately 👋</h3>
+          <p class="home-empty-state__text">Importeer een recept van internet en begin je collectie</p>
           <button class="home-empty-state__btn" type="button" id="homeImportFirstRecipeBtn">Importeer recept</button>
         </div>
       `;
@@ -4809,10 +4825,10 @@ function renderRecipeGrid() {
       recipeGrid.innerHTML = `
         <div class="home-empty-state" style="grid-column:1/-1">
           <div class="home-empty-state__icon">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4.75a5.75 5.75 0 1 0 0 11.5a5.75 5.75 0 0 0 0-11.5Zm0 13.5a7.75 7.75 0 1 1 5.01-13.66a7.75 7.75 0 0 1-5.01 13.66Zm10.04 1.38l-4.42-4.42l1.41-1.41l4.42 4.42l-1.41 1.41Z"/></svg>
+            <svg viewBox="0 0 48 48" aria-hidden="true" fill="none"><circle cx="20" cy="20" r="13" stroke="currentColor" stroke-width="2"/><path d="M30 30l10 10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M16 20h8M20 16v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".4"/></svg>
           </div>
-          <h3 class="home-empty-state__title">Geen resultaten</h3>
-          <p class="home-empty-state__text">Probeer een andere zoekterm</p>
+          <h3 class="home-empty-state__title">Niets gevonden</h3>
+          <p class="home-empty-state__text">Probeer een andere zoekterm of importeer een nieuw recept</p>
         </div>
       `;
     }
@@ -5032,6 +5048,95 @@ function renderDetailRecipe(resetServings = false) {
 
   // Fetch ingredient photos from Albert Heijn
   fetchIngredientPhotos();
+
+  // Load related recipes from same channel
+  loadDetailRelatedRecipes(recipe);
+}
+
+const _relatedRecipesCache = new Map();
+
+async function loadDetailRelatedRecipes(recipe) {
+  const container = document.getElementById("detailRelated");
+  const grid = document.getElementById("detailRelatedGrid");
+  const titleEl = document.getElementById("detailRelatedTitle");
+  if (!container || !grid) return;
+
+  // Only show for recipes from a known channel
+  const sourceUrl = recipe.sourceUrl || "";
+  let channelId = recipe.channelId || "";
+  let channelName = "";
+  if (!channelId && sourceUrl) {
+    try {
+      const host = new URL(sourceUrl).hostname.replace(/^www\./, "");
+      const match = getAllChannels().find((ch) => {
+        try { return new URL(ch.url || "").hostname.replace(/^www\./, "") === host; } catch { return false; }
+      });
+      if (match) { channelId = match.id; channelName = match.name; }
+    } catch {}
+  }
+  if (!channelId) { container.classList.add("hidden"); return; }
+
+  // Channel name for heading
+  if (!channelName) {
+    const ch = getAllChannels().find((c) => c.id === channelId);
+    channelName = ch?.name || "";
+  }
+  if (titleEl && channelName) titleEl.textContent = `Meer van ${channelName}`;
+
+  // Check cache
+  const cacheKey = channelId;
+  if (_relatedRecipesCache.has(cacheKey)) {
+    const cached = _relatedRecipesCache.get(cacheKey);
+    renderRelatedGrid(grid, container, cached, recipe.id);
+    return;
+  }
+
+  container.classList.add("hidden");
+  try {
+    const searchTerm = recipe.mealTag || recipe.title.split(" ").slice(0, 2).join(" ") || "recept";
+    const isCustom = !SEED_CHANNELS.find((c) => c.id === channelId);
+    const ch = getAllChannels().find((c) => c.id === channelId);
+    if (!ch) return;
+    const params = new URLSearchParams({ q: searchTerm, limit: "6" });
+    if (isCustom) params.set("customChannels", `${ch.id}|${ch.name}|${ch.url}`);
+    else params.set("channels", channelId);
+    const resp = await fetch(`/api/search?${params}`, { credentials: "include" });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const results = (data.results || []).filter((r) => r.url !== (recipe.sourceUrl || "")).slice(0, 4);
+    _relatedRecipesCache.set(cacheKey, results);
+    renderRelatedGrid(grid, container, results, recipe.id);
+  } catch {}
+}
+
+function renderRelatedGrid(grid, container, results, currentRecipeId) {
+  const filtered = results.filter((r) => r.url !== undefined);
+  if (!filtered.length) { container.classList.add("hidden"); return; }
+  grid.innerHTML = filtered.map((r) => {
+    const img = r.image ? `<img src="${escapeHtml(r.image)}" alt="" loading="lazy" />` : `<div style="aspect-ratio:3/2;background:var(--color-surface)"></div>`;
+    return `<button class="detail-related__card" type="button" data-related-url="${escapeHtml(r.url || "")}" data-related-title="${escapeHtml(r.title || "")}">
+      ${img}
+      <div class="detail-related__card-body">
+        <span class="detail-related__card-title">${escapeHtml(r.title || "")}</span>
+      </div>
+    </button>`;
+  }).join("");
+  container.classList.remove("hidden");
+
+  // Wire up clicks to import
+  grid.querySelectorAll(".detail-related__card").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const url = btn.dataset.relatedUrl;
+      if (!url) return;
+      if (recipeUrlInput) recipeUrlInput.value = url;
+      switchView("import");
+      // Auto-trigger import after a tick
+      setTimeout(() => {
+        const submitBtn = document.getElementById("submitImport");
+        if (submitBtn) submitBtn.click();
+      }, 100);
+    });
+  });
 }
 
 function renderIngredientSwapSuggestions(recipe) {
@@ -6567,6 +6672,12 @@ function renderCookbookDetail(cookbookId) {
                 data-cb-select-recipe="${escapeHtml(recipe.id)}"
                 aria-label="Selecteer ${escapeHtml(recipe.title)}">
                 ${selecting && selectedIds.has(recipe.id) ? "✓" : ""}
+              </button>
+              <button class="cb-detail__move" type="button"
+                data-move-recipe="${escapeHtml(recipe.id)}"
+                aria-label="Verplaats ${escapeHtml(recipe.title)} naar ander kookboek"
+                title="Verplaatsen">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               </button>
               <button class="cb-detail__remove" type="button"
                 data-remove-from-cookbook="${escapeHtml(recipe.id)}"
@@ -10985,9 +11096,13 @@ bindEvent(groceryGroups, "click", (event) => {
     return;
   }
 
-  groceryItem.checked = !groceryItem.checked;
-  renderGroceryGroups();
-  schedulePersistAppState();
+  // Animate before toggle
+  entry.classList.add("is-checking");
+  setTimeout(() => {
+    groceryItem.checked = !groceryItem.checked;
+    renderGroceryGroups();
+    schedulePersistAppState();
+  }, 160);
 });
 
 bindEvent(detailStepList, "click", (event) => {
@@ -11469,6 +11584,17 @@ function handleCookbookGridClick(event) {
     return;
   }
 
+  const moveRecipeBtn = target.closest("[data-move-recipe]");
+  if (moveRecipeBtn instanceof HTMLElement) {
+    const recipeId = moveRecipeBtn.getAttribute("data-move-recipe") || "";
+    const currentCookbookId = state.openCookbookId || "";
+    if (recipeId && currentCookbookId) {
+      state._moveFromCookbookId = currentCookbookId;
+      openCookbookSaveModal(recipeId);
+    }
+    return;
+  }
+
   const selectRecipeBtn = target.closest("[data-cb-select-recipe]");
   if (selectRecipeBtn instanceof HTMLElement && state.openCookbookId) {
     const recipeId = selectRecipeBtn.getAttribute("data-cb-select-recipe") || "";
@@ -11617,6 +11743,18 @@ bindEvent(cookbookList, "click", (event) => {
     return;
   }
 
+  // Move recipe to another cookbook
+  const moveBtn = target.closest("[data-move-recipe]");
+  if (moveBtn instanceof HTMLElement) {
+    const recipeId = moveBtn.getAttribute("data-move-recipe") || "";
+    const currentCookbookId = state.openCookbookId || "";
+    if (recipeId && currentCookbookId) {
+      state._moveFromCookbookId = currentCookbookId;
+      openCookbookSaveModal(recipeId);
+    }
+    return;
+  }
+
   // Open recipe from detail view
   const openRecipeBtn = target.closest("[data-open-recipe-id]");
   if (openRecipeBtn instanceof HTMLElement) {
@@ -11668,8 +11806,19 @@ function confirmCookbookSave({ recipeId, cookbookId } = {}) {
   const resolvedRecipeId = recipeId || state.pendingCookbookSaveRecipeId || selectedRecipe?.id;
   if (!resolvedRecipeId || !resolvedCookbookId) return;
 
+  const moveFromId = state._moveFromCookbookId || "";
+
   state.selectedRecipeId = resolvedRecipeId;
   saveRecipeToCookbook(resolvedRecipeId, resolvedCookbookId);
+
+  // If this was a move operation, remove from source cookbook
+  if (moveFromId && moveFromId !== resolvedCookbookId) {
+    const fromCb = state.cookbooks.find((cb) => cb.id === moveFromId);
+    if (fromCb) {
+      fromCb.recipeIds = (fromCb.recipeIds || []).filter((id) => id !== resolvedRecipeId);
+    }
+  }
+
   closeCookbookSaveModal();
   renderDetailRecipe(true);
   switchView("detail");
