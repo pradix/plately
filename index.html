@@ -8,7 +8,7 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="3.1.3" />
+    <meta name="plately-build" content="3.1.4" />
     <meta name="theme-color" content="#8da485" />
     <meta property="og:site_name" content="Plately" />
     <meta property="og:type" content="website" />
@@ -29,7 +29,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=3.1.3" />
+    <link rel="stylesheet" href="styles.css?v=3.1.4" />
     <script>
       (function () {
         try {
@@ -1769,49 +1769,74 @@
           <span class="onboarding-progress-dot" data-step="1"></span>
           <span class="onboarding-progress-dot" data-step="2"></span>
           <span class="onboarding-progress-dot" data-step="3"></span>
+          <span class="onboarding-progress-dot" data-step="4"></span>
+          <span class="onboarding-progress-dot" data-step="5"></span>
         </div>
 
-        <!-- Step 1: Eerste recept kiezen (optioneel) -->
+        <!-- Step 1: Profiel afronden -->
         <div class="onboarding-step hidden" id="onboardingStep1">
           <div class="onboarding-header">
-            <div class="onboarding-hero-icon onboarding-hero-icon--book" aria-hidden="true">
+            <div class="onboarding-hero-icon onboarding-hero-icon--profile" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z"/>
-                <path d="M4 16a4 4 0 0 1 4-4h12"/>
+                <path d="M20 21a8 8 0 1 0-16 0"/>
+                <circle cx="12" cy="9" r="4"/>
               </svg>
             </div>
-            <h2 class="onboarding-title">Kies je eerste recept</h2>
-            <p class="onboarding-subtitle">Tap een gerecht om het meteen toe te voegen. Of sla over — je importeert straks ook via een link onderaan de startpagina.</p>
+            <h2 class="onboarding-title">Maak je profiel af</h2>
+            <p class="onboarding-subtitle">Voeg een foto toe (optioneel) en vul je geboortedatum en geslacht in.</p>
           </div>
-          <div id="onboardingRecipePickGrid" class="onboarding-recipe-grid" role="group" aria-label="Voorbeeldrecepten"></div>
-          <p class="onboarding-tip muted" style="margin-top:14px;font-size:0.86rem;line-height:1.45;color:#81786e">Kanalen kun je onder <strong>Instellingen → Kookkanalen</strong> nog kiezen.</p>
+          <div class="profile2-card profile-subpanel__form-card">
+            <div class="onboarding-profile-photo">
+              <div class="onboarding-profile-photo__preview" id="onboardingPhotoPreview" aria-hidden="true"></div>
+              <div class="onboarding-profile-photo__actions">
+                <p class="onboarding-profile-photo__label">Profielfoto</p>
+                <label class="onboarding-file-btn">
+                  Kies foto
+                  <input id="onboardingPhotoInput" type="file" accept="image/*" />
+                </label>
+                <button class="onboarding-link-btn" type="button" id="onboardingPhotoRemove">Verwijder</button>
+              </div>
+            </div>
+            <div class="profile2-row-divider"></div>
+            <div class="onboarding-grid-2">
+              <div class="profile-subpanel__field">
+                <label class="profile-subpanel__label" for="onboardingBirthDate">Geboortedatum</label>
+                <input class="profile-subpanel__input" id="onboardingBirthDate" type="date" />
+              </div>
+              <div class="profile-subpanel__field">
+                <label class="profile-subpanel__label" for="onboardingGender">Geslacht</label>
+                <select class="profile-subpanel__input" id="onboardingGender">
+                  <option value="">Kies…</option>
+                  <option value="vrouw">Vrouw</option>
+                  <option value="man">Man</option>
+                  <option value="anders">Anders</option>
+                  <option value="zeg-ik-liever-niet">Zeg ik liever niet</option>
+                </select>
+              </div>
+            </div>
+          </div>
           <div class="onboarding-actions">
             <button class="onboarding-btn onboarding-btn--secondary" id="onboardingStep1Skip" type="button">Overslaan</button>
             <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep1Next" type="button">Volgende →</button>
           </div>
         </div>
 
-        <!-- Step 2: Favoriete supermarkt -->
+        <!-- Step 2: Kanalen kiezen -->
         <div class="onboarding-step hidden" id="onboardingStep2">
           <div class="onboarding-header">
-            <div class="onboarding-hero-icon onboarding-hero-icon--supermarket" aria-hidden="true">
+            <div class="onboarding-hero-icon onboarding-hero-icon--channels" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 3h2l2.4 12.6a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 2-1.5L22 7H6"/>
-                <circle cx="9" cy="20" r="1.5"/>
-                <circle cx="18" cy="20" r="1.5"/>
+                <path d="M4 12h16"/>
+                <path d="M4 6h16"/>
+                <path d="M4 18h16"/>
               </svg>
             </div>
-            <h2 class="onboarding-title">Je favoriete supermarkt</h2>
-            <p class="onboarding-subtitle">Bij welke supermarkt wil je je boodschappen doen?</p>
+            <h2 class="onboarding-title">Kies je kanalen</h2>
+            <p class="onboarding-subtitle">Zoek en bewaar recepten van je favoriete creators en sites.</p>
           </div>
-          <div id="onboardingSupermarketsList" class="onboarding-channels"></div>
-          <p class="onboarding-supermarket-note">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 16v-4M12 8h.01"/>
-            </svg>
-            Op dit moment kun je alleen boodschappen doen via Albert Heijn. Andere supermarkten volgen binnenkort.
-          </p>
+          <div class="profile2-card onboarding-channels-card">
+            <div id="onboardingChannelsList" class="onboarding-channels"></div>
+          </div>
           <div class="onboarding-actions">
             <button class="onboarding-btn onboarding-btn--secondary" id="onboardingStep2Skip" type="button">Overslaan</button>
             <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep2Next" type="button">Volgende →</button>
@@ -1849,7 +1874,58 @@
           </div>
           <div class="onboarding-actions">
             <button class="onboarding-btn onboarding-btn--secondary" id="onboardingStep3Skip" type="button">Overslaan</button>
-            <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep3Next" type="button">Klaar! ✓</button>
+            <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep3Next" type="button">Volgende →</button>
+          </div>
+        </div>
+
+        <!-- Step 4: Eerste recept importeren -->
+        <div class="onboarding-step hidden" id="onboardingStep4">
+          <div class="onboarding-header">
+            <div class="onboarding-hero-icon onboarding-hero-icon--import" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v12"/>
+                <path d="M7 10l5 5 5-5"/>
+                <path d="M5 19h14"/>
+              </svg>
+            </div>
+            <h2 class="onboarding-title">Importeer je eerste recept</h2>
+            <p class="onboarding-subtitle">Plak straks een link van TikTok, Instagram of een website. Plately vult titel, ingrediënten en stappen in.</p>
+          </div>
+          <div class="profile2-card profile-subpanel__form-card">
+            <div class="onboarding-import-card">
+              <p class="onboarding-import-card__hint">Je gaat zo naar het import-scherm. Daar kun je meteen je eerste recept toevoegen.</p>
+            </div>
+          </div>
+          <div class="onboarding-actions">
+            <button class="onboarding-btn onboarding-btn--secondary" id="onboardingStep4Skip" type="button">Overslaan</button>
+            <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep4Next" type="button">Ga importeren →</button>
+          </div>
+        </div>
+
+        <!-- Step 5: Favoriete supermarkt -->
+        <div class="onboarding-step hidden" id="onboardingStep5">
+          <div class="onboarding-header">
+            <div class="onboarding-hero-icon onboarding-hero-icon--supermarket" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3h2l2.4 12.6a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 2-1.5L22 7H6"/>
+                <circle cx="9" cy="20" r="1.5"/>
+                <circle cx="18" cy="20" r="1.5"/>
+              </svg>
+            </div>
+            <h2 class="onboarding-title">Je favoriete supermarkt</h2>
+            <p class="onboarding-subtitle">Bij welke supermarkt wil je je boodschappen doen?</p>
+          </div>
+          <div id="onboardingSupermarketsList" class="onboarding-channels"></div>
+          <p class="onboarding-supermarket-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 16v-4M12 8h.01"/>
+            </svg>
+            Op dit moment kun je alleen boodschappen doen via Albert Heijn. Andere supermarkten volgen binnenkort.
+          </p>
+          <div class="onboarding-actions">
+            <button class="onboarding-btn onboarding-btn--secondary" id="onboardingStep5Skip" type="button">Overslaan</button>
+            <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep5Next" type="button">Klaar! ✓</button>
           </div>
         </div>
       </div>
@@ -1959,6 +2035,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=3.0.9"></script>
+    <script src="app.js?v=3.1.4"></script>
   </body>
 </html>

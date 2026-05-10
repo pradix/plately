@@ -1509,6 +1509,10 @@ function openAuthModal(mode = "login") {
   // Show/hide name field
   const nameField = document.getElementById("authNameField");
   if (nameField) nameField.style.display = isRegister ? "" : "none";
+  // Password autocomplete hint
+  if (authPassword instanceof HTMLInputElement) {
+    authPassword.setAttribute("autocomplete", isRegister ? "new-password" : "current-password");
+  }
 
   // Show/hide forgot password button (only for login, not register)
   const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
@@ -9239,7 +9243,7 @@ async function submitAuth(mode, email, password) {
 
   if (mode === "register") {
     showOnboarding();
-    showToast("Welkom! Drie snelle stappen — daarna kun je aan de slag.");
+    showToast("Welkom! Nog een paar stappen, dan kun je beginnen.");
   } else {
     closeAuthModal();
     showToast("Je bent ingelogd.");
@@ -13282,7 +13286,9 @@ let onboardingData = {
   cookbook: "",
   supermarket: "ah",
   suggestedChannels: [],
-  firstRecipeSeedId: "",
+  birthDate: "",
+  gender: "",
+  photo: "",
 };
 
 function resetOnboardingData() {
@@ -13292,7 +13298,9 @@ function resetOnboardingData() {
     cookbook: "",
     supermarket: "ah",
     suggestedChannels: [],
-    firstRecipeSeedId: "",
+    birthDate: "",
+    gender: "",
+    photo: "",
   };
 }
 
@@ -13309,13 +13317,14 @@ function showOnboarding() {
   if (overlay) overlay.setAttribute("hidden", "");
 
   showOnboardingStep(1);
-  renderOnboardingRecipePick();
+  renderOnboardingChannels();
   renderOnboardingSupermarkets();
+  syncOnboardingProfileUiFromState();
 }
 
 function showOnboardingStep(step) {
-  const safe = Math.min(Math.max(Number(step) || 1, 1), 3);
-  ["onboardingStep1", "onboardingStep2", "onboardingStep3"].forEach((id) => {
+  const safe = Math.min(Math.max(Number(step) || 1, 1), 5);
+  ["onboardingStep1", "onboardingStep2", "onboardingStep3", "onboardingStep4", "onboardingStep5"].forEach((id) => {
     document.getElementById(id)?.classList.add("hidden");
   });
   document.getElementById(`onboardingStep${safe}`)?.classList.remove("hidden");
@@ -13332,32 +13341,56 @@ function updateOnboardingProgress(step) {
   });
 }
 
-function renderOnboardingRecipePick() {
-  const grid = document.getElementById("onboardingRecipePickGrid");
-  if (!grid) return;
+function syncOnboardingProfileUiFromState() {
+  const preview = document.getElementById("onboardingPhotoPreview");
+  if (preview) {
+    preview.innerHTML = "";
+    if (state.profile.photo) {
+      const img = document.createElement("img");
+      img.src = state.profile.photo;
+      img.alt = "";
+      img.loading = "lazy";
+      preview.appendChild(img);
+    }
+  }
+  const birth = document.getElementById("onboardingBirthDate");
+  if (birth instanceof HTMLInputElement) birth.value = onboardingData.birthDate || "";
+  const gender = document.getElementById("onboardingGender");
+  if (gender instanceof HTMLSelectElement) gender.value = onboardingData.gender || "";
+}
 
-  grid.innerHTML = ONBOARDING_FIRST_RECIPE_IDS.map((rid) => {
-    const r = initialRecipes.find((x) => x && x.id === rid);
-    if (!r) return "";
-    const sel = onboardingData.firstRecipeSeedId === rid ? " selected" : "";
-    const img = escapeHtml(r.image || "");
-    const title = escapeHtml(r.title || "");
-    const safeId = escapeHtml(rid);
-    return `<button type="button" class="onboarding-recipe-card${sel}" data-onboarding-recipe-seed="${safeId}">
-      <img class="onboarding-recipe-card__img" src="${img}" alt="" loading="lazy" />
-      <div class="onboarding-recipe-card__body"><p class="onboarding-recipe-card__title">${title}</p></div>
-    </button>`;
-  }).join("");
+function renderOnboardingChannels() {
+  const list = document.getElementById("onboardingChannelsList");
+  if (!list) return;
+  const seed = getSeedChannelsSortedByName().filter((ch) => isSeedChannelEnabled(ch.id));
+  list.innerHTML = seed
+    .map((ch) => {
+      const enabled = onboardingData.channels.includes(ch.id);
+      return `
+        <label class="onboarding-channel-item ${enabled ? "selected" : ""}" data-onb-channel-id="${escapeHtml(ch.id)}">
+          <input type="checkbox" ${enabled ? "checked" : ""} />
+          <span class="onboarding-channel-avatar" style="background:${escapeHtml(ch.color || "#8da485")}1a">
+            <span style="font-weight:900;font-size:.72rem">${escapeHtml((ch.name || "?")[0] || "?")}</span>
+          </span>
+          <span>${escapeHtml(ch.name || "")}</span>
+        </label>
+      `;
+    })
+    .join("");
 
-  grid.querySelectorAll("[data-onboarding-recipe-seed]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.onboardingRecipeSeed || "";
-      onboardingData.firstRecipeSeedId = id;
-      grid.querySelectorAll(".onboarding-recipe-card").forEach((el) => {
-        if (!(el instanceof HTMLElement)) return;
-        const sid = el.dataset.onboardingRecipeSeed || "";
-        el.classList.toggle("selected", Boolean(id) && sid === id);
-      });
+  list.querySelectorAll("[data-onb-channel-id]").forEach((row) => {
+    row.addEventListener("click", (e) => {
+      // allow checkbox click to work naturally
+      const id = row.getAttribute("data-onb-channel-id") || "";
+      const input = row.querySelector("input[type=checkbox]");
+      if (!(input instanceof HTMLInputElement)) return;
+      if (!(e.target instanceof HTMLInputElement)) input.checked = !input.checked;
+      if (input.checked) {
+        if (!onboardingData.channels.includes(id)) onboardingData.channels.push(id);
+      } else {
+        onboardingData.channels = onboardingData.channels.filter((x) => x !== id);
+      }
+      row.classList.toggle("selected", input.checked);
     });
   });
 }
@@ -13422,22 +13455,15 @@ function finishOnboarding() {
   const cookbookForRecipe =
     newCookbookId || state.selectedCookbookId || favoritesRow?.id || state.cookbooks[0]?.id || "";
 
-  const seedPick = onboardingData.firstRecipeSeedId;
-  if (seedPick && cookbookForRecipe) {
-    const clone = cloneSeedRecipeForUserCollection(seedPick);
-    if (clone) {
-      state.recipes = [clone, ...state.recipes.filter((r) => r && r.id !== clone.id)];
-      saveRecipeToCookbook(clone.id, cookbookForRecipe, { silentToast: true });
-    }
-  }
-
   state.profile.favoriteSupermarket = onboardingData.supermarket || "ah";
+  if (onboardingData.birthDate) state.profile.birthDate = onboardingData.birthDate;
+  if (onboardingData.gender) state.profile.gender = onboardingData.gender;
 
   onboardingScreen.classList.add("hidden");
-  switchView("home");
+  switchView("import");
   renderAll();
   persistAppState();
-  showToast("Welkom bij Plately!");
+  showToast("Klaar! Importeer nu je eerste recept.");
   setTimeout(() => startOnboarding(), 800);
 }
 
@@ -13485,11 +13511,65 @@ document.querySelectorAll(".onboarding-suggestion-pill").forEach((pill) => {
 });
 
 bindEvent(document.getElementById("onboardingStep3Skip"), "click", () => {
-  finishOnboarding();
+  showOnboardingStep(4);
 });
 
 bindEvent(document.getElementById("onboardingStep3Next"), "click", () => {
+  showOnboardingStep(4);
+});
+
+bindEvent(document.getElementById("onboardingStep4Skip"), "click", () => {
+  showOnboardingStep(5);
+});
+
+bindEvent(document.getElementById("onboardingStep4Next"), "click", () => {
+  // Move to supermarkets, then we'll finish and route to import screen.
+  showOnboardingStep(5);
+});
+
+bindEvent(document.getElementById("onboardingStep5Skip"), "click", () => {
   finishOnboarding();
+});
+
+bindEvent(document.getElementById("onboardingStep5Next"), "click", () => {
+  finishOnboarding();
+});
+
+// Profile details (photo / birthdate / gender)
+bindEvent(document.getElementById("onboardingBirthDate"), "change", (e) => {
+  const v = e?.target?.value;
+  onboardingData.birthDate = String(v || "").trim();
+});
+
+bindEvent(document.getElementById("onboardingGender"), "change", (e) => {
+  const v = e?.target?.value;
+  onboardingData.gender = String(v || "").trim();
+});
+
+bindEvent(document.getElementById("onboardingPhotoRemove"), "click", () => {
+  state.profile.photo = "";
+  onboardingData.photo = "";
+  syncOnboardingProfileUiFromState();
+  schedulePersistAppState();
+});
+
+bindEvent(document.getElementById("onboardingPhotoInput"), "change", async (e) => {
+  const input = e?.target;
+  if (!(input instanceof HTMLInputElement)) return;
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (!file.type || !file.type.startsWith("image/")) return;
+  const reader = new FileReader();
+  const dataUrl = await new Promise((resolve) => {
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(file);
+  });
+  if (!dataUrl) return;
+  state.profile.photo = dataUrl;
+  onboardingData.photo = dataUrl;
+  syncOnboardingProfileUiFromState();
+  schedulePersistAppState();
 });
 
 // ── Confirm sheet ──────────────────────────────────────────────────────────────
