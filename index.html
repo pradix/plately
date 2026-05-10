@@ -258,6 +258,11 @@
                     </div>
                   </div>
                   <ul class="ingredient-list" id="detailIngredientList"></ul>
+
+                  <button class="detail-cta" id="addSelectedToGroceriesButton" type="button">
+                    Zet op boodschappenlijst
+                  </button>
+
                   <div class="swap-panel hidden" id="ingredientSwapPanel" aria-label="Slim wisselen">
                     <div class="swap-panel__head">
                       <p class="section-kicker">SLIM WISSELEN</p>
@@ -266,10 +271,6 @@
                     <div class="swap-panel__list" id="ingredientSwapList"></div>
                   </div>
                 </section>
-
-                <button class="detail-cta" id="addSelectedToGroceriesButton" type="button">
-                  Zet op boodschappenlijst
-                </button>
               </div>
 
               <div class="detail-col detail-col--instructions">
@@ -1594,30 +1595,28 @@
     <div class="import-splash hidden" id="importSplash" role="status" aria-live="polite" aria-hidden="true">
       <div class="import-splash__backdrop"></div>
 
-      <!-- Floating ingredients scattered across the full screen -->
-      <div class="import-splash__floaters" aria-hidden="true">
-        <span class="isp-f isp-f--1"><img src="assets/ingredients/tomato.svg" alt=""></span>
-        <span class="isp-f isp-f--2"><img src="assets/ingredients/avocado.svg" alt=""></span>
-        <span class="isp-f isp-f--3"><img src="assets/ingredients/cheese.svg" alt=""></span>
-        <span class="isp-f isp-f--4"><img src="assets/ingredients/herb.svg" alt=""></span>
-        <span class="isp-f isp-f--5"><img src="assets/ingredients/carrot.svg" alt=""></span>
-        <span class="isp-f isp-f--6"><img src="assets/ingredients/egg.svg" alt=""></span>
-        <span class="isp-f isp-f--7"><img src="assets/ingredients/onion.svg" alt=""></span>
-        <span class="isp-f isp-f--8"><img src="assets/ingredients/pasta.svg" alt=""></span>
-        <span class="isp-f isp-f--9"><img src="assets/ingredients/banana.svg" alt=""></span>
-        <span class="isp-f isp-f--10"><img src="assets/ingredients/bread.svg" alt=""></span>
-        <span class="isp-f isp-f--11"><img src="assets/ingredients/chicken.svg" alt=""></span>
-        <span class="isp-f isp-f--12"><img src="assets/ingredients/fish.svg" alt=""></span>
-        <span class="isp-f isp-f--13"><img src="assets/ingredients/milk.svg" alt=""></span>
-        <span class="isp-f isp-f--14"><img src="assets/ingredients/potato.svg" alt=""></span>
-        <span class="isp-f isp-f--15"><img src="assets/ingredients/cucumber.svg" alt=""></span>
-        <span class="isp-f isp-f--16"><img src="assets/ingredients/greens.svg" alt=""></span>
-        <span class="isp-f isp-f--17"><img src="assets/ingredients/beans.svg" alt=""></span>
-        <span class="isp-f isp-f--18"><img src="assets/ingredients/jar.svg" alt=""></span>
-        <span class="isp-f isp-f--19"><img src="assets/ingredients/steak.svg" alt=""></span>
-        <span class="isp-f isp-f--20"><img src="assets/ingredients/tomato.svg" alt=""></span>
-        <span class="isp-f isp-f--21"><img src="assets/ingredients/egg.svg" alt=""></span>
-        <span class="isp-f isp-f--22"><img src="assets/ingredients/herb.svg" alt=""></span>
+      <!-- Ingredients raining down into the basket -->
+      <div class="import-splash__drops" aria-hidden="true">
+        <span class="isp-drop isp-drop--1"><img src="assets/ingredients/tomato.svg" alt=""></span>
+        <span class="isp-drop isp-drop--2"><img src="assets/ingredients/avocado.svg" alt=""></span>
+        <span class="isp-drop isp-drop--3"><img src="assets/ingredients/cheese.svg" alt=""></span>
+        <span class="isp-drop isp-drop--4"><img src="assets/ingredients/herb.svg" alt=""></span>
+        <span class="isp-drop isp-drop--5"><img src="assets/ingredients/carrot.svg" alt=""></span>
+        <span class="isp-drop isp-drop--6"><img src="assets/ingredients/egg.svg" alt=""></span>
+        <span class="isp-drop isp-drop--7"><img src="assets/ingredients/onion.svg" alt=""></span>
+        <span class="isp-drop isp-drop--8"><img src="assets/ingredients/pasta.svg" alt=""></span>
+        <span class="isp-drop isp-drop--9"><img src="assets/ingredients/chicken.svg" alt=""></span>
+        <span class="isp-drop isp-drop--10"><img src="assets/ingredients/fish.svg" alt=""></span>
+        <span class="isp-drop isp-drop--11"><img src="assets/ingredients/milk.svg" alt=""></span>
+        <span class="isp-drop isp-drop--12"><img src="assets/ingredients/potato.svg" alt=""></span>
+        <span class="isp-drop isp-drop--13"><img src="assets/ingredients/cucumber.svg" alt=""></span>
+        <span class="isp-drop isp-drop--14"><img src="assets/ingredients/greens.svg" alt=""></span>
+        <span class="isp-drop isp-drop--15"><img src="assets/ingredients/beans.svg" alt=""></span>
+        <span class="isp-drop isp-drop--16"><img src="assets/ingredients/jar.svg" alt=""></span>
+        <span class="isp-drop isp-drop--17"><img src="assets/ingredients/steak.svg" alt=""></span>
+        <span class="isp-drop isp-drop--18"><img src="assets/ingredients/bread.svg" alt=""></span>
+        <span class="isp-drop isp-drop--19"><img src="assets/ingredients/banana.svg" alt=""></span>
+        <span class="isp-drop isp-drop--20"><img src="assets/ingredients/tomato.svg" alt=""></span>
       </div>
 
       <div class="import-splash__card">

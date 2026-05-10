@@ -10869,7 +10869,7 @@ bindEvent(searchInput, "input", (event) => {
   // Reset filter when starting a new search so results aren't hidden by old filter
   state.channelSearchFilter = null;
 
-  channelSearchTimeout = setTimeout(() => searchChannels(query), 900);
+  channelSearchTimeout = setTimeout(() => searchChannels(query), 250);
 });
 
 bindEvent(searchInput, "keydown", (event) => {
@@ -11466,7 +11466,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 });
 
 // "Over deze App" → about sub-panel
-const APP_VERSION = "3.0.9";
+const APP_VERSION = "3.1.0";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
