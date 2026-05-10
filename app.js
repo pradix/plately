@@ -944,6 +944,28 @@ function applyTranslations() {
     const key = el.getAttribute("data-i18n-aria-label") || el.dataset.i18nAriaLabel;
     if (key) el.setAttribute("aria-label", t(key));
   });
+
+  // Auth modal: mode-afhankelijke teksten (niet via data-i18n — applyTranslations zou anders altijd "aanmelden" tonen)
+  const authModalOpen = document.getElementById("authModal");
+  if (authModalOpen && !authModalOpen.classList.contains("hidden")) {
+    const isRegister = (authModalOpen.dataset.authMode || "") === "register";
+    const switchBtn = document.getElementById("switchAuthModeButton");
+    if (switchBtn) {
+      switchBtn.textContent = isRegister ? t("auth.switchLogin") : t("auth.switchRegister");
+    }
+    const submitBtn = document.getElementById("submitAuthButton");
+    if (submitBtn) {
+      submitBtn.textContent = isRegister ? t("auth.submitRegister") : t("auth.submit");
+    }
+    const kicker = document.getElementById("authKicker");
+    if (kicker) {
+      kicker.textContent = isRegister ? t("auth.registerTitle") : t("auth.loginTitle");
+    }
+    const subEl = document.getElementById("authSubtitle");
+    if (subEl) {
+      subEl.textContent = isRegister ? t("auth.registerSubtitle") : t("auth.loginSubtitle");
+    }
+  }
 }
 
 // Load translations immediately (non-blocking)
@@ -11924,7 +11946,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.03";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.04";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
