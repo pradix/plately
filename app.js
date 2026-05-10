@@ -7261,14 +7261,8 @@ function applyPlatelyTheme() {
 }
 
 function updateThemePanel() {
-  const active = getStoredThemePref();
-  document.querySelectorAll(".theme-option").forEach((btn) => {
-    const p = btn.dataset.themePref;
-    const check = btn.querySelector(".theme-check");
-    if (check) check.style.display = p === active ? "" : "none";
-  });
-  const metaEl = document.getElementById("profileThemeMeta");
-  if (metaEl) metaEl.textContent = THEME_LABELS[active] || "Systeem";
+  // Weergave/thema UI removed for now; keep no-op.
+  void THEME_LABELS;
 }
 
 let _platelyThemeMediaQuery = null;
@@ -11656,23 +11650,7 @@ bindEvent(document.getElementById("profileSubSupermarketSave"), "click", () => {
   showToast("Voorkeur opgeslagen.");
 });
 
-bindEvent(document.getElementById("goToAppearanceBtn"), "click", () => {
-  updateThemePanel();
-  openProfileSubPanel("profileSubTheme");
-});
-bindEvent(document.getElementById("profileSubThemeBack"), "click", () => closeProfileSubPanel("profileSubTheme"));
-
-document.querySelectorAll(".theme-option").forEach((btn) => {
-  bindEvent(btn, "click", () => {
-    const pref = btn.dataset.themePref;
-    if (pref !== "light" && pref !== "dark" && pref !== "system") return;
-    try {
-      localStorage.setItem(PLATELY_THEME_KEY, pref);
-    } catch {}
-    applyPlatelyTheme();
-    updateThemePanel();
-  });
-});
+// Weergave/thema UI is removed for now.
 
 // "Taal" on profile → open language sub-panel
 bindEvent(document.getElementById("goToLanguageBtn"), "click", () => {
