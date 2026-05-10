@@ -13098,13 +13098,6 @@ body {
   object-fit: contain;
 }
 
-.import-splash__food--leaf {
-  top: -6px;
-  left: 49%;
-  transform: translateX(-50%) rotate(-8deg);
-  animation-delay: 0.15s;
-}
-
 .import-splash__food--cheese {
   display: none;
 }
