@@ -914,8 +914,10 @@ const saveRecipeButton = document.getElementById("saveRecipeButton");
 const kookstandButton = document.getElementById("kookstandButton");
 const cookModeButton = document.getElementById("cookModeButton");
 const cookModeHint = document.getElementById("cookModeHint");
+const cookModeStatus = document.getElementById("cookModeStatus");
 const wakeLockButton = document.getElementById("wakeLockButton");
 const wakeLockHint = document.getElementById("wakeLockHint");
+const wakeLockStatus = document.getElementById("wakeLockStatus");
 const detailAssist = document.getElementById("detailAssist");
 const cookModePanel = document.getElementById("cookModePanel");
 const cookModeProgress = document.getElementById("cookModeProgress");
@@ -5758,6 +5760,7 @@ function renderCookMode(recipe, recipeProgress = getRecipeProgress(recipe.id)) {
 
   cookModeButton.classList.toggle("is-active", recipeProgress.cookMode);
   cookModeButton.setAttribute("aria-checked", String(recipeProgress.cookMode));
+  if (cookModeStatus) cookModeStatus.textContent = recipeProgress.cookMode ? "Aan" : "Uit";
 
   if (cookModeHint) {
     cookModeHint.textContent = recipeProgress.cookMode
@@ -9339,6 +9342,7 @@ function updateWakeLockUI() {
   const isActive = !unsupported && Boolean(state.keepAwake && state.wakeLockSentinel);
   wakeLockButton.classList.toggle("is-active", isActive);
   wakeLockButton.setAttribute("aria-checked", String(isActive));
+  if (wakeLockStatus) wakeLockStatus.textContent = unsupported ? "—" : isActive ? "Aan" : "Uit";
   if (unsupported) {
     wakeLockButton.setAttribute("disabled", "");
   } else {
