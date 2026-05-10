@@ -6634,6 +6634,49 @@ async function fetchAhRecipeThumbnail(recipeUrl) {
   }
 }
 
+/**
+ * Verwijdert vaste Allerhande UI-/marketingregels (Box-label, review-CTA) uit importtekst.
+ */
+function cleanAllerhandeUiFluff(raw) {
+  let s = String(raw ?? "").replace(/\r\n/g, "\n");
+  if (!s.trim()) return "";
+
+  const stripInline = (text) => {
+    let t = String(text ?? "");
+    t = t.replace(/\bDit\s+is\s+een\s+Allerhande\s+Box(?:\s*[-–]?\s*)?recept\.?\b/gi, "");
+    t = t.replace(/\bWat\s+vond\s+je\s+van\s+dit\s+recept\??\b/gi, "");
+    t = t.replace(/\s{2,}/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    return t;
+  };
+
+  s = stripInline(s);
+
+  const isJunkLine = (line) => {
+    const x = String(line || "").trim();
+    if (!x) return false;
+    if (/^dit\s+is\s+een\s+allerhande\s+box/i.test(x)) return true;
+    if (/^wat\s+vond\s+je\s+van\s+dit\s+recept/i.test(x)) return true;
+    if (/^allerhande\s+box(?:\s*[-–]?\s*)?recept\.?$/i.test(x)) return true;
+    return false;
+  };
+
+  s = s
+    .split("\n")
+    .map((line) => stripInline(line))
+    .filter((line) => String(line).trim() && !isJunkLine(line))
+    .join("\n")
+    .trim();
+
+  return stripInline(s);
+}
+
+function cleanAllerhandeInstructionSteps(steps) {
+  if (!Array.isArray(steps)) return steps;
+  return steps
+    .map((x) => cleanAllerhandeUiFluff(String(x ?? "")))
+    .filter((x) => x.length > 0);
+}
+
 async function importWebsite(sourceUrl) {
   const parsedUrl = new URL(sourceUrl);
   const isAllerhande = /(^|\.)ah\.nl$/i.test(parsedUrl.hostname) && (/\/allerhande\//i.test(parsedUrl.pathname) || /\/r\/\d+/.test(parsedUrl.pathname));
@@ -6857,7 +6900,8 @@ async function importWebsite(sourceUrl) {
         !/^wij gebruiken cookies/i.test(first) &&
         !/^published time:/i.test(first)
       ) {
-        return first;
+        const polished = cleanAllerhandeUiFluff(first);
+        if (polished.length >= 12) return polished;
       }
 
       const cleaned = normalized
@@ -6866,13 +6910,15 @@ async function importWebsite(sourceUrl) {
         .filter((s) => !/met dit recept van allerhande/i.test(s))
         .filter((s) => !/bekijk ingrediënten/i.test(s))
         .filter((s) => !/bereidingswijze!?\s*$/i.test(s))
+        .filter((s) => !/^dit\s+is\s+een\s+allerhande\s+box/i.test(String(s || "").trim()))
+        .filter((s) => !/^wat\s+vond\s+je\s+van\s+dit\s+recept/i.test(String(s || "").trim()))
         // Drop reader boilerplate
         .filter((s) => !/^published time:/i.test(s))
         .filter((s) => !/^title:\s/i.test(s))
         .filter((s) => !/^url source:\s/i.test(s));
       // Prefer the most "recipe-like" and non-boilerplate candidate.
       cleaned.sort((a, b) => scoreRecipeText(b) - scoreRecipeText(a));
-      return cleaned[0] || "";
+      return cleanAllerhandeUiFluff(cleaned[0] || "");
     };
 
     // Extract image specifically from the HTML (before we process it further)
@@ -6914,13 +6960,15 @@ async function importWebsite(sourceUrl) {
       };
       const bestIngredients = pickBestList([readerIngredients, readerRecipe.ingredients, primaryRecipe.ingredients], 3);
       const bestInstructions = pickBestList([readerInstructions, readerRecipe.instructions, primaryRecipe.instructions], 3);
+      const instructionPick = bestInstructions.length ? bestInstructions : primaryRecipe.instructions;
+      const descriptionPick = ahDescription || primaryRecipe.description;
       return {
         ...primaryRecipe,
         image: imageUrl || primaryRecipe.image,
         ingredients: bestIngredients.length ? bestIngredients : primaryRecipe.ingredients,
-        instructions: bestInstructions.length ? bestInstructions : primaryRecipe.instructions,
+        instructions: cleanAllerhandeInstructionSteps(instructionPick),
         title: finalAhTitle || mergedAhTitle || primaryRecipe.title,
-        description: ahDescription || primaryRecipe.description,
+        description: cleanAllerhandeUiFluff(descriptionPick) || descriptionPick,
         time: ahJsonLdTime || primaryRecipe.time,
         servings: ahJsonLdServings || readerServings || readerRecipe.servings || primaryRecipe.servings,
         kcal: ahJsonLdCalories || primaryRecipe.kcal,
@@ -6930,11 +6978,15 @@ async function importWebsite(sourceUrl) {
       };
     }
 
+    const ahHtmlDescription =
+      pickAhDescription([ahJsonLdDescription, ahIntroFromHtml, ahMetaDescription, primaryRecipe.description]) ||
+      primaryRecipe.description;
     return {
       ...primaryRecipe,
       image: imageUrl || primaryRecipe.image,
       title: ahTitle || primaryRecipe.title,
-      description: pickAhDescription([ahJsonLdDescription, ahIntroFromHtml, ahMetaDescription, primaryRecipe.description]) || primaryRecipe.description,
+      description: cleanAllerhandeUiFluff(ahHtmlDescription) || ahHtmlDescription,
+      instructions: cleanAllerhandeInstructionSteps(primaryRecipe.instructions),
       time: ahJsonLdTime || primaryRecipe.time,
       servings: ahJsonLdServings || primaryRecipe.servings,
       kcal: ahJsonLdCalories || primaryRecipe.kcal,
