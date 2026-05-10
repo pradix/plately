@@ -890,7 +890,10 @@ let translationsReady = false;
 
 async function loadTranslations() {
   try {
-    const response = await fetch('translations.json');
+    const bust =
+      document.querySelector('meta[name="plately-build"]')?.getAttribute("content")?.trim() || "";
+    const url = bust ? `translations.json?v=${encodeURIComponent(bust)}` : "translations.json";
+    const response = await fetch(url);
     translations = await response.json();
     translationsReady = true;
     console.log('✓ Translations loaded:', Object.keys(translations));
@@ -913,8 +916,8 @@ function t(key, fallback = '') {
 
 function applyTranslations() {
   // Update all elements with data-i18n attribute
-  document.querySelectorAll('[data-i18n]').forEach((el) => {
-    const key = el.dataset.i18n;
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = el.getAttribute("data-i18n") || el.dataset.i18n;
     const translated = t(key);
     if (el.tagName === 'INPUT' && el.type === 'placeholder') {
       el.placeholder = translated;
@@ -926,19 +929,19 @@ function applyTranslations() {
   });
 
   // Update all elements with data-i18n-title attribute
-  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
-    const key = el.dataset.i18nTitle;
+  document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+    const key = el.getAttribute("data-i18n-title") || el.dataset.i18nTitle;
     el.title = t(key);
   });
 
   // Update all elements with data-i18n-placeholder attribute
-  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
-    const key = el.dataset.i18nPlaceholder;
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    const key = el.getAttribute("data-i18n-placeholder") || el.dataset.i18nPlaceholder;
     el.placeholder = t(key);
   });
 
   document.querySelectorAll("[data-i18n-aria-label]").forEach((el) => {
-    const key = el.dataset.i18nAriaLabel;
+    const key = el.getAttribute("data-i18n-aria-label") || el.dataset.i18nAriaLabel;
     if (key) el.setAttribute("aria-label", t(key));
   });
 }
@@ -11921,7 +11924,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.02";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.03";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
