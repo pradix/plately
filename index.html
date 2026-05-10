@@ -8,7 +8,7 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="3.1.16" />
+    <meta name="plately-build" content="3.1.17" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -1779,6 +1779,30 @@
         </div>
 
         <div class="auth-screen__surface">
+        <div class="auth-register-panel">
+          <div class="auth-register-panel__row">
+            <span class="auth-register-panel__chip" data-i18n="auth.registerPanelChip">Stap 1 · Je account</span>
+            <div class="auth-register-panel__icons" aria-hidden="true">
+              <div class="auth-register-panel__mini-icon auth-register-panel__mini-icon--channels">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 12h16" />
+                  <path d="M4 6h16" />
+                  <path d="M4 18h16" />
+                </svg>
+              </div>
+              <div class="auth-register-panel__mini-icon auth-register-panel__mini-icon--book">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z" />
+                  <path d="M4 16a4 4 0 0 1 4-4h12" />
+                </svg>
+              </div>
+            </div>
+            <p class="auth-register-panel__hint" data-i18n="auth.registerPanelHint">
+              Na aanmelden stel je je profiel verder in — met o.a. kanalen en een kookboek, dezelfde kaarten als in de app.
+            </p>
+          </div>
+        </div>
+        <div class="auth-screen__form-shell">
         <form id="authForm" class="auth-screen__form">
           <div class="auth-field" id="authNameField" style="display:none">
             <label class="auth-field__label" for="authName" data-i18n="auth.name">Naam</label>
@@ -1805,6 +1829,7 @@
 
           <button class="auth-screen__submit" id="submitAuthButton" type="submit">Inloggen</button>
         </form>
+        </div>
 
         <div class="auth-screen__apple-wrap hidden" id="appleSignInWrap" aria-hidden="true">
           <button type="button" class="auth-screen__apple-btn" id="appleSignInBtn" aria-label="Inloggen met Apple">
@@ -2129,6 +2154,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=3.1.16"></script>
+    <script src="app.js?v=3.1.17"></script>
   </body>
 </html>
