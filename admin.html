@@ -611,6 +611,29 @@
       </div>
       </div>
 
+      <!-- Nieuw Plately-kanaal -->
+      <div class="admin-tab-section" id="adminTabNewChannel" data-tab="channel-test">
+      <div class="section" id="newChannelSection" style="margin-top:16px">
+        <div class="section-header">
+          <h2>Nieuw Plately-kanaal</h2>
+          <div class="muted">Vul naam, URL en testzoekterm in — test via de scraper, voeg daarna globaal toe aan Plately</div>
+        </div>
+        <div id="newChannelError" class="error" style="display:none"></div>
+        <div class="admin-test__row" style="flex-wrap:wrap;gap:8px">
+          <input id="newChannelName" class="admin-test__input" type="text" placeholder="Naam (bijv. Lekker en Simpel)" style="min-width:180px;flex:1" />
+          <input id="newChannelUrl" class="admin-test__input" type="text" placeholder="Website URL (bijv. https://lekkersimpel.nl)" style="min-width:220px;flex:2" />
+          <input id="newChannelQuery" class="admin-test__input" type="text" placeholder="Testzoekterm (bijv. pasta)" style="min-width:140px;flex:1" />
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" type="button" onclick="newChannelTestSearch()">🔍 Test zoeken</button>
+          <button class="btn btn-primary" type="button" onclick="newChannelTestImport()">📥 Test import</button>
+          <button class="btn btn-success" type="button" id="newChannelAddBtn" onclick="newChannelAdd()" style="margin-left:auto">✅ Globaal toevoegen aan Plately</button>
+        </div>
+        <div id="newChannelStatus" class="muted" style="margin-top:8px"></div>
+        <div id="newChannelSearchResults" class="admin-test__results" style="margin-top:8px"></div>
+      </div>
+      </div>
+
       <div class="admin-tab-section" id="adminTabNotifications" data-tab="notifications">
       <div class="section" id="notificationsSection">
         <div class="section-header">
@@ -2266,8 +2289,8 @@
       }
     }
 
-    function renderChannelTestSearchResults(results, backendNote = "") {
-      const wrap = document.getElementById("channelTestSearchResults");
+    function renderChannelTestSearchResults(results, backendNote = "", containerId = "channelTestSearchResults") {
+      const wrap = document.getElementById(containerId);
       if (!wrap) return;
       const list = Array.isArray(results) ? results : [];
       const note = String(backendNote || "").trim();
@@ -2428,6 +2451,120 @@
         showChannelTestError(error.message);
       }
     }
+
+    // ── Nieuw Plately-kanaal ─────────────────────────────────────────────────
+    function getNewChannelFields() {
+      return {
+        name: (document.getElementById("newChannelName")?.value || "").trim(),
+        url: (document.getElementById("newChannelUrl")?.value || "").trim(),
+        query: (document.getElementById("newChannelQuery")?.value || "").trim(),
+      };
+    }
+    function setNewChannelStatus(html, isError = false) {
+      const el = document.getElementById("newChannelStatus");
+      const errEl = document.getElementById("newChannelError");
+      if (!el) return;
+      if (isError) {
+        el.innerHTML = "";
+        if (errEl) { errEl.textContent = html; errEl.style.display = ""; }
+      } else {
+        el.innerHTML = html;
+        if (errEl) errEl.style.display = "none";
+      }
+    }
+    function buildNewChannelCustomChannel() {
+      const { name, url } = getNewChannelFields();
+      return { name, url, initials: name.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase() || "NW", color: "#8da485" };
+    }
+    async function newChannelTestSearch() {
+      const { name, url, query } = getNewChannelFields();
+      const resultsEl = document.getElementById("newChannelSearchResults");
+      if (resultsEl) resultsEl.innerHTML = "";
+      if (!url) return setNewChannelStatus("Vul een URL in.", true);
+      if (!query || query.length < 2) return setNewChannelStatus("Vul een testzoekterm in (min 2 tekens).", true);
+      if (document.getElementById("newChannelError")) document.getElementById("newChannelError").style.display = "none";
+      setNewChannelStatus(`<span class="spinner" aria-hidden="true"></span> Zoeken…`);
+      try {
+        const payload = { channelKind: "custom", customChannel: buildNewChannelCustomChannel(), query, limit: 10 };
+        const response = await fetch("/api/admin/channel-test/search", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Search mislukt");
+        const results = data.results || [];
+        setNewChannelStatus(results.length ? `Top ${results.length} resultaten` : "Geen resultaten gevonden");
+        renderChannelTestSearchResults(results, String(data.searchBackendNote || ""), "newChannelSearchResults");
+      } catch (err) {
+        setNewChannelStatus(err.message, true);
+      }
+    }
+    async function newChannelTestImport() {
+      const { url } = getNewChannelFields();
+      const resultsEl = document.getElementById("newChannelSearchResults");
+      if (!url) return setNewChannelStatus("Vul een website-URL in (de homepage of een recept-URL).", true);
+      if (document.getElementById("newChannelError")) document.getElementById("newChannelError").style.display = "none";
+      // Try to import the URL directly (homepage or recipe page)
+      const importUrl = url.startsWith("http") ? url : `https://${url}`;
+      document.getElementById("channelTestImportUrl") && (document.getElementById("channelTestImportUrl").value = importUrl);
+      setNewChannelStatus(`<span class="spinner" aria-hidden="true"></span> Importeren…`);
+      try {
+        const response = await fetch("/api/admin/channel-test/import", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: importUrl }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Import mislukt");
+        const r = data.recipe || {};
+        const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        const ing = Number(r.ingredientsCount || 0);
+        const steps = Number(r.stepsCount || 0);
+        const imgHtml = r.image
+          ? `<img src="${esc(r.image)}" alt="" style="max-width:200px;max-height:130px;border-radius:6px;border:1px solid #ddd;margin-top:6px">`
+          : `<span style="color:#a00;font-size:12px">⚠️ geen afbeelding</span>`;
+        setNewChannelStatus(
+          `<div>✅ <strong>${esc(r.title || "—")}</strong> · ${ing} ingrediënten · ${steps} stappen</div>` +
+          `<div style="font-size:12px;color:#444">tijd: ${esc(r.time||"—")} · porties: ${esc(r.servings||"—")}</div>` +
+          imgHtml
+        );
+      } catch (err) {
+        setNewChannelStatus(err.message, true);
+      }
+    }
+    async function newChannelAdd() {
+      const { name, url } = getNewChannelFields();
+      if (!name) return setNewChannelStatus("Vul een naam in.", true);
+      if (!url) return setNewChannelStatus("Vul een URL in.", true);
+      const btn = document.getElementById("newChannelAddBtn");
+      if (btn) btn.disabled = true;
+      setNewChannelStatus(`<span class="spinner" aria-hidden="true"></span> Toevoegen…`);
+      try {
+        const response = await fetch("/api/admin/global-channel", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, url }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Toevoegen mislukt");
+        const ch = data.channel || {};
+        setNewChannelStatus(`✅ Kanaal <strong>${ch.name || name}</strong> globaal toegevoegd! ID: <code>${ch.id}</code>`);
+        // Clear form
+        ["newChannelName","newChannelUrl","newChannelQuery"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.value = "";
+        });
+        const resultsEl = document.getElementById("newChannelSearchResults");
+        if (resultsEl) resultsEl.innerHTML = "";
+        // Refresh channels list if visible
+        if (typeof loadAdminChannels === "function") loadAdminChannels();
+      } catch (err) {
+        setNewChannelStatus(err.message, true);
+        if (btn) btn.disabled = false;
+      }
+    }
+    // ── /Nieuw Plately-kanaal ─────────────────────────────────────────────────
 
     function readNotificationForm() {
       const templateKey = String(document.getElementById("notifTemplateKey")?.value || "").trim();
