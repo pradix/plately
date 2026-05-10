@@ -4113,20 +4113,16 @@ function getChannelImportLoadingMarkup() {
 
 /** @param {{ ratingValue?: number; ratingCount?: number }} r */
 function formatChannelSearchRatingHtml(r) {
+  const cnt = Number(r?.ratingCount);
+  if (!Number.isFinite(cnt) || cnt < 1) return "";
   const raw = r?.ratingValue;
   if (raw == null || raw === "") return "";
   const num = Math.min(5, Math.max(1, Math.round(Number(raw))));
-  if (!Number.isFinite(num)) return "";
-  const cnt = Number(r?.ratingCount);
-  const cntOk = Number.isFinite(cnt) && cnt > 0;
-  const label = cntOk
-    ? `Gemiddeld ${num} van 5 sterren, ${cnt} ${cnt === 1 ? "waardering" : "waarderingen"}`
-    : `Gemiddeld ${num} van 5 sterren`;
+  if (!Number.isFinite(num) || num < 1) return "";
+  const label = `Gemiddeld ${num} van 5 sterren, ${cnt} ${cnt === 1 ? "waardering" : "waarderingen"}`;
   const starSvg =
     '<svg class="ch-card__rating-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27z"/></svg>';
-  const countHtml = cntOk
-    ? `<span class="ch-card__rating-sep" aria-hidden="true">·</span><span class="ch-card__rating-count">${cnt}×</span>`
-    : "";
+  const countHtml = `<span class="ch-card__rating-sep" aria-hidden="true">·</span><span class="ch-card__rating-count">${cnt}×</span>`;
   return `<div class="ch-card__rating">
     <span class="ch-card__rating-pill" aria-label="${escapeHtml(label)}">
       ${starSvg}

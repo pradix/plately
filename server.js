@@ -5269,23 +5269,28 @@ function findRecipeJsonLd(html) {
   );
 }
 
-/** Gemiddelde score + aantal uit schema.org Recipe (zoals op kanaal-receptpagina's). */
+/**
+ * Gemiddelde score + aantal uit schema.org Recipe.
+ * Geen minimum naar 1 afdwingen — ontbrekende of placeholdertoontjes (vaak 1/5) worden genegeerd.
+ * Zonder minstens 1 waardering tonen we geen score (eist consistentie met UI).
+ */
 function extractAggregateRatingFromRecipeHtml(html) {
   if (!html || typeof html !== "string") return null;
   const recipe = findRecipeJsonLd(html);
   const agg = recipe?.aggregateRating;
   if (!agg || typeof agg !== "object") return null;
   let ratingValue = Number(agg.ratingValue);
-  if (!Number.isFinite(ratingValue)) return null;
+  if (!Number.isFinite(ratingValue) || ratingValue <= 0) return null;
+  let ratingCount = Number(agg.ratingCount ?? agg.reviewCount ?? 0);
+  if (!Number.isFinite(ratingCount) || ratingCount < 1) return null;
   const best = Number(agg.bestRating);
   if (Number.isFinite(best) && best > 5 && ratingValue <= 10) {
-    ratingValue = Math.round((ratingValue / best) * 5);
+    ratingValue = (ratingValue / best) * 5;
   } else if (!Number.isFinite(best) && ratingValue > 5 && ratingValue <= 10) {
-    ratingValue = Math.round(ratingValue / 2);
+    ratingValue = ratingValue / 2;
   }
-  ratingValue = Math.min(5, Math.max(1, Math.round(ratingValue)));
-  let ratingCount = Number(agg.ratingCount ?? agg.reviewCount ?? 0);
-  if (!Number.isFinite(ratingCount) || ratingCount < 0) ratingCount = 0;
+  ratingValue = Math.round(ratingValue);
+  if (ratingValue < 1 || ratingValue > 5) return null;
   return { ratingValue, ratingCount };
 }
 
@@ -9469,7 +9474,7 @@ function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam 
   }
   const custom = String(customChannelsParam || "").trim();
   // Bump when API-resultaatscherm wijzigt (bijv. ratingvelden) — oude cache mist die velden.
-  const schema = "cs-v5";
+  const schema = "cs-v6";
   return `${q}||${channels}||${custom}||${schema}`;
 }
 
@@ -9753,7 +9758,7 @@ function extractAhSearchRatingsFromAllerhandeHtml(html) {
     const ratingValue = Number(averageRaw);
     if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) continue;
     const ratingCount = Number(m[4]);
-    if (!Number.isFinite(ratingCount) || ratingCount < 0) continue;
+    if (!Number.isFinite(ratingCount) || ratingCount < 1) continue;
     const entry = { ratingValue, ratingCount };
     put(`r-r${m[1]}`.toLowerCase(), entry);
     const sl = String(m[2] || "").trim().toLowerCase();
@@ -9769,7 +9774,7 @@ function extractAhSearchRatingsFromAllerhandeHtml(html) {
       const ratingValue = Number(averageRaw);
       if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) continue;
       const ratingCount = Number(m[3]);
-      if (!Number.isFinite(ratingCount) || ratingCount < 0) continue;
+      if (!Number.isFinite(ratingCount) || ratingCount < 1) continue;
       put(`r-r${m[1]}`.toLowerCase(), { ratingValue, ratingCount });
     }
   }
