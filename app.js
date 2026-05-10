@@ -581,6 +581,13 @@ const CLIENT_TRACK_ALLOWED = new Set([
   "client_kookstand",
   "client_cookbook_save",
   "client_import_success",
+  "client_ah_wissel_open",
+  "client_ah_wissel_pick",
+  "client_ah_research",
+  "client_ah_bio_toggle",
+  "client_channel_search_import",
+  "client_import_review_saved",
+  "client_recipe_deleted",
 ]);
 const __clientEventQueue = [];
 let __clientEventFlushTimer = null;
@@ -634,6 +641,16 @@ function trackClientEvent(type, meta = {}) {
   });
   if (__clientEventQueue.length >= 10) flushClientEventsBatch();
   else scheduleClientEventsFlush();
+}
+
+function hostnameForAnalytics(url) {
+  try {
+    return String(new URL(url).hostname || "")
+      .replace(/^www\./i, "")
+      .slice(0, 96);
+  } catch {
+    return "";
+  }
 }
 
 if (typeof document !== "undefined") {
@@ -2274,6 +2291,10 @@ async function researchBasketItem(itemIndex, { excludeCurrent = true } = {}) {
     if (payload?.choices?.length) {
       item.choices = payload.choices;
       item.selectedChoiceIndex = 0;
+      trackClientEvent("client_ah_research", {
+        choiceCount: payload.choices.length,
+        exclude: exclude.length,
+      });
       renderBasketPreview();
     } else {
       showToast("Geen betere match gevonden.");
@@ -2935,6 +2956,9 @@ function openAlternativesSheet(itemIndex) {
     const listEl = document.getElementById("altOverlayList");
     if (listEl) listEl.innerHTML = `<p class="alt-sheet__empty">Kon alternatieven niet laden. Probeer opnieuw.</p>`;
   }
+
+  const altN = Array.isArray(item.choices) ? item.choices.length : 0;
+  trackClientEvent("client_ah_wissel_open", { choices: altN });
 
   const listEl = document.getElementById("altOverlayList");
   if (listEl) listEl.scrollTop = 0;
@@ -6756,6 +6780,11 @@ function saveImportReview() {
   schedulePersistAppState();
   reviewFeedback.textContent = "Recept bijgewerkt.";
   showToast(`${recipe.title} is opgeslagen.`);
+  trackClientEvent("client_import_review_saved", {
+    ingredients: nextIngredients.length,
+    steps: nextInstructions.length,
+    needs_review: Boolean(recipe.needsReview),
+  });
   openCookbookSaveModal(recipe.id);
 }
 
@@ -10951,12 +10980,17 @@ bindEvent(document.getElementById("deleteRecipeButton"), "click", () => {
     confirmLabel: "Verwijderen",
     destructive: true,
     onConfirm: () => {
+      trackClientEvent("client_recipe_deleted", {
+        was_preview: Boolean(state.importPreviews?.[recipe.id]),
+        in_cookbooks: state.cookbooks.filter((cb) => (cb.recipeIds || []).includes(recipe.id)).length,
+      });
       // Remove from recipes list
       state.recipes = state.recipes.filter((r) => r.id !== recipe.id);
       // Remove from all cookbooks
       state.cookbooks.forEach((cb) => {
         cb.recipeIds = cb.recipeIds.filter((id) => id !== recipe.id);
       });
+      if (state.importPreviews?.[recipe.id]) delete state.importPreviews[recipe.id];
       // Reset selectedRecipeId to first remaining recipe
       if (state.selectedRecipeId === recipe.id) {
         state.selectedRecipeId = state.recipes[0]?.id || "";
@@ -11517,6 +11551,10 @@ bindEvent(channelSearchResults, "click", async (event) => {
     recipe._previewCreatedAt = Date.now();
     state.importPreviews[recipe.id] = recipe;
     state.selectedRecipeId = recipe.id;
+    trackClientEvent("client_channel_search_import", {
+      surface: "home_search",
+      host: hostnameForAnalytics(url),
+    });
     openImportReview(recipe.id);
     showToast(`${recipe.title} klaar om na te lopen.`);
     // Clear search and force-close the channel-search panel so it isn't
@@ -11700,7 +11738,10 @@ bindEvent(document.getElementById("basketFilterRow"), "click", (e) => {
   const chip = e.target.closest("[data-filter]");
   if (!chip) return;
   const f = chip.dataset.filter;
-  if (f === "bio") state.basketFilter.bio = !state.basketFilter.bio;
+  if (f === "bio") {
+    state.basketFilter.bio = !state.basketFilter.bio;
+    trackClientEvent("client_ah_bio_toggle", { active: state.basketFilter.bio });
+  }
   scheduleRefetchBasketWithPreferences();
 });
 
@@ -11841,7 +11882,9 @@ bindEvent(document.getElementById("altOverlayList"), "click", (e) => {
   const itemIdx = state.altSheetItemIndex;
   const item = state.basketPreview?.items?.[itemIdx];
   if (!item || !Number.isInteger(choiceIdx)) return;
+  const prevIdx = Number.isInteger(item.selectedChoiceIndex) ? item.selectedChoiceIndex : 0;
   item.selectedChoiceIndex = choiceIdx;
+  trackClientEvent("client_ah_wissel_pick", { from: prevIdx, to: choiceIdx });
   closeAlternativesSheet();
   renderBasketPreview();
 });
@@ -13265,6 +13308,10 @@ bindEvent(document.getElementById("importChannelSearchResults"), "click", async 
     if (importSearchInput) importSearchInput.value = "";
     const section = document.getElementById("importChannelSearchSection");
     if (section) section.classList.add("hidden");
+    trackClientEvent("client_channel_search_import", {
+      surface: "import_screen_search",
+      host: hostnameForAnalytics(url),
+    });
     openImportReview(recipe.id);
   } catch (err) {
     showToast(err.message || "Importeren mislukt");

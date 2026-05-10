@@ -4127,6 +4127,14 @@ button.ingredient-item {
   padding: 0 20px 8px;
 }
 
+.profile2-privacy-note {
+  margin: -4px 20px 18px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #9ca3af;
+  max-width: 40rem;
+}
+
 .profile2-card {
   background: #fff;
   border-radius: 16px;

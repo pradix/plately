@@ -7552,6 +7552,13 @@ const CLIENT_INGEST_EVENT_TYPES = new Set([
   "client_kookstand",
   "client_cookbook_save",
   "client_import_success",
+  "client_ah_wissel_open",
+  "client_ah_wissel_pick",
+  "client_ah_research",
+  "client_ah_bio_toggle",
+  "client_channel_search_import",
+  "client_import_review_saved",
+  "client_recipe_deleted",
 ]);
 
 const clientIngestBudget = new Map();
