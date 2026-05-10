@@ -936,6 +936,11 @@ function applyTranslations() {
     const key = el.dataset.i18nPlaceholder;
     el.placeholder = t(key);
   });
+
+  document.querySelectorAll("[data-i18n-aria-label]").forEach((el) => {
+    const key = el.dataset.i18nAriaLabel;
+    if (key) el.setAttribute("aria-label", t(key));
+  });
 }
 
 // Load translations immediately (non-blocking)

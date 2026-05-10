@@ -3716,7 +3716,11 @@ button.ingredient-item {
   outline-offset: 2px;
 }
 
-/* Home: korte tips + vertrouwen (uit te zetten per apparaat) */
+/* Home: korte tips + vertrouwen (direct onder import; uit te zetten per apparaat) */
+.import-banner + .home-growth-panel {
+  margin-top: 4px;
+}
+
 .home-growth-panel {
   margin: 0 var(--space-7) var(--space-10);
   padding: 14px 16px 16px;

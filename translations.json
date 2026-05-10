@@ -19,6 +19,20 @@
     "home.saved": "Opgeslagen recepten",
     "home.addCookbook": "Kookboek toevoegen",
     "home.noCookbooks": "Je hebt nog geen kookboeken. Maak er eentje aan!",
+    "home.growthAriaLabel": "Tips om te starten",
+    "home.growthTitle": "Snel aan de slag",
+    "home.growthDismiss": "Verbergen",
+    "home.growthDismissAria": "Deze tips verbergen",
+    "home.growthTip1":
+      "Import — Plak een link van TikTok, Instagram of een receptsite in het veld hierboven.",
+    "home.growthTip2":
+      "Zoeken — In de zoekbalk hoger op dit scherm zoek je al op je favoriete kanalen. Plately heeft populaire recepten en thema’s al als handige zoekwoorden klaar staan.",
+    "home.growthTip3":
+      "Kookboek — Bewaar recepten per thema via het hartje of de knop “Bewaar” op een recept.",
+    "home.growthTip4":
+      "Boodschappen — Zet ingrediënten op je lijst en werk je AH-mandje vanuit Plately bij.",
+    "home.growthTrust":
+      "Receptteksten en foto’s komen vaak van externe makers. Controleer altijd zelf vóór je kookt — Plately is je persoonlijke kookassistent, geen uitgever.",
 
     "search.placeholder": "Zoeken naar recepten...",
     "search.noResults": "Geen recepten gevonden",
@@ -168,6 +182,20 @@
     "home.saved": "Saved recipes",
     "home.addCookbook": "Add cookbook",
     "home.noCookbooks": "You don't have any cookbooks yet. Create one!",
+    "home.growthAriaLabel": "Tips to get started",
+    "home.growthTitle": "Get started quickly",
+    "home.growthDismiss": "Hide",
+    "home.growthDismissAria": "Hide these tips",
+    "home.growthTip1":
+      "Import — Paste a link from TikTok, Instagram or a recipe site in the field above.",
+    "home.growthTip2":
+      "Search — Use the search bar higher on this screen to search your favourite channels. Plately already has popular recipes and themes set up as handy search keywords.",
+    "home.growthTip3":
+      "Cookbook — Save recipes by theme using the heart or “Save” on a recipe.",
+    "home.growthTip4":
+      "Groceries — Add ingredients to your list and update your Albert Heijn basket from Plately.",
+    "home.growthTrust":
+      "Recipe text and photos often come from external creators. Always double-check before you cook — Plately is your personal cooking assistant, not a publisher.",
 
     "search.placeholder": "Search recipes...",
     "search.noResults": "No recipes found",

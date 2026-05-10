@@ -8,7 +8,7 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="3.1.17" />
+    <meta name="plately-build" content="3.1.18" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -37,7 +37,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=3.1.16" />
+    <link rel="stylesheet" href="styles.css?v=3.1.18" />
   </head>
   <body>
     <main class="page">
@@ -118,6 +118,44 @@
             </form>
           </section>
 
+          <section
+            class="home-growth-panel"
+            id="homeGrowthPanel"
+            data-i18n-aria-label="home.growthAriaLabel"
+            aria-label="Tips om te starten"
+          >
+            <div class="home-growth-panel__head">
+              <h3 class="home-growth-panel__title" data-i18n="home.growthTitle">Snel aan de slag</h3>
+              <button
+                type="button"
+                class="home-growth-panel__dismiss"
+                id="homeGrowthDismiss"
+                data-i18n="home.growthDismiss"
+                data-i18n-aria-label="home.growthDismissAria"
+                aria-label="Deze tips verbergen"
+              >
+                Verbergen
+              </button>
+            </div>
+            <ul class="home-growth-panel__list">
+              <li data-i18n="home.growthTip1">
+                Import — Plak een link van TikTok, Instagram of een receptsite in het veld hierboven.
+              </li>
+              <li data-i18n="home.growthTip2">
+                Zoeken — In de zoekbalk hoger op dit scherm zoek je al op je favoriete kanalen. Plately heeft populaire recepten en thema’s al als handige zoekwoorden klaar staan.
+              </li>
+              <li data-i18n="home.growthTip3">
+                Kookboek — Bewaar recepten per thema via het hartje of de knop “Bewaar” op een recept.
+              </li>
+              <li data-i18n="home.growthTip4">
+                Boodschappen — Zet ingrediënten op je lijst en werk je AH-mandje vanuit Plately bij.
+              </li>
+            </ul>
+            <p class="home-growth-panel__trust" data-i18n="home.growthTrust">
+              Receptteksten en foto’s komen vaak van externe makers. Controleer altijd zelf vóór je kookt — Plately is je persoonlijke kookassistent, geen uitgever.
+            </p>
+          </section>
+
           <!-- Recentelijk toegevoegd -->
           <section class="section-heading hidden" id="recentImportsHeading">
             <h2>Recentelijk</h2>
@@ -143,21 +181,6 @@
             <button type="button" class="ghost-link" id="viewAllCookbooksBtn">Bekijk alles</button>
           </section>
           <div class="home-cb-strip" id="homeCbStrip"></div>
-
-          <section class="home-growth-panel" id="homeGrowthPanel" aria-label="Tips om te starten">
-            <div class="home-growth-panel__head">
-              <h3 class="home-growth-panel__title">Snel aan de slag</h3>
-              <button type="button" class="home-growth-panel__dismiss" id="homeGrowthDismiss" aria-label="Deze tips verbergen">Verbergen</button>
-            </div>
-            <ul class="home-growth-panel__list">
-              <li><strong>Import</strong> — Plak een link van TikTok, Instagram of een receptsite in het veld hierboven.</li>
-              <li><strong>Kookboek</strong> — Bewaar recepten per thema via het hartje of de knop “Bewaar” op een recept.</li>
-              <li><strong>Boodschappen</strong> — Zet ingrediënten op je lijst en werk je AH-mandje vanuit Plately bij.</li>
-            </ul>
-            <p class="home-growth-panel__trust">
-              Receptteksten en foto’s komen vaak van externe makers. Controleer altijd zelf vóór je kookt — Plately is je persoonlijke kookassistent, geen uitgever.
-            </p>
-          </section>
 
           <!-- Hidden slider elements kept for JS compatibility -->
           <div hidden aria-hidden="true">
@@ -2154,6 +2177,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=3.1.17"></script>
+    <script src="app.js?v=3.1.18"></script>
   </body>
 </html>
