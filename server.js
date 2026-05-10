@@ -596,6 +596,17 @@ const CHANNEL_SEARCH_SERPER_FALLBACK_IDS = new Set(["ch-mj", "ch-ek"]);
 const SEARCH_WP_REST_FIRST_IDS = new Set(["ch-mj", "ch-ek"]);
 
 /**
+ * Miljuschka/Eef (seed) + admin “nieuw kanaal” / user custom (ch-preview-*, ch-custom-*): zelfde Cloudflare-probleem.
+ * Zonder Serper (`SERPER_API_KEY`) geeft de server vaak 0 resultaten terwijl de site in de browser wel treffers heeft.
+ */
+function channelIdUsesSerperFallback(channelId) {
+  const id = String(channelId || "");
+  if (CHANNEL_SEARCH_SERPER_FALLBACK_IDS.has(id)) return true;
+  if (id.startsWith("ch-preview-") || id.startsWith("ch-custom-")) return true;
+  return false;
+}
+
+/**
  * Kanalen waar zoekresultaten uit de eigen site-index komen; titels herhalen het zoekwoord niet altijd
  * (bv. query „surinaamse” → „Klassieke roti zelf maken”).
  * Miljuschka / Eef: vaak Serper Google `site:` hits — titel/snippet komen van Google, geen strikte woordmatch.
@@ -9225,9 +9236,16 @@ const channelSearchCache = new Map(); // key -> { at:number, results:any[] }
 
 function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam }) {
   const q = String(query || "").trim().toLowerCase();
-  const channels = Array.isArray(allowedChannels) && allowedChannels.length
-    ? [...allowedChannels].map((s) => String(s || "").trim()).filter(Boolean).sort().join(",")
-    : "*";
+  let channels;
+  if (allowedChannels === null) {
+    channels = "*";
+  } else if (Array.isArray(allowedChannels)) {
+    channels = allowedChannels.length
+      ? [...allowedChannels].map((s) => String(s || "").trim()).filter(Boolean).sort().join(",")
+      : "∅";
+  } else {
+    channels = "*";
+  }
   const custom = String(customChannelsParam || "").trim();
   return `${q}||${channels}||${custom}`;
 }
@@ -9405,7 +9423,7 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count, meta 
  * API key: https://serper.dev/ — set SERPER_API_KEY or PLATELY_SERP_API_KEY.
  */
 async function serperGoogleSiteSearchRecipes({ baseUrl, channelName, channelId, query, count }) {
-  if (!CHANNEL_SEARCH_SERPER_FALLBACK_IDS.has(channelId)) return [];
+  if (!channelIdUsesSerperFallback(channelId)) return [];
   const apiKey = sanitizeText(process.env.SERPER_API_KEY || process.env.PLATELY_SERP_API_KEY || "").trim();
   if (!apiKey) return [];
   let host = "";
@@ -9480,8 +9498,8 @@ async function serperGoogleSiteSearchRecipes({ baseUrl, channelName, channelId, 
 function channelSearchBackendNote(channelId, resultCount) {
   const n = Number(resultCount || 0);
   if (n > 0) return "";
-  if (!CHANNEL_SEARCH_SERPER_FALLBACK_IDS.has(channelId)) return "";
-  const label = channelId === "ch-mj" ? "Miljuschka" : channelId === "ch-ek" ? "Eef Kookt Zo" : "Dit kanaal";
+  if (!channelIdUsesSerperFallback(channelId)) return "";
+  const label = channelId === "ch-mj" ? "Miljuschka" : channelId === "ch-ek" ? "Eef Kookt Zo" : "Deze site";
   const serperOn = Boolean(sanitizeText(process.env.SERPER_API_KEY || process.env.PLATELY_SERP_API_KEY || "").trim());
   if (!serperOn) {
     return `${label} blokkeert zoekrequests van servers (bv. Cloudflare). Zet SERPER_API_KEY voor Google site:-zoeken via serper.dev — zie .env.example.`;
@@ -10100,7 +10118,7 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
   // Miljuschka / Eef Kookt Zo block datacenter + reader IPs (403 / Cloudflare). Serper runs in
   // parallel so we don't wait on slow HTML → REST → Jina timeouts before hitting Google site:.
   const serpEarly =
-    CHANNEL_SEARCH_SERPER_FALLBACK_IDS.has(channelId) &&
+    channelIdUsesSerperFallback(channelId) &&
     serperGoogleSiteSearchRecipes({
       baseUrl,
       channelName,
@@ -10147,14 +10165,17 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
 
 async function searchChannelRecipes(query, allowedChannels = null) {
   const q = encodeURIComponent(query);
-  // null = all channels; array = only those channel IDs
-  const allow = allowedChannels && allowedChannels.length ? new Set(allowedChannels) : null;
+  // null = alle seed-kanalen; [] = géén seeds (alleen custom via /api/channel-search); anders = alleen die IDs
+  const allow =
+    allowedChannels === null
+      ? null
+      : new Set(Array.isArray(allowedChannels) ? allowedChannels.map((s) => String(s || "").trim()).filter(Boolean) : []);
   const seedOverrides = await getSeedChannelOverrides();
   const cfg = (id) => getEffectiveSeedChannelConfig(id, seedOverrides);
 
   async function scrapeOrRest(baseUrl, channelName, channelId, searchUrl, parser, count) {
     const serpEarly =
-      CHANNEL_SEARCH_SERPER_FALLBACK_IDS.has(channelId) &&
+      channelIdUsesSerperFallback(channelId) &&
       serperGoogleSiteSearchRecipes({
         baseUrl,
         channelName,
@@ -11554,8 +11575,10 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 200, { ok: true, results: [] });
         return;
       }
+      const channelsParamPresent = requestUrl.searchParams.has("channels");
       const channelsParam = sanitizeText(requestUrl.searchParams.get("channels") || "");
-      const allowedChannels = channelsParam
+      // Omitted `channels` → zoek alle seed-bronnen (legacy/dev). Wel `channels=` of `channels=a,b` → exact die set (mag leeg = geen seeds).
+      const allowedChannels = channelsParamPresent
         ? channelsParam.split(",").map((s) => s.trim()).filter(Boolean)
         : null;
       // Handle custom channels
@@ -11586,9 +11609,8 @@ const server = http.createServer(async (request, response) => {
           })
           .filter((ch) => ch && ch.id && ch.name && ch.url);
 
-        const enabledSeedIds = Array.isArray(allowedChannels) && allowedChannels.length
-          ? allowedChannels
-          : Object.keys(SEED_CHANNEL_DEFAULTS);
+        const enabledSeedIds =
+          allowedChannels === null ? Object.keys(SEED_CHANNEL_DEFAULTS) : allowedChannels;
         const enabledSeedBaseUrls = enabledSeedIds
           .map((id) => SEED_CHANNEL_DEFAULTS[id]?.baseUrl || "")
           .filter(Boolean);

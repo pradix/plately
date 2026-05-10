@@ -3891,12 +3891,10 @@ function getActiveFollowedSeedChannelIds() {
 }
 
 /**
- * Alle ingeschakelde seed-kanalen voor /api/channel-search — los van "volgen".
- * Volgen ≠ ontdekken: gebruikers hoeven Miljuschka niet te volgen om die bron in zoekresultaten te krijgen;
- * admins testen één bron tegelijk; de app zoekt breed tenzij een bron in standaarden uit staat.
+ * Seed-kanalen die het account volgt én die in de app aan staan — gebruikt voor home-/import-zoeken.
  */
 function getSeedChannelIdsForRecipeSearch() {
-  return SEED_CHANNELS.map((ch) => ch.id).filter((id) => isSeedChannelEnabled(id));
+  return getActiveFollowedSeedChannelIds();
 }
 
 function countActiveFollowedChannels() {
