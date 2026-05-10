@@ -2474,7 +2474,8 @@
     }
     function buildNewChannelCustomChannel() {
       const { name, url } = getNewChannelFields();
-      return { name, url, initials: name.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase() || "NW", color: "#8da485" };
+      const slug = (() => { try { return new URL(url).hostname.replace(/^www\./i, "").replace(/[^a-z0-9]+/gi, "-"); } catch { return "preview"; } })();
+      return { id: `ch-preview-${slug}`, name, url, initials: name.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase() || "NW", color: "#8da485" };
     }
     async function newChannelTestSearch() {
       const { name, url, query } = getNewChannelFields();
