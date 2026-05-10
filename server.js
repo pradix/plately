@@ -9448,7 +9448,9 @@ function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam 
     channels = "*";
   }
   const custom = String(customChannelsParam || "").trim();
-  return `${q}||${channels}||${custom}`;
+  // Bump when API-resultaatscherm wijzigt (bijv. ratingvelden) — oude cache mist die velden.
+  const schema = "cs-v3";
+  return `${q}||${channels}||${custom}||${schema}`;
 }
 
 function getCachedChannelSearch(key) {
@@ -9711,30 +9713,65 @@ function channelSearchBackendNote(channelId, resultCount) {
 /**
  * Allerhande-zoek HTML bevat geserialiseerde GraphQL/Flight-data met RecipeSummary + RecipeRating
  * (gemiddelde 1–5 en aantal waarderingen). We mappen op recept-id (r-r…).
+ * Eén regex-blok koppelt id + rating zodat we geen verkeerde \"id\" uit nested velden pakken.
  */
 function extractAhSearchRatingsFromAllerhandeHtml(html) {
   const map = new Map();
   if (!html || typeof html !== "string" || html.length < 800) return map;
-  const delim = '\\"__typename\\":\\"RecipeSummary\\"';
-  if (!html.includes("RecipeSummary")) return map;
-  const parts = html.split(delim);
-  const reId = /\\"id\\":(\d+)/;
-  const reRating =
-    /\\"rating\\":\{\\"__typename\\":\\"RecipeRating\\",\\"average\\":(\d+|null),\\"count\\":(\d+)/;
-  for (let i = 1; i < parts.length; i++) {
-    const segment = parts[i];
-    const idMatch = segment.match(reId);
-    const ratingMatch = segment.match(reRating);
-    if (!idMatch || !ratingMatch) continue;
-    const averageRaw = ratingMatch[1];
+  if (!html.includes("RecipeSummary") || !html.includes("RecipeRating")) return map;
+  const row =
+    /\\"__typename\\":\\"RecipeSummary\\",\\"id\\":(\d+)[\s\S]{0,32000}?\\"rating\\":\{\\"__typename\\":\\"RecipeRating\\",\\"average\\":(\d+|null),\\"count\\":(\d+)/g;
+  let m;
+  while ((m = row.exec(html)) !== null) {
+    const averageRaw = m[2];
     if (averageRaw === "null") continue;
     const ratingValue = Number(averageRaw);
     if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) continue;
-    const ratingCount = Number(ratingMatch[2]);
+    const ratingCount = Number(m[3]);
     if (!Number.isFinite(ratingCount) || ratingCount < 0) continue;
-    map.set(`r-r${idMatch[1]}`.toLowerCase(), { ratingValue, ratingCount });
+    map.set(`r-r${m[1]}`.toLowerCase(), { ratingValue, ratingCount });
   }
   return map;
+}
+
+/** AH zoek-HTML voor datacenters die 403/lege body geven op de eerste fetch. */
+async function fetchAllerhandeSearchHtmlWithRetry(searchUrl) {
+  const baseHeaders = {
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.5",
+    Referer: "https://www.ah.nl/allerhande/",
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
+  };
+  const attempts = [
+    {
+      ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      timeout: 16_000,
+    },
+    {
+      ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:125.0) Gecko/20100101 Firefox/125.0",
+      timeout: 16_000,
+    },
+    {
+      ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+      timeout: 18_000,
+    },
+  ];
+  for (const att of attempts) {
+    try {
+      const r = await fetch(searchUrl, {
+        headers: { ...baseHeaders, "User-Agent": att.ua },
+        signal: AbortSignal.timeout(att.timeout),
+        redirect: "follow",
+      });
+      if (!r.ok) continue;
+      const t = await r.text();
+      if (t && t.includes("RecipeSummary") && t.length > 4000) return t;
+    } catch (err) {
+      console.log(`AH HTML retry fetch: ${err?.message || err}`);
+    }
+  }
+  return "";
 }
 
 /**
@@ -9764,13 +9801,14 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
       }),
       fetch(searchUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           "Accept-Language": "nl-NL,nl;q=0.9",
           "Referer": "https://www.ah.nl/allerhande/",
           "Cache-Control": "no-cache",
         },
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(14_000),
+        redirect: "follow",
       }).catch((err) => {
         console.log(`HTML fetch error: ${err.message}`);
         return null;
@@ -9790,7 +9828,22 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
       }
       console.log(`✅ Jina returned ${markdown.length} chars, HTML: ${html.length} chars`);
 
-      const ahRatingByRecipeId = extractAhSearchRatingsFromAllerhandeHtml(html);
+      let ahRatingByRecipeId = extractAhSearchRatingsFromAllerhandeHtml(html);
+      if (ahRatingByRecipeId.size === 0) {
+        console.log("⭐ AH ratings: none from parallel HTML — retrying dedicated fetch for RecipeSummary JSON");
+        const htmlRetry = await fetchAllerhandeSearchHtmlWithRetry(searchUrl);
+        if (htmlRetry) {
+          if (htmlRetry.length > (html || "").length) {
+            html = htmlRetry;
+          } else if (!(html || "").includes("RecipeSummary")) {
+            html = htmlRetry;
+          }
+          ahRatingByRecipeId = extractAhSearchRatingsFromAllerhandeHtml(html);
+        }
+        console.log(`⭐ AH ratings map size: ${ahRatingByRecipeId.size} (HTML after retry: ${(html || "").length} chars)`);
+      } else {
+        console.log(`⭐ AH ratings map size: ${ahRatingByRecipeId.size}`);
+      }
 
       // Extract recipe links from Jina output — alleen `/recept/…` met Allerhande-id `r-r123…/slug`.
       const allRecipeUrls = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recept\/([^\s\)]+)/g)];
