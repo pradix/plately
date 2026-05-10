@@ -20,7 +20,19 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=3.0.9" />
+    <link rel="stylesheet" href="styles.css?v=3.1.0" />
+    <script>
+      (function () {
+        try {
+          var p = localStorage.getItem("plately-theme") || "system";
+          var dark =
+            p === "dark" ||
+            (p === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+          document.documentElement.setAttribute("data-theme-pref", p);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <main class="page">
@@ -524,8 +536,6 @@
             </button>
           </div>
 
-          <p class="profile2-privacy-note" lang="nl">Plately registreert beperkte, anonieme gebruiksdata (welke schermen je opent, of imports en koppelingen met de supermarkt slagen) om de app te verbeteren. Dit is gekoppeld aan je account als je bent ingelogd; anders wordt er een tijdelijk id op dit apparaat gebruikt. We verkopen deze gegevens niet.</p>
-
           <!-- VOORKEUREN section -->
           <p class="profile2-section-label">VOORKEUREN</p>
           <div class="profile2-card">
@@ -555,6 +565,15 @@
               <span class="profile2-row__meta" id="profileLanguageMeta">Nederlands</span>
               <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
             </button>
+            <div class="profile2-row-divider"></div>
+            <button class="profile2-row" type="button" id="goToAppearanceBtn">
+              <span class="profile2-row__icon" style="background:#f3e8ff">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+              </span>
+              <span class="profile2-row__label">Weergave</span>
+              <span class="profile2-row__meta" id="profileThemeMeta">Systeem</span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
           </div>
 
           <!-- PLATELY section -->
@@ -574,6 +593,14 @@
               </span>
               <span class="profile2-row__label">Over deze App</span>
               <span class="profile2-row__meta" id="profileAboutVersionMeta"></span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <div class="profile2-row-divider"></div>
+            <button class="profile2-row" type="button" id="goToPrivacyBtn">
+              <span class="profile2-row__icon" style="background:#ecfeff">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#0e7490" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </span>
+              <span class="profile2-row__label">Privacy</span>
               <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
             </button>
           </div>
@@ -821,6 +848,50 @@
                 </div>
 
                 <p class="about-app__copyright">© 2026 Plately</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ Sub-panel: Privacy ══ -->
+          <div class="profile-subpanel" id="profileSubPrivacy" aria-hidden="true">
+            <header class="topbar--sub">
+              <button class="topbar-back-btn" id="profileSubPrivacyBack" type="button" aria-label="Terug">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <h1 class="topbar-title">Privacy</h1>
+              <span class="topbar-spacer"></span>
+            </header>
+            <div class="profile-subpanel__body">
+              <p class="profile2-privacy-note profile2-privacy-note--subpanel" lang="nl">Plately registreert beperkte, anonieme gebruiksdata (welke schermen je opent, of imports en koppelingen met de supermarkt slagen) om de app te verbeteren. Dit is gekoppeld aan je account als je bent ingelogd; anders wordt er een tijdelijk id op dit apparaat gebruikt. We verkopen deze gegevens niet.</p>
+            </div>
+          </div>
+
+          <!-- ══ Sub-panel: Weergave (thema) ══ -->
+          <div class="profile-subpanel" id="profileSubTheme" aria-hidden="true">
+            <header class="topbar--sub">
+              <button class="topbar-back-btn" id="profileSubThemeBack" type="button" aria-label="Terug">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <h1 class="topbar-title">Weergave</h1>
+              <span class="topbar-spacer"></span>
+            </header>
+            <div class="profile-subpanel__body">
+              <p class="profile2-section-label" style="margin-top:8px">THEMA</p>
+              <div class="profile2-card">
+                <button class="profile2-row theme-option" type="button" data-theme-pref="light" id="themeOptLight">
+                  <span class="profile2-row__label">Licht</span>
+                  <svg class="theme-check" viewBox="0 0 24 24" fill="none" stroke="#6b9e72" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" style="display:none"><polyline points="20 6 9 17 4 12"/></svg>
+                </button>
+                <div class="profile2-row-divider"></div>
+                <button class="profile2-row theme-option" type="button" data-theme-pref="dark" id="themeOptDark">
+                  <span class="profile2-row__label">Donker</span>
+                  <svg class="theme-check" viewBox="0 0 24 24" fill="none" stroke="#6b9e72" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" style="display:none"><polyline points="20 6 9 17 4 12"/></svg>
+                </button>
+                <div class="profile2-row-divider"></div>
+                <button class="profile2-row theme-option" type="button" data-theme-pref="system" id="themeOptSystem">
+                  <span class="profile2-row__label">Systeem</span>
+                  <svg class="theme-check" viewBox="0 0 24 24" fill="none" stroke="#6b9e72" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" style="display:none"><polyline points="20 6 9 17 4 12"/></svg>
+                </button>
               </div>
             </div>
           </div>
@@ -1167,172 +1238,18 @@
             </section>
           </div>
 
-        <!-- Admin Dashboard Screen (Hidden, only for admin) -->
-        <section class="screen" id="adminScreen" aria-hidden="true" style="display:none">
+        <!-- Admin Dashboard Screen (Hidden, only for admin) — volledige admin via admin.html in iframe -->
+        <section class="screen admin-app-screen" id="adminScreen" aria-hidden="true" style="display:none">
           <header class="topbar">
-            <button class="brand-lockup" type="button" data-home-link="true" aria-label="Ga naar home">
-              <img class="brand-logo" src="assets/plately.png" alt="Plately" />
+            <button class="topbar-back-btn" id="adminBackBtn" type="button" aria-label="Terug naar instellingen">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
             </button>
-            <h1 style="margin:0;font-size:1.2rem;flex:1;text-align:center">Admin Dashboard</h1>
-            <div style="width:44px"></div>
+            <h1 class="topbar-title">Admin</h1>
+            <span class="topbar-spacer"></span>
           </header>
-
-          <section style="padding:16px;overflow-y:auto;padding-bottom:100px">
-            <nav class="admin-tabs" aria-label="Admin secties">
-              <div class="admin-tabs__rail" role="tablist" aria-label="Admin tabs" id="inAppAdminTabsRail">
-                <button class="admin-tabs__btn" type="button" role="tab" data-admin-tab="overview" aria-selected="false">Overzicht</button>
-                <button class="admin-tabs__btn" type="button" role="tab" data-admin-tab="channels" aria-selected="false">Kanalen</button>
-                <button class="admin-tabs__btn" type="button" role="tab" data-admin-tab="channel-test" aria-selected="false">Kanaal test</button>
-                <button class="admin-tabs__btn" type="button" role="tab" data-admin-tab="notifications" aria-selected="false">Notificaties</button>
-                <button class="admin-tabs__btn" type="button" role="tab" data-admin-tab="users" aria-selected="false">Users</button>
-                <button class="admin-tabs__btn" type="button" role="tab" data-admin-tab="search-terms" aria-selected="false">Zoekwoorden</button>
-              </div>
-            </nav>
-
-            <div class="admin-tab-section" id="inAppAdminTabOverview" data-tab="overview">
-            <!-- Analytics Cards -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
-              <div class="profile2-card" style="text-align:center;padding:16px">
-                <div style="font-size:2rem;font-weight:700;color:#8da485" id="adminUserCount">0</div>
-                <div style="font-size:0.85rem;color:#989188">Geregistreerde users</div>
-              </div>
-              <div class="profile2-card" style="text-align:center;padding:16px">
-                <div style="font-size:2rem;font-weight:700;color:#8da485" id="adminRecipeCount">0</div>
-                <div style="font-size:0.85rem;color:#989188">Totaal recepten</div>
-              </div>
-            </div>
-
-            <!-- Content Moderation Section -->
-            <p class="profile2-section-label">CONTENT MODERATION</p>
-            <div class="profile2-card">
-              <div id="adminReviewsList" style="max-height:400px;overflow-y:auto"></div>
-            </div>
-            </div>
-
-            <div class="admin-tab-section" id="inAppAdminTabNotifications" data-tab="notifications">
-            <p class="profile2-section-label">🔔 Notificaties</p>
-            <div class="profile2-card">
-              <div style="padding:14px 16px">
-                <div id="adminNotifStatus" style="color:#989188;font-size:0.9rem;margin-bottom:10px">Template + segment → test of verstuur.</div>
-                <div style="display:grid;gap:10px">
-                  <select id="adminNotifTemplateKey" aria-label="Template" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;background:#fff">
-                    <option value="features_new" selected>Nieuwe functies</option>
-                    <option value="ah_basket_ready">AH lijst klaar</option>
-                    <option value="ah_bonus">AH bonus</option>
-                    <option value="cookmode_tips">Kookstand tips</option>
-                  </select>
-                  <select id="adminNotifCategory" aria-label="Categorie" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;background:#fff">
-                    <option value="features" selected>features</option>
-                    <option value="ah">ah</option>
-                    <option value="cookmode">cookmode</option>
-                  </select>
-                  <input id="adminNotifTitle" type="text" placeholder="Titel" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem" />
-                  <textarea id="adminNotifBody" rows="3" placeholder="Bericht" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem;resize:vertical"></textarea>
-                  <input id="adminNotifUrl" type="text" placeholder="Deep link (optioneel, leeg = automatisch)" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem" />
-                  <input id="adminNotifImageUrl" type="text" placeholder="Afbeelding URL (optioneel)" style="width:100%;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;font-size:0.95rem" />
-                  <label style="display:flex;gap:10px;align-items:center;color:#6b6258;font-size:0.9rem">
-                    <input id="adminNotifSegOnlyAh" type="checkbox" />
-                    Alleen favoriete supermarkt: AH
-                  </label>
-                  <label style="display:flex;gap:10px;align-items:center;color:#6b6258;font-size:0.9rem">
-                    <input id="adminNotifSegOnlyBasketReady" type="checkbox" />
-                    Alleen trigger: AH lijst klaar
-                  </label>
-                  <label style="display:flex;gap:10px;align-items:center;color:#6b6258;font-size:0.9rem">
-                    <input id="adminNotifSegOnlyBonus" type="checkbox" />
-                    Alleen trigger: AH bonus
-                  </label>
-                  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-                    <button class="secondary-button" id="adminNotifTestBtn" type="button" style="white-space:nowrap">Test naar mij</button>
-                    <button class="primary-button" id="adminNotifSendBtn" type="button" style="white-space:nowrap">Verstuur naar segment</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p class="profile2-section-label" style="margin-top:16px">Recente aankondigingen</p>
-            <div class="profile2-card">
-              <div style="padding:14px 16px">
-                <div id="adminNotifHistoryStatus" style="color:#989188;font-size:0.9rem;margin-bottom:10px"></div>
-                <div id="adminNotifHistoryList"></div>
-              </div>
-            </div>
-            </div>
-
-            <div class="admin-tab-section" id="inAppAdminTabUsers" data-tab="users">
-            <!-- User Management Section -->
-            <p class="profile2-section-label">USER MANAGEMENT</p>
-            <div class="profile2-card">
-              <input type="text" id="adminUserSearch" placeholder="Zoek op email..." style="width:100%;padding:12px;border:1px solid #e0d5c7;border-radius:8px;font-size:0.9rem;margin-bottom:12px" />
-              <div id="adminUsersList" style="max-height:400px;overflow-y:auto;border:1px solid #f3f5ef;border-radius:8px"></div>
-            </div>
-            </div>
-
-            <div class="admin-tab-section" id="inAppAdminTabSearchTerms" data-tab="search-terms">
-            <!-- Search Terms -->
-            <p class="profile2-section-label">🔎 Zoekwoorden</p>
-            <div class="profile2-card">
-              <div style="padding:14px 16px">
-                <div id="adminSearchTermsStatus" class="admin-search-terms__status">Laden…</div>
-                <div id="adminSearchTermsTableWrap"></div>
-              </div>
-            </div>
-            </div>
-
-            <div class="admin-tab-section" id="inAppAdminTabChannels" data-tab="channels">
-            <p class="profile2-section-label" style="margin-top:24px">KANALEN</p>
-            <div class="profile2-card">
-              <div style="padding:14px 16px">
-                <div id="adminChannelsStatus" style="color:#989188;font-size:0.9rem">Laden…</div>
-                <div id="adminPendingChannels" style="margin-top:10px"></div>
-                <div id="adminRejectedChannels" style="margin-top:14px"></div>
-              </div>
-            </div>
-            </div>
-
-            <div class="admin-tab-section" id="inAppAdminTabChannelTest" data-tab="channel-test">
-            <p class="profile2-section-label" style="margin-top:24px">KANAAL TEST</p>
-            <div class="profile2-card">
-              <div style="padding:14px 16px">
-                <div id="adminChannelTestError" style="display:none;background:rgba(220,53,69,0.08);border:1px solid rgba(220,53,69,0.14);color:rgba(140,23,35,0.95);padding:12px;border-radius:12px;font-size:0.9rem;margin-bottom:12px"></div>
-                <div class="admin-channel-create">
-                  <div class="admin-channel-create__head">
-                    <div>
-                      <h3 class="admin-channel-create__title">Nieuw Plately-kanaal</h3>
-                      <p class="admin-channel-create__hint">Geef het kanaal een naam, test de zoekfunctie en voeg hem daarna toe aan Plately.</p>
-                    </div>
-                  </div>
-                  <div class="admin-channel-create__grid">
-                    <input id="adminNewChannelName" type="text" placeholder="Kanaalnaam" />
-                    <input id="adminNewChannelUrl" type="url" placeholder="https://www.receptensite.nl" />
-                    <input id="adminNewChannelQuery" type="text" placeholder="Test zoekterm, bijv. pasta" />
-                  </div>
-                  <div class="admin-channel-create__actions">
-                    <button class="secondary-button" id="adminNewChannelTestBtn" type="button">Test kanaal</button>
-                    <button class="primary-button" id="adminNewChannelAddBtn" type="button">Toevoegen aan Plately</button>
-                  </div>
-                  <div id="adminNewChannelStatus" class="admin-channel-create__status"></div>
-                  <div id="adminNewChannelResults" class="admin-channel-create__results"></div>
-                </div>
-                <div style="height:1px;background:#f3f5ef;margin:14px 0"></div>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-                  <select id="adminChannelTestSelect" aria-label="Kanaal kiezen" style="flex:1;min-width:220px;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;background:#fff">
-                    <option value="">Kanaal kiezen…</option>
-                  </select>
-                  <input id="adminChannelTestQuery" type="text" placeholder="Search query" style="flex:1;min-width:220px;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px" />
-                  <button class="primary-button" id="adminChannelTestSearchBtn" type="button" style="white-space:nowrap">Test search</button>
-                </div>
-                <div id="adminChannelTestSearchStatus" style="margin-top:10px;color:#989188;font-size:0.9rem"></div>
-                <div id="adminChannelTestResults" style="display:grid;gap:8px;margin-top:10px"></div>
-                <div style="height:1px;background:#f3f5ef;margin:14px 0"></div>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-                  <input id="adminChannelTestImportUrl" type="text" placeholder="Import URL" style="flex:1;min-width:220px;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px" />
-                  <button class="secondary-button" id="adminChannelTestImportBtn" type="button" style="white-space:nowrap">Test import</button>
-                </div>
-                <div id="adminChannelTestImportStatus" style="margin-top:10px;color:#989188;font-size:0.9rem"></div>
-              </div>
-            </div>
-            </div>
-          </section>
+          <div class="admin-app-shell">
+            <iframe class="admin-app-frame" id="adminDashboardFrame" title="Plately Admin" src="admin.html?embedded=1"></iframe>
+          </div>
         </section>
       </section>
 

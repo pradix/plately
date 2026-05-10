@@ -3351,6 +3351,10 @@ function switchView(view, opts = {}) {
     return;
   }
 
+  if (view === "admin" && state.session.ready && !isAdmin()) {
+    view = "settings";
+  }
+
   const prevView = state.view;
   state.view = view;
   homeScreen.classList.toggle("screen--active", view === "home");
@@ -3361,7 +3365,14 @@ function switchView(view, opts = {}) {
   if (cookbooksScreen) cookbooksScreen.classList.toggle("screen--active", view === "cookbooks");
   importScreen.classList.toggle("screen--active", view === "import");
   reviewScreen.classList.toggle("screen--active", view === "review");
-  if (adminScreen) adminScreen.classList.toggle("screen--active", view === "admin");
+  if (adminScreen) {
+    adminScreen.classList.toggle("screen--active", view === "admin");
+    if (view === "admin" && isAdmin()) {
+      adminScreen.removeAttribute("aria-hidden");
+    } else {
+      adminScreen.setAttribute("aria-hidden", "true");
+    }
+  }
 
   navItems.forEach((item) => {
     const isRecipesNav = item.dataset.view === "home" && (view === "home" || view === "detail" || view === "import" || view === "review");
@@ -6103,7 +6114,7 @@ function renderGroceryGroups() {
         const conceptInHeading = gi === 0 ? soloConceptPill : "";
         return `
           <section class="grocery-group">
-            <div class="grocery-group__header">
+            <div class="grocery-group__header grocery-group__header--aisle">
               <h2>${meta.title}${conceptInHeading}</h2>
             </div>
             ${sortedItems.map(renderGroceryItem).join("")}
@@ -7069,6 +7080,72 @@ function updateLanguagePanel() {
   if (metaEl) metaEl.textContent = LANG_LABELS[active] || "Nederlands";
 }
 
+const PLATELY_THEME_KEY = "plately-theme";
+const THEME_LABELS = { light: "Licht", dark: "Donker", system: "Systeem" };
+
+function getStoredThemePref() {
+  try {
+    const v = localStorage.getItem(PLATELY_THEME_KEY);
+    if (v === "light" || v === "dark" || v === "system") return v;
+  } catch {}
+  return "system";
+}
+
+function getEffectiveTheme() {
+  const pref = getStoredThemePref();
+  if (pref === "dark") return "dark";
+  if (pref === "light") return "light";
+  try {
+    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) return "dark";
+  } catch {}
+  return "light";
+}
+
+function applyPlatelyTheme() {
+  const pref = getStoredThemePref();
+  const effective = getEffectiveTheme();
+  document.documentElement.setAttribute("data-theme", effective);
+  document.documentElement.setAttribute("data-theme-pref", pref);
+
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    meta.setAttribute("content", effective === "dark" ? "#1a1f1c" : "#8da485");
+  }
+
+  try {
+    const iframe = document.getElementById("adminDashboardFrame");
+    if (iframe && iframe instanceof HTMLIFrameElement && iframe.contentWindow) {
+      iframe.contentWindow.postMessage({ type: "plately-theme", theme: effective, pref }, "*");
+    }
+  } catch {}
+}
+
+function updateThemePanel() {
+  const active = getStoredThemePref();
+  document.querySelectorAll(".theme-option").forEach((btn) => {
+    const p = btn.dataset.themePref;
+    const check = btn.querySelector(".theme-check");
+    if (check) check.style.display = p === active ? "" : "none";
+  });
+  const metaEl = document.getElementById("profileThemeMeta");
+  if (metaEl) metaEl.textContent = THEME_LABELS[active] || "Systeem";
+}
+
+let _platelyThemeMediaQuery = null;
+function initPlatelyThemeListener() {
+  if (_platelyThemeMediaQuery || !window.matchMedia) return;
+  _platelyThemeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  const onChange = () => {
+    if (getStoredThemePref() !== "system") return;
+    applyPlatelyTheme();
+  };
+  try {
+    _platelyThemeMediaQuery.addEventListener("change", onChange);
+  } catch {
+    _platelyThemeMediaQuery.addListener(onChange);
+  }
+}
+
 function renderProfileSummary() {
   const isAuth = state.auth.authenticated;
 
@@ -7113,6 +7190,7 @@ function renderProfileSummary() {
     supermarketMetaEl.textContent = sm.name;
   }
   updateLanguagePanel();
+  updateThemePanel();
   renderAvatars();
   refreshFeaturePushState().catch(() => {});
 }
@@ -8472,853 +8550,9 @@ function renderRecipeSlider() {
 
 // ── Admin Dashboard ───────────────────────────────────────────────────────────
 const ADMIN_EMAIL = "pradix@me.com";
-const ADMIN_TABS_STORAGE_KEY = "plately-admin-last-tab";
-let inAppAdminTabsInitialized = false;
 
 function isAdmin() {
   return state.auth.authenticated && state.auth.email === ADMIN_EMAIL;
-}
-
-function setInAppAdminTab(tabId, { persist = true } = {}) {
-  const sections = Array.from(document.querySelectorAll("#adminScreen .admin-tab-section"));
-  const btns = Array.from(document.querySelectorAll("#inAppAdminTabsRail [data-admin-tab]"));
-  if (!sections.length || !btns.length) return;
-
-  const id = String(tabId || "").trim();
-  const exists = sections.some((s) => String(s.getAttribute("data-tab") || "") === id);
-  const next = exists ? id : "overview";
-
-  sections.forEach((s) => {
-    const sId = String(s.getAttribute("data-tab") || "");
-    s.classList.toggle("is-active", sId === next);
-  });
-  btns.forEach((b) => {
-    const bId = String(b.getAttribute("data-admin-tab") || "");
-    b.setAttribute("aria-selected", bId === next ? "true" : "false");
-  });
-
-  if (persist) {
-    try { localStorage.setItem(ADMIN_TABS_STORAGE_KEY, next); } catch {}
-  }
-
-  // Scroll the admin screen content to top.
-  const scrollWrap = document.querySelector("#adminScreen section[style*='overflow-y']");
-  if (scrollWrap && typeof scrollWrap.scrollTo === "function") {
-    scrollWrap.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  } else {
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  }
-}
-
-function initInAppAdminTabs() {
-  if (inAppAdminTabsInitialized) return;
-  const rail = document.getElementById("inAppAdminTabsRail");
-  if (!rail) return;
-
-  rail.addEventListener("click", (e) => {
-    const btn = e.target?.closest?.("[data-admin-tab]");
-    if (!btn) return;
-    e.preventDefault();
-    setInAppAdminTab(btn.getAttribute("data-admin-tab") || "");
-  });
-
-  inAppAdminTabsInitialized = true;
-}
-
-async function fetchAdminStats() {
-  try {
-    const payload = await fetchJson(`${state.apiBase}/api/admin/stats`);
-    return payload?.stats || { users: [], totalUsers: 0, totalRecipes: 0, customChannels: { total: 0, approved: 0, pending: 0, rejected: 0 } };
-  } catch (err) {
-    console.error("Failed to fetch admin stats:", err);
-    return { users: [], totalUsers: 0, totalRecipes: 0, customChannels: { total: 0, approved: 0, pending: 0, rejected: 0 } };
-  }
-}
-
-async function fetchAdminSearchTerms() {
-  try {
-    const payload = await fetchJson(`${state.apiBase}/api/admin/search-terms?limit=20`);
-    return payload?.searchTerms || { last7d: [], allTime: [] };
-  } catch (err) {
-    console.error("Failed to fetch admin search terms:", err);
-    return { last7d: [], allTime: [] };
-  }
-}
-
-async function fetchAdminPendingChannels() {
-  try {
-    const payload = await fetchJson(`${state.apiBase}/api/admin/pending-channels`);
-    return {
-      pending: Array.isArray(payload?.channels) ? payload.channels : [],
-      rejected: Array.isArray(payload?.rejectedChannels) ? payload.rejectedChannels : [],
-    };
-  } catch (err) {
-    console.error("Failed to fetch admin pending channels:", err);
-    return { pending: [], rejected: [] };
-  }
-}
-
-async function fetchAdminChannelCatalog() {
-  try {
-    const payload = await fetchJson(`${state.apiBase}/api/admin/channels`);
-    return {
-      seed: Array.isArray(payload?.seedChannels) ? payload.seedChannels : [],
-      custom: payload?.customChannels && typeof payload.customChannels === "object"
-        ? payload.customChannels
-        : { approved: [], pending: [], rejected: [] },
-    };
-  } catch (err) {
-    console.error("Failed to fetch admin channels catalog:", err);
-    return { seed: [], custom: { approved: [], pending: [], rejected: [] } };
-  }
-}
-
-async function setAdminChannelStatus(channelId, status, reason = "") {
-  await fetchJson(`${state.apiBase}/api/admin/approve-channel`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ channelId, status, reason }),
-  });
-}
-
-function renderAdminChannelsModeration({ pending, rejected }) {
-  const statusEl = document.getElementById("adminChannelsStatus");
-  const pendingEl = document.getElementById("adminPendingChannels");
-  const rejectedEl = document.getElementById("adminRejectedChannels");
-  if (!pendingEl || !rejectedEl) return;
-
-  if (statusEl) {
-    const p = Array.isArray(pending) ? pending.length : 0;
-    const r = Array.isArray(rejected) ? rejected.length : 0;
-    statusEl.textContent = `Pending: ${p}${r ? ` · Afgewezen: ${r}` : ""}`;
-  }
-
-  if (!pending?.length) {
-    pendingEl.innerHTML = `<p style="color:#989188;font-size:0.9rem;margin:0">Geen wachtende kanalen.</p>`;
-  } else {
-    pendingEl.innerHTML = `
-      <div style="display:grid;gap:8px">
-        ${pending.map((ch) => {
-          const id = escapeHtml(ch?.id || "");
-          const name = escapeHtml(ch?.name || "");
-          const url = escapeHtml(ch?.url || "");
-          const by = escapeHtml(ch?.createdByEmail || "Onbekend");
-          return `
-            <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #f3f5ef;border-radius:12px;background:#fff">
-              <div style="flex:1;min-width:0">
-                <div style="font-weight:650;color:#3d3d3b">${name || id}</div>
-                <div style="font-size:0.85rem;color:#989188;margin-top:4px;word-break:break-all">
-                  <a href="${url}" target="_blank" rel="noopener" style="color:#6b6258;text-decoration:underline">${url}</a>
-                </div>
-                <div style="font-size:0.8rem;color:#b9ada0;margin-top:4px">Indiener: ${by}</div>
-              </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-                <button class="secondary-button" type="button" data-admin-approve-channel="${id}" style="white-space:nowrap">Goedkeuren</button>
-                <button class="secondary-button" type="button" data-admin-reject-channel="${id}" style="white-space:nowrap;border-color:rgba(220,53,69,0.25);color:rgba(140,23,35,0.95)">Afwijzen</button>
-              </div>
-            </div>
-          `;
-        }).join("")}
-      </div>
-    `;
-  }
-
-  if (!rejected?.length) {
-    rejectedEl.innerHTML = "";
-  } else {
-    rejectedEl.innerHTML = `
-      <div style="margin-top:4px;color:#989188;font-size:0.85rem;font-weight:700;letter-spacing:0.06em">AFGEWEZEN</div>
-      <div style="display:grid;gap:8px;margin-top:10px">
-        ${rejected.map((ch) => {
-          const name = escapeHtml(ch?.name || ch?.id || "");
-          const url = escapeHtml(ch?.url || "");
-          const reason = escapeHtml(ch?.rejectedReason || "—");
-          const rejectedAt = ch?.rejectedAt ? new Date(ch.rejectedAt).toLocaleString("nl-NL") : "—";
-          return `
-            <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #f3f5ef;border-radius:12px;background:#fff">
-              <div style="flex:1;min-width:0">
-                <div style="font-weight:650;color:#3d3d3b">${name} <span style="margin-left:6px;padding:2px 8px;border-radius:999px;background:rgba(220,53,69,0.10);border:1px solid rgba(220,53,69,0.16);color:rgba(140,23,35,0.95);font-size:0.72rem">AFGEWEZEN</span></div>
-                <div style="font-size:0.85rem;color:#989188;margin-top:4px;word-break:break-all">
-                  <a href="${url}" target="_blank" rel="noopener" style="color:#6b6258;text-decoration:underline">${url}</a>
-                </div>
-                <div style="font-size:0.8rem;color:#b9ada0;margin-top:4px">Reden: ${reason}</div>
-                <div style="font-size:0.8rem;color:#b9ada0;margin-top:2px">Afgewezen: ${escapeHtml(rejectedAt)}</div>
-              </div>
-            </div>
-          `;
-        }).join("")}
-      </div>
-    `;
-  }
-}
-
-function setAdminChannelTestError(message) {
-  const el = document.getElementById("adminChannelTestError");
-  if (!el) return;
-  if (!message) {
-    el.style.display = "none";
-    el.textContent = "";
-    return;
-  }
-  el.style.display = "block";
-  el.textContent = "❌ " + message;
-}
-
-function getAdminSelectedChannel() {
-  const sel = document.getElementById("adminChannelTestSelect");
-  const raw = (sel?.value || "").trim();
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function renderAdminChannelTestResults(results, backendNote = "") {
-  const wrap = document.getElementById("adminChannelTestResults");
-  if (!wrap) return;
-  const list = Array.isArray(results) ? results : [];
-  const note = String(backendNote || "").trim();
-  if (!list.length) {
-    const tip = note
-      ? `<div style="margin-bottom:10px;line-height:1.45;color:#5c534c;font-size:0.9rem">${escapeHtml(note)}</div>`
-      : "";
-    wrap.innerHTML = `<div>${tip}<div style="color:#989188;font-size:0.9rem">Geen recepten gevonden voor deze zoekterm.</div></div>`;
-    return;
-  }
-  wrap.innerHTML = list.slice(0, 10).map((r) => {
-    const title = escapeHtml(r?.title || "—");
-    const url = escapeHtml(r?.url || "");
-    const src = escapeHtml(r?.channelName || r?.channelId || "");
-    const thumb = escapeHtml(r?.imageUrl || r?.thumbnail || r?.image || "");
-    const thumbHtml = thumb
-      ? `<img src="${thumb}" alt="" loading="lazy" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex:0 0 auto;background:#f3f5ef" />`
-      : `<div aria-hidden="true" style="width:44px;height:44px;border-radius:10px;background:#f3f5ef;flex:0 0 auto"></div>`;
-    return `
-      <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #f3f5ef;border-radius:12px;background:#fff">
-        ${thumbHtml}
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:650;color:#3d3d3b">${title}</div>
-          <div style="font-size:0.85rem;color:#989188;margin-top:4px;word-break:break-all">${src} · <a href="${url}" target="_blank" rel="noopener" style="color:#6b6258;text-decoration:underline">${url}</a></div>
-        </div>
-        <button class="secondary-button" type="button" data-admin-channel-test-import="${url}" style="white-space:nowrap">Import</button>
-      </div>
-    `;
-  }).join("");
-}
-
-function getAdminNewChannelDraft() {
-  const name = String(document.getElementById("adminNewChannelName")?.value || "").trim();
-  const url = String(document.getElementById("adminNewChannelUrl")?.value || "").trim();
-  const query = String(document.getElementById("adminNewChannelQuery")?.value || "").trim();
-  return { name, url, query };
-}
-
-function setAdminNewChannelStatus(message) {
-  const el = document.getElementById("adminNewChannelStatus");
-  if (el) el.textContent = String(message || "");
-}
-
-function renderAdminNewChannelResults(results, backendNote = "") {
-  const wrap = document.getElementById("adminNewChannelResults");
-  if (!wrap) return;
-  const list = Array.isArray(results) ? results : [];
-  const note = String(backendNote || "").trim();
-  if (!list.length) {
-    wrap.innerHTML = note
-      ? `<div style="line-height:1.45;color:#5c534c;font-size:0.9rem">${escapeHtml(note)}</div>`
-      : "";
-    return;
-  }
-  const hosts = new Set(list.map((r) => getSourceHost(r?.url || "")).filter(Boolean));
-  const quality = list.length >= 3 ? "Sterk" : list.length >= 1 ? "Oké" : "Zwak";
-  const summary = `
-    <div class="admin-channel-preview">
-      <span class="admin-channel-preview__favicon" aria-hidden="true">
-        ${hosts.size ? `<img src="${escapeHtml(getSourceIconUrl(`https://${[...hosts][0]}`))}" alt="" loading="lazy" />` : ""}
-      </span>
-      <div>
-        <strong>${list.length} recepten gevonden</strong>
-        <p>${escapeHtml([...hosts][0] || "Nieuw kanaal")} · importkwaliteit: ${quality}</p>
-      </div>
-    </div>
-  `;
-  wrap.innerHTML = list.slice(0, 5).map((r) => {
-    const title = escapeHtml(r?.title || "—");
-    const url = escapeHtml(r?.url || "");
-    return `
-      <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #f3f5ef;border-radius:12px;background:#fff">
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:650;color:#3d3d3b">${title}</div>
-          <div style="font-size:0.85rem;color:#989188;margin-top:4px;word-break:break-all">
-            <a href="${url}" target="_blank" rel="noopener" style="color:#6b6258;text-decoration:underline">${url}</a>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join("");
-  wrap.innerHTML = summary + wrap.innerHTML;
-}
-
-async function runAdminNewChannelTest() {
-  setAdminChannelTestError("");
-  const { name, url, query } = getAdminNewChannelDraft();
-  if (!name || !url) {
-    setAdminChannelTestError("Vul eerst naam en URL in.");
-    return;
-  }
-  if (!query || query.length < 2) {
-    setAdminChannelTestError("Vul een test zoekterm in (min 2 tekens).");
-    return;
-  }
-  setAdminNewChannelStatus("Kanaal testen…");
-  renderAdminNewChannelResults([]);
-  try {
-    const id = `ch-preview-${Date.now()}`;
-    const res = await fetchJson(`${state.apiBase}/api/admin/channel-test/search`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        channelKind: "custom",
-        customChannel: { id, name, url },
-        query,
-        limit: 5,
-      }),
-    });
-    const results = Array.isArray(res?.results) ? res.results : [];
-    const note = String(res?.searchBackendNote || "").trim();
-    const ms = Number(res?.responseTimeMs);
-    const timing = Number.isFinite(ms) ? ` (${ms} ms)` : "";
-    setAdminNewChannelStatus(
-      (results.length ? `✅ Test werkt: ${results.length} resultaten` : "Geen resultaten gevonden bij deze test.") + timing
-    );
-    renderAdminNewChannelResults(results, note);
-    return results;
-  } catch (err) {
-    setAdminNewChannelStatus("");
-    setAdminChannelTestError(err.message);
-    return [];
-  }
-}
-
-async function addAdminGlobalChannel() {
-  setAdminChannelTestError("");
-  const { name, url } = getAdminNewChannelDraft();
-  if (!name || !url) {
-    setAdminChannelTestError("Vul eerst naam en URL in.");
-    return;
-  }
-  const addBtn = document.getElementById("adminNewChannelAddBtn");
-  if (addBtn) addBtn.disabled = true;
-  setAdminNewChannelStatus("Toevoegen aan Plately…");
-  try {
-    const res = await fetchJson(`${state.apiBase}/api/admin/global-channel`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, url }),
-    });
-    const channel = res?.channel || {};
-    setAdminNewChannelStatus(`✅ ${channel.name || name} toegevoegd aan Plately`);
-    ["adminNewChannelName", "adminNewChannelUrl", "adminNewChannelQuery"].forEach((id) => {
-      const input = document.getElementById(id);
-      if (input) input.value = "";
-    });
-    renderAdminNewChannelResults([]);
-    showToast("Kanaal toegevoegd aan Plately");
-    await renderAdminScreen();
-  } catch (err) {
-    setAdminNewChannelStatus("");
-    setAdminChannelTestError(err.message);
-  } finally {
-    if (addBtn) addBtn.disabled = false;
-  }
-}
-
-async function runAdminChannelTestSearch() {
-  setAdminChannelTestError("");
-  const channel = getAdminSelectedChannel();
-  const query = String(document.getElementById("adminChannelTestQuery")?.value || "").trim();
-  const statusEl = document.getElementById("adminChannelTestSearchStatus");
-  if (statusEl) statusEl.textContent = "Zoeken…";
-  if (!channel) {
-    setAdminChannelTestError("Kies eerst een kanaal.");
-    if (statusEl) statusEl.textContent = "";
-    return;
-  }
-  if (!query || query.length < 2) {
-    setAdminChannelTestError("Vul een query in (min 2 tekens).");
-    if (statusEl) statusEl.textContent = "";
-    return;
-  }
-  try {
-    const payload = channel.kind === "custom"
-      ? { channelKind: "custom", customChannel: channel.customChannel, query, limit: 10 }
-      : { channelKind: "seed", channelId: channel.channelId, query, limit: 10 };
-    const res = await fetchJson(`${state.apiBase}/api/admin/channel-test/search`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const results = Array.isArray(res?.results) ? res.results : [];
-    const note = String(res?.searchBackendNote || "").trim();
-    const ms = Number(res?.responseTimeMs);
-    const timing = Number.isFinite(ms) ? ` · ${ms} ms` : "";
-    if (statusEl) statusEl.textContent = `${results.length ? `Top ${results.length} resultaten` : "Geen resultaten"}${timing}`;
-    renderAdminChannelTestResults(results, note);
-  } catch (err) {
-    if (statusEl) statusEl.textContent = "";
-    setAdminChannelTestError(err.message);
-  }
-}
-
-async function runAdminChannelTestImport(urlOverride = "") {
-  setAdminChannelTestError("");
-  const input = document.getElementById("adminChannelTestImportUrl");
-  const url = String(urlOverride || input?.value || "").trim();
-  const statusEl = document.getElementById("adminChannelTestImportStatus");
-  if (!url) {
-    setAdminChannelTestError("Vul een URL in om te importeren.");
-    if (statusEl) statusEl.textContent = "";
-    return;
-  }
-  if (statusEl) statusEl.textContent = "Importeren…";
-  try {
-    const res = await fetchJson(`${state.apiBase}/api/admin/channel-test/import`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-    });
-    const r = res?.recipe || {};
-    const title = r.title || "—";
-    const ing = Number(r.ingredientsCount || 0);
-    const steps = Number(r.stepsCount || 0);
-    if (statusEl) statusEl.textContent = `✅ ${title} · ingrediënten: ${ing} · stappen: ${steps}`;
-  } catch (err) {
-    if (statusEl) statusEl.textContent = "";
-    setAdminChannelTestError(err.message);
-  }
-}
-
-function renderAdminSearchTerms(searchTerms) {
-  const statusEl = document.getElementById("adminSearchTermsStatus");
-  const wrapEl = document.getElementById("adminSearchTermsTableWrap");
-  if (!wrapEl) return;
-
-  const last7d = Array.isArray(searchTerms?.last7d) ? searchTerms.last7d : [];
-  const allTime = Array.isArray(searchTerms?.allTime) ? searchTerms.allTime : [];
-  const allTimeByQuery = new Map(allTime.map((it) => [String(it?.query || ""), it]));
-
-  if (!last7d.length) {
-    if (statusEl) statusEl.textContent = "Nog geen zoekwoorden (of analytics staat uit).";
-    wrapEl.innerHTML = "";
-    return;
-  }
-
-  if (statusEl) statusEl.textContent = `Top ${last7d.length} (laatste 7 dagen)`;
-
-  wrapEl.innerHTML = `
-    <div class="admin-search-terms">
-      <table class="admin-search-terms__table">
-        <thead>
-          <tr>
-            <th>Zoekwoord</th>
-            <th class="num">7d</th>
-            <th class="num">All</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${last7d.map((row) => {
-            const q = String(row?.query || "");
-            const all = allTimeByQuery.get(q);
-            const allCount = Number(all?.count || 0);
-            const count7d = Number(row?.count || 0);
-            return `
-              <tr>
-                <td class="query" title="${escapeHtml(q)}">${escapeHtml(q)}</td>
-                <td class="num">${Number.isFinite(count7d) ? count7d : 0}</td>
-                <td class="num">${Number.isFinite(allCount) ? allCount : 0}</td>
-              </tr>
-            `;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-async function deleteAdminUser(userId) {
-  try {
-    await fetchJson(`${state.apiBase}/api/admin/delete-user`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
-    });
-    showToast("Gebruiker verwijderd");
-    renderAdminScreen();
-  } catch (err) {
-    showToast("Verwijdering mislukt: " + err.message);
-  }
-}
-
-async function renderAdminScreen() {
-  if (!isAdmin()) {
-    // Hide admin screen if user is not admin
-    if (adminScreen) adminScreen.setAttribute("aria-hidden", "true");
-    return;
-  }
-
-  // Show admin screen
-  if (adminScreen) adminScreen.removeAttribute("aria-hidden");
-
-  initInAppAdminTabs();
-  try {
-    const stored = localStorage.getItem(ADMIN_TABS_STORAGE_KEY);
-    setInAppAdminTab(stored || "overview", { persist: false });
-  } catch {
-    setInAppAdminTab("overview", { persist: false });
-  }
-
-  // Fetch admin stats
-  const stats = await fetchAdminStats();
-  const searchTerms = await fetchAdminSearchTerms();
-  const channels = await fetchAdminPendingChannels();
-  const catalog = await fetchAdminChannelCatalog();
-
-  // Update analytics cards
-  const userCountEl = document.getElementById("adminUserCount");
-  const recipeCountEl = document.getElementById("adminRecipeCount");
-
-  if (userCountEl) userCountEl.textContent = stats.totalUsers || 0;
-  if (recipeCountEl) {
-    const totalRecipes = stats.users.reduce((acc, u) => acc + (Number(u?.recipes || 0) || 0), 0);
-    recipeCountEl.textContent = totalRecipes || 0;
-  }
-
-  // Admin notifications (templates + history)
-  const notifStatus = document.getElementById("adminNotifStatus");
-  const notifTemplateKey = document.getElementById("adminNotifTemplateKey");
-  const notifCategory = document.getElementById("adminNotifCategory");
-  const notifTitle = document.getElementById("adminNotifTitle");
-  const notifBody = document.getElementById("adminNotifBody");
-  const notifUrl = document.getElementById("adminNotifUrl");
-  const notifImage = document.getElementById("adminNotifImageUrl");
-  const notifSegAh = document.getElementById("adminNotifSegOnlyAh");
-  const notifSegBasketReady = document.getElementById("adminNotifSegOnlyBasketReady");
-  const notifSegBonus = document.getElementById("adminNotifSegOnlyBonus");
-  const notifTestBtn = document.getElementById("adminNotifTestBtn");
-  const notifSendBtn = document.getElementById("adminNotifSendBtn");
-  const notifHistoryStatus = document.getElementById("adminNotifHistoryStatus");
-  const notifHistoryList = document.getElementById("adminNotifHistoryList");
-
-  const setNotifStatus = (text) => {
-    if (notifStatus) notifStatus.textContent = String(text || "");
-  };
-
-  const readNotifPayload = () => {
-    const templateKey = String(notifTemplateKey?.value || "").trim();
-    const category = String(notifCategory?.value || "features").trim();
-    const title = String(notifTitle?.value || "").trim();
-    const body = String(notifBody?.value || "").trim();
-    const url = String(notifUrl?.value || "").trim();
-    const imageUrl = String(notifImage?.value || "").trim();
-    const onlyAh = Boolean(notifSegAh?.checked);
-    const onlyBasketReady = Boolean(notifSegBasketReady?.checked);
-    const onlyBonus = Boolean(notifSegBonus?.checked);
-    return {
-      templateKey,
-      category,
-      title,
-      body,
-      url: url || undefined,
-      imageUrl: imageUrl || undefined,
-      segment: {
-        onlyFavoriteSupermarketAh: onlyAh,
-        onlyTriggerAhBasketReadyEnabled: onlyBasketReady,
-        onlyTriggerAhBonusEnabled: onlyBonus,
-      },
-    };
-  };
-
-  let vapidOk = false;
-  try {
-    const keyRes = await fetchJson(`${state.apiBase}/api/push/vapid-public-key`, { method: "GET" });
-    vapidOk = Boolean(String(keyRes?.publicKey || "").trim());
-    if (!vapidOk) setNotifStatus("❌ Push is niet geconfigureerd (VAPID keys ontbreken op de server).");
-  } catch {
-    vapidOk = false;
-    setNotifStatus("⚠️ Kan push-configuratie niet ophalen.");
-  }
-  if (notifSendBtn) notifSendBtn.disabled = !vapidOk;
-  if (notifTestBtn) notifTestBtn.disabled = !vapidOk;
-
-  const renderNotifHistory = (announcements) => {
-    if (!notifHistoryList) return;
-    const list = Array.isArray(announcements) ? announcements : [];
-    if (!list.length) {
-      notifHistoryList.innerHTML = `<div style="color:#989188;font-size:0.9rem">Nog geen aankondigingen.</div>`;
-      return;
-    }
-    notifHistoryList.innerHTML = list.slice(0, 30).map((a) => {
-      const id = escapeHtml(a?.id || "");
-      const key = escapeHtml(a?.templateKey || a?.category || "");
-      const title = escapeHtml(a?.title || "");
-      const deepLink = `/?announce=${encodeURIComponent(a?.id || "")}`;
-      const m = a?.metrics || {};
-      const createdAt = a?.createdAt ? new Date(a.createdAt).toLocaleString("nl-NL") : "—";
-      return `
-        <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #f3f5ef;border-radius:12px;background:#fff;margin-bottom:8px">
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:700;color:#3d3d3b">${key || "—"} · ${title || "—"}</div>
-            <div style="font-size:0.85rem;color:#989188;margin-top:4px;word-break:break-all">
-              <a href="${deepLink}" target="_blank" rel="noopener" style="color:#6b6258;text-decoration:underline">${escapeHtml(deepLink)}</a>
-            </div>
-            <div style="font-size:0.8rem;color:#b9ada0;margin-top:4px">
-              Matched: ${Number(m.matched || 0)} · Sent: ${Number(m.sent || 0)} · Failed: ${Number(m.failed || 0)} · Removed: ${Number(m.removed || 0)} · ${escapeHtml(createdAt)}
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-            <button class="secondary-button" type="button" data-admin-notif-resend="${id}" style="white-space:nowrap">Resend</button>
-            <button class="secondary-button" type="button" data-admin-notif-delete="${id}" style="white-space:nowrap;border-color:rgba(220,53,69,0.25);color:rgba(140,23,35,0.95)">Delete</button>
-          </div>
-        </div>
-      `;
-    }).join("");
-  };
-
-  const refreshNotifHistory = async () => {
-    if (notifHistoryStatus) notifHistoryStatus.textContent = "Laden…";
-    try {
-      const res = await fetchJson(`${state.apiBase}/api/admin/push/announcements?limit=50`, { method: "GET" });
-      renderNotifHistory(res?.announcements || []);
-      if (notifHistoryStatus) notifHistoryStatus.textContent = "";
-    } catch (err) {
-      if (notifHistoryStatus) notifHistoryStatus.textContent = `⚠️ ${err.message}`;
-    }
-  };
-  refreshNotifHistory().catch(() => {});
-
-  const withNotifBusy = async (fn) => {
-    if (notifSendBtn) notifSendBtn.disabled = true;
-    if (notifTestBtn) notifTestBtn.disabled = true;
-    try { await fn(); } finally {
-      if (notifSendBtn) notifSendBtn.disabled = !vapidOk;
-      if (notifTestBtn) notifTestBtn.disabled = !vapidOk;
-    }
-  };
-
-  if (notifSendBtn) {
-    notifSendBtn.onclick = () => withNotifBusy(async () => {
-      const payload = readNotifPayload();
-      if (!payload.title || !payload.body) {
-        setNotifStatus("Titel en bericht zijn verplicht.");
-        return;
-      }
-      setNotifStatus("Versturen…");
-      const res = await fetchJson(`${state.apiBase}/api/admin/push/announce`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const sent = Number(res?.sent || 0);
-      const failed = Number(res?.failed || 0);
-      const matched = Number(res?.matched || 0);
-      setNotifStatus(`✅ Verstuurd: ${sent}/${matched} · Mislukt: ${failed}`);
-      refreshNotifHistory().catch(() => {});
-    }).catch((err) => setNotifStatus(`❌ Mislukt: ${err.message}`));
-  }
-
-  if (notifTestBtn) {
-    notifTestBtn.onclick = () => withNotifBusy(async () => {
-      const payload = readNotifPayload();
-      if (!payload.title || !payload.body) {
-        setNotifStatus("Titel en bericht zijn verplicht.");
-        return;
-      }
-      setNotifStatus("Test sturen…");
-      const res = await fetchJson(`${state.apiBase}/api/admin/push/test`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const sent = Number(res?.sent || 0);
-      const failed = Number(res?.failed || 0);
-      const matched = Number(res?.matched || 0);
-      setNotifStatus(`✅ Test gestuurd: ${sent}/${matched} · Mislukt: ${failed}`);
-    }).catch((err) => setNotifStatus(`❌ Mislukt: ${err.message}`));
-  }
-
-  document.querySelectorAll("[data-admin-notif-resend]").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const id = btn.getAttribute("data-admin-notif-resend") || "";
-      if (!id) return;
-      if (!confirm("Deze aankondiging opnieuw versturen?")) return;
-      await withNotifBusy(async () => {
-        setNotifStatus("Resend…");
-        const res = await fetchJson(`${state.apiBase}/api/admin/push/resend`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ announcementId: id, segment: readNotifPayload().segment }),
-        });
-        const sent = Number(res?.sent || 0);
-        const failed = Number(res?.failed || 0);
-        const matched = Number(res?.matched || 0);
-        setNotifStatus(`✅ Resent: ${sent}/${matched} · Mislukt: ${failed}`);
-        refreshNotifHistory().catch(() => {});
-      });
-    }, { once: true });
-  });
-  document.querySelectorAll("[data-admin-notif-delete]").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const id = btn.getAttribute("data-admin-notif-delete") || "";
-      if (!id) return;
-      if (!confirm("Deze aankondiging verwijderen?")) return;
-      await withNotifBusy(async () => {
-        setNotifStatus("Verwijderen…");
-        await fetchJson(`${state.apiBase}/api/admin/push/delete`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ announcementId: id }),
-        });
-        setNotifStatus("✅ Verwijderd");
-        refreshNotifHistory().catch(() => {});
-      });
-    }, { once: true });
-  });
-
-  // Render user list
-  const usersList = document.getElementById("adminUsersList");
-  if (usersList) {
-    if (!stats.users || stats.users.length === 0) {
-      usersList.innerHTML = "<p style='padding:16px;color:#989188'>Geen gebruikers gevonden</p>";
-    } else {
-      const renderFollowedChannels = (user) => {
-        const channels = Array.isArray(user?.followedChannels) ? user.followedChannels : [];
-        let names = channels
-          .map((ch) => String(ch?.name || ch?.id || "").trim())
-          .filter(Boolean);
-
-        if (!names.length && Array.isArray(user?.followedChannelIds) && user.followedChannelIds.length) {
-          const seedNameById = new Map(SEED_CHANNELS.map((ch) => [ch.id, ch.name]));
-          const customNameById = new Map((state.customChannels || []).map((ch) => [ch.id, ch.name]));
-          names = user.followedChannelIds
-            .map((id) => String(customNameById.get(id) || seedNameById.get(id) || id || "").trim())
-            .filter(Boolean);
-        }
-        if (!names.length) {
-          return `<span style="color:#b9ada0">—</span>`;
-        }
-
-        const maxShown = 4;
-        const shown = names.slice(0, maxShown);
-        const extra = Math.max(0, names.length - shown.length);
-        const chips = shown.map((name) => {
-          return `<span title="${escapeHtml(name)}" style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;background:#f6f7f1;color:#6b6258;font-size:0.72rem;line-height:1;border:1px solid #eee9e2;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis;margin-right:6px">${escapeHtml(name)}</span>`;
-        }).join("");
-        const more = extra ? `<span style="color:#989188;font-size:0.75rem;white-space:nowrap">+${extra}</span>` : "";
-        return `${chips}${more}`;
-      };
-
-      usersList.innerHTML = stats.users.map((user) => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border-bottom:1px solid #f3f5ef">
-          <div style="flex:1">
-            <div style="font-weight:500;color:#3d3d3b">${escapeHtml(user.email || "Onbekend")}</div>
-            <div style="font-size:0.85rem;color:#989188;margin-top:4px">
-              ${user.recipes || 0} recepten • ${user.cookbooks || 0} kookboeken
-            </div>
-            <div style="font-size:0.78rem;color:#989188;margin-top:6px">
-              <span style="color:#b9ada0;margin-right:8px">Kanalen</span>
-              <span style="display:inline-flex;flex-wrap:wrap;gap:0;align-items:center">${renderFollowedChannels(user)}</span>
-            </div>
-            ${user.createdAt ? `<div style="font-size:0.8rem;color:#b9ada0;margin-top:2px">Aangemaakt: ${new Date(user.createdAt).toLocaleDateString('nl-NL')}</div>` : ''}
-          </div>
-          <button class="secondary-button" type="button" style="margin-left:8px;white-space:nowrap" data-admin-delete-user="${escapeHtml(user.id)}">Verwijderen</button>
-        </div>
-      `).join("");
-    }
-  }
-
-  renderAdminSearchTerms(searchTerms);
-
-  renderAdminChannelsModeration(channels);
-
-  // Bind moderation actions
-  document.querySelectorAll("[data-admin-approve-channel]").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const id = btn.getAttribute("data-admin-approve-channel") || "";
-      if (!id) return;
-      if (!confirm("Kanaal goedkeuren?")) return;
-      try {
-        await setAdminChannelStatus(id, "approved", "");
-        showToast("Kanaal goedgekeurd");
-        renderAdminScreen();
-      } catch (err) {
-        showToast("Mislukt: " + err.message);
-      }
-    }, { once: true });
-  });
-  document.querySelectorAll("[data-admin-reject-channel]").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const id = btn.getAttribute("data-admin-reject-channel") || "";
-      if (!id) return;
-      if (!confirm("Kanaal afwijzen?")) return;
-      const reason = prompt("Reden (optioneel):") || "";
-      try {
-        await setAdminChannelStatus(id, "rejected", reason);
-        showToast("Kanaal afgewezen");
-        renderAdminScreen();
-      } catch (err) {
-        showToast("Mislukt: " + err.message);
-      }
-    }, { once: true });
-  });
-
-  // Populate channel test select
-  const select = document.getElementById("adminChannelTestSelect");
-  if (select) {
-    const seed = Array.isArray(catalog?.seed) ? catalog.seed : [];
-    const custom = catalog?.custom || { approved: [], pending: [], rejected: [] };
-    const opt = (label, valueObj) => `<option value="${escapeHtml(JSON.stringify(valueObj))}">${escapeHtml(label)}</option>`;
-    const groups = [];
-    if (seed.length) {
-      groups.push(`<optgroup label="Seed kanalen">${seed.map((ch) => opt(ch.name, { kind: "seed", channelId: ch.id, label: ch.name })).join("")}</optgroup>`);
-    }
-    const makeCustomGroup = (label, list) => {
-      const arr = Array.isArray(list) ? list : [];
-      if (!arr.length) return "";
-      return `<optgroup label="${escapeHtml(label)}">${arr.map((ch) => opt(`${ch.name}${ch.url ? ` — ${ch.url}` : ""}`, { kind: "custom", customChannel: { id: ch.id, name: ch.name, url: ch.url }, label: ch.name })).join("")}</optgroup>`;
-    };
-    groups.push(makeCustomGroup("Custom (approved)", custom.approved));
-    groups.push(makeCustomGroup("Custom (pending)", custom.pending));
-    groups.push(makeCustomGroup("Custom (rejected)", custom.rejected));
-    if (groups.filter(Boolean).length) {
-      select.innerHTML = `<option value="">Kanaal kiezen…</option>` + groups.filter(Boolean).join("");
-    }
-  }
-
-  const searchBtn = document.getElementById("adminChannelTestSearchBtn");
-  if (searchBtn) searchBtn.onclick = () => runAdminChannelTestSearch();
-  const importBtn = document.getElementById("adminChannelTestImportBtn");
-  if (importBtn) importBtn.onclick = () => runAdminChannelTestImport("");
-  const newChannelTestBtn = document.getElementById("adminNewChannelTestBtn");
-  if (newChannelTestBtn) newChannelTestBtn.onclick = () => runAdminNewChannelTest();
-  const newChannelAddBtn = document.getElementById("adminNewChannelAddBtn");
-  if (newChannelAddBtn) newChannelAddBtn.onclick = () => addAdminGlobalChannel();
-
-  document.querySelectorAll("[data-admin-channel-test-import]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      const url = btn.getAttribute("data-admin-channel-test-import") || "";
-      const input = document.getElementById("adminChannelTestImportUrl");
-      if (input) input.value = url;
-      runAdminChannelTestImport(url);
-    }, { once: true });
-  });
 }
 
 function renderAll() {
@@ -9343,10 +8577,6 @@ function renderAll() {
   closeBasketModal();
   // Apply translations for current language (once loaded)
   if (translationsReady) applyTranslations();
-  // Render admin screen (async, non-blocking)
-  if (isAdmin()) {
-    renderAdminScreen();
-  }
 }
 
 function normalizeUiErrorMessage(message, code = "") {
@@ -9703,6 +8933,9 @@ async function bootstrapSession() {
   } finally {
     console.log("🔄 Bootstrap session finally block - authenticated:", state.auth.authenticated, "sessionCheckSucceeded:", sessionCheckSucceeded);
     state.session.ready = true;
+
+    applyPlatelyTheme();
+    initPlatelyThemeListener();
 
     renderAll();
 
@@ -12084,6 +11317,24 @@ bindEvent(document.getElementById("profileSubSupermarketSave"), "click", () => {
   showToast("Voorkeur opgeslagen.");
 });
 
+bindEvent(document.getElementById("goToAppearanceBtn"), "click", () => {
+  updateThemePanel();
+  openProfileSubPanel("profileSubTheme");
+});
+bindEvent(document.getElementById("profileSubThemeBack"), "click", () => closeProfileSubPanel("profileSubTheme"));
+
+document.querySelectorAll(".theme-option").forEach((btn) => {
+  bindEvent(btn, "click", () => {
+    const pref = btn.dataset.themePref;
+    if (pref !== "light" && pref !== "dark" && pref !== "system") return;
+    try {
+      localStorage.setItem(PLATELY_THEME_KEY, pref);
+    } catch {}
+    applyPlatelyTheme();
+    updateThemePanel();
+  });
+});
+
 // "Taal" on profile → open language sub-panel
 bindEvent(document.getElementById("goToLanguageBtn"), "click", () => {
   updateLanguagePanel();
@@ -12106,6 +11357,11 @@ bindEvent(document.getElementById("goToAboutBtn"), "click", () => {
   openProfileSubPanel("profileSubAbout");
 });
 bindEvent(document.getElementById("profileSubAboutBack"), "click", () => closeProfileSubPanel("profileSubAbout"));
+
+bindEvent(document.getElementById("goToPrivacyBtn"), "click", () => {
+  openProfileSubPanel("profileSubPrivacy");
+});
+bindEvent(document.getElementById("profileSubPrivacyBack"), "click", () => closeProfileSubPanel("profileSubPrivacy"));
 
 // "Nieuw in Plately" → changelog sub-panel
 // Profile stat buttons → navigate to relevant screen/panel
@@ -13910,56 +13166,23 @@ const adminDashboardBtn = document.getElementById("adminDashboardBtn");
 if (adminDashboardBtn) {
   adminDashboardBtn.addEventListener("click", () => {
     switchView("admin");
-    renderAdminScreen();
   });
 }
 
-// Home button in admin screen
-if (adminScreen) {
-  const adminHomeBtn = adminScreen.querySelector(".brand-lockup");
-  if (adminHomeBtn) {
-    adminHomeBtn.addEventListener("click", () => switchView("home"));
-  }
+const adminBackBtn = document.getElementById("adminBackBtn");
+if (adminBackBtn) {
+  adminBackBtn.addEventListener("click", () => switchView("settings"));
 }
 
-// User search filter
-const adminUserSearch = document.getElementById("adminUserSearch");
-if (adminUserSearch) {
-  let adminUserSearchTimeout = null;
-  adminUserSearch.addEventListener("input", (e) => {
-    clearTimeout(adminUserSearchTimeout);
-    const term = String(e?.target?.value || "").trim().toLowerCase();
-    adminUserSearchTimeout = setTimeout(() => {
-      const userItems = document.querySelectorAll("#adminUsersList > div");
-      userItems.forEach((item) => {
-        if (!(item instanceof HTMLElement)) return;
-        if (!item.dataset.emailLower) {
-          const email = item.querySelector("div")?.textContent || "";
-          item.dataset.emailLower = String(email).toLowerCase();
-        }
-        item.style.display = item.dataset.emailLower.includes(term) ? "" : "none";
-      });
-    }, 160);
-  });
-}
-
-// User delete buttons (delegated event handling)
-const adminUsersList = document.getElementById("adminUsersList");
-if (adminUsersList) {
-  adminUsersList.addEventListener("click", (event) => {
-    const deleteBtn = event.target.closest("[data-admin-delete-user]");
-    if (deleteBtn instanceof HTMLElement && deleteBtn.dataset.adminDeleteUser) {
-      const userId = deleteBtn.dataset.adminDeleteUser;
-      const userEmail = deleteBtn.closest("div")?.querySelector("div")?.textContent || "gebruiker";
-
-      // Show confirmation
-      showConfirmSheet(
-        `Verwijder "${userEmail}"?`,
-        "Deze actie kan niet ongedaan gemaakt worden.",
-        "Verwijderen",
-        () => deleteAdminUser(userId)
+const adminDashboardFrame = document.getElementById("adminDashboardFrame");
+if (adminDashboardFrame) {
+  adminDashboardFrame.addEventListener("load", () => {
+    try {
+      adminDashboardFrame.contentWindow?.postMessage(
+        { type: "plately-theme", theme: getEffectiveTheme(), pref: getStoredThemePref() },
+        "*"
       );
-    }
+    } catch {}
   });
 }
 
