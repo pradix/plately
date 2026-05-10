@@ -7186,6 +7186,200 @@ button.ingredient-item {
   background: rgba(120, 147, 111, 0.1);
 }
 
+/* Onboarding stap 3 — eerste kookboek (strak + visueel) */
+.onboarding-step--cookbook {
+  gap: 18px;
+}
+
+.onboarding-header--cookbook .onboarding-hero-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  margin-bottom: 10px;
+}
+
+.onboarding-header--cookbook .onboarding-hero-icon svg {
+  width: 36px;
+  height: 36px;
+}
+
+.onboarding-header--cookbook .onboarding-title {
+  margin-top: 4px;
+}
+
+.onboarding-header--cookbook .onboarding-subtitle {
+  max-width: 30ch;
+  font-size: 0.88rem;
+  line-height: 1.42;
+}
+
+.onboarding-cookbook-card {
+  display: grid;
+  grid-template-columns: 1fr;
+  border-radius: var(--radius-4, 18px);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
+  box-shadow: var(--shadow-2);
+  background: var(--color-surface);
+}
+
+@media (min-width: 440px) {
+  .onboarding-cookbook-card {
+    grid-template-columns: minmax(0, 118px) minmax(0, 1fr);
+  }
+}
+
+.onboarding-cookbook-visual {
+  display: flex;
+  min-height: 112px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, #9b7cc9 22%, var(--color-surface)) 0%,
+    var(--color-surface) 55%,
+    color-mix(in srgb, var(--color-brand) 8%, var(--color-surface)) 100%
+  );
+}
+
+.onboarding-cookbook-visual__spine {
+  width: 13px;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, #5c4678 0%, #9b7cc9 48%, #6b5289 100%);
+  box-shadow: inset -3px 0 6px rgba(0, 0, 0, 0.18);
+}
+
+.onboarding-cookbook-visual__cover {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 10px;
+  text-align: center;
+}
+
+.onboarding-cookbook-visual__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  border: 1px solid color-mix(in srgb, #9b7cc9 35%, transparent);
+  color: #9b7cc9;
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset;
+}
+
+.onboarding-cookbook-visual__icon svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.onboarding-cookbook-visual__name {
+  margin: 0;
+  padding: 0 4px;
+  font-family: var(--font-display);
+  font-size: clamp(0.95rem, 3.2vw, 1.08rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: var(--color-text);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onboarding-cookbook-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 16px;
+  min-width: 0;
+}
+
+.onboarding-cookbook-label {
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.onboarding-cookbook-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1.5px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 96%, var(--color-surface-3));
+  font-size: 1.02rem;
+  font-weight: 650;
+  font-family: inherit;
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.onboarding-cookbook-input::placeholder {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.onboarding-cookbook-input:hover {
+  border-color: color-mix(in srgb, var(--color-brand) 35%, var(--color-border));
+}
+
+.onboarding-cookbook-input:focus {
+  border-color: var(--color-brand);
+  background: var(--color-surface);
+  box-shadow: var(--focus-ring);
+}
+
+.onboarding-cookbook-pills {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.onboarding-cookbook-pills__kicker {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.onboarding-cookbook-pills .onboarding-suggestion-pills {
+  gap: 6px;
+}
+
+.onboarding-cookbook-pills .onboarding-suggestion-pill {
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
+  background: var(--color-surface);
+  color: var(--muted-strong);
+}
+
+.onboarding-cookbook-pills .onboarding-suggestion-pill:hover {
+  border-color: color-mix(in srgb, var(--color-brand) 42%, var(--color-border));
+  background: color-mix(in srgb, var(--color-brand) 7%, var(--color-surface));
+  color: var(--color-text);
+}
+
+.onboarding-cookbook-pills .onboarding-suggestion-pill:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 /* Photo upload styling */
 .onboarding-photo-btn {
   position: relative;

@@ -11950,7 +11950,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.07";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.08";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
@@ -13765,6 +13765,14 @@ function resetOnboardingData() {
   };
 }
 
+function syncOnboardingCookbookPreview() {
+  const input = document.getElementById("onboardingCookbookName");
+  const preview = document.getElementById("onboardingCookbookPreview");
+  if (!(preview instanceof HTMLElement)) return;
+  const raw = input instanceof HTMLInputElement ? input.value.trim() : "";
+  preview.textContent = raw || "Jouw kookboek";
+}
+
 function showOnboarding() {
   resetOnboardingData();
   authModal.classList.add("hidden");
@@ -13773,6 +13781,7 @@ function showOnboarding() {
 
   const cookbookInput = document.getElementById("onboardingCookbookName");
   if (cookbookInput instanceof HTMLInputElement) cookbookInput.value = "";
+  syncOnboardingCookbookPreview();
 
   const overlay = document.getElementById("onboardingOverlay");
   if (overlay) overlay.setAttribute("hidden", "");
@@ -13791,6 +13800,7 @@ function showOnboardingStep(step) {
   });
   document.getElementById(`onboardingStep${safe}`)?.classList.remove("hidden");
   updateOnboardingProgress(safe);
+  if (safe === 3) syncOnboardingCookbookPreview();
 }
 
 function updateOnboardingProgress(step) {
@@ -14023,11 +14033,16 @@ document.querySelectorAll(".onboarding-suggestion-pill").forEach((pill) => {
   pill.addEventListener("click", () => {
     const suggestedName = pill.dataset.cookbookSuggest;
     const input = document.getElementById("onboardingCookbookName");
-    if (input) {
-      input.value = suggestedName;
+    if (input instanceof HTMLInputElement) {
+      input.value = suggestedName || "";
       input.focus();
+      syncOnboardingCookbookPreview();
     }
   });
+});
+
+bindEvent(document.getElementById("onboardingCookbookName"), "input", () => {
+  syncOnboardingCookbookPreview();
 });
 
 bindEvent(document.getElementById("onboardingStep3Skip"), "click", () => {
