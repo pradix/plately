@@ -12575,28 +12575,13 @@ body {
   transition: color 170ms ease, transform 170ms cubic-bezier(.22,1,.36,1);
 }
 
-.nav-item::before {
-  content: "";
-  position: absolute;
-  top: 5px;
-  left: 50%;
-  width: 18px;
-  height: 3px;
-  border-radius: var(--radius-pill);
-  background: #78936f;
-  transform: translateX(-50%) scaleX(0.35);
-  opacity: 0;
-  transition: opacity 170ms ease, transform 170ms cubic-bezier(.22,1,.36,1);
-}
+/* Active-indicator (dakje) verwijderd — actieve staat blijft zichtbaar via
+   tekst-/icoon-kleur (#5f7f58) en zwaardere SVG-strokewidth hieronder. */
+.nav-item::before { content: none; }
 
 .nav-item--active {
   color: #5f7f58;
   background: transparent;
-}
-
-.nav-item--active::before {
-  opacity: 1;
-  transform: translateX(-50%) scaleX(1);
 }
 
 .nav-item--active svg {
