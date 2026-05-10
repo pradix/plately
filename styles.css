@@ -3179,6 +3179,92 @@ button.ingredient-item {
 
 .recent-card:active { transform: translateY(0) scale(0.99); }
 
+.recipe-status-pills {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: calc(100% - 16px);
+  pointer-events: none;
+}
+
+.recipe-status-pill {
+  font-size: 0.65rem;
+  font-weight: 750;
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 253, 249, 0.96);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 22%, transparent);
+  color: #3d5a45;
+  line-height: 1.15;
+  box-shadow: 0 1px 5px rgba(36, 60, 43, 0.1);
+}
+
+.recipe-status-pill--review {
+  background: rgba(246, 182, 157, 0.28);
+  border-color: rgba(232, 150, 120, 0.65);
+  color: #5c351f;
+}
+
+.recipe-status-pill--fav {
+  padding: 2px 7px;
+  font-size: 0.72rem;
+}
+
+.home-concepts-banner {
+  margin: 0 var(--space-7) var(--space-8);
+  padding: 12px 14px;
+  border-radius: var(--radius-3);
+  background: linear-gradient(135deg, rgba(141, 164, 133, 0.14), rgba(246, 182, 157, 0.1));
+  border: 1px solid color-mix(in srgb, var(--color-brand) 20%, var(--line));
+}
+
+.home-concepts-banner.hidden {
+  display: none;
+}
+
+.home-concepts-banner__inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.home-concepts-banner__icon {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.home-concepts-banner__text {
+  margin: 0;
+  flex: 1;
+  min-width: 200px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--color-text, #2a2a28);
+}
+
+.home-concepts-banner__btn {
+  flex-shrink: 0;
+  border: 0;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--color-brand);
+  box-shadow: var(--shadow-1);
+}
+
+.home-concepts-banner__btn:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
 .recent-card__img {
   width: 100%;
   aspect-ratio: 16/10;

@@ -783,6 +783,7 @@ const homeStats = document.getElementById("homeStats");
 const recentImportList = document.getElementById("recentImportList");
 const homeConceptsHeading = document.getElementById("homeConceptsHeading");
 const homeConceptsGrid = document.getElementById("homeConceptsGrid");
+const homeConceptsBanner = document.getElementById("homeConceptsBanner");
 const homeImportForm = document.getElementById("homeImportForm");
 const homeImportUrl = document.getElementById("homeImportUrl");
 const homeImportSubmit = document.getElementById("homeImportSubmit");
@@ -2482,7 +2483,11 @@ function openBasketModal(preview) {
   const recipe = state.selectedRecipeId ? getRecipeById(state.selectedRecipeId) : null;
   const base = recipe ? parseBaseServings(recipe.servings) : 2;
   state.basketBaseServings = base;
-  state.basketServings = base;
+  // Lijn mand-personen af op gekozen porties op recept (indien van toepassing)
+  const aligned = recipe
+    ? Math.min(20, Math.max(1, Math.round(Number(state.currentServings) || base)))
+    : base;
+  state.basketServings = aligned;
   state.basketFilter = { bio: false, beterLeven1: false, vegetarisch: false, vegan: false, plantaardig: false };
   const smartBtn = document.getElementById("basketSmartPickButton");
   if (smartBtn) smartBtn.style.display = preview?.store === "albert-heijn" ? "" : "none";
@@ -3536,6 +3541,80 @@ function mergeAmountLabels(existing, incoming) {
   return uniqueValues.join(" + ");
 }
 
+/** Schaal één hoeveelheidstekst (bijv. na porties wijzigen). Ondersteunt "400 g + 200 g". */
+function scaleAmountLabelByRatio(amountStr, ratio) {
+  if (!Number.isFinite(ratio) || ratio <= 0 || Math.abs(ratio - 1) < 1e-9) {
+    return String(amountStr || "").trim();
+  }
+  const raw = String(amountStr || "").trim();
+  if (!raw) return raw;
+  const parts = raw.split(/\s*\+\s*/).map((p) => p.trim()).filter(Boolean);
+  const scaled = parts.map((part) => {
+    const p = parseAmountLabel(part);
+    if (!p) return part;
+    return formatMergedAmount(p.amount * ratio, p.unit);
+  });
+  return scaled.join(" + ");
+}
+
+/** Dedupe-key: zelfde ingrediënt ongeacht grove groep; optioneel apart. */
+function groceryMergeKeyForList(item) {
+  const raw = String(item?.title || "");
+  const opt =
+    /\(optioneel\)/i.test(raw) || /\boptioneel\b/i.test(raw.toLowerCase()) ? "|opt" : "";
+  const stripped = raw.replace(/\s*\(optioneel\)\s*$/i, "").replace(/\boptioneel$/i, "").trim();
+  return `${normalizeIngredientKey(stripped)}${opt}`;
+}
+
+function consolidateUncheckedGroceryDuplicates() {
+  const items = state.groceryItems;
+  if (!Array.isArray(items) || items.length < 2) return;
+
+  const buckets = new Map();
+  const keyOrder = [];
+  for (const item of items) {
+    if (!item || item.checked) continue;
+    const k = groceryMergeKeyForList(item);
+    if (!k) continue;
+    if (!buckets.has(k)) {
+      buckets.set(k, []);
+      keyOrder.push(k);
+    }
+    buckets.get(k).push(item);
+  }
+
+  const removeIds = new Set();
+  for (const k of keyOrder) {
+    const group = buckets.get(k);
+    if (!group || group.length < 2) continue;
+    const [first, ...rest] = group;
+    let combined = String(first.amount || "").trim();
+    const titles = new Set();
+    if (first.recipeTitle) titles.add(String(first.recipeTitle));
+    for (const o of rest) {
+      combined = mergeAmountLabels(combined, String(o.amount || "").trim());
+      if (o.recipeTitle) titles.add(String(o.recipeTitle));
+      if (o.id) removeIds.add(o.id);
+    }
+    first.amount = combined;
+    const mergedTitle = [...titles].filter(Boolean).join(", ");
+    if (mergedTitle) first.recipeTitle = mergedTitle;
+  }
+
+  if (!removeIds.size) return;
+  state.groceryItems = items.filter((i) => i && !removeIds.has(i.id));
+}
+
+function rescaleGroceryAmountsForRecipe(recipeId, ratio) {
+  const id = String(recipeId || "").trim();
+  if (!id || !Number.isFinite(ratio) || ratio <= 0 || Math.abs(ratio - 1) < 1e-9) return;
+  for (const item of state.groceryItems) {
+    if (!item || item.checked) continue;
+    if (item.recipeId !== id) continue;
+    item.amount = scaleAmountLabelByRatio(item.amount, ratio);
+  }
+}
+
 // Optional manual sanity checks in browser console:
 //   window.__platelyIngredientSanity?.()
 //   window.__platelyPantrySanity?.()
@@ -4407,7 +4486,28 @@ function renderHomeConcepts() {
   if (!items.length) {
     homeConceptsHeading.classList.add("hidden");
     homeConceptsGrid.innerHTML = "";
+    if (homeConceptsBanner) {
+      homeConceptsBanner.classList.add("hidden");
+      homeConceptsBanner.innerHTML = "";
+    }
     return;
+  }
+
+  if (homeConceptsBanner) {
+    const n = previews.length;
+    const newest = previews[0];
+    homeConceptsBanner.classList.remove("hidden");
+    homeConceptsBanner.innerHTML = `
+      <div class="home-concepts-banner__inner">
+        <span class="home-concepts-banner__icon" aria-hidden="true">📝</span>
+        <p class="home-concepts-banner__text"><strong>${n === 1 ? "1 import" : `${n} imports`}</strong> nog niet in een kookboek — rond de import af zodat alles klopt.</p>
+        <button type="button" class="home-concepts-banner__btn" id="homeConceptsBannerCta">Naar controle</button>
+      </div>
+    `;
+    const cta = document.getElementById("homeConceptsBannerCta");
+    if (cta && newest?.id) {
+      cta.onclick = () => openImportReview(newest.id);
+    }
   }
 
   homeConceptsHeading.classList.remove("hidden");
@@ -4927,9 +5027,20 @@ function renderRecipeGrid() {
         const faviconHtml = faviconUrl
           ? `<span class="recent-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" /></span>`
           : "";
+        const statusBadges = [
+          recipe.needsReview
+            ? `<span class="recipe-status-pill recipe-status-pill--review">Nakijken</span>`
+            : "",
+          isRecipeFavorited(recipe.id)
+            ? `<span class="recipe-status-pill recipe-status-pill--fav" aria-hidden="true">❤︎</span>`
+            : "",
+        ]
+          .filter(Boolean)
+          .join("");
         return `
         <button class="recent-card" type="button" data-recipe-id="${escapeHtml(recipe.id)}">
           <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title || "")}" loading="lazy" />
+          ${statusBadges ? `<div class="recipe-status-pills">${statusBadges}</div>` : ""}
           ${faviconHtml}
           <div class="recent-card__body">
             <p class="recent-card__title">${escapeHtml(recipe.title)}</p>
@@ -5530,6 +5641,7 @@ function getPantryOptionalSuggestionsForRecipe(recipe, existingKeySet) {
 }
 
 function renderGroceryGroups() {
+  consolidateUncheckedGroceryDuplicates();
   persistGroceryItemsLocally();
   const uncheckedCount = state.groceryItems.filter((item) => !item.checked).length;
   if (grocerySubtitle) {
@@ -7324,13 +7436,12 @@ function addRecipeToGrocery(recipe) {
       return;
     }
     const isOptional = isOptionalGroceryIngredient(ingredient.name);
-    const normalizedTitle = `${normalizeIngredientKey(ingredient.name)}${isOptional ? " optioneel" : ""}`.trim();
     const nextAmount = formatIngredientAmount(ingredient, state.currentServings / parseBaseServings(recipe.servings));
+    const mergeKey = groceryMergeKeyForList({
+      title: isOptional ? buildOptionalTitle(ingredient.name) : ingredient.name,
+    });
     const existingItem = state.groceryItems.find(
-      (item) =>
-        !item.checked &&
-        normalizeIngredientKey(item.title) === normalizedTitle &&
-        item.group === getIngredientGroup(normalizedTitle || ingredient.name)
+      (item) => !item.checked && groceryMergeKeyForList(item) === mergeKey
     );
 
     if (existingItem) {
@@ -10932,21 +11043,54 @@ document.getElementById("channelRow")?.addEventListener("click", (event) => {
   }
 });
 
-bindEvent(servingsDown, "click", () => {
-  if (state.currentServings <= 1) {
-    return;
-  }
-  state.currentServings -= 1;
-  renderDetailRecipe(false);
-});
+function tryAdjustDetailServings(delta) {
+  const recipe = getSelectedRecipe();
+  if (!recipe || state.view !== "detail") return;
+  const next = state.currentServings + delta;
+  if (next < 1 || next > 20) return;
 
-bindEvent(servingsUp, "click", () => {
-  if (state.currentServings >= 20) {
-    return;
+  const base = parseBaseServings(recipe.servings);
+  const oldN = state.currentServings;
+  if (next === oldN) return;
+
+  const hasGroceryForRecipe = state.groceryItems.some(
+    (item) => item && item.recipeId === recipe.id && !item.checked
+  );
+
+  if (hasGroceryForRecipe) {
+    const ratio = next / oldN;
+    const pct = Math.round((ratio - 1) * 100);
+    const factorLabel =
+      Math.abs(ratio - 1) < 0.001
+        ? "gelijk"
+        : ratio > 1
+          ? `ongeveer ${pct > 0 ? "+" : ""}${pct}% meer ingrediënt op je lijst`
+          : `ongeveer ${Math.abs(pct)}% minder ingrediënt op je lijst`;
+    const doubling =
+      Math.abs(ratio - 2) < 0.05 ? " (ongeveer dubbele hoeveelheden)" : Math.abs(ratio - 0.5) < 0.05 ? " (ongeveer halve hoeveelheden)" : "";
+
+    const ok = window.confirm(
+      `Personen: ${oldN} → ${next} (recept is oorspronkelijk voor ${base} pers.).\n\n` +
+        `Hoeveelheden op je boodschappenlijst voor dit recept worden meegeschaald${
+          doubling || ` (${factorLabel})`
+        }.\n\nDoorgaan?`
+    );
+    if (!ok) return;
+    rescaleGroceryAmountsForRecipe(recipe.id, ratio);
+    schedulePersistAppState();
+    renderGroceryGroups();
+    if (state.basketPreview) {
+      scheduleRefetchBasketWithPreferences();
+    }
   }
-  state.currentServings += 1;
+
+  state.currentServings = next;
   renderDetailRecipe(false);
-});
+}
+
+bindEvent(servingsDown, "click", () => tryAdjustDetailServings(-1));
+
+bindEvent(servingsUp, "click", () => tryAdjustDetailServings(1));
 
 bindEvent(searchInput, "input", (event) => {
   // Debounced channel search — short pause after typing to batch requests
@@ -11005,6 +11149,20 @@ bindEvent(searchInput, "blur", () => {
 
 // Home quick chips (generated on load + when re-entering home)
 renderHomeQuickChips();
+
+const openConceptsImportReviewBtn = document.getElementById("openConceptsImportReviewBtn");
+if (openConceptsImportReviewBtn) {
+  bindEvent(openConceptsImportReviewBtn, "click", () => {
+    const list = getImportPreviewList();
+    const first = list[0];
+    if (first?.id) {
+      openImportReview(first.id);
+    } else {
+      showToast("Geen open concepten.");
+    }
+  });
+}
+
 bindEvent(homeSearchChipsWrap, "click", (event) => {
   const chip = event.target.closest("[data-home-search-chip]");
   if (!(chip instanceof HTMLElement)) return;
@@ -11256,16 +11414,32 @@ bindEvent(detailStepList, "click", (event) => {
   }
 });
 
-// Basket servings controls
-bindEvent(document.getElementById("basketServingsMinus"), "click", () => {
-  if (state.basketServings <= 1) return;
-  state.basketServings -= 1;
+// Basket servings controls (+ bevestiging vóór schalen AH-mand)
+function tryAdjustBasketServings(delta) {
+  const preview = state.basketPreview;
+  if (!preview) return;
+  const next = state.basketServings + delta;
+  if (next < 1 || next > 24) return;
+  if (next === state.basketServings) return;
+
+  const isAh = preview.store === "albert-heijn";
+  const hasItems = Array.isArray(preview.items) && preview.items.length > 0;
+  if (isAh && hasItems) {
+    const oldN = state.basketServings;
+    const base = state.basketBaseServings || 2;
+    const ok = window.confirm(
+      `Porties voor de mand: ${oldN} → ${next} personen (t.o.v. ${base} pers. in het recept).\n\n` +
+        `Hoeveelheden en prijzen in dit overzicht schalen mee. Doorgaan?`
+    );
+    if (!ok) return;
+  }
+
+  state.basketServings = next;
   renderBasketPreview();
-});
-bindEvent(document.getElementById("basketServingsPlus"), "click", () => {
-  state.basketServings += 1;
-  renderBasketPreview();
-});
+}
+
+bindEvent(document.getElementById("basketServingsMinus"), "click", () => tryAdjustBasketServings(-1));
+bindEvent(document.getElementById("basketServingsPlus"), "click", () => tryAdjustBasketServings(1));
 
 // Bio toggle (only filter chip in basket sheet; per-item Wissel handles diet variants)
 bindEvent(document.getElementById("basketFilterRow"), "click", (e) => {
