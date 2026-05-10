@@ -11707,7 +11707,7 @@ const server = http.createServer(async (request, response) => {
     <meta name="twitter:description" content="${escapeHtml(desc)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
-    <link rel="stylesheet" href="/styles.css?v=3.1.10" />
+    <link rel="stylesheet" href="/styles.css?v=3.1.12" />
     <script>
       (function () {
         document.addEventListener(
@@ -11774,6 +11774,8 @@ const server = http.createServer(async (request, response) => {
             </ol>
           </section>
         </div>
+
+        <p class="public-recipe__trust">Receptinhoud en beelden komen van de maker of bronsite. Deel met respect — link waar het kan naar het origineel.</p>
 
         <footer class="public-recipe__footer">
           <a class="public-recipe__source" href="${escapeHtml(sanitizeText(payload.sourceUrl || "/index.html"))}" target="_blank" rel="noopener noreferrer">Bekijk originele bron</a>

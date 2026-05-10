@@ -492,6 +492,61 @@ function installImageSaveGuards() {
   );
 }
 
+const RECIPE_CARD_IMG_FALLBACK = "assets/hero-burger.svg";
+
+function wireRecipeCardImageFallbacks(root) {
+  const scope = root && typeof root.querySelectorAll === "function" ? root : document;
+  scope.querySelectorAll("img.recent-card__img").forEach((img) => {
+    if (img.dataset.platelyImgFallback === "1") return;
+    img.dataset.platelyImgFallback = "1";
+    img.addEventListener(
+      "error",
+      () => {
+        const cur = String(img.getAttribute("src") || "");
+        if (cur.includes("hero-burger")) return;
+        img.removeAttribute("srcset");
+        img.src = RECIPE_CARD_IMG_FALLBACK;
+        img.classList.add("is-fallback-image");
+      },
+      { once: true }
+    );
+  });
+}
+
+const HOME_GROWTH_DISMISS_KEY = "plately-home-growth-dismiss";
+
+function syncHomeGrowthPanelVisibility() {
+  const panel = document.getElementById("homeGrowthPanel");
+  if (!panel) return;
+  try {
+    if (localStorage.getItem(HOME_GROWTH_DISMISS_KEY) === "1") {
+      panel.classList.add("hidden");
+      panel.setAttribute("aria-hidden", "true");
+    } else {
+      panel.classList.remove("hidden");
+      panel.removeAttribute("aria-hidden");
+    }
+  } catch {
+    panel.classList.remove("hidden");
+    panel.removeAttribute("aria-hidden");
+  }
+}
+
+function installHomeGrowthPanelOnce() {
+  if (installHomeGrowthPanelOnce._done) return;
+  installHomeGrowthPanelOnce._done = true;
+  const btn = document.getElementById("homeGrowthDismiss");
+  if (!btn) return;
+  bindEvent(btn, "click", () => {
+    try {
+      localStorage.setItem(HOME_GROWTH_DISMISS_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    syncHomeGrowthPanelVisibility();
+  });
+}
+
 function normalizeHttpOrigin(origin) {
   return String(origin || "").trim().replace(/\/+$/, "").toLowerCase();
 }
@@ -972,12 +1027,11 @@ const navItems = [...document.querySelectorAll(".nav-item[data-view]")];
 const detailHeroImage = document.getElementById("detailHeroImage");
 const detailTitle = document.getElementById("detailTitle");
 const detailMealTag = document.getElementById("detailMealTag");
-const detailTime = document.getElementById("detailTime");
-const detailKcal = document.getElementById("detailKcal");
-const detailServings = document.getElementById("detailServings");
+const detailMetaChips = document.getElementById("detailMetaChips");
 const detailDescription = document.getElementById("detailDescription");
 const detailSourceIcon = document.getElementById("detailSourceIcon");
 const detailSourceLabel = document.getElementById("detailSourceLabel");
+const detailSourceLink = document.getElementById("detailSourceLink");
 const reviewImportButton = document.getElementById("reviewImportButton");
 const detailSaveHeaderButton = document.getElementById("detailSaveHeaderButton");
 const shareRecipeButton = document.getElementById("shareRecipeButton");
@@ -3671,6 +3725,7 @@ function switchView(view, opts = {}) {
     // Chips: pick a new set each time home is entered
     renderHomeQuickChips();
     hideHomeFocusPanel();
+    syncHomeGrowthPanelVisibility();
 
     // Defensive: when input is empty, ALWAYS force the channel-search panel
     // closed regardless of any lingering state. Mobile flows can leave
@@ -4859,8 +4914,8 @@ function renderRecentImports() {
     const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
     return `
     <button class="recent-card" type="button" data-recipe-id="${escapeHtml(recipe.id)}">
-      <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title)}" loading="lazy" />
-      ${faviconUrl ? `<span class="recent-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" /></span>` : ""}
+      <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title)}" loading="lazy" decoding="async" draggable="false" />
+      ${faviconUrl ? `<span class="recent-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" decoding="async" /></span>` : ""}
       <div class="recent-card__body">
         <p class="recent-card__title">${escapeHtml(recipe.title)}</p>
         <p class="recent-card__meta">${escapeHtml(recipe.time || "")}</p>
@@ -4888,6 +4943,7 @@ function renderRecentImports() {
   perfMeasure("renderRecentImports", () => {
     grid.innerHTML = cards.join("");
   });
+  wireRecipeCardImageFallbacks(grid);
 
   // Bind once: event delegation prevents per-render listener churn.
   if (!grid.dataset.bound) {
@@ -4954,8 +5010,8 @@ function renderHomeConcepts() {
       const host = getSourceHost(recipe.sourceUrl || "") || getPlatformLabel(recipe.platform || "website");
       return `
         <button class="recent-card" type="button" data-concept-id="${escapeHtml(recipe.id)}">
-          <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title || "Concept")}" loading="lazy" />
-          ${faviconUrl ? `<span class="recent-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" /></span>` : ""}
+          <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title || "Concept")}" loading="lazy" decoding="async" draggable="false" />
+          ${faviconUrl ? `<span class="recent-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" decoding="async" /></span>` : ""}
           <div class="recent-card__body">
             <p class="recent-card__title">${escapeHtml(recipe.title || "Concept")}</p>
             <p class="recent-card__meta">${escapeHtml(host)}</p>
@@ -4964,6 +5020,8 @@ function renderHomeConcepts() {
       `;
     })
     .join("");
+
+  wireRecipeCardImageFallbacks(homeConceptsGrid);
 
   homeConceptsGrid.querySelectorAll("[data-concept-id]").forEach((card) => {
     card.addEventListener("click", () => {
@@ -5506,7 +5564,7 @@ function renderRecipeGrid() {
           .join("");
         return `
         <button class="recent-card" type="button" data-recipe-id="${escapeHtml(recipe.id)}">
-          <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title || "")}" loading="lazy" />
+          <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title || "")}" loading="lazy" decoding="async" draggable="false" />
           ${statusBadges ? `<div class="recipe-status-pills">${statusBadges}</div>` : ""}
           ${faviconHtml}
           <div class="recent-card__body">
@@ -5532,6 +5590,7 @@ function renderRecipeGrid() {
   }
 
   recipeGrid.innerHTML = gridHtml;
+  wireRecipeCardImageFallbacks(recipeGrid);
 
   // Bind the add recipe card click
   const addRecipeCardBtn = document.getElementById("addRecipeCard");
@@ -5567,22 +5626,54 @@ function renderDetailRecipe(resetServings = false) {
 
   detailHeroImage.src = recipe.image;
   detailHeroImage.alt = recipe.alt;
+  const heroSrc = String(recipe.image || "").trim();
+  const isPlaceholderHero = !heroSrc || heroSrc.includes("hero-burger");
+  detailHeroImage.loading = isPlaceholderHero ? "lazy" : "eager";
+  detailHeroImage.fetchPriority = isPlaceholderHero ? "low" : "high";
+  detailHeroImage.decoding = "async";
   detailTitle.textContent = recipe.title;
   detailMealTag.textContent = recipe.mealTag;
-  detailTime.textContent = recipe.time;
-  detailKcal.textContent = recipe.kcal;
-  detailServings.textContent = recipe.servings;
+  if (detailMetaChips) {
+    const chips = [];
+    const timeLabel = String(recipe.time || "").trim();
+    if (timeLabel) chips.push({ ic: "⏱", tx: timeLabel });
+    const kcalRaw = String(recipe.kcal || "").trim();
+    if (kcalRaw && kcalRaw !== "◔" && !/^[\s◔·]+$/.test(kcalRaw)) {
+      chips.push({ ic: "", tx: kcalRaw });
+    }
+    const servLabel = String(recipe.servings || "").trim();
+    if (servLabel) chips.push({ ic: "👥", tx: servLabel });
+    chips.push({ ic: "", tx: getPlatformLabel(recipe.platform || "website") });
+    detailMetaChips.innerHTML = chips
+      .map(
+        (c) =>
+          `<span class="detail-chip" role="listitem"><span class="detail-chip__ic" aria-hidden="true">${escapeHtml(c.ic)}</span><span class="detail-chip__tx">${escapeHtml(c.tx)}</span></span>`
+      )
+      .join("");
+  }
   detailDescription.textContent = recipe.description || "";
   detailDescription.classList.toggle("is-hidden", !recipe.description);
   const iconUrl = getSourceIconUrl(recipe.sourceUrl || "");
   const host = getSourceHost(recipe.sourceUrl || "");
   if (detailSourceIcon) {
     detailSourceIcon.innerHTML = iconUrl
-      ? `<span class="source-favicon__inner"><img src="${iconUrl}" alt="" loading="lazy" /></span>`
+      ? `<span class="source-favicon__inner"><img src="${iconUrl}" alt="" loading="lazy" decoding="async" /></span>`
       : `<span class="source-favicon__inner"><span>${(host || "•").slice(0, 1).toUpperCase()}</span></span>`;
   }
   if (detailSourceLabel) {
     detailSourceLabel.textContent = host || getPlatformLabel(recipe.platform || "website");
+  }
+  const srcUrl = String(recipe.sourceUrl || "").trim();
+  if (detailSourceLink) {
+    if (/^https?:\/\//i.test(srcUrl)) {
+      detailSourceLink.href = srcUrl;
+      detailSourceLink.classList.remove("hidden");
+      detailSourceLink.removeAttribute("hidden");
+    } else {
+      detailSourceLink.removeAttribute("href");
+      detailSourceLink.classList.add("hidden");
+      detailSourceLink.setAttribute("hidden", "");
+    }
   }
   if (reviewImportButton) {
     reviewImportButton.classList.remove("hidden");
@@ -6180,7 +6271,7 @@ function renderGroceryGroups() {
           : "";
         return `
           <button class="recent-card" type="button" data-grocery-add-recipe-id="${escapeHtml(recipe.id)}" aria-label="Zet ${escapeHtml(recipe.title || "recept")} op boodschappenlijst">
-            <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title || "")}" loading="lazy" />
+            <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title || "")}" loading="lazy" decoding="async" draggable="false" />
             ${faviconHtml}
             <div class="recent-card__body">
               <p class="recent-card__title">${escapeHtml(recipe.title || "Recept")}</p>
@@ -6227,6 +6318,7 @@ function renderGroceryGroups() {
           addRecipeToGrocery(recipe);
         });
       });
+    wireRecipeCardImageFallbacks(groceryGroups);
     return;
   }
 
@@ -13297,6 +13389,8 @@ try {
 } catch { /* ignore */ }
 
 installImageSaveGuards();
+installHomeGrowthPanelOnce();
+syncHomeGrowthPanelVisibility();
 
 // Bootstrap session - this will render the app AFTER checking authentication
 bootstrapSession();

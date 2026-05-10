@@ -8,7 +8,7 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="3.1.10" />
+    <meta name="plately-build" content="3.1.12" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -32,7 +32,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=3.1.10" />
+    <link rel="stylesheet" href="styles.css?v=3.1.12" />
     <script>
       (function () {
         try {
@@ -151,6 +151,21 @@
           </section>
           <div class="home-cb-strip" id="homeCbStrip"></div>
 
+          <section class="home-growth-panel" id="homeGrowthPanel" aria-label="Tips om te starten">
+            <div class="home-growth-panel__head">
+              <h3 class="home-growth-panel__title">Snel aan de slag</h3>
+              <button type="button" class="home-growth-panel__dismiss" id="homeGrowthDismiss" aria-label="Deze tips verbergen">Verbergen</button>
+            </div>
+            <ul class="home-growth-panel__list">
+              <li><strong>Import</strong> — Plak een link van TikTok, Instagram of een receptsite in het veld hierboven.</li>
+              <li><strong>Kookboek</strong> — Bewaar recepten per thema via het hartje of de knop “Bewaar” op een recept.</li>
+              <li><strong>Boodschappen</strong> — Zet ingrediënten op je lijst en werk je AH-mandje vanuit Plately bij.</li>
+            </ul>
+            <p class="home-growth-panel__trust">
+              Receptteksten en foto’s komen vaak van externe makers. Controleer altijd zelf vóór je kookt — Plately is je persoonlijke kookassistent, geen uitgever.
+            </p>
+          </section>
+
           <!-- Hidden slider elements kept for JS compatibility -->
           <div hidden aria-hidden="true">
             <div id="recipeSlider"></div>
@@ -186,7 +201,7 @@
             </div>
           </header>
           <div class="detail-hero">
-            <img id="detailHeroImage" src="assets/hero-burger.svg" alt="Receptafbeelding" loading="lazy" decoding="async" fetchpriority="low" />
+            <img id="detailHeroImage" src="assets/hero-burger.svg" alt="Receptafbeelding" loading="eager" decoding="async" fetchpriority="high" draggable="false" />
             <div class="detail-hero__actions">
               <button class="detail-icon-action" id="favoriteRecipeButton" type="button" aria-label="Toevoegen aan favorieten" title="Voeg dit recept toe aan je favorieten (hartje) voor gemakkelijke terugkeer">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -209,19 +224,18 @@
               <span class="meal-pill" id="detailMealTag">Lunch</span>
             </div>
 
-            <div class="detail-stats">
-              <span class="detail-stat"><span>◔</span><strong id="detailTime">35 min</strong></span>
-              <span class="detail-stat"><span>◔</span><strong id="detailKcal">650 kcal</strong></span>
-              <span class="detail-stat"><span>◔</span><strong id="detailServings">2 Pers.</strong></span>
-            </div>
+            <div class="detail-meta-chips" id="detailMetaChips" role="list" aria-label="Receptinformatie"></div>
 
             <p class="detail-description" id="detailDescription">
               Een heerlijke vegetarische burger waarbij het broodje is vervangen door perfect rijpe avocado helften.
             </p>
             <div class="detail-origin" id="detailOriginRow">
-              <div class="detail-origin__meta">
-                <span class="source-favicon detail-origin__icon" id="detailSourceIcon" aria-hidden="true"></span>
-                <span id="detailSourceLabel">Bron</span>
+              <div class="detail-origin__primary">
+                <div class="detail-origin__meta">
+                  <span class="source-favicon detail-origin__icon" id="detailSourceIcon" aria-hidden="true"></span>
+                  <span id="detailSourceLabel">Bron</span>
+                </div>
+                <a class="detail-source-link hidden" id="detailSourceLink" href="#" target="_blank" rel="noopener noreferrer">Open origineel</a>
               </div>
               <div class="detail-origin__actions">
                 <button class="detail-icon-action" id="reviewImportButton" type="button" aria-label="Recept bewerken" title="Controleer en bewerk titel, ingrediënten, of bereiding">
@@ -245,6 +259,9 @@
                 </button>
               </div>
             </div>
+            <p class="detail-trust-note">
+              Recept en afbeelding komen van de bron hierboven (tenzij je zelf iets hebt aangepast). Makers verdienen het verkeer — open de originele pagina als je iets deelt buiten Plately.
+            </p>
             <section class="cook-tools-card" aria-label="Kookhulp">
               <p class="cook-tools-card__kicker">Tijdens koken</p>
               <button class="cook-kookstand-cta" id="kookstandButton" type="button">
@@ -1403,6 +1420,7 @@
       </div>
       <div class="share-card__actions">
         <p class="share-card__hint">📸 Screenshot voor Instagram of WhatsApp</p>
+        <p class="share-card__trust">Deel respectvol: tekst en beeld horen bij de oorspronkelijke maker — tag ze waar dat past.</p>
         <div class="share-card__buttons">
           <button class="secondary-button" type="button" id="shareCardClose">Sluiten</button>
           <button class="primary-button" type="button" id="shareCardNativeShare">Delen</button>
@@ -2037,6 +2055,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=3.1.10"></script>
+    <script src="app.js?v=3.1.12"></script>
   </body>
 </html>

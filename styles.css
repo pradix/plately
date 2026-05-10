@@ -1488,6 +1488,81 @@ img {
 
 .detail-stat span { color: #adbfae; }
 
+/* Receptdetail: meta als duidelijke chips (tijd, energie, porties, bron-type) */
+.detail-meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 16px;
+  list-style: none;
+  padding: 0;
+}
+
+.detail-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-surface) 96%, var(--color-brand-soft));
+  border: 1px solid color-mix(in srgb, var(--color-brand) 16%, var(--color-border));
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.2;
+  box-shadow: 0 2px 10px rgba(36, 60, 43, 0.06);
+}
+
+.detail-chip__ic {
+  font-size: 0.85rem;
+  line-height: 1;
+  opacity: 0.88;
+}
+
+.detail-chip__tx {
+  color: var(--text);
+  font-weight: 780;
+}
+
+.detail-trust-note {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted-strong);
+  font-weight: 550;
+  background: color-mix(in srgb, var(--color-surface-2) 88%, transparent);
+  border-radius: var(--radius-3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+}
+
+.detail-source-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 2px;
+  font-size: 0.82rem;
+  font-weight: 750;
+  color: var(--color-brand);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.detail-source-link:hover,
+.detail-source-link:focus-visible {
+  color: color-mix(in srgb, var(--color-brand) 78%, #1a2e18);
+}
+
+.detail-origin__primary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
 .detail-actions,
 .recipe-management,
 .recipe-management__row {
@@ -1783,6 +1858,16 @@ img {
 
 [data-theme="dark"] .cook-kookstand-cta {
   background: var(--color-surface-3);
+}
+
+[data-theme="dark"] .detail-chip {
+  background: color-mix(in srgb, var(--color-surface-2) 92%, var(--color-brand) 10%);
+  border-color: color-mix(in srgb, var(--color-brand) 24%, var(--color-border));
+}
+
+[data-theme="dark"] .detail-trust-note {
+  background: color-mix(in srgb, var(--color-surface-2) 70%, transparent);
+  color: var(--muted);
 }
 
 .detail-assist {
@@ -3575,6 +3660,22 @@ button.ingredient-item {
 
 .recent-card:active { transform: translateY(0) scale(0.99); }
 
+@media (prefers-reduced-motion: reduce) {
+  .recent-card,
+  .recent-card:hover,
+  .recent-card:active {
+    transition: none;
+    transform: none;
+  }
+}
+
+.recent-card__img.is-fallback-image {
+  object-fit: contain;
+  padding: 14%;
+  opacity: 0.9;
+  background: var(--surface-muted);
+}
+
 .recipe-status-pills {
   position: absolute;
   top: 8px;
@@ -3659,6 +3760,84 @@ button.ingredient-item {
 .home-concepts-banner__btn:focus-visible {
   outline: 2px solid var(--color-brand);
   outline-offset: 2px;
+}
+
+/* Home: korte tips + vertrouwen (uit te zetten per apparaat) */
+.home-growth-panel {
+  margin: 0 var(--space-7) var(--space-10);
+  padding: 14px 16px 16px;
+  border-radius: var(--radius-4);
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-brand-soft));
+  border: 1px solid color-mix(in srgb, var(--color-brand) 18%, var(--color-border));
+  box-shadow: var(--shadow-2);
+}
+
+.home-growth-panel.hidden {
+  display: none;
+}
+
+.home-growth-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.home-growth-panel__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.home-growth-panel__dismiss {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 4px 2px;
+}
+
+.home-growth-panel__dismiss:hover,
+.home-growth-panel__dismiss:focus-visible {
+  color: var(--color-brand);
+}
+
+.home-growth-panel__list {
+  margin: 0;
+  padding: 0 0 0 18px;
+  display: grid;
+  gap: 8px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--muted-strong);
+}
+
+.home-growth-panel__list strong {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.home-growth-panel__trust {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--muted);
+  font-weight: 550;
+}
+
+[data-theme="dark"] .home-growth-panel {
+  background: color-mix(in srgb, var(--color-surface-2) 88%, var(--color-brand) 8%);
+  border-color: color-mix(in srgb, var(--color-brand) 22%, var(--color-border));
 }
 
 .recent-card__img {
@@ -7188,6 +7367,18 @@ button.ingredient-item {
   color: var(--color-text);
   font-weight: 650;
   line-height: 1.6;
+}
+
+.public-recipe__trust {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted-strong);
+  font-weight: 550;
+  background: color-mix(in srgb, var(--color-surface-2) 88%, transparent);
+  border-radius: var(--radius-3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
 }
 
 .public-recipe__footer {
@@ -10992,6 +11183,15 @@ body {
   color: rgba(255,255,255,0.5);
   margin: 0;
   text-align: center;
+}
+
+.share-card__trust {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: rgba(255,255,255,0.38);
+  margin: 0;
+  text-align: center;
+  max-width: 300px;
 }
 .share-card__buttons {
   display: flex;
