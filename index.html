@@ -8,7 +8,7 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="3.1.13" />
+    <meta name="plately-build" content="3.1.14" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -37,7 +37,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=3.1.13" />
+    <link rel="stylesheet" href="styles.css?v=3.1.14" />
   </head>
   <body>
     <main class="page">
@@ -558,7 +558,11 @@
             <h2 class="profile-login-banner__title">Welkom bij Plately</h2>
             <p class="profile-login-banner__sub">Log in om je recepten en kookboeken op elk apparaat te bewaren.</p>
             <button class="profile-login-banner__btn profile-login-banner__btn--primary" id="profileLoginBtn" type="button">Inloggen</button>
-            <button class="profile-login-banner__btn profile-login-banner__btn--ghost" id="profileRegisterBtn" type="button">Account aanmaken</button>
+            <p class="profile-login-banner__register-line">
+              <button type="button" class="profile-login-banner__link" id="profileRegisterBtn" data-i18n="auth.switchRegister">
+                Nog geen account? Aanmelden
+              </button>
+            </p>
           </div>
 
           <!-- Profile header: name + stats -->
@@ -1775,32 +1779,6 @@
         </div>
 
         <div class="auth-screen__surface">
-        <div class="auth-screen__register-hero" aria-hidden="true">
-          <div class="auth-screen__register-badge">
-            <span class="auth-screen__register-badge__dot" aria-hidden="true"></span>
-            <span data-i18n="auth.registerBadge">Gratis account</span>
-          </div>
-          <ul class="auth-screen__register-perks">
-            <li>
-              <span class="auth-screen__register-perk-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8M8 11h6"/></svg>
-              </span>
-              <span data-i18n="auth.registerPerk1">Recepten en kookboeken overal bij je</span>
-            </li>
-            <li>
-              <span class="auth-screen__register-perk-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg>
-              </span>
-              <span data-i18n="auth.registerPerk2">Lijstje en weekmenu synchroon op al je apparaten</span>
-            </li>
-            <li>
-              <span class="auth-screen__register-perk-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              </span>
-              <span data-i18n="auth.registerPerk3">Geen betaalpas nodig — start direct</span>
-            </li>
-          </ul>
-        </div>
         <form id="authForm" class="auth-screen__form">
           <div class="auth-field" id="authNameField" style="display:none">
             <label class="auth-field__label" for="authName" data-i18n="auth.name">Naam</label>
@@ -1838,8 +1816,8 @@
         </div>
 
         <p class="auth-screen__alt-action">
-          <button type="button" class="auth-screen__alt-link" id="switchAuthModeButton">
-            Nog geen account? Maak er eentje aan
+          <button type="button" class="auth-screen__alt-link" id="switchAuthModeButton" data-i18n="auth.switchRegister">
+            Nog geen account? Aanmelden
           </button>
         </p>
 
@@ -2151,6 +2129,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=3.1.13"></script>
+    <script src="app.js?v=3.1.14"></script>
   </body>
 </html>

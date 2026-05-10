@@ -5055,10 +5055,39 @@ button.ingredient-item {
   background: #78936f;
   color: #fff;
 }
-.profile-login-banner__btn--ghost {
-  background: transparent;
-  color: #78936f;
-  border: 2px solid #c5d5c2;
+
+.profile-login-banner__register-line {
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.profile-login-banner__link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--muted-strong);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--color-brand) 35%, transparent);
+  text-underline-offset: 2px;
+  line-height: 1.45;
+  transition: color 0.15s, text-decoration-color 0.15s;
+}
+
+.profile-login-banner__link:hover {
+  color: var(--color-brand);
+  text-decoration-color: var(--color-brand);
+}
+
+.profile-login-banner__link:focus-visible {
+  outline: none;
+  border-radius: 4px;
+  box-shadow: var(--focus-ring);
 }
 
 /* ── Profile sub-panels (slide-in pages) ── */
@@ -5845,15 +5874,6 @@ button.ingredient-item {
   filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.12));
 }
 
-.auth-screen[data-auth-mode="register"] .auth-screen__logo-wrap {
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--color-accent) 30%, transparent) 0%,
-      color-mix(in srgb, var(--color-brand) 26%, transparent) 100%
-    );
-}
-
 .auth-screen__surface {
   position: relative;
   padding: clamp(22px, 5vw, 28px);
@@ -5868,205 +5888,6 @@ button.ingredient-item {
     0 0 40px color-mix(in srgb, var(--color-brand) 8%, transparent);
 }
 
-
-/* Register flow — extra Plately polish (hidden for login) */
-.auth-screen__register-hero {
-  display: none;
-  margin: 0 0 20px;
-  padding-bottom: 4px;
-}
-
-.auth-screen[data-auth-mode="register"] .auth-screen__register-hero {
-  display: block;
-}
-
-.auth-screen__register-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 14px 7px 10px;
-  margin-bottom: 14px;
-  border-radius: var(--radius-pill);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--color-brand) 88%, #1a2e1a);
-  background: linear-gradient(
-    105deg,
-    color-mix(in srgb, var(--color-accent-soft) 92%, transparent) 0%,
-    color-mix(in srgb, var(--color-brand) 14%, transparent) 100%
-  );
-  border: 1px solid color-mix(in srgb, var(--color-brand) 22%, transparent);
-  box-shadow:
-    0 10px 28px color-mix(in srgb, var(--color-brand) 14%, transparent),
-    0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset;
-}
-
-
-.auth-screen__register-badge__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--color-brand);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 28%, transparent);
-  flex-shrink: 0;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .auth-screen[data-auth-mode="register"]:not(.hidden) .auth-screen__register-badge {
-    animation: authRegisterBadgePulse 2.8s ease-in-out infinite;
-  }
-}
-
-@keyframes authRegisterBadgePulse {
-  0%,
-  100% {
-    box-shadow:
-      0 10px 28px color-mix(in srgb, var(--color-brand) 14%, transparent),
-      0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset;
-  }
-  50% {
-    box-shadow:
-      0 12px 34px color-mix(in srgb, var(--color-accent) 22%, transparent),
-      0 1px 0 color-mix(in srgb, #fff 60%, transparent) inset;
-  }
-}
-
-.auth-screen__register-perks {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.auth-screen__register-perks li {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: var(--radius-2);
-  font-size: 0.89rem;
-  font-weight: 650;
-  line-height: 1.38;
-  color: var(--color-text);
-  background: linear-gradient(
-    125deg,
-    color-mix(in srgb, var(--color-surface) 96%, transparent) 0%,
-    color-mix(in srgb, var(--color-brand) 7%, transparent) 100%
-  );
-  border: 1px solid color-mix(in srgb, var(--color-border) 88%, var(--color-brand));
-  box-shadow: 0 1px 0 color-mix(in srgb, #fff 40%, transparent) inset;
-}
-
-
-.auth-screen__register-perk-icon {
-  flex-shrink: 0;
-  width: 38px;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  color: var(--color-brand);
-  background: color-mix(in srgb, var(--color-brand) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-brand) 18%, transparent);
-}
-
-.auth-screen__register-perk-icon svg {
-  width: 20px;
-  height: 20px;
-  display: block;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .auth-screen[data-auth-mode="register"]:not(.hidden) .auth-screen__register-perks li:nth-child(1) {
-    animation: authPerkIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
-  }
-  .auth-screen[data-auth-mode="register"]:not(.hidden) .auth-screen__register-perks li:nth-child(2) {
-    animation: authPerkIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.16s both;
-  }
-  .auth-screen[data-auth-mode="register"]:not(.hidden) .auth-screen__register-perks li:nth-child(3) {
-    animation: authPerkIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.24s both;
-  }
-}
-
-@keyframes authPerkIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.auth-screen[data-auth-mode="register"] .auth-screen__surface {
-  border-color: color-mix(in srgb, var(--color-accent) 32%, var(--color-border));
-  background: linear-gradient(
-    165deg,
-    color-mix(in srgb, var(--color-surface) 88%, transparent) 0%,
-    color-mix(in srgb, var(--color-accent-soft) 38%, var(--color-surface)) 55%,
-    color-mix(in srgb, var(--color-surface) 90%, transparent) 100%
-  );
-  box-shadow:
-    var(--card-shadow),
-    0 1px 0 color-mix(in srgb, #fff 48%, transparent) inset,
-    0 0 0 1px color-mix(in srgb, var(--color-accent) 14%, transparent) inset,
-    0 0 56px color-mix(in srgb, var(--color-brand) 10%, transparent);
-}
-
-
-.auth-screen[data-auth-mode="register"] .auth-screen__subtitle {
-  font-size: 0.98rem;
-  max-width: 34ch;
-  color: var(--muted-strong);
-}
-
-.auth-screen[data-auth-mode="register"] .auth-screen__form {
-  gap: 16px;
-}
-
-.auth-screen[data-auth-mode="register"] #authNameField .auth-field__input {
-  border-color: color-mix(in srgb, var(--color-accent) 38%, var(--color-border));
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.04),
-    0 0 0 1px color-mix(in srgb, var(--color-accent) 12%, transparent);
-}
-
-.auth-screen[data-auth-mode="register"] #authNameField .auth-field__input:focus {
-  border-color: var(--color-accent);
-  box-shadow: var(--focus-ring), inset 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-
-.auth-screen[data-auth-mode="register"] .auth-screen__submit {
-  background: linear-gradient(
-    128deg,
-    var(--color-brand) 0%,
-    color-mix(in srgb, var(--color-accent) 55%, var(--color-brand)) 52%,
-    color-mix(in srgb, var(--color-brand) 72%, #1e2a1e) 100%
-  );
-  box-shadow:
-    0 14px 36px color-mix(in srgb, var(--color-brand) 32%, transparent),
-    0 0 28px color-mix(in srgb, var(--color-accent) 12%, transparent),
-    0 1px 0 color-mix(in srgb, #fff 30%, transparent) inset;
-}
-
-.auth-screen[data-auth-mode="register"] .auth-screen__submit:hover {
-  filter: brightness(1.06);
-}
-
-.auth-screen[data-auth-mode="register"] .auth-screen__alt-action {
-  margin-top: var(--space-12);
-}
-
-.auth-screen[data-auth-mode="register"] .auth-screen__brand {
-  padding-bottom: 22px;
-}
-
 .auth-screen__title {
   margin: 0 0 10px;
   font-family: var(--font-display);
@@ -6075,13 +5896,6 @@ button.ingredient-item {
   color: var(--color-text);
   letter-spacing: -0.035em;
   line-height: 1.12;
-}
-
-.auth-screen[data-auth-mode="register"] .auth-screen__title {
-  background: linear-gradient(118deg, var(--color-text) 0%, var(--color-brand) 55%, var(--color-accent) 130%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 
 .auth-screen__subtitle {
@@ -6104,19 +5918,19 @@ button.ingredient-item {
   border: none;
   background: none;
   font: inherit;
-  font-size: 0.94rem;
-  font-weight: 650;
-  color: var(--color-brand);
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--muted-strong);
   cursor: pointer;
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--color-brand) 38%, transparent);
-  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--color-brand) 32%, transparent);
+  text-underline-offset: 2px;
   line-height: 1.45;
   transition: color 0.15s, text-decoration-color 0.15s;
 }
 
 .auth-screen__alt-link:hover {
-  color: var(--muted-strong);
+  color: var(--color-brand);
   text-decoration-color: var(--color-brand);
 }
 
