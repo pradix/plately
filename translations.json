@@ -116,9 +116,6 @@
     "auth.registerTitle": "Account aanmaken",
     "auth.loginSubtitle": "Log in om je opgeslagen recepten en kookboeken te bekijken.",
     "auth.registerSubtitle": "Vul je naam, e-mail en wachtwoord in. Daarna richt je Plately in een paar stappen in.",
-    "auth.registerPanelChip": "Stap 1 · Je account",
-    "auth.registerPanelHint":
-      "Na aanmelden stel je je profiel verder in — met o.a. kanalen en een kookboek, dezelfde kaarten als in de app.",
 
     "onboarding.step1": "Stap 1: Kanalen",
     "onboarding.step2": "Stap 2: Winkels",
@@ -279,9 +276,6 @@
     "auth.registerTitle": "Create account",
     "auth.loginSubtitle": "Sign in to see your saved recipes and cookbooks.",
     "auth.registerSubtitle": "Enter your name, email and password. Then we’ll walk you through a short setup.",
-    "auth.registerPanelChip": "Step 1 · Your account",
-    "auth.registerPanelHint":
-      "After sign-up you’ll continue your profile — including channels and a cookbook, using the same card style as elsewhere in Plately.",
 
     "onboarding.step1": "Step 1: Channels",
     "onboarding.step2": "Step 2: Stores",

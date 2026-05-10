@@ -948,11 +948,7 @@ function applyTranslations() {
   // Auth modal: mode-afhankelijke teksten (niet via data-i18n — applyTranslations zou anders altijd "aanmelden" tonen)
   const authModalOpen = document.getElementById("authModal");
   if (authModalOpen && !authModalOpen.classList.contains("hidden")) {
-    const isRegister = (authModalOpen.dataset.authMode || "") === "register";
-    const switchBtn = document.getElementById("switchAuthModeButton");
-    if (switchBtn) {
-      switchBtn.textContent = isRegister ? t("auth.switchLogin") : t("auth.switchRegister");
-    }
+    syncAuthModeToggleButtons();
     const submitBtn = document.getElementById("submitAuthButton");
     if (submitBtn) {
       submitBtn.textContent = isRegister ? t("auth.submitRegister") : t("auth.submit");
@@ -1197,7 +1193,6 @@ const authForm = document.getElementById("authForm");
 const authEmail = document.getElementById("authEmail");
 const authPassword = document.getElementById("authPassword");
 const submitAuthButton = document.getElementById("submitAuthButton");
-const switchAuthModeButton = document.getElementById("switchAuthModeButton");
 const authFeedback = document.getElementById("authFeedback");
 const cookbookSaveModal = document.getElementById("cookbookSaveModal");
 const cookbookSaveList = document.getElementById("cookbookSaveList");
@@ -1636,6 +1631,16 @@ function updateAuthUI() {
   logoutButton.classList.add("hidden");
 }
 
+function syncAuthModeToggleButtons() {
+  const modal = document.getElementById("authModal");
+  if (!modal || modal.classList.contains("hidden")) return;
+  const isRegister = (modal.dataset.authMode || "") === "register";
+  const toLogin = document.getElementById("switchToLoginButton");
+  const toRegister = document.getElementById("switchToRegisterButton");
+  if (toLogin) toLogin.classList.toggle("hidden", !isRegister);
+  if (toRegister) toRegister.classList.toggle("hidden", isRegister);
+}
+
 function openAuthModal(mode = "login") {
   console.log("🔐 Opening auth modal, mode:", mode, "authModal element:", authModal);
   state.auth.mode = mode;
@@ -1670,9 +1675,7 @@ function openAuthModal(mode = "login") {
     subtitleEl.textContent = isRegister ? t("auth.registerSubtitle") : t("auth.loginSubtitle");
   }
 
-  if (switchAuthModeButton) {
-    switchAuthModeButton.textContent = isRegister ? t("auth.switchLogin") : t("auth.switchRegister");
-  }
+  syncAuthModeToggleButtons();
 
   // Show/hide name field
   const nameField = document.getElementById("authNameField");
@@ -11946,7 +11949,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.04";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.05";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
@@ -12645,8 +12648,11 @@ bindEvent(document.getElementById("customChannelForm"), "submit", async (event) 
   }
 });
 
-bindEvent(switchAuthModeButton, "click", () => {
-  openAuthModal(state.auth.mode === "register" ? "login" : "register");
+bindEvent(document.getElementById("switchToLoginButton"), "click", () => {
+  openAuthModal("login");
+});
+bindEvent(document.getElementById("switchToRegisterButton"), "click", () => {
+  openAuthModal("register");
 });
 
 // Instagram link button (opens in new tab — handled by anchor href)
