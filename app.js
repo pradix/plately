@@ -3224,6 +3224,7 @@ function switchView(view, opts = {}) {
       subtitle:
         "Dit recept staat nog niet in een kookboek. Het blijft als concept zichtbaar bij Concepten.",
       confirmLabel: "Toch doorgaan",
+      destructive: true,
       onConfirm: () => switchView(view, { skipImportReviewLeaveGuard: true }),
     });
     return;
