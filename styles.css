@@ -12488,7 +12488,8 @@ body {
   position: fixed;
   inset: 0;
   z-index: 9990;
-  pointer-events: none;
+  /* Block taps on the app until Volgende / Overslaan (spotlight is visual only). */
+  pointer-events: auto;
 }
 
 .onboarding-spotlight {
@@ -12557,6 +12558,35 @@ body {
 .onboarding-dot--active {
   background: #4a6b4c;
   width: 18px;
+}
+
+.onboarding-dot--skip {
+  opacity: 0.28;
+}
+
+[data-theme="dark"] .onboarding-bubble {
+  background: var(--color-surface);
+  box-shadow: var(--shadow-4);
+}
+
+[data-theme="dark"] .onboarding-bubble__text {
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .onboarding-bubble[data-arrow="up"]::before {
+  border-bottom-color: var(--color-surface);
+}
+
+[data-theme="dark"] .onboarding-bubble[data-arrow="down"]::before {
+  border-top-color: var(--color-surface);
+}
+
+[data-theme="dark"] .onboarding-skip-btn {
+  color: var(--muted);
+}
+
+[data-theme="dark"] .onboarding-next-btn {
+  background: var(--color-brand);
 }
 
 .onboarding-bubble__text {

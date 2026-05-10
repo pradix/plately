@@ -9431,6 +9431,7 @@ async function submitAuth(mode, email, password, registerOpts = {}) {
     closeAuthModal();
     showToast("Je bent ingelogd.");
     scrollToTopSoon();
+    window.setTimeout(() => startOnboarding(), 450);
   }
 }
 
@@ -13257,7 +13258,8 @@ function getOnboardingDoneKey() {
   const email = String(state?.auth?.email || "").trim().toLowerCase();
   return `plately-onboarding-v2:${email || "unknown"}`;
 }
-const ONBOARDING_SESSION_KEY = "plately-tooltips-shown-this-session"; // One-time per login session
+/** @deprecated Cleared on logout; tooltip tour no longer depends on this — use profile.onboardingSeenAt. */
+const ONBOARDING_SESSION_KEY = "plately-tooltips-shown-this-session";
 const INSTALL_APP_SESSION_KEY = "plately-install-shown-this-session"; // One-time install modal per login session
 
 const ONBOARDING_STEPS = [
@@ -13299,130 +13301,277 @@ const ONBOARDING_STEPS = [
 ];
 
 let _obStep = 0;
+let _obLayoutTimer = 0;
+let _obLayoutListenersBound = false;
+let _obStartTimer = 0;
 
-function _obShow(index) {
+function _obDismissOverlayQuiet() {
   const overlay = document.getElementById("onboardingOverlay");
+  if (overlay) {
+    overlay.hidden = true;
+    overlay.setAttribute("aria-hidden", "true");
+  }
+}
+
+function _obIsTourTargetUsable(el) {
+  if (!(el instanceof Element)) return false;
+  const r = el.getBoundingClientRect();
+  if (
+    !Number.isFinite(r.width) ||
+    !Number.isFinite(r.height) ||
+    r.width < 6 ||
+    r.height < 6
+  ) {
+    return false;
+  }
+
+  let node = /** @type {Element | null} */ (el);
+  while (node && node.nodeType === 1) {
+    const st = window.getComputedStyle(node);
+    if (st.display === "none" || st.visibility === "hidden") return false;
+    if (Number(st.opacity) === 0) return false;
+    const hz = /** @type {HTMLElement | null} */ (node);
+    if (hz instanceof HTMLElement && hz.hidden) return false;
+    if (node.getAttribute?.("aria-hidden") === "true") return false;
+    node = node.parentElement;
+  }
+
+  const screen = el.closest(".screen");
+  if (screen instanceof Element && !screen.classList.contains("screen--active")) return false;
+
+  return true;
+}
+
+function _obResolveNextStepIndex(fromInclusive) {
+  const start = Math.max(0, Math.floor(Number(fromInclusive) || 0));
+  for (let i = start; i < ONBOARDING_STEPS.length; i++) {
+    const el = document.querySelector(ONBOARDING_STEPS[i].selector);
+    if (_obIsTourTargetUsable(el)) return i;
+  }
+  return null;
+}
+
+function _obEnsureLayoutListeners() {
+  if (_obLayoutListenersBound) return;
+  _obLayoutListenersBound = true;
+
+  let t = 0;
+  const onResize = () => {
+    window.clearTimeout(t);
+    t = window.setTimeout(() => {
+      const overlay = document.getElementById("onboardingOverlay");
+      if (!overlay || overlay.hidden) return;
+      const sel = ONBOARDING_STEPS[_obStep]?.selector;
+      const target = sel ? document.querySelector(sel) : null;
+      if (!target || !_obIsTourTargetUsable(target)) return;
+      _obPositionBubbleAndSpot(target, ONBOARDING_STEPS[_obStep], _obStep);
+    }, 96);
+  };
+  window.addEventListener("resize", onResize, { passive: true });
+  window.addEventListener("orientationchange", onResize, { passive: true });
+  try {
+    window.visualViewport?.addEventListener?.("resize", onResize);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Measure + spotlight + tooltip copy (instant layout, no recursion). */
+function _obPositionBubbleAndSpot(target, step, stepIndex) {
   const spotlight = document.getElementById("onboardingSpotlight");
   const bubble = document.getElementById("onboardingBubble");
   const textEl = document.getElementById("onboardingText");
   const progressEl = document.getElementById("onboardingProgress");
   const nextBtn = document.getElementById("onboardingNext");
-  if (!overlay) return;
 
-  if (index >= ONBOARDING_STEPS.length) {
-    _obFinish();
-    return;
-  }
+  const PAD = 8;
+  const rect = target.getBoundingClientRect();
 
-  const step = ONBOARDING_STEPS[index];
-  const target = document.querySelector(step.selector);
-  // Skip if target is missing OR not actually visible (display:none, hidden parent)
-  if (!target) { _obShow(index + 1); return; }
-  const initialRect = target.getBoundingClientRect();
-  if (initialRect.width === 0 || initialRect.height === 0) {
-    _obShow(index + 1);
-    return;
-  }
-
-  // Scroll target into view before measuring (block: 'center' centers vertically)
-  // Use behavior 'instant' if available so the spotlight lines up immediately.
-  try {
-    target.scrollIntoView({ block: "center", behavior: "smooth" });
-  } catch {}
-
-  // Wait a tick for the scroll to settle, then measure and position
-  setTimeout(() => positionTooltip(target, step, index), 380);
-
-  function positionTooltip(target, step, index) {
-    overlay.hidden = false;
-    overlay.removeAttribute("aria-hidden");
-
-    const PAD = 8;
-    const rect = target.getBoundingClientRect();
-
-    // Spotlight
+  if (spotlight) {
     spotlight.style.left = `${rect.left - PAD}px`;
     spotlight.style.top = `${rect.top - PAD}px`;
     spotlight.style.width = `${rect.width + PAD * 2}px`;
     spotlight.style.height = `${rect.height + PAD * 2}px`;
     spotlight.style.borderRadius = window.getComputedStyle(target).borderRadius || "16px";
+  }
 
-    // Content
-    textEl.textContent = step.text;
-    progressEl.innerHTML = ONBOARDING_STEPS.map((_, i) =>
-      `<span class="onboarding-dot ${i === index ? "onboarding-dot--active" : ""}"></span>`
-    ).join("");
-    nextBtn.textContent = index === ONBOARDING_STEPS.length - 1 ? "Klaar ✓" : "Volgende →";
+  if (textEl) textEl.textContent = step.text;
 
-    // Bubble position
-    const BW = Math.min(270, window.innerWidth - 24);
-    const MARGIN = 14;
-    let bLeft = rect.left + rect.width / 2 - BW / 2;
-    bLeft = Math.max(12, Math.min(bLeft, window.innerWidth - BW - 12));
+  if (progressEl) {
+    progressEl.innerHTML = ONBOARDING_STEPS.map((_, i) => {
+      const el = document.querySelector(ONBOARDING_STEPS[i].selector);
+      const dim = !_obIsTourTargetUsable(el);
+      return `<span class="onboarding-dot ${i === stepIndex ? "onboarding-dot--active" : ""}${dim ? " onboarding-dot--skip" : ""
+        }"></span>`;
+    }).join("");
+  }
 
-    const arrowX = rect.left + rect.width / 2 - bLeft;
-    bubble.style.setProperty("--arrow-x", `${Math.max(20, Math.min(arrowX, BW - 20))}px`);
-    bubble.style.left = `${bLeft}px`;
-    bubble.style.width = `${BW}px`;
-
-    // Auto-flip direction when there's not enough space in the chosen direction
-    let dir = step.dir || "below";
-    const bubbleHeightEstimate = 160;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    if (dir === "below" && spaceBelow < bubbleHeightEstimate && spaceAbove > spaceBelow) {
-      dir = "above";
-    } else if (dir === "above" && spaceAbove < bubbleHeightEstimate && spaceBelow > spaceAbove) {
-      dir = "below";
+  if (nextBtn) {
+    let lastUsable = -1;
+    for (let j = ONBOARDING_STEPS.length - 1; j >= 0; j--) {
+      const el = document.querySelector(ONBOARDING_STEPS[j].selector);
+      if (_obIsTourTargetUsable(el)) {
+        lastUsable = j;
+        break;
+      }
     }
+    nextBtn.textContent =
+      lastUsable >= 0 && stepIndex >= lastUsable ? "Klaar ✓" : "Volgende →";
+  }
 
-    if (dir === "above") {
-      bubble.style.top = "auto";
-      bubble.style.bottom = `${Math.max(12, window.innerHeight - rect.top + MARGIN)}px`;
-      bubble.dataset.arrow = "down";
-    } else {
-      bubble.style.bottom = "auto";
-      bubble.style.top = `${Math.min(window.innerHeight - bubbleHeightEstimate - 12, rect.bottom + MARGIN)}px`;
-      bubble.dataset.arrow = "up";
-    }
+  if (!bubble) return;
+
+  const BW = Math.min(270, window.innerWidth - 24);
+  const MARGIN = 14;
+  let bLeft = rect.left + rect.width / 2 - BW / 2;
+  bLeft = Math.max(12, Math.min(bLeft, window.innerWidth - BW - 12));
+
+  const arrowX = rect.left + rect.width / 2 - bLeft;
+  bubble.style.setProperty("--arrow-x", `${Math.max(20, Math.min(arrowX, BW - 20))}px`);
+  bubble.style.left = `${bLeft}px`;
+  bubble.style.width = `${BW}px`;
+
+  let dir = step.dir || "below";
+  const bubbleHeightEstimate = Math.min(200, Math.max(120, bubble.offsetHeight || 160));
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const spaceAbove = rect.top;
+  if (dir === "below" && spaceBelow < bubbleHeightEstimate && spaceAbove > spaceBelow) {
+    dir = "above";
+  } else if (dir === "above" && spaceAbove < bubbleHeightEstimate && spaceBelow > spaceAbove) {
+    dir = "below";
+  }
+
+  if (dir === "above") {
+    bubble.style.top = "auto";
+    bubble.style.bottom = `${Math.max(12, window.innerHeight - rect.top + MARGIN)}px`;
+    bubble.dataset.arrow = "down";
+  } else {
+    bubble.style.bottom = "auto";
+    bubble.style.top = `${Math.min(
+      window.innerHeight - bubbleHeightEstimate - 12,
+      rect.bottom + MARGIN
+    )}px`;
+    bubble.dataset.arrow = "up";
   }
 }
 
+/**
+ * Advance to first visible step at or after `fromInclusive`.
+ * @param finalizeIfDry If no further steps remain, complete the tour.
+ */
+function _obGoTo(fromInclusive, finalizeIfDry) {
+  const next = _obResolveNextStepIndex(fromInclusive);
+  if (next === null) {
+    if (finalizeIfDry) _obFinish();
+    else _obDismissOverlayQuiet();
+    return;
+  }
+
+  _obStep = next;
+  const step = ONBOARDING_STEPS[next];
+  let target = document.querySelector(step.selector);
+  if (!_obIsTourTargetUsable(target)) {
+    _obGoTo(next + 1, finalizeIfDry);
+    return;
+  }
+
+  try {
+    target.scrollIntoView({ block: "center", behavior: "auto" });
+  } catch {
+    try {
+      target.scrollIntoView();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  window.clearTimeout(_obLayoutTimer);
+
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      const sel = step.selector;
+      target = document.querySelector(sel);
+      if (!_obIsTourTargetUsable(target)) {
+        _obGoTo(next + 1, finalizeIfDry);
+        return;
+      }
+
+      const overlay = document.getElementById("onboardingOverlay");
+      const spotlight = document.getElementById("onboardingSpotlight");
+      const bubble = document.getElementById("onboardingBubble");
+      if (!overlay || !spotlight || !bubble) return;
+
+      overlay.hidden = false;
+      overlay.removeAttribute("aria-hidden");
+
+      _obEnsureLayoutListeners();
+      _obPositionBubbleAndSpot(target, step, next);
+
+      _obLayoutTimer = window.setTimeout(() => {
+        const el2 = document.querySelector(sel);
+        if (!el2 || !_obIsTourTargetUsable(el2)) return;
+        _obPositionBubbleAndSpot(el2, ONBOARDING_STEPS[next], next);
+      }, 48);
+    });
+  });
+}
+
 function _obFinish() {
-  const overlay = document.getElementById("onboardingOverlay");
-  if (overlay) { overlay.hidden = true; overlay.setAttribute("aria-hidden", "true"); }
+  window.clearTimeout(_obStartTimer);
+  _obStartTimer = 0;
+  _obDismissOverlayQuiet();
+  window.clearTimeout(_obLayoutTimer);
   if (state?.auth?.authenticated) {
     if (!state.profile) state.profile = {};
     if (!state.profile.onboardingSeenAt) state.profile.onboardingSeenAt = new Date().toISOString();
     try { localStorage.setItem(getOnboardingDoneKey(), "1"); } catch {}
-    // Fire-and-forget: mark onboarding seen on server so it's once-per-account.
     fetchJson(`${state.apiBase}/api/onboarding/seen`, { method: "POST" }).catch(() => {});
   }
   window.scrollTo(0, 0);
 }
 
 function startOnboarding() {
-  // Show tooltips only once per account (persisted across sessions)
   if (!state.auth.authenticated) return;
-
-  // Source of truth: server-provided onboardingSeenAt
   if (state?.profile?.onboardingSeenAt) return;
 
-  // Check if we already showed tooltips in this session
-  try { if (sessionStorage.getItem(ONBOARDING_SESSION_KEY)) return; } catch {}
+  switchView("home");
+  scrollToTopSoon();
 
-  // Mark tooltips as shown for this session
-  try { sessionStorage.setItem(ONBOARDING_SESSION_KEY, "1"); } catch {}
-
-  _obStep = 0;
-  setTimeout(() => _obShow(0), 600);
+  window.clearTimeout(_obStartTimer);
+  _obStartTimer = window.setTimeout(() => {
+    _obStartTimer = 0;
+    window.requestAnimationFrame(() => {
+      const first = _obResolveNextStepIndex(0);
+      if (first === null) return;
+      _obGoTo(first, false);
+    });
+  }, 520);
 }
 
-document.getElementById("onboardingNext")?.addEventListener("click", () => {
-  _obStep++;
-  _obShow(_obStep);
+document.addEventListener("keydown", (ev) => {
+  if (ev.key !== "Escape") return;
+  const o = document.getElementById("onboardingOverlay");
+  if (!o || o.hidden) return;
+  ev.preventDefault();
+  _obFinish();
 });
-document.getElementById("onboardingSkip")?.addEventListener("click", _obFinish);
+
+document.getElementById("onboardingNext")?.addEventListener("click", () => {
+  let lastUsable = -1;
+  for (let j = ONBOARDING_STEPS.length - 1; j >= 0; j--) {
+    const q = document.querySelector(ONBOARDING_STEPS[j].selector);
+    if (_obIsTourTargetUsable(q)) {
+      lastUsable = j;
+      break;
+    }
+  }
+  const atLast = lastUsable >= 0 ? _obStep >= lastUsable : _obStep >= ONBOARDING_STEPS.length - 1;
+
+  if (atLast) _obFinish();
+  else _obGoTo(_obStep + 1, true);
+});
+
+document.getElementById("onboardingSkip")?.addEventListener("click", () => _obFinish());
 
 // Don't render yet - wait for bootstrapSession() to check authentication first
 // startOnboarding();
