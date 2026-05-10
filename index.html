@@ -8,7 +8,7 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="3.0.4" />
+    <meta name="plately-build" content="3.0.6" />
     <meta name="theme-color" content="#8da485" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -20,7 +20,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=3.0.4" />
+    <link rel="stylesheet" href="styles.css?v=3.0.6" />
   </head>
   <body>
     <main class="page">
@@ -498,7 +498,7 @@
               <span class="profile2-row__label">Mijn account</span>
               <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
             </button>
-            <div class="profile2-row-divider"></div>
+            <div class="profile2-row-divider" id="adminDashboardLeadDivider" style="display:none"></div>
             <button class="profile2-row" id="adminDashboardBtn" type="button" style="display:none">
               <span class="profile2-row__icon" style="background:#e0e7ff">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -506,7 +506,11 @@
               <span class="profile2-row__label">Admin Dashboard</span>
               <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
             </button>
-            <div class="profile2-row-divider" id="adminDashboardDivider" style="display:none"></div>
+          </div>
+
+          <!-- VOORKEUREN section -->
+          <p class="profile2-section-label">VOORKEUREN</p>
+          <div class="profile2-card">
             <button class="profile2-row" type="button" id="goToChannelsBtn">
               <span class="profile2-row__icon" style="background:#ede9fe">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
@@ -543,21 +547,6 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="#ca8a04" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
               </span>
               <span class="profile2-row__label">Nieuw in Plately</span>
-              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
-            </button>
-            <button class="profile2-row" type="button">
-              <span class="profile2-row__icon" style="background:#f3f4f6">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-              </span>
-              <span class="profile2-row__label">FAQ &amp; Contact</span>
-              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
-            </button>
-            <div class="profile2-row-divider"></div>
-            <button class="profile2-row" type="button">
-              <span class="profile2-row__icon" style="background:#f3f4f6">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              </span>
-              <span class="profile2-row__label">Privacy</span>
               <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
             </button>
             <div class="profile2-row-divider"></div>
@@ -1291,6 +1280,26 @@
             <div class="profile2-card">
               <div style="padding:14px 16px">
                 <div id="adminChannelTestError" style="display:none;background:rgba(220,53,69,0.08);border:1px solid rgba(220,53,69,0.14);color:rgba(140,23,35,0.95);padding:12px;border-radius:12px;font-size:0.9rem;margin-bottom:12px"></div>
+                <div class="admin-channel-create">
+                  <div class="admin-channel-create__head">
+                    <div>
+                      <h3 class="admin-channel-create__title">Nieuw Plately-kanaal</h3>
+                      <p class="admin-channel-create__hint">Geef het kanaal een naam, test de zoekfunctie en voeg hem daarna toe aan Plately.</p>
+                    </div>
+                  </div>
+                  <div class="admin-channel-create__grid">
+                    <input id="adminNewChannelName" type="text" placeholder="Kanaalnaam" />
+                    <input id="adminNewChannelUrl" type="url" placeholder="https://www.receptensite.nl" />
+                    <input id="adminNewChannelQuery" type="text" placeholder="Test zoekterm, bijv. pasta" />
+                  </div>
+                  <div class="admin-channel-create__actions">
+                    <button class="secondary-button" id="adminNewChannelTestBtn" type="button">Test kanaal</button>
+                    <button class="primary-button" id="adminNewChannelAddBtn" type="button">Toevoegen aan Plately</button>
+                  </div>
+                  <div id="adminNewChannelStatus" class="admin-channel-create__status"></div>
+                  <div id="adminNewChannelResults" class="admin-channel-create__results"></div>
+                </div>
+                <div style="height:1px;background:#f3f5ef;margin:14px 0"></div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
                   <select id="adminChannelTestSelect" aria-label="Kanaal kiezen" style="flex:1;min-width:220px;padding:10px 12px;border:1px solid #e0d5c7;border-radius:10px;background:#fff">
                     <option value="">Kanaal kiezen…</option>
@@ -1634,63 +1643,6 @@
         <p class="import-splash__hint">We lezen het recept en zoeken de lekkerste ingrediënten voor je bij elkaar.</p>
         <p class="import-splash__source" id="importSplashSource"></p>
         <p class="import-splash__status" id="importSplashStatus">URL analyseren</p>
-      </div>
-    </div>
-
-    <!-- AH match splash: zichtbaar tijdens productmatching met Albert Heijn -->
-    <div class="import-splash ah-match-splash hidden" id="ahMatchSplash" role="status" aria-live="polite" aria-hidden="true">
-      <div class="import-splash__backdrop"></div>
-      <div class="import-splash__card">
-        <div class="import-splash__stage" aria-hidden="true">
-          <span class="import-splash__ring import-splash__ring--1"></span>
-          <span class="import-splash__ring import-splash__ring--2"></span>
-          <span class="import-splash__halo"></span>
-          <span class="import-splash__halo import-splash__halo--2"></span>
-          <span class="import-splash__sparkle import-splash__sparkle--1"></span>
-          <span class="import-splash__sparkle import-splash__sparkle--2"></span>
-          <span class="import-splash__sparkle import-splash__sparkle--3"></span>
-          <span class="import-splash__food import-splash__food--leaf"><img src="assets/ingredients/herb.svg" alt=""></span>
-          <span class="import-splash__food import-splash__food--jar"><img src="assets/ingredients/jar.svg" alt=""></span>
-          <span class="import-splash__falling import-splash__falling--1"><img src="assets/ingredients/tomato.svg" alt=""></span>
-          <span class="import-splash__falling import-splash__falling--2"><img src="assets/ingredients/cheese.svg" alt=""></span>
-          <span class="import-splash__falling import-splash__falling--3"><img src="assets/ingredients/avocado.svg" alt=""></span>
-          <span class="import-splash__falling import-splash__falling--4"><img src="assets/ingredients/herb.svg" alt=""></span>
-          <span class="import-splash__falling import-splash__falling--5"><img src="assets/ingredients/jar.svg" alt=""></span>
-          <span class="import-splash__catch-burst import-splash__catch-burst--1"></span>
-          <span class="import-splash__catch-burst import-splash__catch-burst--2"></span>
-          <span class="import-splash__catch-burst import-splash__catch-burst--3"></span>
-          <span class="import-splash__orbit-step import-splash__orbit-step--url" data-phase="0">
-            <span class="import-splash__orbit-check"></span>
-            <span>Ingrediënten</span>
-          </span>
-          <span class="import-splash__orbit-step import-splash__orbit-step--text" data-phase="1">
-            <span class="import-splash__orbit-check"></span>
-            <span>AH zoeken</span>
-          </span>
-          <span class="import-splash__orbit-step import-splash__orbit-step--products" data-phase="2">
-            <span class="import-splash__orbit-check"></span>
-            <span>Beste matches</span>
-          </span>
-          <span class="import-splash__orbit-step import-splash__orbit-step--done" data-phase="3">
-            <span class="import-splash__orbit-check"></span>
-            <span>Lijst klaar</span>
-          </span>
-          <div class="import-splash__basket ah-match-splash__logo" aria-label="Albert Heijn">
-            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <rect width="200" height="200" rx="44" fill="#00a0e2"/>
-              <path d="M52 139V61h20v30h56V61h20v78h-20v-30H72v30H52Z" fill="#fff"/>
-              <path d="M43 151c30 19 84 19 114 0" fill="none" stroke="#fff" stroke-width="13" stroke-linecap="round"/>
-            </svg>
-          </div>
-        </div>
-
-        <div class="import-splash__bar" aria-hidden="true">
-          <span class="import-splash__bar-fill"></span>
-        </div>
-
-        <h2 class="import-splash__title">AH matches zoeken...</h2>
-        <p class="import-splash__hint" id="ahMatchSplashHint">We matchen je ingrediënten met de beste Albert Heijn producten.</p>
-        <p class="import-splash__status" id="ahMatchSplashStatus">Ingrediënten lezen</p>
       </div>
     </div>
 
@@ -2040,6 +1992,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=3.0.4"></script>
+    <script src="app.js?v=3.0.6"></script>
   </body>
 </html>

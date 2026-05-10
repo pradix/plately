@@ -1200,6 +1200,11 @@ function updateAuthUI() {
   if (!accountTitle || !accountCopy || !openRegisterButton || !openLoginButton || !logoutButton) {
     return;
   }
+  const adminBtn = document.getElementById("adminDashboardBtn");
+  const adminLeadDivider = document.getElementById("adminDashboardLeadDivider");
+  const shouldShowAdmin = isAdmin();
+  if (adminBtn) adminBtn.style.display = shouldShowAdmin ? "" : "none";
+  if (adminLeadDivider) adminLeadDivider.style.display = shouldShowAdmin ? "" : "none";
 
   if (!state.auth.enabled) {
     accountTitle.textContent = "Account volgt zodra Postgres is gekoppeld";
@@ -1226,15 +1231,6 @@ function updateAuthUI() {
   openRegisterButton.classList.remove("hidden");
   openLoginButton.classList.remove("hidden");
   logoutButton.classList.add("hidden");
-
-  // Show/hide admin dashboard button based on authentication
-  const adminBtn = document.getElementById("adminDashboardBtn");
-  const adminDivider = document.getElementById("adminDashboardDivider");
-  if (adminBtn && adminDivider) {
-    const shouldShowAdmin = isAdmin();
-    adminBtn.style.display = shouldShowAdmin ? "" : "none";
-    adminDivider.style.display = shouldShowAdmin ? "" : "none";
-  }
 }
 
 function openAuthModal(mode = "login") {
@@ -1918,6 +1914,32 @@ function choiceMatchesBasketFilters(choice, filter, item) {
   return true;
 }
 
+function getBasketItemCategory(item, choice) {
+  const text = normalizeBasketToken([
+    item?.ingredientTitle,
+    item?.ingredientAmount,
+    choice?.title,
+    choice?.subtitle,
+  ].filter(Boolean).join(" "));
+  const groups = [
+    { key: "produce", label: "Groente & fruit", terms: ["aardappel", "appel", "avocado", "banaan", "bloemkool", "bosui", "champignon", "citroen", "courgette", "fruit", "groente", "komkommer", "knoflook", "limoen", "paprika", "prei", "rucola", "sla", "spinazie", "tomaat", "ui", "wortel"] },
+    { key: "meat", label: "Vlees, vis & vega", terms: ["bacon", "gehakt", "ham", "kip", "kabeljauw", "rookworst", "spek", "tonijn", "vega", "vegan", "vis", "vlees", "worst", "zalm"] },
+    { key: "dairy", label: "Zuivel & kaas", terms: ["boter", "creme", "crème", "ei", "eieren", "kaas", "kwark", "melk", "mozzarella", "room", "slagroom", "yoghurt", "zuivel"] },
+    { key: "bakery", label: "Brood & granen", terms: ["brood", "wrap", "tortilla", "pasta", "rijst", "noedel", "couscous", "bloem", "paneermeel", "havermout"] },
+    { key: "pantry", label: "Voorraadkast", terms: ["azijn", "bouillon", "honing", "ketchup", "mayonaise", "mosterd", "olie", "saus", "soja", "suiker", "tomatenpuree", "peper", "zout", "kruiden", "paprikapoeder"] },
+    { key: "frozen", label: "Diepvries", terms: ["diepvries", "bevroren", "vriesvers"] },
+    { key: "drinks", label: "Drinken", terms: ["sap", "water", "wijn", "bier", "frisdrank", "drank"] },
+  ];
+  const hit = groups.find((group) => group.terms.some((term) => text.includes(term)));
+  return hit || { key: "other", label: "Overig" };
+}
+
+function getBasketMatchQuality(choice) {
+  const score = Number(choice?.matchMeta?.score);
+  if (!Number.isFinite(score)) return "unknown";
+  return score > 45 ? "low" : "good";
+}
+
 function renderBasketPreview() {
   const preview = state.basketPreview;
   const nameEl = document.getElementById("basketRecipeName");
@@ -1998,9 +2020,9 @@ function renderBasketPreview() {
 
   const activeFilter = state.basketFilter || {};
 
-  const rendered = preview.items.map((item, itemIndex) => {
+  const renderedItems = preview.items.map((item, itemIndex) => {
     const choices = Array.isArray(item.choices) ? item.choices : [];
-    if (!choices.length) return "";
+    if (!choices.length) return null;
 
     // When filters/search are active: pick the first matching alternative choice.
     const hasDietFilter =
@@ -2017,7 +2039,7 @@ function renderBasketPreview() {
     if (pickedIndex < 0 || pickedIndex >= choices.length) pickedIndex = 0;
 
     const choice = choices[pickedIndex];
-    if (!choice) return "";
+    if (!choice) return null;
 
     const priceNum = parseFloat((choice.price || "0").replace("€", "").replace(",", ".")) || 0;
     const qty = Math.max(1, Math.round((item.qty || 1) * servScale));
@@ -2042,8 +2064,14 @@ function renderBasketPreview() {
     const ingredientTitle = splitCompoundIngredientWords(item.ingredientTitle || "");
     const itemId = String(item.id || `basket-item-${itemIndex}`);
 
-    return `
-      <div class="basket-product" data-basket-item="${itemIndex}">
+    const category = getBasketItemCategory(item, choice);
+    const matchQuality = getBasketMatchQuality(choice);
+    const matchBadge = matchQuality === "low"
+      ? `<span class="basket-product__attention">Check match</span>`
+      : "";
+
+    const html = `
+      <div class="basket-product ${matchQuality === "low" ? "basket-product--attention" : ""}" data-basket-item="${itemIndex}">
         <div class="basket-product__img-wrap">
           ${img}
         </div>
@@ -2052,6 +2080,7 @@ function renderBasketPreview() {
           <p class="basket-product__meta">
             ${renderChoicePriceHtml(choice)}
             ${promotionBadge}
+            ${matchBadge}
             ${choice.subtitle ? `<span>${escapeHtml(choice.subtitle)}</span>` : ""}
           </p>
           <p class="basket-product__for">voor ${escapeHtml(item.ingredientAmount || "")} ${escapeHtml(ingredientTitle)}</p>
@@ -2072,9 +2101,46 @@ function renderBasketPreview() {
         </div>
       </div>
     `;
-  }).join("");
+    return { html, category, matchQuality };
+  }).filter(Boolean);
 
-  const productsHtml = rendered || `<p style="text-align:center;padding:26px 18px;color:#888;font-size:0.95rem">Geen producten gevonden.</p>`;
+  const attentionItems = renderedItems.filter((entry) => entry.matchQuality === "low");
+  const regularItems = renderedItems.filter((entry) => entry.matchQuality !== "low");
+  const categoryOrder = ["produce", "meat", "dairy", "bakery", "pantry", "frozen", "drinks", "other"];
+  const grouped = new Map();
+  regularItems.forEach((entry) => {
+    const key = entry.category.key;
+    if (!grouped.has(key)) grouped.set(key, { label: entry.category.label, items: [] });
+    grouped.get(key).items.push(entry.html);
+  });
+
+  const sectionHtml = [];
+  if (attentionItems.length) {
+    sectionHtml.push(`
+      <section class="basket-section basket-section--attention">
+        <div class="basket-section__head">
+          <h3>Even controleren</h3>
+          <span>${attentionItems.length}</span>
+        </div>
+        <div class="basket-section__list">${attentionItems.map((entry) => entry.html).join("")}</div>
+      </section>
+    `);
+  }
+  categoryOrder.forEach((key) => {
+    const group = grouped.get(key);
+    if (!group?.items?.length) return;
+    sectionHtml.push(`
+      <section class="basket-section">
+        <div class="basket-section__head">
+          <h3>${escapeHtml(group.label)}</h3>
+          <span>${group.items.length}</span>
+        </div>
+        <div class="basket-section__list">${group.items.join("")}</div>
+      </section>
+    `);
+  });
+
+  const productsHtml = sectionHtml.join("") || `<p style="text-align:center;padding:26px 18px;color:#888;font-size:0.95rem">Geen producten gevonden.</p>`;
   listEl.innerHTML = `${productsHtml}${pantryOptionalHtml}`;
 
   // Calculate total
@@ -4561,6 +4627,7 @@ function renderChannelSettings() {
         "Goedgekeurd";
       const isPending = status === "pending";
       const isRejected = status === "rejected";
+      const isManagedByAdmin = Boolean(ch.managedByAdmin);
       const enabled = isCustomChannelEnabled(ch.id);
       const isAdminDisabled = status === "approved" && !enabled;
       // Admin-uitgeschakelde kanalen volledig verbergen, ook als de gebruiker ze volgt.
@@ -4569,9 +4636,15 @@ function renderChannelSettings() {
       const toggleDisabled = (isPending || isRejected || isAdminDisabled) ? "disabled" : "";
       const rowDisabledClass = (isPending || isRejected || isAdminDisabled) ? "channel-toggle-row--disabled" : "";
       const adminDisabledBadge = isAdminDisabled ? ` <span class="channel-status-badge channel-status-badge--rejected">Uitgeschakeld</span>` : "";
+      const managedBadgeHtml = isManagedByAdmin
+        ? `<span class="channel-dupe-badge">Plately kanaal</span>`
+        : "";
       const toggleHtml = (isRejected || isAdminDisabled)
         ? `<span class="toggle-switch disabled" role="switch" aria-checked="${followed}" aria-disabled="true" tabindex="-1"></span>`
         : `<span class="toggle-switch ${followed ? "toggle-switch--on" : ""} ${toggleDisabled}" role="switch" aria-checked="${followed}" tabindex="0" data-toggle-channel="${ch.id}" ${toggleDisabled}></span>`;
+      const deleteHtml = isManagedByAdmin
+        ? ""
+        : `<button class="channel-delete-btn" type="button" aria-label="Verwijder ${escapeHtml(ch.name)}" data-delete-channel="${ch.id}">×</button>`;
 
       return `
         <div class="channel-toggle-row channel-toggle-row--custom ${rowDisabledClass}" data-channel-id="${ch.id}">
@@ -4581,10 +4654,11 @@ function renderChannelSettings() {
           <div class="channel-toggle-info">
             <span class="channel-toggle-name">${escapeHtml(ch.name)}${adminDisabledBadge}</span>
             <span class="channel-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+            ${managedBadgeHtml}
             ${dupeBadgeHtml}
           </div>
           ${toggleHtml}
-          <button class="channel-delete-btn" type="button" aria-label="Verwijder ${escapeHtml(ch.name)}" data-delete-channel="${ch.id}">×</button>
+          ${deleteHtml}
         </div>`;
     }).join("");
 
@@ -5846,21 +5920,43 @@ function renderReviewSummary(recipe) {
     return;
   }
 
+  const ingredientCount = (recipe.ingredients || []).length;
+  const stepCount = (recipe.instructions || []).length;
   const summaryItems = [
-    { label: getSourceHost(recipe.sourceUrl || "") || getPlatformLabel(recipe.platform || "website"), tone: "muted" },
-    { label: `${(recipe.ingredients || []).length} ingrediënten`, tone: (recipe.ingredients || []).length >= 4 ? "good" : "warn" },
-    { label: `${(recipe.instructions || []).length} stappen`, tone: (recipe.instructions || []).length >= 3 ? "good" : "warn" },
-    { label: recipe.time || "Tijd onbekend", tone: "muted" },
+    {
+      title: "Bron",
+      value: getSourceHost(recipe.sourceUrl || "") || getPlatformLabel(recipe.platform || "website"),
+      tone: "muted",
+    },
+    {
+      title: "Ingrediënten",
+      value: `${ingredientCount} gevonden`,
+      detail: ingredientCount >= 4 ? "Ziet er compleet uit" : "Controleer of er niets mist",
+      tone: ingredientCount >= 4 ? "good" : "warn",
+    },
+    {
+      title: "Bereiding",
+      value: `${stepCount} stappen`,
+      detail: stepCount >= 3 ? "Klaar om te koken" : "Maak losse stappen",
+      tone: stepCount >= 3 ? "good" : "warn",
+    },
+    {
+      title: "Tijd",
+      value: recipe.time || "Onbekend",
+      tone: "muted",
+    },
   ];
 
   reviewSummary.innerHTML = `
-    <div class="review-summary__row">
+    <div class="review-summary__grid">
       ${summaryItems
         .map(
           (item) => `
-            <span class="review-summary__pill review-summary__pill--${item.tone}">
-              ${escapeHtml(item.label)}
-            </span>
+            <article class="review-summary__card review-summary__card--${item.tone}">
+              <span>${escapeHtml(item.title)}</span>
+              <strong>${escapeHtml(item.value)}</strong>
+              ${item.detail ? `<p>${escapeHtml(item.detail)}</p>` : ""}
+            </article>
           `
         )
         .join("")}
@@ -7191,9 +7287,6 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
   if (destLabel) {
     destLabel.textContent = storeConfig.loadingLabel;
   }
-  if (storeSlug === "albert-heijn") {
-    showAhMatchSplash(activeItems.length);
-  }
 
   try {
     const payload = await fetchJson(`${state.apiBase}/api/store-basket`, {
@@ -7257,9 +7350,6 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
   } catch {
     showToast(`Kon ${storeName} niet voorbereiden.`);
   } finally {
-    if (storeSlug === "albert-heijn") {
-      hideAhMatchSplash();
-    }
     button.disabled = false;
     if (destLabel) {
       destLabel.textContent = originalLabel;
@@ -7507,7 +7597,9 @@ function buildPersistedAppState() {
     featuredRecipeId: state.featuredRecipeId,
     selectedRecipeId: state.selectedRecipeId,
     followedChannelIds: [...state.followedChannelIds],
-    customChannels: state.customChannels.map((ch) => ({ ...ch })),
+    customChannels: state.customChannels
+      .filter((ch) => !ch.managedByAdmin)
+      .map((ch) => ({ ...ch })),
     language: state.language || "nl",
     currentView: state.view || "home",
   };
@@ -7617,8 +7709,14 @@ function applyPersistedAppState(user) {
   }
 
   if (Array.isArray(user.customChannels)) {
+    const seenCustomChannels = new Set();
     state.customChannels = user.customChannels
       .filter((ch) => ch && typeof ch.id === "string" && typeof ch.name === "string" && typeof ch.url === "string")
+      .filter((ch) => {
+        if (seenCustomChannels.has(ch.id)) return false;
+        seenCustomChannels.add(ch.id);
+        return true;
+      })
       .map((ch) => ({ ...ch }));
   }
 
@@ -7913,6 +8011,115 @@ function renderAdminChannelTestResults(results, backendNote = "") {
       </div>
     `;
   }).join("");
+}
+
+function getAdminNewChannelDraft() {
+  const name = String(document.getElementById("adminNewChannelName")?.value || "").trim();
+  const url = String(document.getElementById("adminNewChannelUrl")?.value || "").trim();
+  const query = String(document.getElementById("adminNewChannelQuery")?.value || "").trim();
+  return { name, url, query };
+}
+
+function setAdminNewChannelStatus(message) {
+  const el = document.getElementById("adminNewChannelStatus");
+  if (el) el.textContent = String(message || "");
+}
+
+function renderAdminNewChannelResults(results, backendNote = "") {
+  const wrap = document.getElementById("adminNewChannelResults");
+  if (!wrap) return;
+  const list = Array.isArray(results) ? results : [];
+  const note = String(backendNote || "").trim();
+  if (!list.length) {
+    wrap.innerHTML = note
+      ? `<div style="line-height:1.45;color:#5c534c;font-size:0.9rem">${escapeHtml(note)}</div>`
+      : "";
+    return;
+  }
+  wrap.innerHTML = list.slice(0, 5).map((r) => {
+    const title = escapeHtml(r?.title || "—");
+    const url = escapeHtml(r?.url || "");
+    return `
+      <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #f3f5ef;border-radius:12px;background:#fff">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:650;color:#3d3d3b">${title}</div>
+          <div style="font-size:0.85rem;color:#989188;margin-top:4px;word-break:break-all">
+            <a href="${url}" target="_blank" rel="noopener" style="color:#6b6258;text-decoration:underline">${url}</a>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function runAdminNewChannelTest() {
+  setAdminChannelTestError("");
+  const { name, url, query } = getAdminNewChannelDraft();
+  if (!name || !url) {
+    setAdminChannelTestError("Vul eerst naam en URL in.");
+    return;
+  }
+  if (!query || query.length < 2) {
+    setAdminChannelTestError("Vul een test zoekterm in (min 2 tekens).");
+    return;
+  }
+  setAdminNewChannelStatus("Kanaal testen…");
+  renderAdminNewChannelResults([]);
+  try {
+    const id = `ch-preview-${Date.now()}`;
+    const res = await fetchJson(`${state.apiBase}/api/admin/channel-test/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channelKind: "custom",
+        customChannel: { id, name, url },
+        query,
+        limit: 5,
+      }),
+    });
+    const results = Array.isArray(res?.results) ? res.results : [];
+    const note = String(res?.searchBackendNote || "").trim();
+    setAdminNewChannelStatus(results.length ? `✅ Test werkt: ${results.length} resultaten` : "Geen resultaten gevonden bij deze test.");
+    renderAdminNewChannelResults(results, note);
+    return results;
+  } catch (err) {
+    setAdminNewChannelStatus("");
+    setAdminChannelTestError(err.message);
+    return [];
+  }
+}
+
+async function addAdminGlobalChannel() {
+  setAdminChannelTestError("");
+  const { name, url } = getAdminNewChannelDraft();
+  if (!name || !url) {
+    setAdminChannelTestError("Vul eerst naam en URL in.");
+    return;
+  }
+  const addBtn = document.getElementById("adminNewChannelAddBtn");
+  if (addBtn) addBtn.disabled = true;
+  setAdminNewChannelStatus("Toevoegen aan Plately…");
+  try {
+    const res = await fetchJson(`${state.apiBase}/api/admin/global-channel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, url }),
+    });
+    const channel = res?.channel || {};
+    setAdminNewChannelStatus(`✅ ${channel.name || name} toegevoegd aan Plately`);
+    ["adminNewChannelName", "adminNewChannelUrl", "adminNewChannelQuery"].forEach((id) => {
+      const input = document.getElementById(id);
+      if (input) input.value = "";
+    });
+    renderAdminNewChannelResults([]);
+    showToast("Kanaal toegevoegd aan Plately");
+    await renderAdminScreen();
+  } catch (err) {
+    setAdminNewChannelStatus("");
+    setAdminChannelTestError(err.message);
+  } finally {
+    if (addBtn) addBtn.disabled = false;
+  }
 }
 
 async function runAdminChannelTestSearch() {
@@ -8382,6 +8589,10 @@ async function renderAdminScreen() {
   if (searchBtn) searchBtn.onclick = () => runAdminChannelTestSearch();
   const importBtn = document.getElementById("adminChannelTestImportBtn");
   if (importBtn) importBtn.onclick = () => runAdminChannelTestImport("");
+  const newChannelTestBtn = document.getElementById("adminNewChannelTestBtn");
+  if (newChannelTestBtn) newChannelTestBtn.onclick = () => runAdminNewChannelTest();
+  const newChannelAddBtn = document.getElementById("adminNewChannelAddBtn");
+  if (newChannelAddBtn) newChannelAddBtn.onclick = () => addAdminGlobalChannel();
 
   document.querySelectorAll("[data-admin-channel-test-import]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -9495,119 +9706,6 @@ function hideImportSplash() {
     _importSplashHideTimeout = setTimeout(() => {
       _importSplashHideTimeout = null;
       _doHideImportSplash();
-    }, remaining);
-  }
-}
-
-/* ─── AH match splash overlay ─── */
-const AH_MATCH_SPLASH_PHASE_COUNT = 4;
-const AH_MATCH_SPLASH_PHASE_LABELS = [
-  "Ingrediënten lezen",
-  "Albert Heijn doorzoeken",
-  "Beste producten kiezen",
-  "Lijst klaarzetten"
-];
-const AH_MATCH_SPLASH_MIN_MS = 2600;
-const AH_MATCH_SPLASH_MAX_MS = 30000;
-let _ahMatchSplashTimer = null;
-let _ahMatchSplashPhase = 0;
-let _ahMatchSplashShownAt = 0;
-let _ahMatchSplashHideTimeout = null;
-let _ahMatchSplashSafetyTimeout = null;
-let _ahMatchSplashExitTimeout = null;
-
-function _renderAhMatchSplashPhases(activeIdx) {
-  const splash = document.getElementById("ahMatchSplash");
-  const status = document.getElementById("ahMatchSplashStatus");
-  const items = splash ? splash.querySelectorAll(".import-splash__orbit-step") : [];
-  const phaseCount = items.length || AH_MATCH_SPLASH_PHASE_COUNT;
-  const safeIdx = Math.max(0, Math.min(activeIdx, phaseCount - 1));
-  if (splash) {
-    splash.dataset.phase = String(safeIdx);
-    splash.style.setProperty("--import-progress", `${((safeIdx + 1) / phaseCount) * 100}%`);
-  }
-  if (status) status.textContent = AH_MATCH_SPLASH_PHASE_LABELS[safeIdx] || "AH producten matchen";
-  items.forEach((el, i) => {
-    el.dataset.state = i < safeIdx ? "done" : i === safeIdx ? "active" : "pending";
-  });
-}
-
-function _doHideAhMatchSplash() {
-  const splash = document.getElementById("ahMatchSplash");
-  if (!splash) return;
-  if (_ahMatchSplashExitTimeout) {
-    clearTimeout(_ahMatchSplashExitTimeout);
-    _ahMatchSplashExitTimeout = null;
-  }
-  splash.classList.add("import-splash--leaving");
-  _ahMatchSplashExitTimeout = window.setTimeout(() => {
-    _ahMatchSplashExitTimeout = null;
-    splash.classList.add("hidden");
-    splash.classList.remove("import-splash--leaving", "import-splash--ready");
-    splash.setAttribute("aria-hidden", "true");
-    splash.style.removeProperty("--import-progress");
-    delete splash.dataset.phase;
-  }, 260);
-  if (_ahMatchSplashTimer) {
-    clearInterval(_ahMatchSplashTimer);
-    _ahMatchSplashTimer = null;
-  }
-  if (_ahMatchSplashSafetyTimeout) {
-    clearTimeout(_ahMatchSplashSafetyTimeout);
-    _ahMatchSplashSafetyTimeout = null;
-  }
-  _ahMatchSplashShownAt = 0;
-}
-
-function showAhMatchSplash(itemCount = 0) {
-  const splash = document.getElementById("ahMatchSplash");
-  if (!splash) return;
-  if (_ahMatchSplashHideTimeout) {
-    clearTimeout(_ahMatchSplashHideTimeout);
-    _ahMatchSplashHideTimeout = null;
-  }
-  if (_ahMatchSplashExitTimeout) {
-    clearTimeout(_ahMatchSplashExitTimeout);
-    _ahMatchSplashExitTimeout = null;
-  }
-  const hint = document.getElementById("ahMatchSplashHint");
-  if (hint) {
-    const count = Number(itemCount) || 0;
-    hint.textContent = count > 1
-      ? `We matchen ${count} ingrediënten met de beste Albert Heijn producten.`
-      : "We matchen je ingrediënt met het beste Albert Heijn product.";
-  }
-  _ahMatchSplashPhase = 0;
-  _renderAhMatchSplashPhases(0);
-  splash.classList.remove("hidden", "import-splash--leaving", "import-splash--ready");
-  splash.setAttribute("aria-hidden", "false");
-  _ahMatchSplashShownAt = Date.now();
-  if (_ahMatchSplashTimer) clearInterval(_ahMatchSplashTimer);
-  _ahMatchSplashTimer = setInterval(() => {
-    _ahMatchSplashPhase = Math.min(_ahMatchSplashPhase + 1, AH_MATCH_SPLASH_PHASE_COUNT - 1);
-    _renderAhMatchSplashPhases(_ahMatchSplashPhase);
-  }, 850);
-  if (_ahMatchSplashSafetyTimeout) clearTimeout(_ahMatchSplashSafetyTimeout);
-  _ahMatchSplashSafetyTimeout = setTimeout(() => {
-    _ahMatchSplashSafetyTimeout = null;
-    _doHideAhMatchSplash();
-  }, AH_MATCH_SPLASH_MAX_MS);
-}
-
-function hideAhMatchSplash() {
-  const elapsed = _ahMatchSplashShownAt ? Date.now() - _ahMatchSplashShownAt : AH_MATCH_SPLASH_MIN_MS;
-  const remaining = Math.max(0, AH_MATCH_SPLASH_MIN_MS - elapsed);
-  if (_ahMatchSplashHideTimeout) clearTimeout(_ahMatchSplashHideTimeout);
-  if (remaining === 0) {
-    _doHideAhMatchSplash();
-  } else {
-    _ahMatchSplashPhase = AH_MATCH_SPLASH_PHASE_COUNT - 1;
-    _renderAhMatchSplashPhases(AH_MATCH_SPLASH_PHASE_COUNT - 1);
-    const splash = document.getElementById("ahMatchSplash");
-    if (splash) splash.classList.add("import-splash--ready");
-    _ahMatchSplashHideTimeout = setTimeout(() => {
-      _ahMatchSplashHideTimeout = null;
-      _doHideAhMatchSplash();
     }, remaining);
   }
 }
@@ -11181,7 +11279,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 });
 
 // "Over deze App" → about sub-panel
-const APP_VERSION = "3.0.4";
+const APP_VERSION = "3.0.6";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;

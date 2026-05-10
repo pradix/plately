@@ -1629,6 +1629,92 @@ async function setChannelEnabledState(nextState) {
   await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2));
 }
 
+function sanitizeGlobalCustomChannel(channel) {
+  const id = sanitizeText(channel?.id || "");
+  const name = sanitizeText(channel?.name || "").slice(0, 80);
+  const url = sanitizeText(channel?.url || "").slice(0, 500);
+  if (!id || !name || !url) return null;
+  const initials = sanitizeText(channel?.initials || name.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase() || "WEB").slice(0, 4);
+  return {
+    id,
+    name,
+    url,
+    initials,
+    color: sanitizeText(channel?.color || "#8da485").slice(0, 32),
+    status: "approved",
+    managedByAdmin: true,
+    createdBy: sanitizeText(channel?.createdBy || ""),
+    createdByEmail: sanitizeText(channel?.createdByEmail || ""),
+    createdAt: sanitizeText(channel?.createdAt || ""),
+    updatedAt: sanitizeText(channel?.updatedAt || ""),
+  };
+}
+
+async function getGlobalCustomChannels() {
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const row = await pool.query("SELECT value FROM plately_admin_state WHERE key = $1 LIMIT 1", ["globalCustomChannels"]);
+    const value = row.rows?.[0]?.value;
+    let list = Array.isArray(value) ? value : [];
+    if (value && typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        list = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        list = [];
+      }
+    }
+    return list.map(sanitizeGlobalCustomChannel).filter(Boolean);
+  }
+  try {
+    const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+    const db = JSON.parse(rawFile);
+    const list = Array.isArray(db?.adminState?.globalCustomChannels) ? db.adminState.globalCustomChannels : [];
+    return list.map(sanitizeGlobalCustomChannel).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function setGlobalCustomChannels(channels) {
+  const clean = (Array.isArray(channels) ? channels : []).map(sanitizeGlobalCustomChannel).filter(Boolean);
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    await pool.query(
+      `
+        INSERT INTO plately_admin_state (key, value, updated_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+      `,
+      ["globalCustomChannels", JSON.stringify(clean)]
+    );
+    return clean;
+  }
+  const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+  const db = JSON.parse(rawFile);
+  if (!db.adminState || typeof db.adminState !== "object") db.adminState = {};
+  db.adminState.globalCustomChannels = clean;
+  await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2));
+  return clean;
+}
+
+function withGlobalCustomChannels(appState, globalCustomChannels) {
+  const globals = (Array.isArray(globalCustomChannels) ? globalCustomChannels : []).map(sanitizeGlobalCustomChannel).filter(Boolean);
+  if (!globals.length) return appState;
+  const local = Array.isArray(appState?.customChannels) ? appState.customChannels : [];
+  const seen = new Set();
+  const merged = [];
+  for (const channel of [...globals, ...local]) {
+    const id = sanitizeText(channel?.id || "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    merged.push(channel);
+  }
+  return { ...appState, customChannels: merged };
+}
+
 /** Tijdelijk uitgeschakelde kanalen — Cloudflare blokkeert imports/zoek; weer aanzetten zodra dat stabiel is. */
 const TEMPORARILY_DISABLED_CHANNEL_IDS = new Set(["ch-mj", "ch-ek"]);
 
@@ -10652,9 +10738,13 @@ const server = http.createServer(async (request, response) => {
       console.log(`🔐 /api/session - authUser resolved: ${authUser ? authUser.email : "NULL"}`);
 
       const channelEnabled = await getChannelEnabledState().catch(() => ({ seed: {}, custom: {} }));
+      const globalCustomChannels = await getGlobalCustomChannels().catch(() => []);
 
       if (authUser) {
-        const appState = isPostgresEnabled() ? buildAppStateFromUser(authUser) : (await ensureUserSession(request, response));
+        const appState = withGlobalCustomChannels(
+          isPostgresEnabled() ? buildAppStateFromUser(authUser) : (await ensureUserSession(request, response)),
+          globalCustomChannels
+        );
         console.log(`🔐 /api/session - RESPONSE: authenticated=true, email=${authUser.email}`);
         sendJson(response, 200, {
           ok: true,
@@ -10673,7 +10763,7 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
-        const user = await ensureUserSession(request, response);
+        const user = withGlobalCustomChannels(await ensureUserSession(request, response), globalCustomChannels);
         console.log(`🔐 /api/session - RESPONSE: authenticated=false (guest user_id=${user?.user_id || "?"})`);
         sendJson(response, 200, {
           ok: true,
@@ -10979,9 +11069,10 @@ const server = http.createServer(async (request, response) => {
       if (authUser) {
         const updatedUser = await updateAuthenticatedUserState(authUser.id, body);
         const channelEnabled = await getChannelEnabledState().catch(() => ({ seed: {}, custom: {} }));
+        const globalCustomChannels = await getGlobalCustomChannels().catch(() => []);
         sendJson(response, 200, {
           ok: true,
-          user: { ...buildAppStateFromUser(updatedUser), channelEnabled },
+          user: { ...withGlobalCustomChannels(buildAppStateFromUser(updatedUser), globalCustomChannels), channelEnabled },
           auth: {
             enabled: isPostgresEnabled(),
             authenticated: true,
@@ -12534,6 +12625,7 @@ const server = http.createServer(async (request, response) => {
         const seedOverrides = await getSeedChannelOverrides();
         const channelOverrides = await getChannelOverrides();
         const enabledState = await getChannelEnabledState().catch(() => ({ seed: {}, custom: {} }));
+        const globalCustomChannels = await getGlobalCustomChannels().catch(() => []);
         const seedChannels = Array.isArray(SEED_CHANNELS)
           ? SEED_CHANNELS.map((ch) => ({
               id: sanitizeText(ch?.id || ""),
@@ -12574,6 +12666,7 @@ const server = http.createServer(async (request, response) => {
             rejectedAt: sanitizeText(ch?.rejectedAt || ""),
             rejectedReason: sanitizeText(ch?.rejectedReason || ""),
             ownerEmail: sanitizeText(ownerEmail || ""),
+            managedByAdmin: Boolean(ch?.managedByAdmin),
             kind: "custom",
             enabled: isChannelEnabled("custom", id, enabledState),
           };
@@ -12581,6 +12674,8 @@ const server = http.createServer(async (request, response) => {
           else if (status === "rejected") customChannels.rejected.push(entry);
           else customChannels.approved.push(entry);
         };
+
+        for (const ch of globalCustomChannels) pushCustom(ch, ch.createdByEmail || "Plately");
 
         if (isPostgresEnabled()) {
           await ensurePostgresSchema();
@@ -12676,6 +12771,66 @@ const server = http.createServer(async (request, response) => {
       } catch (error) {
         console.error("❌ Error in /api/admin/seed-channel-override:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/global-channel" && request.method === "POST") {
+      console.log("➕ /api/admin/global-channel called");
+      try {
+        const adminUser = await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const name = sanitizeText(body.name || "").slice(0, 80);
+        const rawUrl = sanitizeText(body.url || "").slice(0, 500);
+        if (!name || !rawUrl) {
+          return sendJson(response, 400, { ok: false, error: "name and url required" });
+        }
+
+        let normalizedUrl = "";
+        let slug = "";
+        try {
+          const parsed = new URL(rawUrl);
+          if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+            return sendJson(response, 400, { ok: false, error: "URL must be http(s)" });
+          }
+          normalizedUrl = parsed.toString().replace(/\/+$/, "");
+          slug = parsed.hostname.replace(/^www\./i, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+        } catch {
+          return sendJson(response, 400, { ok: false, error: "Invalid URL" });
+        }
+
+        const nowIso = new Date().toISOString();
+        const globals = await getGlobalCustomChannels();
+        const normalizedCompare = normalizeChannelUrlForCompare(normalizedUrl);
+        const existing = globals.find((ch) => {
+          const cmp = normalizeChannelUrlForCompare(ch.url || "");
+          return cmp && normalizedCompare && cmp.host === normalizedCompare.host && cmp.path === normalizedCompare.path;
+        });
+        if (existing) {
+          return sendJson(response, 409, { ok: false, error: "Kanaal bestaat al in Plately", channel: existing });
+        }
+
+        const initials = name.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase() || "WEB";
+        const channel = sanitizeGlobalCustomChannel({
+          id: `ch-global-${slug || Date.now()}-${Date.now()}`,
+          name,
+          url: normalizedUrl,
+          initials,
+          color: "#8da485",
+          managedByAdmin: true,
+          createdBy: adminUser?.id || "",
+          createdByEmail: adminUser?.email || "",
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+        globals.push(channel);
+        await setGlobalCustomChannels(globals);
+        const enabledState = await getChannelEnabledState();
+        enabledState.custom[channel.id] = true;
+        await setChannelEnabledState(enabledState);
+        return sendJson(response, 200, { ok: true, channel });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/global-channel:", error.message);
+        return sendJson(response, error.statusCode || 500, { ok: false, error: error.message });
       }
     }
 
