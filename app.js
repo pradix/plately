@@ -7913,6 +7913,36 @@ function buildPublicRecipeShareUrl(recipe) {
   }
 }
 
+async function buildShortShareUrl(recipe) {
+  // Prefer a real short link (server stores payload) when the backend is available.
+  try {
+    const payload = {
+      id: recipe?.id || "",
+      title: recipe?.title || "",
+      description: recipe?.description || "",
+      time: recipe?.time || "",
+      servings: recipe?.servings || "",
+      mealTag: recipe?.mealTag || "",
+      image: recipe?.image || "",
+      sourceUrl: recipe?.sourceUrl || "",
+      ingredients: Array.isArray(recipe?.ingredients) ? recipe.ingredients : [],
+      instructions: Array.isArray(recipe?.instructions) ? recipe.instructions : [],
+    };
+    const resp = await fetch("/api/share/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload }),
+    });
+    const data = await resp.json().catch(() => null);
+    if (resp.ok && data?.ok && data?.url) {
+      return new URL(String(data.url), window.location.origin).toString();
+    }
+  } catch {
+    // fall back below
+  }
+  return buildPublicRecipeShareUrl(recipe);
+}
+
 async function shareSelectedRecipe() {
   const recipe = getSelectedRecipe();
   openShareCard(recipe);
@@ -7922,7 +7952,7 @@ bindEvent(document.getElementById("shareCardClose"), "click", closeShareCard);
 
 bindEvent(document.getElementById("shareCardNativeShare"), "click", async () => {
   const recipe = getSelectedRecipe();
-  const url = buildPublicRecipeShareUrl(recipe);
+  const url = await buildShortShareUrl(recipe);
   if (navigator.share) {
     try {
       await navigator.share({ title: recipe?.title || "Recept", url });

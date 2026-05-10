@@ -1203,6 +1203,7 @@ function createEmptyDatabase() {
     authSessions: {}, // Dev-only: simple auth token -> {email, userId} mapping
     pushSubscriptions: [],
     announcements: [],
+    shareLinks: {}, // token -> { payload, createdAt }
   };
 }
 
@@ -2023,13 +2024,18 @@ async function loadDatabase() {
         sessions: parsed?.sessions && typeof parsed.sessions === "object" ? parsed.sessions : {},
         authSessions: parsed?.authSessions && typeof parsed.authSessions === "object" ? parsed.authSessions : {},
         pushSubscriptions: Array.isArray(parsed?.pushSubscriptions) ? parsed.pushSubscriptions : [],
+        announcements: Array.isArray(parsed?.announcements) ? parsed.announcements : [],
+        shareLinks: parsed?.shareLinks && typeof parsed.shareLinks === "object" ? parsed.shareLinks : {},
       };
       const userCount = Object.keys(databaseCache.users).length;
       const sessionCount = Object.keys(databaseCache.sessions).length;
       const authCount = Object.keys(databaseCache.authSessions).length;
       const pushCount = Array.isArray(databaseCache.pushSubscriptions) ? databaseCache.pushSubscriptions.length : 0;
+      const announceCount = Array.isArray(databaseCache.announcements) ? databaseCache.announcements.length : 0;
+      const shareCount = databaseCache.shareLinks && typeof databaseCache.shareLinks === "object" ? Object.keys(databaseCache.shareLinks).length : 0;
       console.log(`✅ Database loaded from disk: ${userCount} users, ${sessionCount} sessions, ${authCount} auth sessions`);
       console.log(`   pushSubscriptions=${pushCount}`);
+      console.log(`   announcements=${announceCount}, shareLinks=${shareCount}`);
     } catch (parseError) {
       console.error("❌ Database parse error:", parseError.message);
       databaseCache = createEmptyDatabase();
@@ -2055,8 +2061,12 @@ async function persistDatabase() {
     const sessionCount = Object.keys(db.sessions || {}).length;
     const authCount = Object.keys(db.authSessions || {}).length;
     const pushCount = Array.isArray(db.pushSubscriptions) ? db.pushSubscriptions.length : 0;
+    const announceCount = Array.isArray(db.announcements) ? db.announcements.length : 0;
+    const shareCount = db.shareLinks && typeof db.shareLinks === "object" ? Object.keys(db.shareLinks).length : 0;
     console.log(`💾 Writing database to ${DATA_FILE}`);
-    console.log(`   users=${userCount}, sessions=${sessionCount}, authSessions=${authCount}, pushSubscriptions=${pushCount}`);
+    console.log(
+      `   users=${userCount}, sessions=${sessionCount}, authSessions=${authCount}, pushSubscriptions=${pushCount}, announcements=${announceCount}, shareLinks=${shareCount}`
+    );
     await fsp.writeFile(DATA_FILE, JSON.stringify(db, null, 2), "utf8");
     console.log(`✅ Database written successfully to ${DATA_FILE}`);
   });
@@ -2636,6 +2646,15 @@ function sanitizeText(value) {
   return String(value || "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function splitCompoundIngredientWords(text) {
@@ -11636,6 +11655,105 @@ const server = http.createServer(async (request, response) => {
   }
 
   try {
+    // ── Public recipe share shortlinks ───────────────────────────────────────
+    if ((requestUrl.pathname === "/share" || requestUrl.pathname.startsWith("/share/")) && request.method === "GET") {
+      const token =
+        requestUrl.pathname.startsWith("/share/") ? requestUrl.pathname.slice("/share/".length) : requestUrl.searchParams.get("t") || "";
+      const safeToken = sanitizeText(String(token || "")).trim();
+      const db = await loadDatabase();
+      const record = db.shareLinks && safeToken ? db.shareLinks[safeToken] : null;
+      if (!record || !record.payload) {
+        response.writeHead(302, { Location: "/recipe.html", ...HTTP_HEADERS });
+        response.end();
+        return;
+      }
+
+      const payload = record.payload || {};
+      const title = sanitizeText(payload.title || "Recept");
+      const desc = sanitizeText(payload.description || "Een recept gedeeld via Plately.");
+      const image = sanitizeText(payload.image || "") || "/assets/icon-512.png?v=7";
+
+      const html = `<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtml(title)} — Plately</title>
+    <meta name="description" content="${escapeHtml(desc)}" />
+    <meta name="theme-color" content="#8da485" />
+    <meta property="og:site_name" content="Plately" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(desc)}" />
+    <meta property="og:image" content="${escapeHtml(image)}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(desc)}" />
+    <meta name="twitter:image" content="${escapeHtml(image)}" />
+    <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
+    <link rel="stylesheet" href="/styles.css?v=3.1.3" />
+  </head>
+  <body class="public-recipe-page">
+    <main class="public-recipe" id="publicRecipeRoot">
+      <header class="public-recipe__top">
+        <a class="public-recipe__brand" href="/index.html" aria-label="Open Plately">
+          <img src="/assets/plately.png" alt="Plately" class="public-recipe__brand-logo" />
+          <span class="public-recipe__brand-name">Plately</span>
+        </a>
+        <div class="public-recipe__cta">
+          <a class="btn-secondary public-recipe__cta-btn" href="/index.html">Inloggen</a>
+          <a class="btn-primary public-recipe__cta-btn" href="/index.html">Account maken</a>
+        </div>
+      </header>
+
+      <section class="public-recipe__card" aria-live="polite">
+        <p class="section-kicker public-recipe__kicker">${escapeHtml(payload.mealTag || "Gedeeld recept")}</p>
+        <h1 class="public-recipe__title">${escapeHtml(title)}</h1>
+        <p class="public-recipe__sub">${escapeHtml(desc)}</p>
+        <div class="public-recipe__meta">${escapeHtml([payload.time ? "⏱ " + payload.time : "", payload.servings ? "👥 " + payload.servings : ""].filter(Boolean).join(" · "))}</div>
+
+        <div class="public-recipe__grid">
+          <section class="public-recipe__panel" aria-label="Ingrediënten">
+            <h2 class="public-recipe__h2">Ingrediënten</h2>
+            <ul class="public-recipe__list">
+              ${(Array.isArray(payload.ingredients) ? payload.ingredients : [])
+                .slice(0, 80)
+                .map((i) => {
+                  const n = sanitizeText(i?.name || "");
+                  const q = sanitizeText(i?.quantity || "");
+                  const u = sanitizeText(i?.unit || "");
+                  const right = [q, u].filter(Boolean).join(" ").trim();
+                  return `<li><strong>${escapeHtml(n)}</strong>${right ? `<span>${escapeHtml(right)}</span>` : ""}</li>`;
+                })
+                .join("")}
+            </ul>
+          </section>
+
+          <section class="public-recipe__panel" aria-label="Bereiding">
+            <h2 class="public-recipe__h2">Bereiding</h2>
+            <ol class="public-recipe__steps">
+              ${(Array.isArray(payload.instructions) ? payload.instructions : [])
+                .slice(0, 80)
+                .map((s) => `<li>${escapeHtml(s)}</li>`)
+                .join("")}
+            </ol>
+          </section>
+        </div>
+
+        <footer class="public-recipe__footer">
+          <a class="public-recipe__source" href="${escapeHtml(sanitizeText(payload.sourceUrl || "/index.html"))}" target="_blank" rel="noopener noreferrer">Bekijk originele bron</a>
+          <button class="btn-secondary public-recipe__copy" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(location.href)">Link kopiëren</button>
+        </footer>
+      </section>
+    </main>
+  </body>
+</html>`;
+
+      response.writeHead(200, { ...HTTP_HEADERS, "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
+      response.end(html);
+      return;
+    }
+
     if (requestUrl.pathname === "/api/health" && request.method === "GET") {
       sendJson(response, 200, {
         ok: true,
@@ -11662,6 +11780,47 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === "/api/image-proxy" && request.method === "GET") {
       await proxyImage(requestUrl, response);
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/share/create" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const payload = body?.payload && typeof body.payload === "object" ? body.payload : null;
+      if (!payload) {
+        sendJson(response, 400, { ok: false, error: "Missing payload." });
+        return;
+      }
+
+      const safePayload = {
+        v: 1,
+        id: sanitizeText(payload.id || ""),
+        title: sanitizeText(payload.title || "").slice(0, 140),
+        description: sanitizeText(payload.description || "").slice(0, 240),
+        time: sanitizeText(payload.time || "").slice(0, 40),
+        servings: sanitizeText(payload.servings || "").slice(0, 40),
+        mealTag: sanitizeText(payload.mealTag || "").slice(0, 40),
+        image: sanitizeText(payload.image || "").slice(0, 900),
+        sourceUrl: sanitizeText(payload.sourceUrl || "").slice(0, 900),
+        ingredients: Array.isArray(payload.ingredients)
+          ? payload.ingredients.slice(0, 80).map((i) => ({
+              quantity: sanitizeText(i?.quantity || "").slice(0, 40),
+              unit: sanitizeText(i?.unit || "").slice(0, 40),
+              name: sanitizeText(i?.name || "").slice(0, 120),
+            }))
+          : [],
+        instructions: Array.isArray(payload.instructions)
+          ? payload.instructions.slice(0, 80).map((s) => sanitizeText(String(s || "")).slice(0, 500))
+          : [],
+      };
+
+      const token = crypto.randomBytes(5).toString("base64url"); // ~8 chars, URL-safe
+      const db = await loadDatabase();
+      if (!db.shareLinks || typeof db.shareLinks !== "object") db.shareLinks = {};
+      db.shareLinks[token] = { payload: safePayload, createdAt: new Date().toISOString() };
+      await persistDatabase();
+
+      const shareUrl = new URL(`/share/${encodeURIComponent(token)}`, `http://${request.headers.host || "localhost"}`);
+      sendJson(response, 200, { ok: true, token, url: shareUrl.pathname });
       return;
     }
 
