@@ -9403,12 +9403,39 @@ async function bootstrapSession() {
     // Handle announce deep links (/?announce=... or /?new=1)
     handleAnnouncementQueryParams().catch(() => {});
 
+    const signupUrlParams = new URLSearchParams(window.location.search);
+    const wantsRegisterFromUrl =
+      signupUrlParams.get("register") === "1" ||
+      signupUrlParams.get("signup") === "1" ||
+      signupUrlParams.get("aanmelden") === "1";
+
+    const stripSignupParamsFromUrl = () => {
+      try {
+        const next = new URL(window.location.href);
+        let touched = false;
+        ["register", "signup", "aanmelden"].forEach((key) => {
+          if (next.searchParams.has(key)) {
+            next.searchParams.delete(key);
+            touched = true;
+          }
+        });
+        if (touched) {
+          const q = next.searchParams.toString();
+          window.history.replaceState({}, document.title, next.pathname + (q ? `?${q}` : ""));
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+
     // Show auth modal to all unauthenticated users
     // IMPORTANT: Check state.auth.authenticated (from server) NOT cached localStorage
     if (sessionCheckSucceeded && state.auth.authenticated === false) {
-      console.log("📱 User not authenticated, showing login modal");
-      openAuthModal("login");
+      console.log("📱 User not authenticated, showing auth modal");
+      openAuthModal(wantsRegisterFromUrl ? "register" : "login");
+      stripSignupParamsFromUrl();
     } else {
+      if (wantsRegisterFromUrl) stripSignupParamsFromUrl();
       console.log("✅ User is authenticated or session check failed. state.auth.authenticated:", state.auth.authenticated);
       // Show tooltips once per login session
       if (state.auth.authenticated) {
@@ -11950,7 +11977,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.08";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.09";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;

@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#8da485" />
+    <meta
+      name="description"
+      content="Plately — verticale promo voor Instagram Reel. Neem op in portret (9:16) met schermopname."
+    />
+    <title>Plately — Reel</title>
+    <link rel="icon" href="assets/favicon.ico?v=7" sizes="any" />
+    <style>
+      :root {
+        --sage: #8da485;
+        --sage-dark: #5f7359;
+        --peach: #f6b99d;
+        --cream: #fbf7f1;
+        --ink: #1e241c;
+        --muted: rgba(30, 36, 28, 0.72);
+        --card: rgba(255, 253, 249, 0.94);
+        --reel-sec: 28s;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #0f120f;
+        color: var(--ink);
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* Instagram Reel: 9:16 kader, gecentreerd op bredere schermen */
+      .reel-root {
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+          max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      }
+
+      .reel-frame {
+        position: relative;
+        width: min(100vw, calc(100dvh * 9 / 16));
+        height: min(100dvh, calc(100vw * 16 / 9));
+        aspect-ratio: 9 / 16;
+        border-radius: 22px;
+        overflow: hidden;
+        background: var(--cream);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .reel-stage {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .reel-ambient {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(120% 80% at 20% 0%, rgba(141, 164, 133, 0.35), transparent 55%),
+          radial-gradient(90% 70% at 100% 20%, rgba(246, 185, 157, 0.32), transparent 50%),
+          linear-gradient(180deg, #fbf7f1 0%, #eef3ea 100%);
+      }
+
+      .reel-slide {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 28px 22px 88px;
+        text-align: center;
+        opacity: 0;
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      /* Tijdslijn: 5 scenes in één loop (var(--reel-sec)) */
+      .reel-slide--splash {
+        animation: reelSplash var(--reel-sec) ease-in-out infinite;
+      }
+      .reel-slide--logo {
+        animation: reelLogo var(--reel-sec) ease-in-out infinite;
+      }
+      .reel-slide--feat1 {
+        animation: reelFeat1 var(--reel-sec) ease-in-out infinite;
+      }
+      .reel-slide--feat2 {
+        animation: reelFeat2 var(--reel-sec) ease-in-out infinite;
+      }
+      .reel-slide--cta {
+        animation: reelCta var(--reel-sec) ease-in-out infinite;
+      }
+
+      @keyframes reelSplash {
+        0%,
+        2% {
+          opacity: 0;
+          transform: scale(0.96);
+        }
+        4%,
+        11% {
+          opacity: 1;
+          transform: scale(1);
+          z-index: 2;
+        }
+        13%,
+        100% {
+          opacity: 0;
+          transform: scale(1.02);
+          z-index: 0;
+        }
+      }
+      @keyframes reelLogo {
+        0%,
+        12% {
+          opacity: 0;
+        }
+        14%,
+        22% {
+          opacity: 1;
+          z-index: 2;
+        }
+        24%,
+        100% {
+          opacity: 0;
+          z-index: 0;
+        }
+      }
+      @keyframes reelFeat1 {
+        0%,
+        23% {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        25%,
+        40% {
+          opacity: 1;
+          transform: translateY(0);
+          z-index: 2;
+        }
+        42%,
+        100% {
+          opacity: 0;
+          transform: translateY(-6px);
+          z-index: 0;
+        }
+      }
+      @keyframes reelFeat2 {
+        0%,
+        41% {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        43%,
+        58% {
+          opacity: 1;
+          transform: translateY(0);
+          z-index: 2;
+        }
+        60%,
+        100% {
+          opacity: 0;
+          z-index: 0;
+        }
+      }
+      @keyframes reelCta {
+        0%,
+        59% {
+          opacity: 0;
+          transform: scale(0.98);
+        }
+        61%,
+        88% {
+          opacity: 1;
+          transform: scale(1);
+          z-index: 2;
+        }
+        90%,
+        100% {
+          opacity: 0;
+          z-index: 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .reel-slide {
+          animation: none !important;
+          opacity: 0 !important;
+        }
+        .reel-slide--cta {
+          opacity: 1 !important;
+          z-index: 3 !important;
+        }
+      }
+
+      /* Splash: ringen (import-splash-achtig, vereenvoudigd) */
+      .reel-splash__rings {
+        position: relative;
+        width: 120px;
+        height: 120px;
+        margin-bottom: 18px;
+      }
+      .reel-splash__rings span {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2px solid color-mix(in srgb, var(--sage) 45%, transparent);
+        animation: reelRing 2.8s ease-in-out infinite;
+      }
+      .reel-splash__rings span:nth-child(2) {
+        inset: 12px;
+        animation-delay: 0.35s;
+        opacity: 0.75;
+      }
+      .reel-splash__rings span:nth-child(3) {
+        inset: 24px;
+        animation-delay: 0.7s;
+        opacity: 0.55;
+      }
+      @keyframes reelRing {
+        0%,
+        100% {
+          transform: scale(0.92);
+          opacity: 0.5;
+        }
+        50% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      .reel-kicker {
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--sage-dark);
+        margin: 0 0 10px;
+      }
+
+      .reel-title {
+        margin: 0;
+        font-size: clamp(1.55rem, 5.2vw, 1.85rem);
+        font-weight: 850;
+        letter-spacing: -0.04em;
+        line-height: 1.05;
+      }
+
+      .reel-sub {
+        margin: 10px 0 0;
+        max-width: 26ch;
+        font-size: 0.95rem;
+        line-height: 1.45;
+        color: var(--muted);
+        font-weight: 550;
+      }
+
+      .reel-logo-wrap {
+        width: 96px;
+        height: 96px;
+        border-radius: 26px;
+        background: linear-gradient(145deg, rgba(141, 164, 133, 0.35), rgba(246, 185, 157, 0.28));
+        border: 1px solid rgba(141, 164, 133, 0.35);
+        display: grid;
+        place-items: center;
+        margin-bottom: 16px;
+        box-shadow: 0 16px 40px rgba(95, 115, 89, 0.2);
+      }
+      .reel-logo-wrap img {
+        width: 62px;
+        height: 62px;
+        object-fit: contain;
+        display: block;
+      }
+
+      .reel-tagline {
+        margin: 6px 0 0;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .reel-features {
+        width: 100%;
+        max-width: 280px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        text-align: left;
+      }
+
+      .reel-feat {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: var(--card);
+        border: 1px solid rgba(95, 115, 89, 0.12);
+        box-shadow: 0 8px 22px rgba(60, 70, 55, 0.06);
+      }
+      .reel-feat__icon {
+        flex-shrink: 0;
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        background: color-mix(in srgb, var(--sage) 16%, transparent);
+        color: var(--sage-dark);
+      }
+      .reel-feat__icon svg {
+        width: 20px;
+        height: 20px;
+      }
+      .reel-feat__text strong {
+        display: block;
+        font-size: 0.92rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        margin-bottom: 2px;
+      }
+      .reel-feat__text span {
+        font-size: 0.78rem;
+        color: var(--muted);
+        line-height: 1.35;
+        font-weight: 550;
+      }
+
+      .reel-slide--cta .reel-title {
+        font-size: clamp(1.45rem, 4.8vw, 1.7rem);
+      }
+
+      .reel-footer {
+        flex-shrink: 0;
+        padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0));
+        background: linear-gradient(180deg, transparent, rgba(251, 247, 241, 0.92) 18%, rgba(251, 247, 241, 0.98));
+        border-top: 1px solid rgba(95, 115, 89, 0.12);
+        text-align: center;
+      }
+
+      .reel-cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        max-width: 320px;
+        margin: 0 auto;
+        padding: 14px 18px;
+        border-radius: 16px;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+        font: inherit;
+        font-size: 1rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        color: #fff;
+        background: linear-gradient(135deg, var(--sage) 0%, #6d8a66 52%, #4d6348 100%);
+        box-shadow: 0 14px 32px rgba(95, 115, 89, 0.35), 0 1px 0 rgba(255, 255, 255, 0.25) inset;
+      }
+      .reel-cta:active {
+        transform: scale(0.98);
+      }
+
+      .reel-url {
+        margin: 8px 0 0;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+
+      .reel-hint {
+        margin: 10px auto 0;
+        max-width: 34ch;
+        font-size: 0.68rem;
+        line-height: 1.4;
+        color: rgba(30, 36, 28, 0.55);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="reel-root">
+      <div class="reel-frame" role="document" aria-label="Plately promotie voor social media">
+        <div class="reel-stage">
+          <div class="reel-ambient" aria-hidden="true"></div>
+
+          <section class="reel-slide reel-slide--splash" aria-hidden="true">
+            <div class="reel-splash__rings" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </div>
+            <p class="reel-kicker">Nieuw</p>
+            <h1 class="reel-title">Recepten bewaren<br />zoals jij kookt</h1>
+            <p class="reel-sub">Van TikTok, Instagram en je favoriete sites — in één app.</p>
+          </section>
+
+          <section class="reel-slide reel-slide--logo" aria-hidden="true">
+            <div class="reel-logo-wrap">
+              <img src="assets/plately.png" width="128" height="128" alt="Plately" decoding="async" fetchpriority="high" />
+            </div>
+            <h2 class="reel-title">Plately</h2>
+            <p class="reel-tagline">Save it · Cook it · Love it</p>
+            <p class="reel-sub">Jouw persoonlijke plek voor recepten en boodschappen.</p>
+          </section>
+
+          <section class="reel-slide reel-slide--feat1" aria-hidden="true">
+            <p class="reel-kicker">Wat je kunt doen</p>
+            <h2 class="reel-title">Alles bij elkaar</h2>
+            <div class="reel-features" style="margin-top: 14px">
+              <div class="reel-feat">
+                <div class="reel-feat__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </div>
+                <div class="reel-feat__text">
+                  <strong>Importeer recepten</strong>
+                  <span>Plak een link van TikTok, Instagram of een website — titel en ingrediënten worden opgehaald.</span>
+                </div>
+              </div>
+              <div class="reel-feat">
+                <div class="reel-feat__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z" />
+                    <path d="M4 16a4 4 0 0 1 4-4h12" />
+                  </svg>
+                </div>
+                <div class="reel-feat__text">
+                  <strong>Kookboeken</strong>
+                  <span>Bewaar recepten per thema en vind ze snel terug.</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="reel-slide reel-slide--feat2" aria-hidden="true">
+            <p class="reel-kicker">En verder</p>
+            <h2 class="reel-title">Van idee tot mandje</h2>
+            <div class="reel-features" style="margin-top: 14px">
+              <div class="reel-feat">
+                <div class="reel-feat__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <circle cx="10.5" cy="10.5" r="5.5" />
+                    <path d="M16 16l5 5" />
+                  </svg>
+                </div>
+                <div class="reel-feat__text">
+                  <strong>Zoek op kanalen</strong>
+                  <span>Ontdek recepten bij creators en sites die jij volgt.</span>
+                </div>
+              </div>
+              <div class="reel-feat">
+                <div class="reel-feat__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M3 3h2l2.4 12.6a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 2-1.5L22 7H6" />
+                    <circle cx="9" cy="20" r="1.5" />
+                    <circle cx="18" cy="20" r="1.5" />
+                  </svg>
+                </div>
+                <div class="reel-feat__text">
+                  <strong>Boodschappen</strong>
+                  <span>Zet ingrediënten op je lijst — werk je AH-mandje vanuit Plately bij.</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="reel-slide reel-slide--cta" aria-hidden="true">
+            <p class="reel-kicker">Gratis starten</p>
+            <h2 class="reel-title">Meld je aan<br />voor Plately</h2>
+            <p class="reel-sub">Maak een account en bewaar je eerste recepten vandaag nog.</p>
+          </section>
+        </div>
+
+        <footer class="reel-footer">
+          <a id="reelCta" class="reel-cta" href="https://app.plately.nl/?register=1" rel="noopener noreferrer"
+            >Account aanmaken</a
+          >
+          <p class="reel-url" id="reelHost">app.plately.nl</p>
+          <p class="reel-hint">
+            Tip voor Reel: open deze pagina op je telefoon in portret, zet schermopname aan en laat de animatie minstens één keer doorlopen. CTA onderaan blijft tappable.
+          </p>
+        </footer>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var a = document.getElementById("reelCta");
+        var h = document.getElementById("reelHost");
+        try {
+          var o = window.location.origin;
+          if (o && o !== "null" && !/^file:/i.test(o)) {
+            var u = new URL("/", o);
+            u.searchParams.set("register", "1");
+            if (a) a.href = u.toString();
+            if (h) h.textContent = u.host;
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </body>
+</html>
