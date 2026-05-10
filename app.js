@@ -2057,17 +2057,9 @@ function renderBasketPreview() {
   const listEl = document.getElementById("basketSheetList");
   const totalEl = document.getElementById("basketSheetTotal");
   const ctaBtn = document.getElementById("basketSheetCta");
-  const trustEl = document.getElementById("basketSheetTrust");
   if (!preview || !listEl) return;
 
   if (nameEl) nameEl.textContent = preview.recipeTitle || "Boodschappenlijst";
-
-  if (trustEl) {
-    trustEl.textContent =
-      preview.store === "albert-heijn"
-        ? "Elk product komt uit de AH-zoek-API als voorstel. Controleer rood gemarkeerde regels (‘Even controleren’); het totaal is een indicatie vóór je naar ah.nl gaat."
-        : "Supermarktkoppeling zoekt automatisch; controleer de matches en hoeveelheden vóór je afrekent.";
-  }
 
   // Optional/pantry items ("in huis"): informational only and do not include them
   // in the store basket URL/payload.

@@ -422,6 +422,11 @@ function buildIngredientMatchTerms(rawIngredient, normalizedBase) {
     terms.add("yogurt");
   }
 
+  if (/\bgember\b/.test(base) || /\bgember\b/.test(raw) || /\bginger\b/.test(raw)) {
+    terms.add("gember");
+    terms.add("ginger");
+  }
+
   return [...terms].filter(Boolean);
 }
 
@@ -561,6 +566,11 @@ function normalizeIngredientForSearch(raw) {
   if (/\b(rode|gele|witte|zilver)\s*ui\b/.test(t)) return "ui";
   if (/sjalot/.test(t)) return "sjalot";
   if (/lente.?ui/.test(t)) return "lente-ui";
+
+  // 8b. Gember: los zoeken op "gember" treft vaak bier/koek/siroop — duw naar verse knol / poeder expliciet
+  if (/^gember$/.test(t)) return "verse gember";
+  if (/^verse\s+gember$/.test(t)) return "verse gember";
+  if (/\bgemberpoeder\b/.test(t) || /\bgemalen\s+gember\b/.test(t)) return "gemberpoeder";
 
   // 9. Cheese
   if (/\b(parmigiano(?:\s+reggiano)?|parmigiana|parmezaan(?:se)?(?:\s+kaas)?)\b/.test(t))
@@ -2732,6 +2742,10 @@ function mapEnglishIngredientPhraseForNlStore(phrase) {
     ["sour cream", "zure room"],
     ["yogurt", "yoghurt"],
     ["greek yogurt", "griekse yoghurt"],
+    ["ginger", "gember"],
+    ["fresh ginger", "verse gember"],
+    ["ginger root", "verse gember"],
+    ["ground ginger", "gemberpoeder"],
     ["all-purpose flour", "bloem"],
     ["confectioners sugar", "poedersuiker"],
     ["powdered sugar", "poedersuiker"],
@@ -7983,6 +7997,20 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
     const wantsCoconutMilk = /\bkokosmelk\b/.test(baseLower) || /\bkokosmelk\b/.test(rawLower);
     const isPlainRiceQuery = baseLower === "rijst" || /\b(basmati|jasmijn|zilvervlies|volkoren)\s*rijst$/i.test(baseLower);
     const isPlainFlourQuery = baseLower === "bloem" && !/\b(amandel|spelt|volkoren|rijst|haver|kokos|ma[iï]s|tapioca|boekweit)\b/.test(rawLower);
+    const wantsGemberPowder =
+      /\bgemberpoeder\b/.test(baseLower) ||
+      /\bgemalen\s+gember\b/.test(baseLower) ||
+      /\bgemberpoeder\b/.test(rawLower) ||
+      /\bgemalen\s+gember\b/.test(rawLower);
+    const isPlainFreshGemberQuery =
+      !wantsGemberPowder &&
+      (baseLower === "gember" ||
+        baseLower === "verse gember" ||
+        /^verse\s+gember$/i.test(baseLower) ||
+        /^biologisch(?:e)?\s+verse\s+gember$/i.test(baseLower));
+    const isPlainCitroenQuery =
+      (baseLower === "citroen" || baseLower === "citroenen") &&
+      !/\b(sap|sapje|limonade|concentraat|drank|aroma|mix|ijs|tea|thee)\b/.test(rawLower);
 
     const ingredientTokens = tokenizeForMatch(baseLower);
     const produceSynonymTokens = [];
@@ -8192,6 +8220,71 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         if (/\b(patent|tarwe|zelfrijzend)\b/.test(title) && /\bbloem\b/.test(title)) {
           score -= 10;
           adjustments.push({ kind: "bonus", label: "Tarwe-/patentbloem", delta: -10 });
+        }
+      }
+
+      // Gember: verse knol / stuk (recept) vs bier, gebak, siroop, poeder (afzonderlijk pad)
+      if (isPlainFreshGemberQuery) {
+        if (/\b(gemberbier|ginger ale|ginger\s*beer)\b/i.test(title)) {
+          score += 102;
+          adjustments.push({ kind: "penalty", label: "Gemberbier / ginger ale", delta: 102 });
+        }
+        if (/\b(bier|mout)\b/.test(title) && /\bgember\b/.test(title)) {
+          score += 96;
+          adjustments.push({ kind: "penalty", label: "Bier (geen verse gember)", delta: 96 });
+        }
+        if (/\b(koek|koekjes|koeken|speculaas|gebak|cake|biscuit|ontbijtkoek|peperkoek)\b/i.test(title)) {
+          score += 94;
+          adjustments.push({ kind: "penalty", label: "Gebak met gember", delta: 94 });
+        }
+        if (/\b(shot|siroop|likeur|bitter|spray)\b/i.test(title) && /\bgember\b/.test(title)) {
+          score += 86;
+          adjustments.push({ kind: "penalty", label: "Gemberdrank / siroop", delta: 86 });
+        }
+        if (/\b(wijn|liqueur)\b/i.test(title) && /\bgember\b/.test(title)) {
+          score += 92;
+          adjustments.push({ kind: "penalty", label: "Alcohol met gember", delta: 92 });
+        }
+        if (/\bgemberpoeder\b/.test(title) || /\bgemalen\s+gember\b/i.test(title)) {
+          score += 52;
+          adjustments.push({ kind: "penalty", label: "Gemberpoeder (vers gevraagd)", delta: 52 });
+        }
+        if (/\b(ingelegd|sushi)\b/.test(title) && /\bgember\b/.test(title)) {
+          score += 40;
+          adjustments.push({ kind: "penalty", label: "Ingelegde / sushi-gember", delta: 40 });
+        }
+        if (
+          /\b(?:ah\s+)?(?:biologisch\s+)?verse\s+gember\b/i.test(title) ||
+          /\bgember\s*(?:staak|stuk|wortel|knol)\b/i.test(title)
+        ) {
+          score -= 22;
+          adjustments.push({ kind: "bonus", label: "Verse gember (product)", delta: -22 });
+        }
+      }
+      if (wantsGemberPowder) {
+        if (/\bgemberpoeder\b/.test(title) || /\bgemalen\s+gember\b/i.test(title)) {
+          score -= 22;
+          adjustments.push({ kind: "bonus", label: "Gemberpoeder", delta: -22 });
+        }
+        if (
+          /\bverse\b.*\bgember\b/i.test(title) &&
+          !/\bgemberpoeder\b/.test(title) &&
+          !/\bgemalen\b/.test(title)
+        ) {
+          score += 52;
+          adjustments.push({ kind: "penalty", label: "Verse gember i.p.v. poeder", delta: 52 });
+        }
+      }
+
+      // Citroen (hele vrucht): minder sap / limonade / concentraat
+      if (isPlainCitroenQuery) {
+        if (/\b(sap|limonade|fris|concentraat|aroma|mix|cordial|syrop|siroop)\b/i.test(title) && !/\b(verse|vrucht|stuk|eet|pers)\b/i.test(title)) {
+          score += 78;
+          adjustments.push({ kind: "penalty", label: "Citroensap/-drank (geen vrucht)", delta: 78 });
+        }
+        if (/\b(ijs|sorbet|granita)\b/i.test(title) && /\bcitroen\b/i.test(title)) {
+          score += 58;
+          adjustments.push({ kind: "penalty", label: "Citroenijs i.p.v. vrucht", delta: 58 });
         }
       }
 

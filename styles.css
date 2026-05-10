@@ -11436,13 +11436,6 @@ body {
   letter-spacing: 0.06em;
 }
 
-.basket-sheet__trust {
-  margin: 0 0 14px;
-  font-size: 0.73rem;
-  line-height: 1.42;
-  color: #817b72;
-}
-
 .basket-sheet__cta {
   width: 100%;
   background: #00AEEF;
