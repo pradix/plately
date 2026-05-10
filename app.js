@@ -815,16 +815,9 @@ function getInitials(name, email) {
 
 function resetOnboardingPhotoCircle() {
   try {
-    const circle = document.getElementById("onboardingPhotoCircle");
-    const icon = circle?.querySelector?.(".onboarding-photo-icon");
-    if (circle) {
-      circle.style.backgroundImage = "";
-      circle.style.backgroundSize = "";
-      circle.style.backgroundPosition = "";
-    }
-    if (icon instanceof HTMLElement) {
-      icon.style.display = "";
-    }
+    document.getElementById("onboardingAvatarStudio")?.classList.remove("onboarding-avatar-studio--has-photo");
+    const preview = document.getElementById("onboardingPhotoPreview");
+    if (preview) preview.innerHTML = "";
   } catch {
     // ignore
   }
@@ -13560,6 +13553,7 @@ function showOnboarding() {
   renderOnboardingChannels();
   renderOnboardingSupermarkets();
   syncOnboardingProfileUiFromState();
+  bindOnboardingAvatarDropzone();
 }
 
 function showOnboardingStep(step) {
@@ -13588,15 +13582,68 @@ function syncOnboardingProfileUiFromState() {
     if (state.profile.photo) {
       const img = document.createElement("img");
       img.src = state.profile.photo;
-      img.alt = "";
+      img.alt = "Profielfoto";
       img.loading = "lazy";
       preview.appendChild(img);
     }
+  }
+  const avatarStudio = document.getElementById("onboardingAvatarStudio");
+  if (avatarStudio) {
+    avatarStudio.classList.toggle("onboarding-avatar-studio--has-photo", Boolean(state.profile.photo));
   }
   const birth = document.getElementById("onboardingBirthDate");
   if (birth instanceof HTMLInputElement) birth.value = onboardingData.birthDate || "";
   const gender = document.getElementById("onboardingGender");
   if (gender instanceof HTMLSelectElement) gender.value = onboardingData.gender || "";
+}
+
+async function applyOnboardingProfilePhotoFile(file) {
+  if (!(file instanceof File)) return;
+  if (!file.type || !file.type.startsWith("image/")) return;
+  const reader = new FileReader();
+  const dataUrl = await new Promise((resolve) => {
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(file);
+  });
+  if (!dataUrl) return;
+  state.profile.photo = dataUrl;
+  onboardingData.photo = dataUrl;
+  syncOnboardingProfileUiFromState();
+  schedulePersistAppState();
+}
+
+function bindOnboardingAvatarDropzone() {
+  const studio = document.getElementById("onboardingAvatarStudio");
+  const zone = studio?.querySelector(".onboarding-avatar-studio__dropzone");
+  if (!zone || zone.dataset.dragBound === "1") return;
+  zone.dataset.dragBound = "1";
+
+  /** @type {number} */
+  let dragDepth = 0;
+
+  zone.addEventListener("dragenter", (e) => {
+    e.preventDefault();
+    dragDepth += 1;
+    studio?.classList.add("onboarding-avatar-studio--drag");
+  });
+  zone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+  });
+  zone.addEventListener("dragleave", () => {
+    dragDepth -= 1;
+    if (dragDepth <= 0) {
+      dragDepth = 0;
+      studio?.classList.remove("onboarding-avatar-studio--drag");
+    }
+  });
+  zone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dragDepth = 0;
+    studio?.classList.remove("onboarding-avatar-studio--drag");
+    const f = e.dataTransfer?.files?.[0];
+    if (f) void applyOnboardingProfilePhotoFile(f);
+  });
 }
 
 function renderOnboardingChannels() {
@@ -13789,6 +13836,8 @@ bindEvent(document.getElementById("onboardingGender"), "change", (e) => {
 bindEvent(document.getElementById("onboardingPhotoRemove"), "click", () => {
   state.profile.photo = "";
   onboardingData.photo = "";
+  const input = document.getElementById("onboardingPhotoInput");
+  if (input instanceof HTMLInputElement) input.value = "";
   syncOnboardingProfileUiFromState();
   schedulePersistAppState();
 });
@@ -13798,18 +13847,27 @@ bindEvent(document.getElementById("onboardingPhotoInput"), "change", async (e) =
   if (!(input instanceof HTMLInputElement)) return;
   const file = input.files && input.files[0];
   if (!file) return;
-  if (!file.type || !file.type.startsWith("image/")) return;
-  const reader = new FileReader();
-  const dataUrl = await new Promise((resolve) => {
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => resolve("");
-    reader.readAsDataURL(file);
-  });
-  if (!dataUrl) return;
-  state.profile.photo = dataUrl;
-  onboardingData.photo = dataUrl;
-  syncOnboardingProfileUiFromState();
-  schedulePersistAppState();
+  await applyOnboardingProfilePhotoFile(file);
+});
+
+document.addEventListener("paste", (e) => {
+  const onboardingEl = document.getElementById("onboardingScreen");
+  const step1 = document.getElementById("onboardingStep1");
+  if (!onboardingEl?.classList || onboardingEl.classList.contains("hidden")) return;
+  if (!step1 || step1.classList.contains("hidden")) return;
+
+  const items = e.clipboardData?.items;
+  if (!items?.length) return;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.startsWith("image/")) {
+      const f = items[i].getAsFile();
+      if (f) {
+        e.preventDefault();
+        void applyOnboardingProfilePhotoFile(f);
+      }
+      break;
+    }
+  }
 });
 
 // ── Confirm sheet ──────────────────────────────────────────────────────────────
