@@ -8,7 +8,7 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.19.09" />
+    <meta name="plately-build" content="1.0.19.10" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -37,7 +37,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=1.0.19.09" />
+    <link rel="stylesheet" href="styles.css?v=1.0.19.10" />
   </head>
   <body>
     <main class="page">
@@ -2000,37 +2000,40 @@
             <p class="onboarding-subtitle">Optioneel. Leeg laten of een naam kiezen — later altijd aan te passen.</p>
           </div>
 
-          <div class="onboarding-cookbook-card">
-            <div class="onboarding-cookbook-visual" aria-hidden="true">
-              <div class="onboarding-cookbook-visual__spine"></div>
-              <div class="onboarding-cookbook-visual__cover">
-                <div class="onboarding-cookbook-visual__icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <div class="profile2-card onboarding-cookbook-app-card">
+            <div class="onboarding-cookbook-cover-preview">
+              <div class="onboarding-cookbook-cover-preview__wash" aria-hidden="true"></div>
+              <div class="onboarding-cookbook-cover-preview__content">
+                <div class="onboarding-cookbook-cover-preview__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z"/>
                     <path d="M4 16a4 4 0 0 1 4-4h12"/>
                   </svg>
                 </div>
-                <p class="onboarding-cookbook-visual__name" id="onboardingCookbookPreview">Jouw kookboek</p>
+                <p class="onboarding-cookbook-cover-preview__title" id="onboardingCookbookPreview">Jouw kookboek</p>
               </div>
             </div>
+            <div class="profile2-row-divider"></div>
             <div class="onboarding-cookbook-body">
-              <label class="onboarding-cookbook-label" for="onboardingCookbookName">Naam</label>
-              <input
-                id="onboardingCookbookName"
-                class="onboarding-cookbook-input"
-                type="text"
-                maxlength="40"
-                placeholder="Bijv. Favorieten"
-                autocomplete="off"
-              />
+              <div class="profile-subpanel__field">
+                <label class="profile-subpanel__label" for="onboardingCookbookName">Naam kookboek</label>
+                <input
+                  id="onboardingCookbookName"
+                  class="onboarding-cookbook-input"
+                  type="text"
+                  maxlength="40"
+                  placeholder="Bijv. Favorieten of Weekendkoken"
+                  autocomplete="off"
+                />
+              </div>
               <div class="onboarding-cookbook-pills">
                 <span class="onboarding-cookbook-pills__kicker">Snel kiezen</span>
                 <div class="onboarding-suggestion-pills">
-                  <button class="onboarding-suggestion-pill" type="button" data-cookbook-suggest="Favorieten">Favorieten</button>
-                  <button class="onboarding-suggestion-pill" type="button" data-cookbook-suggest="Snel & makkelijk">Snel &amp; makkelijk</button>
-                  <button class="onboarding-suggestion-pill" type="button" data-cookbook-suggest="Weekendkoken">Weekendkoken</button>
-                  <button class="onboarding-suggestion-pill" type="button" data-cookbook-suggest="Bakken">Bakken</button>
-                  <button class="onboarding-suggestion-pill" type="button" data-cookbook-suggest="Vegetarisch">Vegetarisch</button>
+                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Favorieten">Favorieten</button>
+                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Snel & makkelijk">Snel &amp; makkelijk</button>
+                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Weekendkoken">Weekendkoken</button>
+                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Bakken">Bakken</button>
+                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Vegetarisch">Vegetarisch</button>
                 </div>
               </div>
             </div>
@@ -2174,6 +2177,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=1.0.19.09"></script>
+    <script src="app.js?v=1.0.19.10"></script>
   </body>
 </html>

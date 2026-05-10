@@ -7186,9 +7186,9 @@ button.ingredient-item {
   background: rgba(120, 147, 111, 0.1);
 }
 
-/* Onboarding stap 3 — eerste kookboek (strak + visueel) */
+/* Onboarding stap 3 — eerste kookboek (zelfde beeldtaal als kookboek-kaarten op home) */
 .onboarding-step--cookbook {
-  gap: 18px;
+  gap: 20px;
 }
 
 .onboarding-header--cookbook .onboarding-hero-icon {
@@ -7196,6 +7196,13 @@ button.ingredient-item {
   height: 72px;
   border-radius: 20px;
   margin-bottom: 10px;
+}
+
+.onboarding-header--cookbook .onboarding-hero-icon--book {
+  background:
+    radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--color-brand) 35%, transparent), transparent 55%),
+    var(--color-surface);
+  color: var(--color-brand);
 }
 
 .onboarding-header--cookbook .onboarding-hero-icon svg {
@@ -7213,78 +7220,75 @@ button.ingredient-item {
   line-height: 1.42;
 }
 
-.onboarding-cookbook-card {
-  display: grid;
-  grid-template-columns: 1fr;
-  border-radius: var(--radius-4, 18px);
+.onboarding-cookbook-app-card {
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--line);
+}
+
+.onboarding-cookbook-cover-preview {
+  position: relative;
+  width: min(220px, 76%);
+  aspect-ratio: 1 / 1;
+  margin: 16px auto 4px;
+  border-radius: var(--card-radius);
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
+  border: 1px dashed rgba(170, 181, 166, 0.55);
+  background:
+    radial-gradient(circle at 30% 22%, rgba(246, 182, 157, 0.18), transparent 38%),
+    radial-gradient(circle at 72% 78%, rgba(220, 232, 220, 0.72), transparent 42%),
+    color-mix(in srgb, var(--color-surface) 90%, transparent);
   box-shadow: var(--shadow-2);
-  background: var(--color-surface);
 }
 
-@media (min-width: 440px) {
-  .onboarding-cookbook-card {
-    grid-template-columns: minmax(0, 118px) minmax(0, 1fr);
-  }
+.onboarding-cookbook-cover-preview__wash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(141, 164, 133, 0.42), transparent 72%);
+  mix-blend-mode: multiply;
+  opacity: 0.32;
 }
 
-.onboarding-cookbook-visual {
-  display: flex;
-  min-height: 112px;
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, #9b7cc9 22%, var(--color-surface)) 0%,
-    var(--color-surface) 55%,
-    color-mix(in srgb, var(--color-brand) 8%, var(--color-surface)) 100%
-  );
-}
-
-.onboarding-cookbook-visual__spine {
-  width: 13px;
-  flex-shrink: 0;
-  background: linear-gradient(180deg, #5c4678 0%, #9b7cc9 48%, #6b5289 100%);
-  box-shadow: inset -3px 0 6px rgba(0, 0, 0, 0.18);
-}
-
-.onboarding-cookbook-visual__cover {
-  flex: 1;
+.onboarding-cookbook-cover-preview__content {
+  position: relative;
+  z-index: 1;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 14px 10px;
+  gap: 8px;
+  padding: 16px 12px;
   text-align: center;
 }
 
-.onboarding-cookbook-visual__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
-  border: 1px solid color-mix(in srgb, #9b7cc9 35%, transparent);
-  color: #9b7cc9;
-  box-shadow: 0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset;
+.onboarding-cookbook-cover-preview__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-2);
+  display: grid;
+  place-items: center;
+  color: var(--color-brand);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  border: 1px solid rgba(141, 164, 133, 0.38);
+  box-shadow: var(--shadow-1);
 }
 
-.onboarding-cookbook-visual__icon svg {
-  width: 24px;
-  height: 24px;
+.onboarding-cookbook-cover-preview__icon svg {
+  width: 26px;
+  height: 26px;
   display: block;
 }
 
-.onboarding-cookbook-visual__name {
+.onboarding-cookbook-cover-preview__title {
   margin: 0;
-  padding: 0 4px;
+  padding: 0 8px;
   font-family: var(--font-display);
-  font-size: clamp(0.95rem, 3.2vw, 1.08rem);
+  font-size: clamp(0.98rem, 3.4vw, 1.15rem);
   font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
   color: var(--color-text);
   max-width: 100%;
   overflow: hidden;
@@ -7293,30 +7297,25 @@ button.ingredient-item {
 }
 
 .onboarding-cookbook-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px 16px 16px;
+  padding: 4px 0 12px;
   min-width: 0;
 }
 
-.onboarding-cookbook-label {
-  font-size: 0.68rem;
-  font-weight: 750;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
+.onboarding-cookbook-body .profile-subpanel__field {
+  padding-bottom: 2px;
 }
 
 .onboarding-cookbook-input {
+  display: block;
   width: 100%;
   box-sizing: border-box;
-  padding: 13px 14px;
-  border-radius: 14px;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-2);
   border: 1.5px solid var(--color-border);
   background: color-mix(in srgb, var(--color-surface) 96%, var(--color-surface-3));
-  font-size: 1.02rem;
-  font-weight: 650;
+  font-size: 1rem;
+  font-weight: 600;
   font-family: inherit;
   color: var(--color-text);
   outline: none;
@@ -7339,9 +7338,9 @@ button.ingredient-item {
 }
 
 .onboarding-cookbook-pills {
-  margin-top: 4px;
-  padding-top: 12px;
-  border-top: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
+  margin-top: 10px;
+  padding: 14px var(--space-7) 16px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -7356,28 +7355,12 @@ button.ingredient-item {
 }
 
 .onboarding-cookbook-pills .onboarding-suggestion-pills {
-  gap: 6px;
+  gap: 8px;
 }
 
-.onboarding-cookbook-pills .onboarding-suggestion-pill {
-  padding: 7px 12px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 650;
-  border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
-  background: var(--color-surface);
-  color: var(--muted-strong);
-}
-
-.onboarding-cookbook-pills .onboarding-suggestion-pill:hover {
-  border-color: color-mix(in srgb, var(--color-brand) 42%, var(--color-border));
-  background: color-mix(in srgb, var(--color-brand) 7%, var(--color-surface));
-  color: var(--color-text);
-}
-
-.onboarding-cookbook-pills .onboarding-suggestion-pill:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
+/* filter-chip levert de pill-stijl van de app; onboarding-suggestion-pill blijft voor bestaande JS */
+.onboarding-cookbook-pills .onboarding-suggestion-pill.filter-chip {
+  font-size: 0.8rem;
 }
 
 /* Photo upload styling */
