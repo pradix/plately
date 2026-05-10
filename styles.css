@@ -2332,20 +2332,18 @@ button.ingredient-item {
 }
 
 @media (max-width: 767px) {
+  /* Genoeg ruimte onderaan zodat de laatste content (o.a. boodschappenknop) niet achter de tabbar verdwijnt */
   .detail-screen.screen--active {
-    padding-bottom: calc(178px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   }
 
+  /* Knop blijft in de kolom onder ingrediënten + eventueel Slim wisselen (geen zwevende balk) */
   .detail-screen.screen--active .detail-cta {
-    position: fixed;
-    left: max(14px, calc((100vw - 960px) / 2 + 14px));
-    right: max(14px, calc((100vw - 960px) / 2 + 14px));
-    bottom: calc(86px + env(safe-area-inset-bottom, 0px));
-    z-index: 42;
-    width: auto;
-    margin: 0;
-    border-radius: 18px;
-    box-shadow: 0 18px 42px rgba(36, 60, 43, 0.22);
+    position: static;
+    width: 100%;
+    margin-top: 18px;
+    margin-bottom: 8px;
+    box-shadow: 0 8px 22px rgba(36, 60, 43, 0.12);
   }
 }
 
