@@ -1631,14 +1631,12 @@ function openAuthModal(mode = "login") {
   if (mainAuthForm) mainAuthForm.style.display = "";
   if (resetForm) resetForm.classList.add("hidden");
 
-  // Title and subtitle
-  if (authKicker) authKicker.textContent = isRegister ? "Account aanmaken" : "Welkom terug";
+  // Title and subtitle (i18n — keys in translations.json)
+  if (authKicker) authKicker.textContent = isRegister ? t("auth.registerTitle") : t("auth.loginTitle");
 
   const subtitleEl = document.getElementById("authSubtitle");
   if (subtitleEl) {
-    subtitleEl.textContent = isRegister
-      ? "Vul je naam en e-mail in, kies een wachtwoord. Daarna stel je Plately in een paar stappen voor je in."
-      : "Log in om je recepten en lijstjes te bekijken.";
+    subtitleEl.textContent = isRegister ? t("auth.registerSubtitle") : t("auth.loginSubtitle");
   }
 
   if (switchAuthModeButton) {
@@ -1658,7 +1656,7 @@ function openAuthModal(mode = "login") {
   if (forgotPasswordBtn) forgotPasswordBtn.style.display = isRegister ? "none" : "";
 
   // Submit button text
-  if (submitAuthButton) submitAuthButton.textContent = isRegister ? "Account aanmaken" : "Inloggen";
+  if (submitAuthButton) submitAuthButton.textContent = isRegister ? t("auth.submitRegister") : t("auth.submit");
 
   // Clear feedback
   if (authFeedback) authFeedback.textContent = "";
@@ -1674,6 +1672,7 @@ function openAuthModal(mode = "login") {
   }, 100);
 
   syncAppleSignInRowVisibility();
+  applyTranslations();
 }
 
 function closeAuthModal() {
@@ -12709,7 +12708,7 @@ bindEvent(authForm, "submit", async (event) => {
   }
 
   submitAuthButton.disabled = true;
-  submitAuthButton.textContent = state.auth.mode === "register" ? "Account aanmaken..." : "Inloggen...";
+  submitAuthButton.textContent = state.auth.mode === "register" ? t("auth.submitRegisterPending") : t("auth.submitPending");
   if (authFeedback) authFeedback.textContent = "";
 
   try {
@@ -12718,7 +12717,7 @@ bindEvent(authForm, "submit", async (event) => {
     if (authFeedback) authFeedback.textContent = error.message;
   } finally {
     submitAuthButton.disabled = false;
-    submitAuthButton.textContent = state.auth.mode === "register" ? "Account aanmaken" : "Inloggen";
+    submitAuthButton.textContent = state.auth.mode === "register" ? t("auth.submitRegister") : t("auth.submit");
   }
 });
 
