@@ -2917,6 +2917,8 @@ function isChannelSearchEmpty() {
 }
 
 function ensureChannelSearchClosed() {
+  channelSearchAbortController?.abort();
+  channelSearchAbortController = null;
   if (channelSearchSection) channelSearchSection.classList.add("hidden");
   if (channelSearchResults) channelSearchResults.innerHTML = "";
   state.channelSearchQuery = "";
@@ -3881,6 +3883,9 @@ function getSavedImportedRecipes() {
 // ── Channel recipe search ─────────────────────────────────────────────────────
 
 let channelSearchTimeout = null;
+/** Abort lopende /api/channel-search als de gebruiker verder typt of het paneel sluit */
+let channelSearchAbortController = null;
+let importChannelSearchAbortController = null;
 
 function getActiveFollowedSeedChannelIds() {
   // Only seed channels can be toggled; custom channels are passed separately via customChannels param.
@@ -4110,6 +4115,8 @@ function renderChannelFilterChips(results) {
 
 async function searchChannels(query) {
   if (!query || query.trim().length < 2) {
+    channelSearchAbortController?.abort();
+    channelSearchAbortController = null;
     renderChannelSearchResults([]);
     return;
   }
@@ -4118,6 +4125,9 @@ async function searchChannels(query) {
 
   // Skeleton loader: only show if the request isn't instant.
   const requestId = (searchChannels._reqId = (searchChannels._reqId || 0) + 1);
+  channelSearchAbortController?.abort();
+  const abortCtl = new AbortController();
+  channelSearchAbortController = abortCtl;
   let skeletonTimer = null;
   skeletonTimer = setTimeout(() => {
     if (requestId !== searchChannels._reqId) return;
@@ -4163,8 +4173,9 @@ async function searchChannels(query) {
 
     console.log("🔍 Channel search:", { query: query.trim(), channels, url });
 
-    const resp = await fetch(url);
+    const resp = await fetch(url, { signal: abortCtl.signal });
     const data = await resp.json();
+    if (requestId !== searchChannels._reqId) return;
     console.log("✅ Channel search results:", data.results?.length || 0, "results");
     if (data.results && data.results.length > 0) {
       console.log("📦 First result details:", {
@@ -4176,7 +4187,9 @@ async function searchChannels(query) {
     }
     renderChannelSearchResults(data.results || []);
   } catch (error) {
+    if (error?.name === "AbortError") return;
     console.error("❌ Channel search error:", error);
+    if (requestId !== searchChannels._reqId) return;
     renderChannelSearchResults([]);
   } finally {
     if (skeletonTimer) clearTimeout(skeletonTimer);
@@ -4188,14 +4201,19 @@ async function searchChannelsOnImportScreen(query) {
   const results = document.getElementById("importChannelSearchResults");
   const orRow = document.getElementById("importOrRow");
   if (!query || query.trim().length < 2) {
+    importChannelSearchAbortController?.abort();
+    importChannelSearchAbortController = null;
     if (section) section.classList.add("hidden");
     if (orRow) orRow.classList.remove("hidden");
     return;
   }
   state.channelSearchQuery = query.trim();
-  if (section) section.classList.remove("hidden");
   // Skeleton loader: only show if the request isn't instant.
   const requestId = (searchChannelsOnImportScreen._reqId = (searchChannelsOnImportScreen._reqId || 0) + 1);
+  importChannelSearchAbortController?.abort();
+  const importAbortCtl = new AbortController();
+  importChannelSearchAbortController = importAbortCtl;
+  if (section) section.classList.remove("hidden");
   let skeletonTimer = null;
   skeletonTimer = setTimeout(() => {
     if (requestId !== searchChannelsOnImportScreen._reqId) return;
@@ -4237,8 +4255,9 @@ async function searchChannelsOnImportScreen(query) {
     const customChannelsParam = dedupedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
     let url = `/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`;
     if (customChannelsParam) url += `&customChannels=${encodeURIComponent(customChannelsParam)}`;
-    const resp = await fetch(url);
+    const resp = await fetch(url, { signal: importAbortCtl.signal });
     const data = await resp.json();
+    if (requestId !== searchChannelsOnImportScreen._reqId) return;
     const all = data.results || [];
     if (!all.length) {
       if (results) results.innerHTML = `<p class="ch-result__loading">Geen resultaten gevonden.</p>`;
@@ -4279,7 +4298,9 @@ async function searchChannelsOnImportScreen(query) {
       }).join("")}</div>`;
     }
     if (orRow) orRow.classList.remove("hidden");
-  } catch {
+  } catch (err) {
+    if (err?.name === "AbortError") return;
+    if (requestId !== searchChannelsOnImportScreen._reqId) return;
     if (section) section.classList.add("hidden");
     if (orRow) orRow.classList.remove("hidden");
   } finally {

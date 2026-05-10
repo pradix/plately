@@ -9411,8 +9411,9 @@ function isLikelyBlogPage(title, url, description = "") {
 
 // ── In-memory caches ──────────────────────────────────────────────────────────
 // Simple per-process cache to keep channel search snappy for repeated queries.
-// This resets on deploy/restart (fine for our use-case).
-const CHANNEL_SEARCH_CACHE_TTL_MS = 60_000;
+// This resets on deploy/restart (fine for our use-case). Longer TTL = sneller bij herhaalde termen
+// (lege resultaten worden sowieso niet gecached).
+const CHANNEL_SEARCH_CACHE_TTL_MS = 3 * 60_000;
 const CHANNEL_SEARCH_CACHE_MAX_ENTRIES = 250;
 const channelSearchCache = new Map(); // key -> { at:number, results:any[] }
 
