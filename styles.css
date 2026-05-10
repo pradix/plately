@@ -1279,7 +1279,7 @@ img { display: block; max-width: 100%; }
 
 .detail-hero img {
   width: 100%;
-  height: clamp(300px, 54vw, 430px);
+  height: clamp(360px, 62vw, 520px);
   object-fit: cover;
   display: block;
 }
@@ -1288,7 +1288,7 @@ img { display: block; max-width: 100%; }
   content: "";
   position: absolute;
   inset: auto 0 0;
-  height: 38%;
+  height: 44%;
   background: linear-gradient(180deg, rgba(251, 247, 241, 0), rgba(251, 247, 241, 0.96));
   pointer-events: none;
 }
@@ -1773,36 +1773,47 @@ button.ingredient-item {
   padding: 0;
   margin: 0;
   display: grid;
-  gap: 22px;
+  gap: 14px;
 }
 
 .step-item {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 14px;
   align-items: flex-start;
-  padding: 14px;
-  border-radius: 18px;
-  background: rgba(255,255,255,0.72);
+  padding: 18px 18px 20px;
+  border-radius: 22px;
+  background: var(--color-surface);
   border: 1px solid rgba(35,33,30,0.05);
+  box-shadow: 0 1px 3px rgba(36,40,34,0.04);
+  transition: box-shadow 180ms ease, transform 180ms ease;
+  position: relative;
+}
+.step-item:hover { box-shadow: 0 4px 14px rgba(36,40,34,0.06); }
+/* Subtiele active-state als de stap is afgevinkt */
+.step-item:has(.step-index.is-checked) {
+  background: rgba(220, 232, 220, 0.32);
+  border-color: rgba(141, 164, 133, 0.18);
 }
 
 .step-index {
-  width: 28px; height: 28px;
+  width: 36px; height: 36px;
   border-radius: 999px;
   display: grid;
   place-items: center;
   background: #fde3d0;
   color: #342820;
-  font-weight: 900;
-  font-size: 0.85rem;
+  font-weight: 800;
+  font-size: 0.95rem;
   flex: none;
-  margin-top: 2px;
-  border: none;
+  margin-top: 0;
+  border: 2px solid rgba(246, 182, 157, 0.45);
   padding: 0;
   cursor: pointer;
   position: relative;
+  transition: background 180ms ease, transform 160ms ease, border-color 180ms ease;
 }
+.step-index:hover { transform: scale(1.05); }
 
 .step-index__num { display: inline-block; }
 
@@ -1827,9 +1838,10 @@ button.ingredient-item {
 
 .step-copy {
   margin: 0;
-  color: #4a4643;
-  font-size: 0.94rem;
-  line-height: 1.55;
+  color: #2f2c29;
+  font-size: 1rem;
+  line-height: 1.6;
+  font-weight: 400;
 }
 
 /* ── Cookbook detail view ────────────────────────────────────────────────── */
