@@ -409,6 +409,19 @@ function buildIngredientMatchTerms(rawIngredient, normalizedBase) {
     terms.add("cucumber");
   }
 
+  if (
+    (base === "melk" || /^(?:volle|halfvolle|magere)\s+melk$/i.test(base)) &&
+    !/\bkokos|kokosmelk|coconut\b/.test(raw)
+  ) {
+    terms.add("melk");
+    terms.add("milk"); // bilingual AH titles
+  }
+
+  if (/\byoghurts?\b/.test(base) || /\byogurt\b/.test(raw)) {
+    terms.add("yoghurt");
+    terms.add("yogurt");
+  }
+
   return [...terms].filter(Boolean);
 }
 
@@ -2717,6 +2730,8 @@ function mapEnglishIngredientPhraseForNlStore(phrase) {
     ["minced pork", "varkensgehakt"],
     ["heavy cream", "slagroom"],
     ["sour cream", "zure room"],
+    ["yogurt", "yoghurt"],
+    ["greek yogurt", "griekse yoghurt"],
     ["all-purpose flour", "bloem"],
     ["confectioners sugar", "poedersuiker"],
     ["powdered sugar", "poedersuiker"],
@@ -7931,9 +7946,10 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
   const searchTerm = queryOverride || baseTerm;
   try {
     const token = await fetchAHAnonymousToken();
+    const searchSize = Math.min(72, Math.max(count * 3, 24));
     const searchUrl =
       `https://api.ah.nl/mobile-services/product/search/v2` +
-      `?query=${encodeURIComponent(searchTerm)}&size=${Math.max(count * 2, 12)}&sortOn=RELEVANCE`;
+      `?query=${encodeURIComponent(searchTerm)}&size=${searchSize}&sortOn=RELEVANCE`;
 
     const response = await fetch(searchUrl, {
       headers: {
@@ -7960,6 +7976,13 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
     const wantsSaltSnackLike =
       /\b(zoutjes|chips|sticks|noten|gezouten)\b/.test(baseLower) || /\b(zoutjes|chips|sticks|noten|gezouten)\b/.test(rawLower);
     const isPepperQuery = baseLower === "peper" || baseLower === "zwarte peper";
+    const isPlainMilkQuery =
+      baseLower === "melk" ||
+      /^(?:volle|halfvolle|magere)\s+melk$/i.test(baseLower) ||
+      /^biologisch(?:e)?\s+melk$/i.test(baseLower);
+    const wantsCoconutMilk = /\bkokosmelk\b/.test(baseLower) || /\bkokosmelk\b/.test(rawLower);
+    const isPlainRiceQuery = baseLower === "rijst" || /\b(basmati|jasmijn|zilvervlies|volkoren)\s*rijst$/i.test(baseLower);
+    const isPlainFlourQuery = baseLower === "bloem" && !/\b(amandel|spelt|volkoren|rijst|haver|kokos|ma[iï]s|tapioca|boekweit)\b/.test(rawLower);
 
     const ingredientTokens = tokenizeForMatch(baseLower);
     const produceSynonymTokens = [];
@@ -8015,6 +8038,19 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         const delta = -overlap * 18;
         score += delta;
         adjustments.push({ kind: "bonus", label: `Token overlap (${overlap})`, delta });
+      }
+
+      // Phrase hit: whole normalized search term appears inside the product title (strong signal).
+      const fold = (s) =>
+        String(s || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase();
+      const titleFolded = fold(title);
+      const baseFolded = fold(baseLower);
+      if (baseFolded.length >= 3 && titleFolded.includes(baseFolded)) {
+        score -= 28;
+        adjustments.push({ kind: "bonus", label: "Zoekterm in producttitel", delta: -28 });
       }
       // If there is no meaningful token overlap, the title is often only loosely related
       // (e.g. "met basilicum" style flavour variants). Keep these as alternatives, but
@@ -8108,6 +8144,54 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
             score += 55;
             adjustments.push({ kind: "penalty", label: "Gezouten (waarschijnlijk snack)", delta: 55 });
           }
+        }
+      }
+
+      // Dairy: plain "melk" should not become koffiemelk, kokosmelk of gecondenseerde melk.
+      if (isPlainMilkQuery && !wantsCoconutMilk) {
+        if (/\bkoffiemelk\b/.test(title)) {
+          score += 105;
+          adjustments.push({ kind: "penalty", label: "Koffiemelk i.p.v. melk", delta: 105 });
+        }
+        if (/\b(gecondenseerd(?:e)?|condensed|opgeklopte|opkok)\b/.test(title) && /\bmelk\b/.test(title)) {
+          score += 95;
+          adjustments.push({ kind: "penalty", label: "Gecondenseerde/kookmelk i.p.v. drinkmelk", delta: 95 });
+        }
+        if (/\bkokosmelk\b/.test(title)) {
+          score += 85;
+          adjustments.push({ kind: "penalty", label: "Kokosmelk (niet koemelk)", delta: 85 });
+        }
+        if (/\b(amandel(?:drank|-drank)|haver(?:drank|-drank)|soja(?:drank)?|zetmelk)\b/.test(title)) {
+          score += 65;
+          adjustments.push({ kind: "penalty", label: "Plantaardige/zetmelk", delta: 65 });
+        }
+        if (/\b(volle|halfvolle|magere)\s+melk\b/.test(title) || /\bmelk\s+\d/.test(title)) {
+          score -= 12;
+          adjustments.push({ kind: "bonus", label: "Drinkmelk (verpakking)", delta: -12 });
+        }
+      }
+
+      // Rijst: avoid rijstwafels / rijstpapier when user asked for rice.
+      if (isPlainRiceQuery) {
+        if (/\b(rijstwafel|rijstkoek|rijstpapier|rijstnoedel|mihoen)\b/.test(title)) {
+          score += 62;
+          adjustments.push({ kind: "penalty", label: "Rijst-afgeleide (geen losse rijst)", delta: 62 });
+        }
+        if (/\b(basmati|jasmijn|zilvervlies|volkoren|risotto|sushi|pandang)\b/.test(title) && /\brijst\b/.test(title)) {
+          score -= 8;
+          adjustments.push({ kind: "bonus", label: "Rijstvariant in titel", delta: -8 });
+        }
+      }
+
+      // Bloem: default "bloem" is tarwebloem; penalize specialty flours unless named in ingredient.
+      if (isPlainFlourQuery) {
+        if (/\b(amandel|haver|spelt|rijst|kokos|ma[iï]s|tapioca|boekweit|rogge)(?:meel|bloem)\b/.test(title)) {
+          score += 58;
+          adjustments.push({ kind: "penalty", label: "Speciaalmeel (niet tarwebloem)", delta: 58 });
+        }
+        if (/\b(patent|tarwe|zelfrijzend)\b/.test(title) && /\bbloem\b/.test(title)) {
+          score -= 10;
+          adjustments.push({ kind: "bonus", label: "Tarwe-/patentbloem", delta: -10 });
         }
       }
 
@@ -8282,9 +8366,12 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) 
     { tag: "plantaardig", query: `plantaardig ${base}`, count: LABEL_COUNT }
   );
 
+  const matchSeed = sanitizeText(rawBase || base || ingredient || "");
+
   const buckets = await Promise.all(
     variants.map(async (v) => {
-      const products = await findAHProducts(base, v.count || LABEL_COUNT, v.query);
+      // Use raw ingredient text for scorer (baseLower/rawLower nuance); query override stays `v.query`.
+      const products = await findAHProducts(matchSeed, v.count || LABEL_COUNT, v.query);
       return { tag: v.tag, products };
     })
   );
@@ -8294,14 +8381,26 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) 
   for (const bucket of buckets) {
     for (const product of bucket.products) {
       const key = product.id || `${product.name}|${product.imageUrl}`;
+      const pScore = Number(product.matchMeta?.score);
+
       if (!byId.has(key)) {
-        byId.set(key, {
+        const entry = {
           ...product,
           labels: Array.isArray(product.labels) ? [...product.labels] : [],
-        });
+        };
+        if (bucket.tag) entry.labels.push(bucket.tag);
+        byId.set(key, entry);
+        continue;
       }
+
       const entry = byId.get(key);
       if (bucket.tag) entry.labels.push(bucket.tag);
+      if (Number.isFinite(pScore)) {
+        const cur = Number(entry.matchMeta?.score);
+        if (!Number.isFinite(cur) || pScore < cur) {
+          entry.matchMeta = { ...product.matchMeta };
+        }
+      }
     }
   }
 
@@ -8311,11 +8410,17 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) 
     labels: [...new Set(p.labels.map((l) => sanitizeText(l)).filter(Boolean))],
   }));
 
-  // Sort by ascending price so "Meest voordelig" naturally surfaces.
+  const parseAhPriceNum = (p) =>
+    parseFloat(String(p.price || "").replace("€", "").replace(",", ".").trim()) || 9999;
+
+  // Relevance first (lower match score is better), then price — was price-only and picked wrong products.
   merged.sort((a, b) => {
-    const pa = parseFloat(String(a.price || "").replace("€", "").replace(",", ".")) || 9999;
-    const pb = parseFloat(String(b.price || "").replace("€", "").replace(",", ".")) || 9999;
-    return pa - pb;
+    const sa = Number(a.matchMeta?.score);
+    const sb = Number(b.matchMeta?.score);
+    const fa = Number.isFinite(sa) ? sa : 9999;
+    const fb = Number.isFinite(sb) ? sb : 9999;
+    if (fa !== fb) return fa - fb;
+    return parseAhPriceNum(a) - parseAhPriceNum(b);
   });
 
   return merged.slice(0, maxCount);
@@ -11145,11 +11250,16 @@ async function buildStoreBasket(body) {
     const bestScore = finiteScores.length ? Math.min(...finiteScores) : null;
     // "Good match" window: keep relevance primary, then pick cheapest within that window.
     // Score is a distance/penalty where lower is better (can be negative).
-    const cutoff = bestScore === null ? null : Math.min(bestScore + 60, 95);
+    const cutoff = bestScore === null ? null : Math.min(bestScore + 48, 88);
     const good = cutoff === null ? scored : scored.filter((s) => s.score === null || s.score <= cutoff);
 
-    const byPrice = (a, b) => (a.price !== b.price ? a.price - b.price : a.idx - b.idx);
-    const goodSorted = [...good].sort(byPrice);
+    const goodSorted = [...good].sort((a, b) => {
+      const sa = Number.isFinite(a.score) ? a.score : Infinity;
+      const sb = Number.isFinite(b.score) ? b.score : Infinity;
+      if (sa !== sb) return sa - sb;
+      if (a.price !== b.price) return a.price - b.price;
+      return a.idx - b.idx;
+    });
 
     if (prefs?.bio) {
       const bioGood = goodSorted.filter((s) => s.bio);
