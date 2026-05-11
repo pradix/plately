@@ -1858,8 +1858,8 @@
         <!-- Password reset form (hidden, shown when user clicks forgot) -->
         <div class="auth-screen__reset-form hidden" id="passwordResetForm">
           <button class="auth-screen__reset-back" type="button" id="resetFormBack">← Terug</button>
-          <h2 class="auth-screen__title">Wachtwoord resetten</h2>
-          <p class="auth-screen__subtitle">Voer je e-mailadres in om je wachtwoord opnieuw in te stellen.</p>
+          <h2 class="auth-screen__title" data-i18n="auth.resetTitle">Wachtwoord resetten</h2>
+          <p class="auth-screen__subtitle" data-i18n="auth.resetSubtitle">Voer je e-mailadres in om je wachtwoord opnieuw in te stellen.</p>
 
           <form id="resetEmailForm" class="auth-screen__form">
             <div class="auth-field">
@@ -1867,10 +1867,10 @@
               <input class="auth-field__input" id="resetEmail" name="email" type="email" placeholder="jij@voorbeeld.nl" autocomplete="email" required />
             </div>
             <p class="auth-screen__feedback" id="resetFeedback" aria-live="polite"></p>
-            <button class="auth-screen__submit" id="resetSubmitBtn" type="submit">Reset link versturen</button>
+            <button class="auth-screen__submit" id="resetSubmitBtn" type="submit" data-i18n="auth.resetSubmit">Reset link versturen</button>
           </form>
 
-          <p class="auth-screen__reset-note">Je ontvangt een e-mail met een link om je wachtwoord opnieuw in te stellen.</p>
+          <p class="auth-screen__reset-note" data-i18n="auth.resetNote">Je ontvangt een e-mail met een link om je wachtwoord opnieuw in te stellen.</p>
         </div>
 
         <div class="auth-screen__social-buttons" id="authSocialRow">
