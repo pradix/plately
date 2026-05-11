@@ -4461,7 +4461,8 @@ let importChannelSearchAbortController = null;
 /** Tijd na laatste toets voordat de zoekrequest start (lager = sneller na stoppen met typen) */
 const CHANNEL_SEARCH_DEBOUNCE_MS = 100;
 const CHANNEL_SEARCH_SKELETON_MS = 50;
-const IMPORT_CHANNEL_SEARCH_DEBOUNCE_MS = 240;
+/** Import-scherm: zelfde debounce als home zodat resultaten sneller verschijnen na typen. */
+const IMPORT_CHANNEL_SEARCH_DEBOUNCE_MS = 100;
 
 // Client-side cache to avoid repeated network requests and heavy rerenders while typing/backspacing.
 // Short TTL is enough; server also caches, but this makes UI feel instant.
@@ -4526,6 +4527,16 @@ function getActiveFollowedSeedChannelIds() {
  */
 function getSeedChannelIdsForRecipeSearch() {
   return getActiveFollowedSeedChannelIds();
+}
+
+/** Gevolgde custom kanalen die mee mogen in recept-zoek (incl. in behandeling; rejected uitgesloten). */
+function getFollowedCustomChannelsForChannelSearch() {
+  return state.customChannels.filter(
+    (ch) =>
+      state.followedChannelIds.includes(ch.id) &&
+      (ch.status || "approved") !== "rejected" &&
+      isCustomChannelEnabled(ch.id)
+  );
 }
 
 function countActiveFollowedChannels() {
@@ -4853,13 +4864,7 @@ async function searchChannels(query) {
   }, CHANNEL_SEARCH_SKELETON_MS);
   try {
     const channels = getSeedChannelIdsForRecipeSearch().join(",");
-    // Only include approved custom channels in search
-    const followedCustomChannels = state.customChannels.filter(
-      (ch) =>
-        state.followedChannelIds.includes(ch.id) &&
-        (ch.status || "approved") === "approved" &&
-        isCustomChannelEnabled(ch.id)
-    );
+    const followedCustomChannels = getFollowedCustomChannelsForChannelSearch();
     const dedupedCustomChannels = followedCustomChannels.filter((ch) => {
       const seed = findMatchingSeedChannelForUrl(ch.url);
       // Only dedupe when the matching seed exists in zoek-scope (enabled) and zou dubbel zoeken.
@@ -4916,22 +4921,11 @@ async function searchChannelsOnImportScreen(query) {
   const importAbortCtl = new AbortController();
   importChannelSearchAbortController = importAbortCtl;
   if (section) section.classList.remove("hidden");
-  let skeletonTimer = null;
-  skeletonTimer = setTimeout(() => {
-    if (requestId !== searchChannelsOnImportScreen._reqId) return;
-    if (!results) return;
-    results.innerHTML = CHANNEL_SEARCH_SKELETON_MARKUP;
-  }, CHANNEL_SEARCH_SKELETON_MS);
+  if (results) results.innerHTML = CHANNEL_SEARCH_SKELETON_MARKUP;
   if (orRow) orRow.classList.add("hidden");
   try {
     const channels = getSeedChannelIdsForRecipeSearch().join(",");
-    // Only include approved custom channels in search
-    const followedCustomChannels = state.customChannels.filter(
-      (ch) =>
-        state.followedChannelIds.includes(ch.id) &&
-        (ch.status || "approved") === "approved" &&
-        isCustomChannelEnabled(ch.id)
-    );
+    const followedCustomChannels = getFollowedCustomChannelsForChannelSearch();
     const dedupedCustomChannels = followedCustomChannels.filter((ch) => {
       const seed = findMatchingSeedChannelForUrl(ch.url);
       return !(seed && getSeedChannelIdsForRecipeSearch().includes(seed.id));
@@ -4997,8 +4991,6 @@ async function searchChannelsOnImportScreen(query) {
     if (requestId !== searchChannelsOnImportScreen._reqId) return;
     if (section) section.classList.add("hidden");
     if (orRow) orRow.classList.remove("hidden");
-  } finally {
-    if (skeletonTimer) clearTimeout(skeletonTimer);
   }
 }
 
@@ -12076,7 +12068,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.26";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.27";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
@@ -13403,11 +13395,25 @@ if (importSearchInput) {
       if (orRow) orRow.classList.remove("hidden");
       return;
     }
-    // Lightweight placeholder; the real skeleton is handled inside searchChannelsOnImportScreen.
-    if (results) results.innerHTML = `<div style="padding:12px 14px"><div class="skeleton" style="height:12px;width:50%"></div></div>`;
+    if (results) results.innerHTML = CHANNEL_SEARCH_SKELETON_MARKUP;
     if (section) section.classList.remove("hidden");
     if (orRow) orRow.classList.add("hidden");
     importSearchTimeout = setTimeout(() => searchChannelsOnImportScreen(q), IMPORT_CHANNEL_SEARCH_DEBOUNCE_MS);
+  });
+
+  importSearchInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    const q = importSearchInput.value.trim();
+    if (q.length < 2) return;
+    event.preventDefault();
+    clearTimeout(importSearchTimeout);
+    const orRow = document.getElementById("importOrRow");
+    const section = document.getElementById("importChannelSearchSection");
+    const results = document.getElementById("importChannelSearchResults");
+    if (results) results.innerHTML = CHANNEL_SEARCH_SKELETON_MARKUP;
+    if (section) section.classList.remove("hidden");
+    if (orRow) orRow.classList.add("hidden");
+    searchChannelsOnImportScreen(q);
   });
 }
 
