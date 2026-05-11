@@ -3730,6 +3730,58 @@ button.ingredient-item {
   box-shadow: var(--shadow-2);
 }
 
+.home-growth-panel.home-growth-panel--tooltip {
+  position: fixed;
+  z-index: 520; /* above most home content; below onboarding overlay (999x) */
+  margin: 0;
+  max-width: min(420px, calc(100vw - 28px));
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 14px 44px rgba(0,0,0,0.18);
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* arrow up = bubble is below anchor */
+.home-growth-panel.home-growth-panel--tooltip[data-arrow="up"]::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: var(--arrow-x, 50%);
+  transform: translateX(-50%);
+  border: 9px solid transparent;
+  border-top: 0;
+  border-bottom: 9px solid #fff;
+}
+
+/* arrow down = bubble is above anchor */
+.home-growth-panel.home-growth-panel--tooltip[data-arrow="down"]::before {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: var(--arrow-x, 50%);
+  transform: translateX(-50%);
+  border: 9px solid transparent;
+  border-bottom: 0;
+  border-top: 9px solid #fff;
+}
+
+.home-growth-panel.home-growth-panel--tooltip .home-growth-panel__head {
+  margin-bottom: 8px;
+}
+
+.home-growth-panel.home-growth-panel--tooltip .home-growth-panel__dismiss {
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+}
+
+.home-growth-panel.home-growth-panel--tooltip .home-growth-panel__dismiss:hover,
+.home-growth-panel.home-growth-panel--tooltip .home-growth-panel__dismiss:focus-visible {
+  background: color-mix(in srgb, var(--color-brand) 16%, transparent);
+}
+
 .home-growth-panel.hidden {
   display: none;
 }
