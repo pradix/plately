@@ -4553,6 +4553,10 @@ function getChannelImportLoadingMarkup() {
   return `<svg class="spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Plately is bezig...</span>`;
 }
 
+function getInlineSpinnerSvg() {
+  return `<svg class="spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+}
+
 function sanitizeRatingSourceLabel(raw) {
   const s = String(raw ?? "").trim().replace(/[\u0000-\u001f<>]/g, "");
   return s.slice(0, 48);
@@ -11977,7 +11981,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.12";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.13";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
@@ -12970,16 +12974,22 @@ bindEvent(homeImportForm, "submit", async (event) => {
   }
 
   const url = extractUrl(homeImportUrl.value.trim());
+  const captionToggle = document.getElementById("homeImportCaptionToggle");
+  const captionField = document.getElementById("homeImportCaption");
 
   await submitImport(
     url,
-    (document.getElementById("homeImportCaption")?.value || "").trim(),
+    (captionField?.value || "").trim(),
     (message) => {
       homeImportFeedback.textContent = message;
     },
     (isLoading) => {
       homeImportSubmit.disabled = isLoading;
       homeImportSubmit.textContent = isLoading ? "Importeren..." : "Importeer";
+      if (homeImportUrl) homeImportUrl.disabled = isLoading;
+      if (captionToggle) captionToggle.disabled = isLoading;
+      if (captionField) captionField.disabled = isLoading;
+      if (homeImportForm) homeImportForm.setAttribute("aria-busy", String(isLoading));
       if (isLoading) {
         homeImportFeedback.textContent =
           "Import is bezig: titel, ingrediënten en stappen worden opgeschoond...";
@@ -12987,13 +12997,17 @@ bindEvent(homeImportForm, "submit", async (event) => {
     },
     (importedRecipe) => {
       homeImportForm.reset();
-      const captionField = document.getElementById("homeImportCaption");
       if (captionField) {
         captionField.value = "";
         captionField.classList.add("hidden");
+        captionField.disabled = false;
       }
-      const captionToggle = document.getElementById("homeImportCaptionToggle");
-      if (captionToggle) captionToggle.textContent = "+ Voeg beschrijving toe";
+      if (captionToggle) {
+        captionToggle.textContent = "+ Voeg beschrijving toe";
+        captionToggle.disabled = false;
+      }
+      if (homeImportUrl) homeImportUrl.disabled = false;
+      if (homeImportForm) homeImportForm.setAttribute("aria-busy", "false");
       homeImportFeedback.textContent = "Voeg direct een recept toe vanuit social media of een receptenwebsite.";
       openImportReview(importedRecipe.id);
       showToast(`${importedRecipe.title} klaar om na te lopen.`);
@@ -13010,15 +13024,30 @@ bindEvent(importScreenForm, "submit", async (event) => {
   }
 
   const url = extractUrl(importScreenUrl.value.trim());
+  const captionToggle = document.getElementById("importScreenCaptionToggle");
+  const captionField = document.getElementById("importScreenCaption");
+  const idleMarkup = importScreenSubmit?.innerHTML || "";
 
   await submitImport(
     url,
-    (document.getElementById("importScreenCaption")?.value || "").trim(),
+    (captionField?.value || "").trim(),
     (message) => {
       importScreenFeedback.textContent = message;
     },
     (isLoading) => {
       importScreenSubmit.disabled = isLoading;
+      importScreenSubmit.setAttribute("aria-busy", String(isLoading));
+      if (importScreenUrl) importScreenUrl.disabled = isLoading;
+      if (captionToggle) captionToggle.disabled = isLoading;
+      if (captionField) captionField.disabled = isLoading;
+      if (isLoading) {
+        if (!importScreenSubmit.dataset.idleMarkup && idleMarkup) {
+          importScreenSubmit.dataset.idleMarkup = idleMarkup;
+        }
+        importScreenSubmit.innerHTML = getInlineSpinnerSvg();
+      } else {
+        importScreenSubmit.innerHTML = importScreenSubmit.dataset.idleMarkup || idleMarkup || importScreenSubmit.innerHTML;
+      }
       if (isLoading) {
         importScreenFeedback.textContent =
           "Import is bezig: titel, ingrediënten en stappen worden opgeschoond...";
@@ -13026,13 +13055,18 @@ bindEvent(importScreenForm, "submit", async (event) => {
     },
     (importedRecipe) => {
       importScreenForm.reset();
-      const captionField = document.getElementById("importScreenCaption");
       if (captionField) {
         captionField.value = "";
         captionField.classList.add("hidden");
+        captionField.disabled = false;
       }
-      const captionToggle = document.getElementById("importScreenCaptionToggle");
-      if (captionToggle) captionToggle.textContent = "+ Voeg beschrijving toe";
+      if (captionToggle) {
+        captionToggle.textContent = "+ Voeg beschrijving toe";
+        captionToggle.disabled = false;
+      }
+      if (importScreenUrl) importScreenUrl.disabled = false;
+      importScreenSubmit.setAttribute("aria-busy", "false");
+      importScreenSubmit.innerHTML = importScreenSubmit.dataset.idleMarkup || idleMarkup || importScreenSubmit.innerHTML;
       importScreenFeedback.textContent = "Kopieer de link uit de app of website en plak hem hierboven.";
       openImportReview(importedRecipe.id);
       showToast(`${importedRecipe.title} klaar om na te lopen.`);
