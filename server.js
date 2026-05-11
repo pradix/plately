@@ -10267,8 +10267,52 @@ function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam 
   }
   const custom = String(customChannelsParam || "").trim();
   // Bump when API-resultaatscherm wijzigt (bijv. ratingvelden) — oude cache mist die velden.
-  const schema = "cs-v7";
+  const schema = "cs-v8";
   return `${q}||${channels}||${custom}||${schema}`;
+}
+
+/**
+ * Ingelogd: zoek alleen op seed- en customkanalen uit het account (volgen + niet rejected + admin enabled).
+ * Niet ingelogd: queryparameters blijven gelden; seed-IDs worden tegen SEED_CHANNEL_DEFAULTs gevalideerd.
+ */
+async function resolveAllowedChannelSearchForRequest(authUser, channelsParamPresent, channelsParam, customChannelsParamRaw) {
+  if (authUser) {
+    const globalCustom = await getGlobalCustomChannels().catch(() => []);
+    const appState = withGlobalCustomChannels(buildAppStateFromUser(authUser), globalCustom);
+    const channelEnabled = await getChannelEnabledState();
+    const followed = Array.isArray(appState.followedChannelIds)
+      ? appState.followedChannelIds.map((id) => sanitizeText(id)).filter(Boolean)
+      : [];
+    const allowedSeedIds = followed.filter(
+      (id) => Boolean(SEED_CHANNEL_DEFAULTS[id]) && isChannelEnabled("seed", id, channelEnabled)
+    );
+    const customList = (Array.isArray(appState.customChannels) ? appState.customChannels : []).filter((ch) => {
+      const id = sanitizeText(ch?.id || "");
+      if (!id || !followed.includes(id)) return false;
+      if (String(ch?.status || "approved") === "rejected") return false;
+      return isChannelEnabled("custom", id, channelEnabled);
+    });
+    const customChannelsParam = customList
+      .map((ch) => {
+        const id = sanitizeText(ch.id || "");
+        const name = sanitizeText(ch.name || "").slice(0, 80);
+        const url = sanitizeText(ch.url || "").slice(0, 500);
+        if (!id || !name || !url) return "";
+        return `${id}|${name}|${url}`;
+      })
+      .filter(Boolean)
+      .join(",");
+    return { allowedChannels: allowedSeedIds, customChannelsParam };
+  }
+
+  const rawCustom = String(customChannelsParamRaw || "").trim();
+  let allowedChannels = channelsParamPresent
+    ? channelsParam.split(",").map((s) => s.trim()).filter(Boolean)
+    : null;
+  if (Array.isArray(allowedChannels)) {
+    allowedChannels = allowedChannels.filter((id) => Boolean(SEED_CHANNEL_DEFAULTS[sanitizeText(id)]));
+  }
+  return { allowedChannels, customChannelsParam: rawCustom };
 }
 
 function getCachedChannelSearch(key) {
@@ -12016,7 +12060,7 @@ const server = http.createServer(async (request, response) => {
     <meta name="twitter:description" content="${escapeHtml(desc)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
-    <link rel="stylesheet" href="/styles.css?v=1.0.19.27" />
+    <link rel="stylesheet" href="/styles.css?v=1.0.19.28" />
     <script>
       (function () {
         document.addEventListener(
@@ -13167,17 +13211,19 @@ const server = http.createServer(async (request, response) => {
       }
       const channelsParamPresent = requestUrl.searchParams.has("channels");
       const channelsParam = sanitizeText(requestUrl.searchParams.get("channels") || "");
-      // Omitted `channels` → zoek alle seed-bronnen (legacy/dev). Wel `channels=` of `channels=a,b` → exact die set (mag leeg = geen seeds).
-      const allowedChannels = channelsParamPresent
-        ? channelsParam.split(",").map((s) => s.trim()).filter(Boolean)
-        : null;
-      // Handle custom channels
-      const customChannelsParam = requestUrl.searchParams.get("customChannels") || "";
+      const customChannelsRaw = requestUrl.searchParams.get("customChannels") || "";
+
+      const authUser = await getAuthenticatedUser(request).catch(() => null);
+      const { allowedChannels, customChannelsParam } = await resolveAllowedChannelSearchForRequest(
+        authUser,
+        channelsParamPresent,
+        channelsParam,
+        customChannelsRaw
+      );
       const channelOverrides = await getChannelOverrides();
 
       // Analytics: record channel search (best-effort, avoids PII beyond user id)
       if (normalizedForAnalytics) {
-        const authUser = await getAuthenticatedUser(request).catch(() => null);
         await recordEvent("channel_search", authUser?.id || null, { query: normalizedForAnalytics });
       }
 
