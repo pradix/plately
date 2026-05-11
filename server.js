@@ -12167,7 +12167,7 @@ const server = http.createServer(async (request, response) => {
     <meta name="twitter:description" content="${escapeHtml(desc)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
-    <link rel="stylesheet" href="/styles.css?v=1.0.19.32" />
+    <link rel="stylesheet" href="/styles.css?v=1.0.19.33" />
     <script>
       (function () {
         document.addEventListener(
@@ -14296,6 +14296,7 @@ const server = http.createServer(async (request, response) => {
             recent: [],
             userInsights: null,
             funnel: null,
+            extraStats: null,
           };
           return sendJson(response, 200, {
             ok: true,
@@ -14666,6 +14667,48 @@ const server = http.createServer(async (request, response) => {
         const gh = groceryHistRes.rows[0] || {};
         const funnelRow = funnelRes.rows[0] || {};
 
+        const extraStatsRes = await pool.query(
+          `
+          SELECT
+            (SELECT COUNT(*)::int FROM (
+              SELECT DISTINCT user_id FROM plately_events
+              WHERE user_id IS NOT NULL AND created_at >= NOW() - INTERVAL '24 hours'
+            ) z) AS dau_logged_in,
+            (SELECT COUNT(*)::int FROM (
+              SELECT DISTINCT user_id FROM plately_events
+              WHERE user_id IS NOT NULL AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
+            ) z2) AS wau_logged_in_window,
+            (SELECT COUNT(*)::int FROM plately_users WHERE updated_at >= NOW() - INTERVAL '24 hours') AS profiles_touched_24h,
+            (SELECT COUNT(*)::int FROM plately_users WHERE updated_at >= NOW() - ($1::int * INTERVAL '1 day')) AS profiles_touched_window,
+            (SELECT COUNT(*)::int FROM plately_users WHERE updated_at < NOW() - INTERVAL '90 days') AS dormant_accounts_90d,
+            (SELECT COALESCE(SUM(COALESCE(jsonb_array_length(COALESCE(app_state, '{}'::jsonb)->'importedRecipes'), 0)), 0)::bigint FROM plately_users) AS total_recipe_slots,
+            (SELECT COALESCE(SUM(COALESCE(jsonb_array_length(COALESCE(app_state, '{}'::jsonb)->'cookbooks'), 0)), 0)::bigint FROM plately_users) AS total_cookbook_slots,
+            (SELECT COUNT(*)::int FROM plately_users
+              WHERE COALESCE(jsonb_array_length(COALESCE(app_state, '{}'::jsonb)->'importedRecipes'), 0) >= 1) AS users_with_recipes,
+            (SELECT COALESCE(SUM(COALESCE(jsonb_array_length(COALESCE(app_state, '{}'::jsonb)->'followedChannelIds'), 0)), 0)::bigint FROM plately_users) AS total_followed_channel_slots,
+            (SELECT COUNT(*)::int FROM plately_users
+              WHERE COALESCE(jsonb_array_length(COALESCE(app_state, '{}'::jsonb)->'followedChannelIds'), 0) >= 1) AS users_following_any,
+            (SELECT COALESCE(SUM(COALESCE(jsonb_array_length(COALESCE(app_state, '{}'::jsonb)->'customChannels'), 0)), 0)::bigint FROM plately_users) AS total_custom_channel_slots,
+            (SELECT COUNT(*)::int FROM plately_users
+              WHERE COALESCE(jsonb_array_length(COALESCE(app_state, '{}'::jsonb)->'customChannels'), 0) >= 1) AS users_with_custom_channels,
+            (SELECT COALESCE((
+              SELECT n_live_tup::bigint FROM pg_stat_all_tables
+              WHERE schemaname = 'public' AND relname = 'plately_events'
+              LIMIT 1
+            ), 0)) AS events_rows_estimate,
+            (SELECT COUNT(*) FILTER (WHERE type = 'client_import_success' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_import_success,
+            (SELECT COUNT(*) FILTER (WHERE type = 'client_recipe_detail_view' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_recipe_detail_views,
+            (SELECT COUNT(*) FILTER (WHERE type = 'client_kookstand' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_kookstand,
+            (SELECT COUNT(*) FILTER (WHERE type = 'client_ah_basket_open' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_ah_basket_open,
+            (SELECT COUNT(*) FILTER (WHERE type = 'client_grocery_add' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_grocery_add,
+            (SELECT COUNT(*) FILTER (WHERE type = 'client_cookbook_save' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_cookbook_save,
+            (SELECT COUNT(*) FILTER (WHERE type = 'client_import_review_saved' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_import_review_saved,
+            (SELECT COUNT(*) FILTER (WHERE type = 'client_recipe_deleted' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_recipe_deleted
+          `,
+          [activityDays]
+        );
+        const ex = extraStatsRes.rows[0] || {};
+
         return sendJson(response, 200, {
           ok: true,
           analytics: {
@@ -14732,6 +14775,30 @@ const server = http.createServer(async (request, response) => {
                 cohortSignups: Number(funnelRow.signups) || 0,
                 importInFirstWeek: Number(funnelRow.did_import) || 0,
                 savedReviewInFirstWeek: Number(funnelRow.did_save) || 0,
+              },
+              extraStats: {
+                primaryWindowDays: activityDays,
+                dauLoggedIn: Number(ex.dau_logged_in) || 0,
+                wauLoggedInWindow: Number(ex.wau_logged_in_window) || 0,
+                profilesTouched24h: Number(ex.profiles_touched_24h) || 0,
+                profilesTouchedWindow: Number(ex.profiles_touched_window) || 0,
+                dormantAccounts90d: Number(ex.dormant_accounts_90d) || 0,
+                totalRecipeSlots: Number(ex.total_recipe_slots) || 0,
+                totalCookbookSlots: Number(ex.total_cookbook_slots) || 0,
+                usersWithRecipes: Number(ex.users_with_recipes) || 0,
+                totalFollowedChannelSlots: Number(ex.total_followed_channel_slots) || 0,
+                usersFollowingAny: Number(ex.users_following_any) || 0,
+                totalCustomChannelSlots: Number(ex.total_custom_channel_slots) || 0,
+                usersWithCustomChannels: Number(ex.users_with_custom_channels) || 0,
+                eventsRowsEstimate: Number(ex.events_rows_estimate) || 0,
+                clientImportSuccess: Number(ex.client_import_success) || 0,
+                clientRecipeDetailViews: Number(ex.client_recipe_detail_views) || 0,
+                clientKookstand: Number(ex.client_kookstand) || 0,
+                clientAhBasketOpen: Number(ex.client_ah_basket_open) || 0,
+                clientGroceryAdd: Number(ex.client_grocery_add) || 0,
+                clientCookbookSave: Number(ex.client_cookbook_save) || 0,
+                clientImportReviewSaved: Number(ex.client_import_review_saved) || 0,
+                clientRecipeDeleted: Number(ex.client_recipe_deleted) || 0,
               },
               userInsights: {
                 newUsers7d: ur.new_users_7d || 0,

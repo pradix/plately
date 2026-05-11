@@ -1082,6 +1082,16 @@
               <div class="stat-label">Conversie t.o.v. cohort</div>
             </div>
           </div>
+
+          <h3 class="subhead" style="font-size:12px;margin:18px 0 6px">Extra statistieken</h3>
+          <p class="muted" id="actExtraStatsHint" style="margin:0 0 12px;font-size:11px;line-height:1.45"></p>
+          <div class="stats-grid" style="margin:0 0 10px" id="actExtraEngagementGrid"></div>
+          <div class="stats-grid" style="margin:0 0 12px" id="actExtraDataGrid"></div>
+          <div class="admin-activity-panel" style="margin-bottom:16px">
+            <h3 class="subhead" id="actExtraClientTitle">Client-functies (primair venster)</h3>
+            <div class="stats-grid" style="margin:0" id="actExtraClientGrid"></div>
+          </div>
+
           <div class="admin-activity-panels">
             <div class="admin-activity-panel">
               <h3 class="subhead" id="actSignupTitle">Nieuwe accounts per dag</h3>
@@ -1867,6 +1877,62 @@
             : fn ? "0% import · 0% save" : "—"
         );
         setText("actFunnelCohortLbl", `Nieuwe accounts (laatste ${p}d)`);
+
+        const ex = activity.extraStats;
+        const hintEl = document.getElementById("actExtraStatsHint");
+        if (hintEl) {
+          hintEl.textContent = ex
+            ? `DAU = unieke ingelogde users met minstens één event in de laatste 24 uur. “Users met event” = distinct user_id in het primair venster (${p} dagen). Profiel bijgewerkt = updated_at op plately_users. Event-rijen ≈ schatting uit pg_stat (periodiek bijgewerkt).`
+            : "";
+        }
+        const actExtraClientTitle = document.getElementById("actExtraClientTitle");
+        if (actExtraClientTitle) actExtraClientTitle.textContent = `Client-functies (${p}d)`;
+        const cardStat = (label, val) =>
+          `<div class="stat-card"><div class="stat-value">${formatNumber(val)}</div><div class="stat-label">${escapeHtml(
+            label
+          )}</div></div>`;
+        const eg = document.getElementById("actExtraEngagementGrid");
+        const dg = document.getElementById("actExtraDataGrid");
+        const cg = document.getElementById("actExtraClientGrid");
+        if (eg) {
+          eg.innerHTML = ex
+            ? [
+                cardStat("DAU (ingelogd, 24u)", ex.dauLoggedIn ?? 0),
+                cardStat(`Users met event (${p}d)`, ex.wauLoggedInWindow ?? 0),
+                cardStat("Profiel bijgewerkt (24u)", ex.profilesTouched24h ?? 0),
+                cardStat(`Profiel bijgewerkt (${p}d)`, ex.profilesTouchedWindow ?? 0),
+                cardStat("Account inactief 90d+", ex.dormantAccounts90d ?? 0),
+              ].join("")
+            : "";
+        }
+        if (dg) {
+          dg.innerHTML = ex
+            ? [
+                cardStat("Totaal recept-slots (Σ)", ex.totalRecipeSlots ?? 0),
+                cardStat("Totaal kookboeken (Σ)", ex.totalCookbookSlots ?? 0),
+                cardStat("Accounts met ≥1 recept", ex.usersWithRecipes ?? 0),
+                cardStat("Σ gevolgde kanalen", ex.totalFollowedChannelSlots ?? 0),
+                cardStat("Accounts met ≥1 kanaal", ex.usersFollowingAny ?? 0),
+                cardStat("Σ custom-kanalen", ex.totalCustomChannelSlots ?? 0),
+                cardStat("Accounts met custom", ex.usersWithCustomChannels ?? 0),
+                cardStat("≈ rijen event-log", ex.eventsRowsEstimate ?? 0),
+              ].join("")
+            : "";
+        }
+        if (cg) {
+          cg.innerHTML = ex
+            ? [
+                cardStat("Import gelukt (client)", ex.clientImportSuccess ?? 0),
+                cardStat("Recept-detail views", ex.clientRecipeDetailViews ?? 0),
+                cardStat("Kookstand", ex.clientKookstand ?? 0),
+                cardStat("AH mand geopend", ex.clientAhBasketOpen ?? 0),
+                cardStat("Boodschappen toegevoegd", ex.clientGroceryAdd ?? 0),
+                cardStat("Kookboek opgeslagen", ex.clientCookbookSave ?? 0),
+                cardStat("Import-review opgeslagen", ex.clientImportReviewSaved ?? 0),
+                cardStat("Recept verwijderd", ex.clientRecipeDeleted ?? 0),
+              ].join("")
+            : "";
+        }
 
         const signupBars = document.getElementById("actSignupBars");
         if (signupBars) {
