@@ -6013,6 +6013,29 @@ button.ingredient-item {
   text-align: center;
 }
 
+/* Make “Account aanmaken” more prominent on login */
+.auth-screen[data-auth-mode="login"] #switchToRegisterButton.auth-screen__alt-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-brand) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 22%, var(--color-border));
+  color: var(--color-brand);
+  text-decoration: none;
+  font-weight: 750;
+  box-shadow: var(--shadow-1);
+}
+
+.auth-screen[data-auth-mode="login"] #switchToRegisterButton.auth-screen__alt-link:hover,
+.auth-screen[data-auth-mode="login"] #switchToRegisterButton.auth-screen__alt-link:focus-visible {
+  background: color-mix(in srgb, var(--color-brand) 18%, transparent);
+  border-color: color-mix(in srgb, var(--color-brand) 34%, var(--color-border));
+  color: var(--color-text);
+}
+
 .auth-screen__alt-link {
   display: inline;
   margin: 0;
@@ -6306,12 +6329,21 @@ button.ingredient-item {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0;
-  margin-top: 4px;
+  gap: 10px;
+  margin-top: 14px;
   max-width: 320px;
   margin-left: auto;
   margin-right: auto;
   width: 100%;
+}
+
+.auth-screen__social-kicker {
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .auth-screen__ig-follow {

@@ -121,7 +121,7 @@
     "auth.resetSubmit": "Resetlink versturen",
     "auth.resetNote": "We sturen je een e-mail met een veilige resetlink.",
     "auth.followUsDivider": "Volg ons",
-    "auth.followInstagram": "Volg ons op Instagram",
+    "auth.followInstagram": "Instagram",
     "auth.followInstagramAria": "Open Instagram-profiel van Plately in een nieuw tabblad",
 
     "onboarding.step1": "Stap 1: Kanalen",
@@ -288,7 +288,7 @@
     "auth.resetSubmit": "Send reset link",
     "auth.resetNote": "We’ll email you a secure reset link.",
     "auth.followUsDivider": "Follow us",
-    "auth.followInstagram": "Follow us on Instagram",
+    "auth.followInstagram": "Instagram",
     "auth.followInstagramAria": "Open Plately’s Instagram profile in a new tab",
 
     "onboarding.step1": "Step 1: Channels",
