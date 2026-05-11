@@ -5573,26 +5573,20 @@ function renderRecipeGrid() {
     const isNewUser = getSavedImportedRecipes().length === 0 && !isSearching && !state.activeCookbookFilter;
 
     if (isNewUser && state.auth.authenticated) {
-      // New authenticated user - show import prompt
+      // New authenticated user: use the same "add recipe" card style as Recent.
       recipeGrid.innerHTML = `
-        <div class="home-empty-state home-empty-state--welcome">
-          <div class="home-empty-state__icon">
-            <svg viewBox="0 0 48 48" aria-hidden="true" fill="none"><circle cx="24" cy="24" r="22" stroke="currentColor" stroke-width="1.5" opacity=".18"/><path d="M16 30c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="20" cy="20" r="2" fill="currentColor"/><circle cx="28" cy="20" r="2" fill="currentColor"/><path d="M24 10v4M10 24h4M34 24h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          </div>
-          <h3 class="home-empty-state__title">Welkom bij Plately 👋</h3>
-          <p class="home-empty-state__text">Importeer een recept van internet en begin je collectie</p>
-          <div class="home-empty-state__actions home-empty-state__actions--solo">
-          <button class="primary-button home-empty-state__action" type="button" id="homeImportFirstRecipeBtn">Importeer recept</button>
-          </div>
+        <div style="grid-column:1/-1; display:flex; justify-content:center;">
+          <button class="recent-card recent-card--add" type="button" id="addRecipeCard" style="width:min(360px, 100%);">
+            <div class="recent-card__add-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            </div>
+            <div class="recent-card__body">
+              <p class="recent-card__title">Recept toevoegen</p>
+              <p class="recent-card__meta">Importeer via link</p>
+            </div>
+          </button>
         </div>
       `;
-      bindEvent(document.getElementById("homeImportFirstRecipeBtn"), "click", () => {
-        if (!state.auth.authenticated) {
-          openAuthModal("login");
-          return;
-        }
-        switchView("import");
-      });
     } else if (isNewUser) {
       // Unauthenticated user - hide empty state, show nothing
       recipeGrid.innerHTML = "";
@@ -12082,7 +12076,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.23";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.24";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
