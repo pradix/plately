@@ -8254,6 +8254,11 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       (baseLower === "citroen" || baseLower === "citroenen") &&
       !/\b(sap|sapje|limonade|concentraat|drank|aroma|mix|ijs|tea|thee)\b/.test(rawLower);
 
+    // Spice intent: when user asks for a spice, avoid snacks/drinks/supplements becoming the default.
+    const isSpiceLikeQuery =
+      /\b(kurkuma|turmeric|komijn|djinten|cumin|kaneel|cinnamon|paprika(?:poeder)?|chilipoeder|chili\s*poeder|chili|cayenne|kerrie|currypoeder|curry\s*poeder|garam\s*masala|ras\s*el\s*hanout|za atar|za'atar|sumak|nootmuskaat|kruidnagel|kardemom|piment|anijs)\b/.test(baseLower) ||
+      /\b(kurkuma|turmeric|komijn|djinten|cumin|kaneel|cinnamon|paprika(?:poeder)?|chilipoeder|chili\s*poeder|cayenne|kerrie|currypoeder|curry\s*poeder|garam\s*masala|ras\s*el\s*hanout|sumak|nootmuskaat|kruidnagel|kardemom|piment|anijs)\b/.test(rawLower);
+
     const isTurmericQuery =
       /\bkurkuma\b/.test(baseLower) ||
       /\bturmeric\b/.test(baseLower) ||
@@ -8442,6 +8447,35 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         if (!/\bkurkuma\b/.test(title) && !/\bturmeric\b/.test(title)) {
           score += 75;
           adjustments.push({ kind: "penalty", label: "Geen kurkuma in titel", delta: 75 });
+        }
+      }
+
+      // Specerijen algemeen: voorkom dat (super)shots, drank, snoep of koekjes als default gekozen worden.
+      if (isSpiceLikeQuery) {
+        if (/\b(shot|super\s*shot|gember\s*shot|wellness|boost|immune|immunity|vitamine|supplement|capsule|tabletten|drank|sap|sapje|smoothie|juice|thee|tea|latte|koffie|coffee)\b/.test(title)) {
+          score += 85;
+          adjustments.push({ kind: "penalty", label: "Specerij ≠ drank/shot/supplement", delta: 85 });
+        }
+        if (/\b(pepernoot|pepernoten|kruidnoot|kruidnoten|pepermunt|drop|snoep|chocolade|koek|koeken|cake|gebak|ijs|toetje|dessert|reep)\b/.test(title)) {
+          score += 95;
+          adjustments.push({ kind: "penalty", label: "Specerij ≠ zoet/snack", delta: 95 });
+        }
+        // Prefer spice containers / ground spices.
+        if (/\b(poeder|gemalen|kruiden|specerij|specerijen)\b/.test(title)) {
+          score -= 10;
+          adjustments.push({ kind: "bonus", label: "Specerij-verpakking", delta: -10 });
+        }
+      }
+
+      // Pepper ("peper") should not match pepernoten/pepermunt.
+      if (isPepperQuery) {
+        if (/\b(pepernoot|pepernoten|kruidnoot|kruidnoten|pepermunt)\b/.test(title)) {
+          score += 120;
+          adjustments.push({ kind: "penalty", label: "Peper ≠ pepernoten/pepermunt", delta: 120 });
+        }
+        if (/\b(zwarte\s+peper|peper)\b/.test(title) && /\b(poeder|gemalen|molen|korrel|bolletjes)\b/.test(title)) {
+          score -= 12;
+          adjustments.push({ kind: "bonus", label: "Peper als specerij", delta: -12 });
         }
       }
 
@@ -11982,7 +12016,7 @@ const server = http.createServer(async (request, response) => {
     <meta name="twitter:description" content="${escapeHtml(desc)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
-    <link rel="stylesheet" href="/styles.css?v=1.0.19.16" />
+    <link rel="stylesheet" href="/styles.css?v=1.0.19.17" />
     <script>
       (function () {
         document.addEventListener(
