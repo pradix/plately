@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plately — deploy status</title>
+  <style>
+    :root {
+      --bg: #0f1210;
+      --panel: #1a1f1c;
+      --text: #e8eee9;
+      --muted: rgba(232, 238, 233, 0.62);
+      --accent: #8da485;
+      --border: rgba(255, 255, 255, 0.08);
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      padding: 28px 18px 48px;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 1.35rem; font-weight: 650; margin: 0 0 6px; letter-spacing: -0.02em; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 22px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 14px;
+    }
+    .card h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+    dl { margin: 0; display: grid; grid-template-columns: minmax(120px, 34%) 1fr; gap: 10px 14px; font-size: 0.92rem; }
+    dt { color: var(--muted); margin: 0; }
+    dd { margin: 0; word-break: break-word; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.86rem; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: rgba(141, 164, 133, 0.18); color: var(--accent); font-size: 0.8rem; }
+    .err { color: #f0a8a8; }
+    .log { font-size: 0.82rem; color: var(--muted); margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Deploy status</h1>
+    <p class="sub">Laatste build op deze server · Render / Git · alleen beschikbaar op toegestane omgevingen (zoals beta).</p>
+    <div id="status" class="card">
+      <h2>Laden</h2>
+      <p class="muted" style="margin:0">Bezig met ophalen van <code class="mono">/api/deploy-info</code>…</p>
+    </div>
+    <p class="log" id="fetchedAt"></p>
+  </div>
+  <script>
+    function esc(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+    function fmtUptime(sec) {
+      const s = Number(sec) || 0;
+      const d = Math.floor(s / 86400);
+      const h = Math.floor((s % 86400) / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const r = s % 60;
+      const parts = [];
+      if (d) parts.push(d + "d");
+      if (h || d) parts.push(h + "u");
+      parts.push(m + "m " + r + "s");
+      return parts.join(" ");
+    }
+    async function run() {
+      const el = document.getElementById("status");
+      const ft = document.getElementById("fetchedAt");
+      try {
+        const res = await fetch("/api/deploy-info", { credentials: "same-origin" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          el.innerHTML =
+            '<h2>Fout</h2><p class="err">' + esc(data.error || "Kon deploy-info niet laden (" + res.status + ").") + "</p>";
+          return;
+        }
+        const r = data.render || {};
+        const commit = r.gitCommit || "—";
+        const branch = r.gitBranch || "—";
+        const commitLink = r.commitUrl
+          ? '<a href="' + esc(r.commitUrl) + '" target="_blank" rel="noopener">' + esc(commit.slice(0, 12)) + (commit.length > 12 ? "…" : "") + "</a>"
+          : '<span class="mono">' + esc(commit) + "</span>";
+        el.innerHTML =
+          '<h2>Git &amp; Render</h2><dl>' +
+          "<dt>Branch</dt><dd><span class=\"mono\">" +
+          esc(branch) +
+          "</span></dd>" +
+          "<dt>Commit</dt><dd>" +
+          commitLink +
+          "</dd>" +
+          "<dt>Service</dt><dd>" +
+          esc(r.serviceName || "—") +
+          "</dd>" +
+          "<dt>Externe URL</dt><dd>" +
+          (r.externalUrl ? '<a href="' + esc(r.externalUrl) + '">' + esc(r.externalUrl) + "</a>" : "—") +
+          "</dd></dl>" +
+          '<h2 style="margin-top:18px">Bundle &amp; runtime</h2><dl>' +
+          "<dt>Client build</dt><dd><span class=\"pill mono\">" +
+          esc(data.clientBuild || "—") +
+          "</span> <span class=\"muted\">(plately-build uit index.html)</span></dd>" +
+          "<dt>Node omgeving</dt><dd>" +
+          esc(data.nodeEnv || "—") +
+          "</dd>" +
+          "<dt>Proces gestart</dt><dd class=\"mono\">" +
+          esc(data.serverBootedAt || "—") +
+          "</dd>" +
+          "<dt>Uptime</dt><dd>" +
+          esc(fmtUptime(data.uptimeSeconds)) +
+          "</dd>" +
+          "<dt>PostgreSQL</dt><dd>" +
+          (data.database && data.database.postgresEnabled ? "aan" : "uit") +
+          "</dd></dl>";
+        if (ft) {
+          ft.textContent =
+            "Opgevraagd: " +
+            new Date().toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "medium" }) +
+            " · endpoint blijft JSON ook bruikbaar voor monitoring.";
+        }
+      } catch (e) {
+        el.innerHTML = '<h2>Fout</h2><p class="err">' + esc(e.message) + "</p>";
+      }
+    }
+    run();
+  </script>
+</body>
+</html>

@@ -7,6 +7,39 @@ const crypto = require("node:crypto");
 
 const ROOT_DIR = __dirname;
 
+/** ISO tijd bij start Node-proces (voor deploy-status / logs). */
+const SERVER_BOOT_AT_ISO = new Date().toISOString();
+/** `plately-build` uit index.html (lezen bij boot). */
+let CACHED_PLATELY_BUILD_META = "";
+try {
+  const idx = fs.readFileSync(path.join(ROOT_DIR, "index.html"), "utf8");
+  const m = idx.match(/name=["']plately-build["']\s+content=["']([^"']+)["']/i);
+  if (m) CACHED_PLATELY_BUILD_META = m[1].trim();
+} catch (_) {
+  // ignore
+}
+
+function hostnameOnly(hostHeader) {
+  return String(hostHeader || "").split(":")[0].trim().toLowerCase();
+}
+
+/**
+ * HTML deploy-log alleen op beta / expliciet toegestane hosts (niet op productie-app domein).
+ * Zet PLATELY_DEPLOY_STATUS_PAGE=1 om overal toe te staan, of PLATELY_DEPLOY_STATUS_HOSTS=host1,host2
+ */
+function isDeployStatusHtmlAllowed(hostHeader) {
+  if (String(process.env.PLATELY_DEPLOY_STATUS_PAGE || "").trim() === "1") return true;
+  const host = hostnameOnly(hostHeader);
+  const extras = String(process.env.PLATELY_DEPLOY_STATUS_HOSTS || "")
+    .split(/[,;]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (extras.includes(host)) return true;
+  if (host === "beta.plately.nl") return true;
+  if (process.env.NODE_ENV !== "production") return true;
+  return false;
+}
+
 function computeDefaultDataDir() {
   if (process.env.DATA_DIR) return path.resolve(process.env.DATA_DIR);
   if (process.env.NODE_ENV === "production") return "/data";
@@ -12173,6 +12206,51 @@ const server = http.createServer(async (request, response) => {
           website: { configured: true },
         },
       });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/deploy-info" && request.method === "GET") {
+      const commit = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.GIT_SHA || "").trim();
+      const branch = String(process.env.RENDER_GIT_BRANCH || process.env.GIT_BRANCH || "").trim();
+      const repoSlug = String(process.env.PLATELY_SOURCE_REPO || "pradix/plately")
+        .trim()
+        .replace(/^github\.com\//i, "")
+        .replace(/^\//, "");
+      const safeRepo = repoSlug.includes("/") ? repoSlug : "pradix/plately";
+      const commitUrl =
+        commit && /^[a-f0-9]{7,40}$/i.test(commit) ? `https://github.com/${safeRepo}/commit/${commit}` : "";
+      sendJson(response, 200, {
+        ok: true,
+        clientBuild: CACHED_PLATELY_BUILD_META,
+        serverBootedAt: SERVER_BOOT_AT_ISO,
+        uptimeSeconds: Math.floor(process.uptime()),
+        nodeEnv: process.env.NODE_ENV || "development",
+        render: {
+          serviceName: String(process.env.RENDER_SERVICE_NAME || "").trim(),
+          externalUrl: String(process.env.RENDER_EXTERNAL_URL || "").trim(),
+          gitCommit: commit,
+          gitBranch: branch,
+          commitUrl,
+        },
+        database: { postgresEnabled: isPostgresEnabled() },
+      });
+      return;
+    }
+
+    if (
+      (requestUrl.pathname === "/deploy-status.html" || requestUrl.pathname === "/deploy-status") &&
+      request.method === "GET"
+    ) {
+      if (!isDeployStatusHtmlAllowed(request.headers.host || "")) {
+        sendJson(response, 404, { error: "Not found." });
+        return;
+      }
+      if (requestUrl.pathname === "/deploy-status") {
+        response.writeHead(302, { Location: "/deploy-status.html", ...HTTP_HEADERS });
+        response.end();
+        return;
+      }
+      await serveStaticFile("/deploy-status.html", response);
       return;
     }
 

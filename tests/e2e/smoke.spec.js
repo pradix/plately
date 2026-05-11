@@ -11,6 +11,15 @@ test.describe("Plately smoke", () => {
     expect(res.ok()).toBeTruthy();
   });
 
+  test("GET /api/deploy-info responds", async ({ request }) => {
+    const res = await request.get("/api/deploy-info");
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.ok).toBeTruthy();
+    expect(body).toHaveProperty("render");
+    expect(body).toHaveProperty("uptimeSeconds");
+  });
+
   test("POST /api/import returns a usable recipe payload", async ({ request }) => {
     test.setTimeout(150_000);
     const res = await request.post("/api/import", {

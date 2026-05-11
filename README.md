@@ -15,6 +15,7 @@ Productieklare basis voor de eerste online versie van Plately:
 - `render.yaml` voor deploy op Render
 - Node `PORT` support
 - health endpoint: `/api/health`
+- deploy-info JSON: `/api/deploy-info` (Git/Render/uptime); op **beta** ook pagina `/deploy-status.html` (zie `.env.example`: `PLATELY_DEPLOY_STATUS_*`)
 - basis cache headers voor static files
 - server-side sessie + profielopslag
 - optionele Postgres accounts + login
