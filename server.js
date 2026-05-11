@@ -8254,6 +8254,12 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       (baseLower === "citroen" || baseLower === "citroenen") &&
       !/\b(sap|sapje|limonade|concentraat|drank|aroma|mix|ijs|tea|thee)\b/.test(rawLower);
 
+    const isTurmericQuery =
+      /\bkurkuma\b/.test(baseLower) ||
+      /\bturmeric\b/.test(baseLower) ||
+      /\bkurkuma\b/.test(rawLower) ||
+      /\bturmeric\b/.test(rawLower);
+
     const isFreshHerbQuery =
       /^(?:biologisch\s+)?(?:verse\s+)?(koriander|peterselie|basilicum|munt|dille|bieslook)\b/.test(baseLower) ||
       /\bvers(?:e)?\s+(koriander|peterselie|basilicum|munt|dille|bieslook)\b/.test(rawLower);
@@ -8419,6 +8425,23 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         if (/\b(eieren|ei)\b/.test(title)) {
           score -= 16;
           adjustments.push({ kind: "bonus", label: "Ei in titel", delta: -16 });
+        }
+      }
+
+      // Turmeric (kurkuma): prefer spice powder, avoid shots/drinks/supplements.
+      if (isTurmericQuery) {
+        if (/\b(shot|super\s*shot|gember\s*shot|wellness|boost|immune|immunity|vitamine|supplement|capsule|tabletten|drank|sap|smoothie|juice)\b/.test(title)) {
+          score += 95;
+          adjustments.push({ kind: "penalty", label: "Kurkuma ≠ shot/drank/supplement", delta: 95 });
+        }
+        if (/\b(poeder|gemalen|kruiden|specerij|specerijen)\b/.test(title)) {
+          score -= 20;
+          adjustments.push({ kind: "bonus", label: "Kurkuma als specerij", delta: -20 });
+        }
+        // When the title doesn't clearly mention kurkuma, downrank heavily.
+        if (!/\bkurkuma\b/.test(title) && !/\bturmeric\b/.test(title)) {
+          score += 75;
+          adjustments.push({ kind: "penalty", label: "Geen kurkuma in titel", delta: 75 });
         }
       }
 
@@ -11959,7 +11982,7 @@ const server = http.createServer(async (request, response) => {
     <meta name="twitter:description" content="${escapeHtml(desc)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
-    <link rel="stylesheet" href="/styles.css?v=1.0.19.15" />
+    <link rel="stylesheet" href="/styles.css?v=1.0.19.16" />
     <script>
       (function () {
         document.addEventListener(
