@@ -9702,6 +9702,66 @@ button.ingredient-item {
   box-shadow: 0 14px 28px rgba(26, 32, 48, 0.22);
 }
 
+/* ── Offline banner ── */
+.offline-banner {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(calc(100% - 28px), 520px);
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, rgba(35, 33, 30, 0.92) 92%, transparent);
+  color: #fffdf8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: 0 12px 26px rgba(22, 24, 20, 0.2);
+  z-index: 420;
+}
+
+.offline-banner__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff6b6b;
+  box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.18);
+  flex: 0 0 auto;
+}
+
+.offline-banner__text {
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.offline-banner__btn {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.86rem;
+  font-weight: 750;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.offline-banner__btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.offline-banner__btn:focus-visible {
+  outline: 2px solid rgba(200, 230, 200, 0.95);
+  outline-offset: 2px;
+}
+
 @media (min-width: 900px) {
   .detail-hero img { height: 300px; }
 }

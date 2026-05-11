@@ -905,6 +905,7 @@ async function loadTranslations() {
   }
   // Apply once translations are ready (prevents showing raw keys).
   applyTranslations();
+syncOfflineBanner();
 }
 
 function t(key, fallback = '') {
@@ -1017,6 +1018,44 @@ const modal = document.getElementById("importModal");
 const toast = document.getElementById("toast");
 const toastText = document.getElementById("toastText");
 const toastUndo = document.getElementById("toastUndo");
+const offlineBanner = document.getElementById("offlineBanner");
+const offlineBannerText = document.getElementById("offlineBannerText");
+const offlineBannerRetry = document.getElementById("offlineBannerRetry");
+
+let pendingRetryAction = null;
+function setPendingRetryAction(fn) {
+  pendingRetryAction = typeof fn === "function" ? fn : null;
+  if (offlineBannerRetry) {
+    offlineBannerRetry.classList.toggle("hidden", !pendingRetryAction);
+    offlineBannerRetry.disabled = !pendingRetryAction || navigator.onLine;
+  }
+}
+
+function syncOfflineBanner() {
+  if (!offlineBanner) return;
+  const isOffline = !navigator.onLine;
+  offlineBanner.classList.toggle("hidden", !isOffline);
+  if (offlineBannerText) offlineBannerText.textContent = "Geen internetverbinding";
+  if (offlineBannerRetry) offlineBannerRetry.disabled = navigator.onLine;
+}
+
+window.addEventListener("online", () => {
+  syncOfflineBanner();
+  if (offlineBannerRetry) offlineBannerRetry.disabled = false;
+});
+window.addEventListener("offline", () => {
+  syncOfflineBanner();
+});
+
+bindEvent(offlineBannerRetry, "click", () => {
+  if (!navigator.onLine) {
+    showToast("Nog offline. Check je verbinding.", { variant: "info" });
+    return;
+  }
+  const fn = pendingRetryAction;
+  setPendingRetryAction(null);
+  if (typeof fn === "function") fn();
+});
 const importForm = document.getElementById("importForm");
 const importFeedback = document.getElementById("importFeedback");
 const quickRecipeGrid = document.getElementById("quickRecipeGrid");
@@ -8401,6 +8440,17 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
     showToast("Voeg eerst ingrediënten toe aan je lijst.", { variant: "info" });
     return;
   }
+  if (!navigator.onLine) {
+    const storeConfig = getStoreConfig(storeSlug);
+    const storeName = storeConfig.label;
+    showToast(`Geen internet. ${storeName} kan niet laden.`, {
+      variant: "error",
+      undoLabel: "Opnieuw",
+      onUndo: () => openStoreBasket(storeSlug),
+    });
+    setPendingRetryAction(() => openStoreBasket(storeSlug));
+    return;
+  }
 
   const storeConfig = getStoreConfig(storeSlug);
   const storeName = storeConfig.label;
@@ -8481,8 +8531,17 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
     } catch {
       // ignore
     }
-  } catch {
-    showToast(`Kon ${storeName} niet voorbereiden.`, { variant: "error" });
+  } catch (err) {
+    if (!navigator.onLine) {
+      showToast(`Geen internet. ${storeName} kan niet laden.`, {
+        variant: "error",
+        undoLabel: "Opnieuw",
+        onUndo: () => openStoreBasket(storeSlug),
+      });
+      setPendingRetryAction(() => openStoreBasket(storeSlug));
+    } else {
+      showToast(`Kon ${storeName} niet voorbereiden.`, { variant: "error" });
+    }
   } finally {
     button.disabled = false;
     if (destLabel) {
@@ -10145,6 +10204,16 @@ function hideImportSplash() {
 }
 
 async function submitImport(url, note, setFeedback, setLoading, onDone) {
+  if (!navigator.onLine) {
+    setFeedback("Je bent offline. Maak verbinding en probeer opnieuw.");
+    showToast("Geen internet. Import kan niet starten.", {
+      variant: "error",
+      undoLabel: "Opnieuw",
+      onUndo: () => submitImport(url, note, setFeedback, setLoading, onDone),
+    });
+    setPendingRetryAction(() => submitImport(url, note, setFeedback, setLoading, onDone));
+    return;
+  }
   if (!validateUrl(url)) {
     setFeedback("Gebruik een geldige TikTok-, Instagram- of website-link.");
     return;
@@ -10286,7 +10355,16 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
   } catch (error) {
     const message = normalizeUiErrorMessage(error?.message || "");
     setFeedback(message);
-    showToast(message.trim() || "Importeren mislukt.", { variant: "error" });
+    if (!navigator.onLine) {
+      showToast("Geen internet. Probeer opnieuw zodra je verbinding hebt.", {
+        variant: "error",
+        undoLabel: "Opnieuw",
+        onUndo: () => submitImport(url, note, setFeedback, setLoading, onDone),
+      });
+      setPendingRetryAction(() => submitImport(url, note, setFeedback, setLoading, onDone));
+    } else {
+      showToast(message.trim() || "Importeren mislukt.", { variant: "error" });
+    }
   } finally {
     setLoading(false);
     hideImportSplash();
@@ -11981,7 +12059,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.13";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.14";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
