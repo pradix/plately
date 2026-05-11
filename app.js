@@ -690,6 +690,7 @@ const CLIENT_TRACK_ALLOWED = new Set([
   "client_channel_search_import",
   "client_import_review_saved",
   "client_recipe_deleted",
+  "client_recipe_detail_view",
 ]);
 const __clientEventQueue = [];
 let __clientEventFlushTimer = null;
@@ -3818,6 +3819,10 @@ function switchView(view, opts = {}) {
 
   if (state.session.ready && view !== prevView) {
     trackClientEvent("client_navigation", { view, from: prevView });
+  }
+  if (state.session.ready && state.auth.authenticated && view === "detail" && view !== prevView) {
+    const rid = String(state.selectedRecipeId || "").trim();
+    if (rid) trackClientEvent("client_recipe_detail_view", { rid: rid.slice(-14) });
   }
 }
 
@@ -12068,7 +12073,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.29";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.30";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;

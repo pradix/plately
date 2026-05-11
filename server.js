@@ -7830,6 +7830,7 @@ const CLIENT_INGEST_EVENT_TYPES = new Set([
   "client_channel_search_import",
   "client_import_review_saved",
   "client_recipe_deleted",
+  "client_recipe_detail_view",
 ]);
 
 const clientIngestBudget = new Map();
@@ -12060,7 +12061,7 @@ const server = http.createServer(async (request, response) => {
     <meta name="twitter:description" content="${escapeHtml(desc)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
-    <link rel="stylesheet" href="/styles.css?v=1.0.19.29" />
+    <link rel="stylesheet" href="/styles.css?v=1.0.19.30" />
     <script>
       (function () {
         document.addEventListener(
@@ -12884,6 +12885,7 @@ const server = http.createServer(async (request, response) => {
       }
 
       const token = await createAuthSession(response, user.id);
+      void recordEvent(isNew ? "auth_register_apple" : "auth_login_apple", user.id, { isNew: Boolean(isNew) });
       sendJson(response, 200, {
         ok: true,
         isNewUser: isNew,
@@ -12920,6 +12922,7 @@ const server = http.createServer(async (request, response) => {
 
         const createdUser = await createPostgresUser(email, password, body.currentState || {});
         const token = await createAuthSession(response, createdUser.id);
+        void recordEvent("auth_register", createdUser.id, { method: "password" });
         sendJson(response, 200, {
           ok: true,
           user: buildAppStateFromUser(createdUser),
@@ -12992,6 +12995,7 @@ const server = http.createServer(async (request, response) => {
         }
 
         const token = await createAuthSession(response, user.id);
+        void recordEvent("auth_login", user.id, { method: "password" });
         sendJson(response, 200, {
           ok: true,
           user: buildAppStateFromUser(user),
@@ -14139,6 +14143,7 @@ const server = http.createServer(async (request, response) => {
             importPlatforms7d: [],
             importHosts7d: [],
             recent: [],
+            userInsights: null,
           };
           return sendJson(response, 200, {
             ok: true,
@@ -14359,7 +14364,75 @@ const server = http.createServer(async (request, response) => {
           `),
         ]);
 
+        const [
+          userRollupsRes,
+          signupDaily14dRes,
+          recipeHistRes,
+          groceryHistRes,
+          superRes,
+          importDistinctUsers7dRes,
+          authTypes30dRes,
+        ] = await Promise.all([
+          pool.query(`
+            SELECT
+              SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 ELSE 0 END)::int AS new_users_7d,
+              SUM(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END)::int AS new_users_30d,
+              SUM(CASE WHEN created_at < NOW() - INTERVAL '7 days' AND updated_at >= NOW() - INTERVAL '7 days' THEN 1 ELSE 0 END)::int AS returning_active_7d,
+              COUNT(*)::int AS total_accounts
+            FROM plately_users
+          `),
+          pool.query(`
+            SELECT date_trunc('day', created_at) AS day, COUNT(*)::int AS count
+            FROM plately_users
+            WHERE created_at >= NOW() - INTERVAL '14 days'
+            GROUP BY 1
+            ORDER BY 1 ASC
+          `),
+          pool.query(`
+            SELECT
+              SUM(CASE WHEN COALESCE(jsonb_array_length(app_state->'importedRecipes'), 0) = 0 THEN 1 ELSE 0 END)::int AS b0,
+              SUM(CASE WHEN COALESCE(jsonb_array_length(app_state->'importedRecipes'), 0) BETWEEN 1 AND 5 THEN 1 ELSE 0 END)::int AS b1_5,
+              SUM(CASE WHEN COALESCE(jsonb_array_length(app_state->'importedRecipes'), 0) BETWEEN 6 AND 20 THEN 1 ELSE 0 END)::int AS b6_20,
+              SUM(CASE WHEN COALESCE(jsonb_array_length(app_state->'importedRecipes'), 0) > 20 THEN 1 ELSE 0 END)::int AS b21p
+            FROM plately_users
+          `),
+          pool.query(`
+            SELECT
+              SUM(CASE WHEN COALESCE(jsonb_array_length(app_state->'groceryItems'), 0) = 0 THEN 1 ELSE 0 END)::int AS g0,
+              SUM(CASE WHEN COALESCE(jsonb_array_length(app_state->'groceryItems'), 0) BETWEEN 1 AND 8 THEN 1 ELSE 0 END)::int AS g1_8,
+              SUM(CASE WHEN COALESCE(jsonb_array_length(app_state->'groceryItems'), 0) BETWEEN 9 AND 24 THEN 1 ELSE 0 END)::int AS g9_24,
+              SUM(CASE WHEN COALESCE(jsonb_array_length(app_state->'groceryItems'), 0) > 24 THEN 1 ELSE 0 END)::int AS g25p
+            FROM plately_users
+          `),
+          pool.query(`
+            SELECT COALESCE(NULLIF(LOWER(TRIM(profile->>'favoriteSupermarket')), ''), '(niet gezet)') AS sm, COUNT(*)::int AS count
+            FROM plately_users
+            GROUP BY 1
+            ORDER BY count DESC
+            LIMIT 14
+          `),
+          pool.query(`
+            SELECT COUNT(DISTINCT user_id)::int AS n
+            FROM plately_events
+            WHERE type = 'import'
+              AND user_id IS NOT NULL
+              AND created_at >= NOW() - INTERVAL '7 days'
+          `),
+          pool.query(`
+            SELECT type, COUNT(*)::int AS count
+            FROM plately_events
+            WHERE type LIKE 'auth_%'
+              AND created_at >= NOW() - INTERVAL '30 days'
+            GROUP BY type
+            ORDER BY count DESC
+            LIMIT 20
+          `),
+        ]);
+
         const vol = eventsVolumeRes.rows[0] || {};
+        const ur = userRollupsRes.rows[0] || {};
+        const rh = recipeHistRes.rows[0] || {};
+        const gh = groceryHistRes.rows[0] || {};
 
         return sendJson(response, 200, {
           ok: true,
@@ -14420,11 +14493,77 @@ const server = http.createServer(async (request, response) => {
                 created_at: r.created_at,
                 meta: r.meta && typeof r.meta === "object" ? r.meta : {},
               })),
+              userInsights: {
+                newUsers7d: ur.new_users_7d || 0,
+                newUsers30d: ur.new_users_30d || 0,
+                returningActive7d: ur.returning_active_7d || 0,
+                totalAccounts: ur.total_accounts || 0,
+                signupDaily14d: (signupDaily14dRes.rows || []).map((r) => ({ day: r.day, count: r.count || 0 })),
+                recipeBuckets: {
+                  zero: rh.b0 || 0,
+                  oneToFive: rh.b1_5 || 0,
+                  sixToTwenty: rh.b6_20 || 0,
+                  twentyOnePlus: rh.b21p || 0,
+                },
+                groceryBuckets: {
+                  zero: gh.g0 || 0,
+                  oneToEight: gh.g1_8 || 0,
+                  nineToTwentyFour: gh.g9_24 || 0,
+                  twentyFivePlus: gh.g25p || 0,
+                },
+                favoriteSupermarket: (superRes.rows || []).map((r) => ({
+                  key: r.sm || "",
+                  count: r.count || 0,
+                })),
+                distinctUsersWithImport7d: importDistinctUsers7dRes.rows[0]?.n || 0,
+                authEvents30d: (authTypes30dRes.rows || []).map((r) => ({
+                  type: r.type,
+                  count: r.count || 0,
+                })),
+              },
             },
           },
         });
       } catch (error) {
         console.error("❌ Error in /api/admin/analytics:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/user-events" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        if (!isPostgresEnabled()) {
+          return sendJson(response, 200, { ok: true, events: [] });
+        }
+        const userId = sanitizeText(requestUrl.searchParams.get("userId") || "");
+        const limitRaw = Number.parseInt(String(requestUrl.searchParams.get("limit") || "100"), 10);
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 250) : 100;
+        if (!userId) {
+          return sendJson(response, 400, { ok: false, error: "userId required" });
+        }
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        const ev = await pool.query(
+          `
+          SELECT type, meta, created_at
+          FROM plately_events
+          WHERE user_id = $1
+          ORDER BY created_at DESC
+          LIMIT $2
+          `,
+          [userId, limit]
+        );
+        return sendJson(response, 200, {
+          ok: true,
+          events: (ev.rows || []).map((r) => ({
+            type: r.type,
+            created_at: r.created_at,
+            meta: r.meta && typeof r.meta === "object" ? r.meta : {},
+          })),
+        });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/user-events:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
       }
     }

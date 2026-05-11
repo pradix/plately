@@ -990,7 +990,7 @@
         <div class="section" id="activitySection">
           <div class="section-header">
             <h2>Activiteit in de app</h2>
-            <div class="muted">Client-events (UI) + server-events (import, zoeken, kanaal-zoek). Uitgebreid over 24u / 7d / 30d. Alleen met PostgreSQL.</div>
+            <div class="muted">Client-events, server-events, account-statistieken (histogrammen, aanmeldingen, auth) en gebruikers-eventlog. PostgreSQL vereist.</div>
           </div>
           <div class="stats-grid" style="margin:0 0 14px">
             <div class="stat-card">
@@ -1017,6 +1017,56 @@
               <div class="stat-value" id="actActors7d">—</div>
               <div class="stat-label">Unieke actors (7d)</div>
             </div>
+          </div>
+
+          <hr class="divider" style="margin:16px 0" />
+          <h3 class="subhead" style="font-size:12px">Gebruikers &amp; accounts (plately_users + auth-events)</h3>
+          <div class="stats-grid" style="margin:0 0 12px">
+            <div class="stat-card">
+              <div class="stat-value" id="actTotalAccounts">—</div>
+              <div class="stat-label">Accounts totaal</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="actNewUsers7d">—</div>
+              <div class="stat-label">Nieuw (7d)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="actNewUsers30d">—</div>
+              <div class="stat-label">Nieuw (30d)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="actReturning7d">—</div>
+              <div class="stat-label">Terugkerend actief (7d)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="actDistinctImportUsers7d">—</div>
+              <div class="stat-label">Unieke importeurs (7d)</div>
+            </div>
+          </div>
+          <div class="admin-activity-panels">
+            <div class="admin-activity-panel">
+              <h3 class="subhead">Nieuwe accounts per dag (14d)</h3>
+              <div id="actSignupBars"></div>
+            </div>
+            <div class="admin-activity-panel">
+              <h3 class="subhead">Auth-events (30d)</h3>
+              <div class="muted" style="margin:-4px 0 8px;font-size:11px">Server: login, registratie, Apple.</div>
+              <div id="actAuthEvents30d"></div>
+            </div>
+          </div>
+          <div class="admin-activity-panels">
+            <div class="admin-activity-panel">
+              <h3 class="subhead">Recepten per account (histogram)</h3>
+              <div id="actRecipeBuckets"></div>
+            </div>
+            <div class="admin-activity-panel">
+              <h3 class="subhead">Boodschappenlijst per account</h3>
+              <div id="actGroceryBuckets"></div>
+            </div>
+          </div>
+          <div class="admin-activity-panel" style="margin-bottom:16px">
+            <h3 class="subhead">Favoriete supermarkt (profiel)</h3>
+            <div id="actSupermarkets"></div>
           </div>
 
           <div class="admin-activity-panels">
@@ -1647,6 +1697,65 @@
         setText("actServer7dKpi", formatNumber(activity.serverEvents7d ?? 0));
         setText("actActors7d", formatNumber(activity.uniqueActors7d ?? 0));
 
+        const ui = activity.userInsights;
+        const hasUi = ui && typeof ui === "object";
+        setText("actTotalAccounts", hasUi ? formatNumber(ui.totalAccounts ?? 0) : "—");
+        setText("actNewUsers7d", hasUi ? formatNumber(ui.newUsers7d ?? 0) : "—");
+        setText("actNewUsers30d", hasUi ? formatNumber(ui.newUsers30d ?? 0) : "—");
+        setText("actReturning7d", hasUi ? formatNumber(ui.returningActive7d ?? 0) : "—");
+        setText("actDistinctImportUsers7d", hasUi ? formatNumber(ui.distinctUsersWithImport7d ?? 0) : "—");
+
+        const signupBars = document.getElementById("actSignupBars");
+        if (signupBars) {
+          signupBars.innerHTML = hasUi
+            ? activitySparkHtml(ui.signupDaily14d || [], "count", "day", 96)
+            : `<p class="muted">Alleen met PostgreSQL.</p>`;
+        }
+        const authEv = document.getElementById("actAuthEvents30d");
+        if (authEv) {
+          const rows = hasUi && Array.isArray(ui.authEvents30d) ? ui.authEvents30d : [];
+          authEv.innerHTML = rows.length
+            ? `<table class="users-table"><thead><tr><th>type</th><th style="text-align:right">30d</th></tr></thead><tbody>${rows
+                .map(
+                  (r) =>
+                    `<tr><td><code>${escapeHtml(String(r.type || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
+                )
+                .join("")}</tbody></table>`
+            : `<p class="muted">Nog geen auth-events (of JSON-modus).</p>`;
+        }
+        const rb = document.getElementById("actRecipeBuckets");
+        if (rb && hasUi && ui.recipeBuckets) {
+          const b = ui.recipeBuckets;
+          rb.innerHTML = `<table class="users-table"><tbody>
+            <tr><td>0 recepten</td><td style="text-align:right">${formatNumber(b.zero ?? 0)}</td></tr>
+            <tr><td>1–5</td><td style="text-align:right">${formatNumber(b.oneToFive ?? 0)}</td></tr>
+            <tr><td>6–20</td><td style="text-align:right">${formatNumber(b.sixToTwenty ?? 0)}</td></tr>
+            <tr><td>21+</td><td style="text-align:right">${formatNumber(b.twentyOnePlus ?? 0)}</td></tr>
+          </tbody></table>`;
+        } else if (rb) rb.innerHTML = `<p class="muted">—</p>`;
+        const gb = document.getElementById("actGroceryBuckets");
+        if (gb && hasUi && ui.groceryBuckets) {
+          const g = ui.groceryBuckets;
+          gb.innerHTML = `<table class="users-table"><tbody>
+            <tr><td>0 items</td><td style="text-align:right">${formatNumber(g.zero ?? 0)}</td></tr>
+            <tr><td>1–8</td><td style="text-align:right">${formatNumber(g.oneToEight ?? 0)}</td></tr>
+            <tr><td>9–24</td><td style="text-align:right">${formatNumber(g.nineToTwentyFour ?? 0)}</td></tr>
+            <tr><td>25+</td><td style="text-align:right">${formatNumber(g.twentyFivePlus ?? 0)}</td></tr>
+          </tbody></table>`;
+        } else if (gb) gb.innerHTML = `<p class="muted">—</p>`;
+        const smEl = document.getElementById("actSupermarkets");
+        if (smEl) {
+          const sm = hasUi && Array.isArray(ui.favoriteSupermarket) ? ui.favoriteSupermarket : [];
+          smEl.innerHTML = sm.length
+            ? `<table class="users-table"><thead><tr><th>supermarkt</th><th style="text-align:right">accounts</th></tr></thead><tbody>${sm
+                .map(
+                  (r) =>
+                    `<tr><td><code>${escapeHtml(String(r.key || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
+                )
+                .join("")}</tbody></table>`
+            : `<p class="muted">Geen profieldata.</p>`;
+        }
+
         const dailyBars = document.getElementById("actDailyBars");
         if (dailyBars) {
           dailyBars.innerHTML = activitySparkHtml(activity.dailyEvents7d || [], "count", "day", 100);
@@ -2207,11 +2316,59 @@
 
         <h3>Acties</h3>
         <button class="btn btn-danger" onclick="deleteUser('${escapeHtml(user.id)}', '${escapeHtml(user.email)}')">Gebruiker verwijderen</button>
+
+        <hr class="divider" style="margin:16px 0" />
+        <h3>Eventlog (dit account)</h3>
+        <p class="muted" style="margin-bottom:8px">Laatste activiteit uit plately_events (import, navigatie, auth, …).</p>
+        <div id="userEventLog"><p class="muted">Laden…</p></div>
       `;
 
       document.getElementById("detailName").textContent = escapeHtml(user.email) || "Guest User";
       document.getElementById("detailContent").innerHTML = html;
       document.getElementById("detailPanel").classList.add("open");
+
+      const logEl = document.getElementById("userEventLog");
+      if (logEl) {
+        fetch(`/api/admin/user-events?userId=${encodeURIComponent(userId)}&limit=120`, adminFetchInit())
+          .then((res) => res.json())
+          .then((data) => {
+            if (!data.ok || !Array.isArray(data.events)) {
+              logEl.innerHTML = `<p class="muted">${escapeHtml(data.error || "Kon eventlog niet laden.")}</p>`;
+              return;
+            }
+            if (!data.events.length) {
+              logEl.innerHTML = `<p class="muted">Nog geen events voor deze gebruiker.</p>`;
+              return;
+            }
+            logEl.innerHTML = `
+              <div style="overflow:auto;max-height:360px;border:1px solid var(--border);border-radius:var(--radius-sm)">
+                <table class="users-table">
+                  <thead><tr><th>Tijd</th><th>Type</th><th>Meta</th></tr></thead>
+                  <tbody>
+                    ${data.events
+                      .map((ev) => {
+                        const ts = ev.created_at ? new Date(ev.created_at).toLocaleString("nl-NL") : "—";
+                        let mj = "";
+                        try {
+                          mj = JSON.stringify(ev.meta || {}, null, 2);
+                        } catch {
+                          mj = "{}";
+                        }
+                        return `<tr>
+                          <td style="white-space:nowrap;font-size:11px">${escapeHtml(ts)}</td>
+                          <td><code>${escapeHtml(String(ev.type || ""))}</code></td>
+                          <td class="admin-activity-meta"><details><summary>JSON</summary><pre>${escapeHtml(mj)}</pre></details></td>
+                        </tr>`;
+                      })
+                      .join("")}
+                  </tbody>
+                </table>
+              </div>`;
+          })
+          .catch(() => {
+            logEl.innerHTML = `<p class="muted">Netwerkfout bij laden eventlog.</p>`;
+          });
+      }
     }
 
     function closeDetail() {
