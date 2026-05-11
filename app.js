@@ -543,60 +543,19 @@ function setHomeGrowthDismissed() {
   }
 }
 
-function positionHomeGrowthTooltip(panel) {
-  if (!panel) return;
-  if (!panel.classList.contains("home-growth-panel--tooltip")) return;
-  const anchor =
-    document.getElementById("homeImportUrl") ||
-    document.getElementById("homeImportForm") ||
-    document.querySelector(".import-banner");
-  if (!anchor || typeof anchor.getBoundingClientRect !== "function") return;
-
-  const rect = anchor.getBoundingClientRect();
-  const vw = Math.max(320, window.innerWidth || 0);
-  const vh = Math.max(320, window.innerHeight || 0);
-  const pad = 14;
-
-  // Measure after it's visible so offsetWidth/Height are meaningful.
-  const bubbleW = Math.min(panel.offsetWidth || 320, vw - pad * 2);
-  const bubbleH = Math.min(panel.offsetHeight || 260, vh - pad * 2);
-
-  // Prefer below the import field; if not enough space, place above.
-  const belowTop = rect.bottom + 10;
-  const aboveTop = rect.top - 10 - bubbleH;
-  const canFitBelow = belowTop + bubbleH <= vh - pad;
-  const top = canFitBelow ? belowTop : Math.max(pad, aboveTop);
-
-  // Center near the anchor, but clamp to viewport.
-  const idealLeft = rect.left + rect.width / 2 - bubbleW / 2;
-  const left = Math.max(pad, Math.min(vw - pad - bubbleW, idealLeft));
-
-  // Arrow x relative to bubble.
-  const anchorCenterX = rect.left + rect.width / 2;
-  const arrowX = Math.max(22, Math.min(bubbleW - 22, anchorCenterX - left));
-  panel.style.setProperty("--arrow-x", `${arrowX}px`);
-  panel.dataset.arrow = canFitBelow ? "up" : "down";
-
-  panel.style.top = `${Math.round(top)}px`;
-  panel.style.left = `${Math.round(left)}px`;
-  panel.style.width = `${Math.round(bubbleW)}px`;
+function isBrandNewAccount() {
+  // New account = authenticated + has not completed the tooltip tour yet.
+  return Boolean(state?.auth?.authenticated) && !state?.profile?.onboardingSeenAt;
 }
 
 function syncHomeGrowthPanelVisibility() {
   const panel = document.getElementById("homeGrowthPanel");
   if (!panel) return;
 
-  // Only show "Snel aan de slag" when the user has not saved any recipes yet.
-  // (Seed recipes don't count; see getSavedImportedRecipes().)
-  const isNewUser = getSavedImportedRecipes().length === 0;
-  if (!isNewUser) {
+  // Only show once, only for brand-new accounts.
+  if (!isBrandNewAccount()) {
     panel.classList.add("hidden");
     panel.setAttribute("aria-hidden", "true");
-    panel.classList.remove("home-growth-panel--tooltip");
-    panel.style.removeProperty("top");
-    panel.style.removeProperty("left");
-    panel.style.removeProperty("width");
-    panel.removeAttribute("data-arrow");
     return;
   }
 
@@ -609,10 +568,7 @@ function syncHomeGrowthPanelVisibility() {
   try {
     panel.classList.remove("hidden");
     panel.removeAttribute("aria-hidden");
-    panel.classList.add("home-growth-panel--tooltip");
-    // Wait a frame so layout/width is settled before measuring and positioning.
-    window.requestAnimationFrame(() => positionHomeGrowthTooltip(panel));
-    window.requestAnimationFrame(() => positionHomeGrowthTooltip(panel));
+    panel.classList.add("home-growth-panel--popup");
   } catch {
     // Worst case: still show it in-page.
     panel.classList.remove("hidden");
@@ -628,16 +584,10 @@ function installHomeGrowthPanelOnce() {
   bindEvent(btn, "click", () => {
     setHomeGrowthDismissed();
     syncHomeGrowthPanelVisibility();
+    // After closing "Snel aan de slag", start the tooltip tour.
+    // It is guarded (runs only for brand-new accounts).
+    window.setTimeout(() => startOnboarding(), 120);
   });
-
-  // Keep tooltip positioned on resize/scroll while visible.
-  const reposition = () => {
-    const panel = document.getElementById("homeGrowthPanel");
-    if (!panel || panel.classList.contains("hidden")) return;
-    positionHomeGrowthTooltip(panel);
-  };
-  window.addEventListener("resize", reposition, { passive: true });
-  window.addEventListener("scroll", reposition, { passive: true });
 }
 
 function normalizeHttpOrigin(origin) {

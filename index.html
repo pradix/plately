@@ -126,15 +126,10 @@
           >
             <div class="home-growth-panel__head">
               <h3 class="home-growth-panel__title" data-i18n="home.growthTitle">Snel aan de slag</h3>
-              <button
-                type="button"
-                class="home-growth-panel__dismiss"
-                id="homeGrowthDismiss"
-                data-i18n="home.growthDismiss"
-                data-i18n-aria-label="home.growthDismissAria"
-                aria-label="Deze tips verbergen"
-              >
-                Verbergen
+              <button type="button" class="home-growth-panel__close" id="homeGrowthDismiss" aria-label="Sluiten">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
               </button>
             </div>
             <ul class="home-growth-panel__list">
@@ -1926,7 +1921,7 @@
           <div class="profile2-card profile-subpanel__form-card onboarding-step1-card">
             <div class="onboarding-avatar-studio" id="onboardingAvatarStudio">
               <div class="onboarding-avatar-studio__intro">
-                <span class="onboarding-avatar-studio__chip">Stap 1 · Jouw gezicht</span>
+                <span class="onboarding-avatar-studio__chip">Stap 1 · Profielfoto</span>
                 <p class="onboarding-avatar-studio__hint">Later altijd aan te passen in instellingen.</p>
               </div>
               <div class="onboarding-avatar-studio__stage">
@@ -2008,8 +2003,8 @@
                 <path d="M4 16a4 4 0 0 1 4-4h12"/>
               </svg>
             </div>
-            <h2 class="onboarding-title">Je eerste kookboek</h2>
-            <p class="onboarding-subtitle">Optioneel. Leeg laten of een naam kiezen — later altijd aan te passen.</p>
+            <h2 class="onboarding-title">Extra kookboek</h2>
+            <p class="onboarding-subtitle">Optioneel. Je hebt al “Favorieten”. Maak hier een extra kookboek (later aanpasbaar).</p>
           </div>
 
           <div class="profile2-card onboarding-cookbook-app-card">
@@ -2034,16 +2029,17 @@
                   class="onboarding-cookbook-input"
                   type="text"
                   maxlength="40"
-                  placeholder="Bijv. Favorieten of Weekendkoken"
+                  placeholder="Bijv. Weekendkoken"
                   autocomplete="off"
                 />
               </div>
               <div class="onboarding-cookbook-pills">
                 <span class="onboarding-cookbook-pills__kicker">Snel kiezen</span>
                 <div class="onboarding-suggestion-pills">
-                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Favorieten">Favorieten</button>
                   <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Snel & makkelijk">Snel &amp; makkelijk</button>
                   <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Weekendkoken">Weekendkoken</button>
+                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Pasta">Pasta</button>
+                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Aziatisch">Aziatisch</button>
                   <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Bakken">Bakken</button>
                   <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Vegetarisch">Vegetarisch</button>
                 </div>
