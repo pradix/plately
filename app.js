@@ -1774,6 +1774,25 @@ function syncAuthModeToggleButtons() {
   if (toRegister) toRegister.classList.toggle("hidden", isRegister);
 }
 
+function scrollAuthModalToTop() {
+  try {
+    authModal?.scrollTo?.({ top: 0, left: 0, behavior: "auto" });
+  } catch {
+    try { authModal.scrollTop = 0; } catch {}
+  }
+}
+
+function syncAuthSocialVisibility() {
+  const modal = document.getElementById("authModal");
+  const row = document.getElementById("authSocialRow");
+  const resetForm = document.getElementById("passwordResetForm");
+  if (!modal || !row) return;
+  const isRegister = (modal.dataset.authMode || "") === "register";
+  const isResetOpen = resetForm && !resetForm.classList.contains("hidden");
+  // Keep IG only on the first login screen (cleaner + less repetitive).
+  row.style.display = !isRegister && !isResetOpen ? "" : "none";
+}
+
 function openAuthModal(mode = "login") {
   console.log("🔐 Opening auth modal, mode:", mode, "authModal element:", authModal);
   state.auth.mode = mode;
@@ -1840,6 +1859,8 @@ function openAuthModal(mode = "login") {
 
   syncAppleSignInRowVisibility();
   applyTranslations();
+  syncAuthSocialVisibility();
+  scrollAuthModalToTop();
 }
 
 function closeAuthModal() {
@@ -1864,6 +1885,8 @@ bindEvent(document.getElementById("forgotPasswordBtn"), "click", (e) => {
   if (authForm) authForm.style.display = "none";
   if (resetForm) resetForm.classList.remove("hidden");
   syncAppleSignInRowVisibility();
+  syncAuthSocialVisibility();
+  scrollAuthModalToTop();
 });
 
 bindEvent(document.getElementById("resetFormBack"), "click", (e) => {
@@ -1875,6 +1898,8 @@ bindEvent(document.getElementById("resetFormBack"), "click", (e) => {
   const resetFeedback = document.getElementById("resetFeedback");
   if (resetFeedback) resetFeedback.textContent = "";
   syncAppleSignInRowVisibility();
+  syncAuthSocialVisibility();
+  scrollAuthModalToTop();
 });
 
 bindEvent(document.getElementById("resetEmailForm"), "submit", async (e) => {

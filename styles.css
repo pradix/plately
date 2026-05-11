@@ -5899,13 +5899,13 @@ button.ingredient-item {
 
 .auth-screen__brand {
   text-align: center;
-  padding: calc(52px + env(safe-area-inset-top, 0px)) 0 26px;
+  padding: calc(42px + env(safe-area-inset-top, 0px)) 0 16px;
 }
 
 .auth-screen__logo-wrap {
   position: relative;
   width: fit-content;
-  margin: 0 auto 22px;
+  margin: 0 auto 14px;
   padding: clamp(14px, 4vw, 22px);
   border-radius: 28px;
   background:
@@ -5923,7 +5923,7 @@ button.ingredient-item {
 
 
 .auth-screen__logo {
-  height: clamp(92px, 26vw, 112px);
+  height: clamp(78px, 22vw, 96px);
   width: auto;
   object-fit: contain;
   display: block;
@@ -5932,7 +5932,7 @@ button.ingredient-item {
 
 .auth-screen__surface {
   position: relative;
-  padding: clamp(22px, 5vw, 28px);
+  padding: clamp(18px, 4.5vw, 22px);
   border-radius: var(--card-radius);
   background: color-mix(in srgb, var(--color-surface) 82%, transparent);
   backdrop-filter: blur(26px) saturate(160%);
@@ -6005,7 +6005,7 @@ button.ingredient-item {
 }
 
 .auth-screen__title {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-family: var(--font-display);
   font-size: clamp(1.65rem, 5.2vw, 2rem);
   font-weight: 800;
@@ -6321,7 +6321,7 @@ button.ingredient-item {
   flex-direction: column;
   align-items: stretch;
   gap: 0;
-  margin-top: 8px;
+  margin-top: 4px;
   max-width: 320px;
   margin-left: auto;
   margin-right: auto;
