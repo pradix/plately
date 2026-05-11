@@ -6480,7 +6480,7 @@ button.ingredient-item {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: clamp(18px, 6vw, 32px);
+  padding: clamp(10px, 4.4vw, 18px);
 }
 
 .onboarding-avatar-studio__halo {
@@ -6490,8 +6490,8 @@ button.ingredient-item {
 }
 
 .onboarding-avatar-studio__halo--a {
-  width: clamp(196px, 52vw, 240px);
-  height: clamp(196px, 52vw, 240px);
+  width: clamp(150px, 42vw, 190px);
+  height: clamp(150px, 42vw, 190px);
   background: radial-gradient(
     circle,
     color-mix(in srgb, var(--color-brand) 38%, transparent) 0%,
@@ -6501,8 +6501,8 @@ button.ingredient-item {
 }
 
 .onboarding-avatar-studio__halo--b {
-  width: clamp(170px, 46vw, 214px);
-  height: clamp(170px, 46vw, 214px);
+  width: clamp(132px, 38vw, 170px);
+  height: clamp(132px, 38vw, 170px);
   background: radial-gradient(
     circle,
     color-mix(in srgb, var(--color-accent) 42%, transparent) 0%,
@@ -6582,8 +6582,8 @@ button.ingredient-item {
 
 .onboarding-avatar-studio__disc {
   position: relative;
-  width: clamp(124px, 34vw, 156px);
-  height: clamp(124px, 34vw, 156px);
+  width: clamp(98px, 28vw, 128px);
+  height: clamp(98px, 28vw, 128px);
   border-radius: 50%;
   overflow: hidden;
   background:
@@ -6666,8 +6666,8 @@ button.ingredient-item {
 }
 
 .onboarding-avatar-studio__empty-icon {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6679,19 +6679,19 @@ button.ingredient-item {
 }
 
 .onboarding-avatar-studio__empty-icon svg {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
 }
 
 .onboarding-avatar-studio__empty-title {
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 900;
   letter-spacing: -0.03em;
   color: var(--color-text);
 }
 
 .onboarding-avatar-studio__empty-sub {
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 650;
   line-height: 1.35;
   color: var(--muted-strong);
@@ -6700,10 +6700,10 @@ button.ingredient-item {
 
 .onboarding-avatar-studio__fab {
   position: absolute;
-  bottom: clamp(8px, 2.6vw, 12px);
-  right: clamp(8px, 2.6vw, 12px);
-  width: clamp(40px, 11vw, 46px);
-  height: clamp(40px, 11vw, 46px);
+  bottom: clamp(6px, 2.2vw, 10px);
+  right: clamp(6px, 2.2vw, 10px);
+  width: clamp(32px, 9.8vw, 40px);
+  height: clamp(32px, 9.8vw, 40px);
   border-radius: 50%;
   z-index: 5;
   display: flex;
@@ -6723,8 +6723,8 @@ button.ingredient-item {
 }
 
 .onboarding-avatar-studio__fab svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .onboarding-avatar-studio__remove {

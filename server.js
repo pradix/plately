@@ -12016,7 +12016,7 @@ const server = http.createServer(async (request, response) => {
     <meta name="twitter:description" content="${escapeHtml(desc)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
-    <link rel="stylesheet" href="/styles.css?v=1.0.19.22" />
+    <link rel="stylesheet" href="/styles.css?v=1.0.19.23" />
     <script>
       (function () {
         document.addEventListener(
