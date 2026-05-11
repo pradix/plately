@@ -4563,6 +4563,56 @@ const CHANNEL_SEARCH_DEBOUNCE_MS = 100;
 const CHANNEL_SEARCH_SKELETON_MS = 50;
 const IMPORT_CHANNEL_SEARCH_DEBOUNCE_MS = 240;
 
+// Client-side cache to avoid repeated network requests and heavy rerenders while typing/backspacing.
+// Short TTL is enough; server also caches, but this makes UI feel instant.
+const CHANNEL_SEARCH_CLIENT_CACHE_TTL_MS = 45_000;
+const CHANNEL_SEARCH_CLIENT_CACHE_MAX_ENTRIES = 120;
+const channelSearchClientCache = new Map(); // key -> { at:number, results:any[] }
+
+function getChannelSearchClientCacheKey({ query, channels, customChannelsParam }) {
+  const q = String(query || "").trim().toLowerCase();
+  const ch = String(channels || "").trim();
+  const custom = String(customChannelsParam || "").trim();
+  const schema = "csc-v1";
+  return `${q}||${ch}||${custom}||${schema}`;
+}
+
+function getCachedClientChannelSearch(key) {
+  const entry = channelSearchClientCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.at > CHANNEL_SEARCH_CLIENT_CACHE_TTL_MS) {
+    channelSearchClientCache.delete(key);
+    return null;
+  }
+  return entry.results || [];
+}
+
+function setCachedClientChannelSearch(key, results) {
+  channelSearchClientCache.set(key, { at: Date.now(), results: Array.isArray(results) ? results : [] });
+  if (channelSearchClientCache.size <= CHANNEL_SEARCH_CLIENT_CACHE_MAX_ENTRIES) return;
+  const entries = [...channelSearchClientCache.entries()].sort((a, b) => a[1].at - b[1].at);
+  const toRemove = Math.max(0, entries.length - CHANNEL_SEARCH_CLIENT_CACHE_MAX_ENTRIES);
+  for (let i = 0; i < toRemove; i++) channelSearchClientCache.delete(entries[i][0]);
+}
+
+const CHANNEL_SEARCH_SKELETON_MARKUP = `
+  <div style="padding: 12px 14px; display: grid; gap: 10px;">
+    ${Array.from({ length: 4 })
+      .map(
+        () => `
+      <div class="ch-result" aria-hidden="true" style="cursor: default;">
+        <div class="skeleton" style="width: 54px; height: 54px; border-radius: 12px;"></div>
+        <div style="flex:1; min-width:0; display:grid; gap:6px;">
+          <div class="skeleton" style="height: 12px; width: 62%;"></div>
+          <div class="skeleton" style="height: 10px; width: 38%; opacity: .9;"></div>
+        </div>
+      </div>
+    `
+      )
+      .join("")}
+  </div>
+`;
+
 function getActiveFollowedSeedChannelIds() {
   // Only seed channels can be toggled; custom channels are passed separately via customChannels param.
   // Pending/rejected custom channels should never block seed searching.
@@ -4819,6 +4869,12 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
       renderChannelFilterChips(all);
     }
 
+    // Skip expensive full rerender when the visible set is effectively identical.
+    const sig = `${rows.length}::${rows.slice(0, 22).map((r) => r?.url || "").join("|")}`;
+    const nextRenderKey = `${state.channelSearchQuery}||${state.channelSearchFilter || ""}||${sig}`;
+    if (renderChannelSearchResults._lastKey === nextRenderKey) return;
+    renderChannelSearchResults._lastKey = nextRenderKey;
+
     channelSearchResults.innerHTML = `<div class="ch-result-grid">${rows.map((r) => {
       const channel = channelById.get(r.channelId);
       const channelColor = channel?.color || "#8da485";
@@ -4893,19 +4949,7 @@ async function searchChannels(query) {
     if (requestId !== searchChannels._reqId) return;
     if (!channelSearchSection || !channelSearchResults) return;
     channelSearchSection.classList.remove("hidden");
-    channelSearchResults.innerHTML = `
-      <div style="padding: 12px 14px; display: grid; gap: 10px;">
-        ${Array.from({ length: 4 }).map(() => `
-          <div class="ch-result" aria-hidden="true" style="cursor: default;">
-            <div class="skeleton" style="width: 54px; height: 54px; border-radius: 12px;"></div>
-            <div style="flex:1; min-width:0; display:grid; gap:6px;">
-              <div class="skeleton" style="height: 12px; width: 62%;"></div>
-              <div class="skeleton" style="height: 10px; width: 38%; opacity: .9;"></div>
-            </div>
-          </div>
-        `).join("")}
-      </div>
-    `;
+    channelSearchResults.innerHTML = CHANNEL_SEARCH_SKELETON_MARKUP;
   }, CHANNEL_SEARCH_SKELETON_MS);
   try {
     const channels = getSeedChannelIdsForRecipeSearch().join(",");
@@ -4928,27 +4972,25 @@ async function searchChannels(query) {
       });
     }
     const customChannelsParam = dedupedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
+    const cacheKey = getChannelSearchClientCacheKey({ query, channels, customChannelsParam });
+    const cached = getCachedClientChannelSearch(cacheKey);
+    if (cached && requestId === searchChannels._reqId) {
+      renderChannelSearchResults(cached);
+      return;
+    }
+
     let url = `/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`;
     if (customChannelsParam) url += `&customChannels=${encodeURIComponent(customChannelsParam)}`;
-
-    console.log("🔍 Channel search:", { query: query.trim(), channels, url });
 
     const resp = await fetch(url, { signal: abortCtl.signal });
     const data = await resp.json();
     if (requestId !== searchChannels._reqId) return;
-    console.log("✅ Channel search results:", data.results?.length || 0, "results");
-    if (data.results && data.results.length > 0) {
-      console.log("📦 First result details:", {
-        title: data.results[0].title,
-        channelId: data.results[0].channelId,
-        channel: data.results[0].channel,
-        url: data.results[0].url?.substring(0, 80)
-      });
+    if (Array.isArray(data.results) && data.results.length) {
+      setCachedClientChannelSearch(cacheKey, data.results);
     }
     renderChannelSearchResults(data.results || []);
   } catch (error) {
     if (error?.name === "AbortError") return;
-    console.error("❌ Channel search error:", error);
     if (requestId !== searchChannels._reqId) return;
     renderChannelSearchResults([]);
   } finally {
@@ -4978,19 +5020,7 @@ async function searchChannelsOnImportScreen(query) {
   skeletonTimer = setTimeout(() => {
     if (requestId !== searchChannelsOnImportScreen._reqId) return;
     if (!results) return;
-    results.innerHTML = `
-      <div style="padding: 12px 14px; display: grid; gap: 10px;">
-        ${Array.from({ length: 4 }).map(() => `
-          <div class="ch-result" aria-hidden="true" style="cursor: default;">
-            <div class="skeleton" style="width: 54px; height: 54px; border-radius: 12px;"></div>
-            <div style="flex:1; min-width:0; display:grid; gap:6px;">
-              <div class="skeleton" style="height: 12px; width: 62%;"></div>
-              <div class="skeleton" style="height: 10px; width: 38%; opacity: .9;"></div>
-            </div>
-          </div>
-        `).join("")}
-      </div>
-    `;
+    results.innerHTML = CHANNEL_SEARCH_SKELETON_MARKUP;
   }, CHANNEL_SEARCH_SKELETON_MS);
   if (orRow) orRow.classList.add("hidden");
   try {
@@ -12152,7 +12182,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.18";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.19";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
