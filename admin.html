@@ -909,17 +909,17 @@
 
       <div class="section">
         <div class="section-header">
-          <h2>Imports (30 dagen)</h2>
-          <div class="muted">Trend + top sources/platforms</div>
+          <h2 id="importsSectionHead">Imports</h2>
+          <div class="muted">Trend + top sources/platforms (volgt primair/vergelijkings-window op tab Activiteit)</div>
         </div>
         <div class="stats-grid" style="margin:0 0 12px">
           <div class="stat-card">
             <div class="stat-value" id="imports7d">-</div>
-            <div class="stat-label">Imports (7d)</div>
+            <div class="stat-label" id="importsPrimaryLabel">Imports (primair)</div>
           </div>
           <div class="stat-card">
             <div class="stat-value" id="imports30d">-</div>
-            <div class="stat-label">Imports (30d)</div>
+            <div class="stat-label" id="importsCompareLabel">Imports (vergelijking)</div>
           </div>
         </div>
         <div id="importsTrend" style="display:flex;gap:6px;align-items:flex-end;height:120px;padding:8px 0"></div>
@@ -992,6 +992,27 @@
             <h2>Activiteit in de app</h2>
             <div class="muted">Client-events, server-events, account-statistieken (histogrammen, aanmeldingen, auth) en gebruikers-eventlog. PostgreSQL vereist.</div>
           </div>
+          <div id="adminAnalyticsToolbar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px;padding:12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-sm)">
+            <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Primair
+              <select id="actDaysSelect" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
+                <option value="7" selected>7 dagen</option>
+                <option value="14">14 dagen</option>
+                <option value="30">30 dagen</option>
+                <option value="90">90 dagen</option>
+              </select>
+            </label>
+            <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Vergelijken
+              <select id="actCompareSelect" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
+                <option value="7">7 dagen</option>
+                <option value="14">14 dagen</option>
+                <option value="30" selected>30 dagen</option>
+                <option value="90">90 dagen</option>
+              </select>
+            </label>
+            <button class="btn" type="button" id="actAnalyticsRefresh">Ververs</button>
+            <button class="btn" type="button" id="actAnalyticsCsv">Events CSV</button>
+            <span class="muted" id="actAnalyticsRangeMeta" style="font-size:11px;margin-left:auto;max-width:280px;text-align:right;line-height:1.35"></span>
+          </div>
           <div class="stats-grid" style="margin:0 0 14px">
             <div class="stat-card">
               <div class="stat-value" id="actEvents24h">—</div>
@@ -999,23 +1020,23 @@
             </div>
             <div class="stat-card">
               <div class="stat-value" id="actEvents7d">—</div>
-              <div class="stat-label">Alle events (7d)</div>
+              <div class="stat-label" id="actLblEventsPrimary">Alle events (primair)</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" id="actEvents30d">—</div>
-              <div class="stat-label">Alle events (30d)</div>
+              <div class="stat-label" id="actLblEventsCompare">Alle events (vergelijking)</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" id="actClient7d">—</div>
-              <div class="stat-label">Client-events (7d)</div>
+              <div class="stat-label" id="actLblClient">Client-events (primair)</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" id="actServer7dKpi">—</div>
-              <div class="stat-label">Server-events (7d)</div>
+              <div class="stat-label" id="actLblServer">Server-events (primair)</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" id="actActors7d">—</div>
-              <div class="stat-label">Unieke actors (7d)</div>
+              <div class="stat-label" id="actLblActors">Unieke actors (primair)</div>
             </div>
           </div>
 
@@ -1028,28 +1049,46 @@
             </div>
             <div class="stat-card">
               <div class="stat-value" id="actNewUsers7d">—</div>
-              <div class="stat-label">Nieuw (7d)</div>
+              <div class="stat-label" id="actLblNewPrimary">Nieuw (primair)</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" id="actNewUsers30d">—</div>
-              <div class="stat-label">Nieuw (30d)</div>
+              <div class="stat-label" id="actLblNewCompare">Nieuw (vergelijking)</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" id="actReturning7d">—</div>
-              <div class="stat-label">Terugkerend actief (7d)</div>
+              <div class="stat-label" id="actLblReturning">Terugkerend actief (primair)</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" id="actDistinctImportUsers7d">—</div>
-              <div class="stat-label">Unieke importeurs (7d)</div>
+              <div class="stat-label" id="actLblDistinctImport">Unieke importeurs (primair)</div>
+            </div>
+          </div>
+          <div class="stats-grid" style="margin:0 0 14px">
+            <div class="stat-card">
+              <div class="stat-value" id="actFunnelSignups">—</div>
+              <div class="stat-label" id="actFunnelCohortLbl">Nieuwe accounts in cohort-window</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="actFunnelImport">—</div>
+              <div class="stat-label">Met import binnen 7d na signup</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="actFunnelSave">—</div>
+              <div class="stat-label">Review opgeslagen binnen 7d</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="actFunnelRates">—</div>
+              <div class="stat-label">Conversie t.o.v. cohort</div>
             </div>
           </div>
           <div class="admin-activity-panels">
             <div class="admin-activity-panel">
-              <h3 class="subhead">Nieuwe accounts per dag (14d)</h3>
+              <h3 class="subhead" id="actSignupTitle">Nieuwe accounts per dag</h3>
               <div id="actSignupBars"></div>
             </div>
             <div class="admin-activity-panel">
-              <h3 class="subhead">Auth-events (30d)</h3>
+              <h3 class="subhead" id="actAuthTitle">Auth-events</h3>
               <div class="muted" style="margin:-4px 0 8px;font-size:11px">Server: login, registratie, Apple.</div>
               <div id="actAuthEvents30d"></div>
             </div>
@@ -1071,7 +1110,7 @@
 
           <div class="admin-activity-panels">
             <div class="admin-activity-panel">
-              <h3 class="subhead">Volume per dag (alle types, 7d)</h3>
+              <h3 class="subhead" id="actSubDaily">Volume per dag (alle types)</h3>
               <div id="actDailyBars"></div>
             </div>
             <div class="admin-activity-panel">
@@ -1082,43 +1121,55 @@
 
           <div class="admin-activity-panels">
             <div class="admin-activity-panel">
-              <h3 class="subhead">Schermen (client_navigation, 7d)</h3>
+              <h3 class="subhead" id="actSubNav">Schermen (client_navigation)</h3>
               <div id="actNavViews"></div>
             </div>
             <div class="admin-activity-panel">
-              <h3 class="subhead">Kanaal-zoektermen (server, 7d)</h3>
+              <h3 class="subhead" id="actSubChannel">Kanaal-zoektermen (server)</h3>
               <div id="actChannelQueries"></div>
             </div>
           </div>
 
           <div class="admin-activity-panels">
             <div class="admin-activity-panel">
-              <h3 class="subhead">Imports per platform (7d)</h3>
+              <h3 class="subhead" id="actSubImportPlat">Imports per platform</h3>
               <div id="actImportPlatforms7d"></div>
             </div>
             <div class="admin-activity-panel">
-              <h3 class="subhead">Imports per bron-host (7d)</h3>
+              <h3 class="subhead" id="actSubImportHost">Imports per bron-host</h3>
               <div id="actImportHosts7d"></div>
             </div>
           </div>
 
           <div class="admin-activity-panels">
             <div class="admin-activity-panel">
-              <h3 class="subhead">Meest actieve accounts (7d)</h3>
+              <h3 class="subhead" id="actSubTopUsers">Meest actieve accounts</h3>
               <div id="actTopUsers"></div>
             </div>
             <div class="admin-activity-panel">
-              <h3 class="subhead">Anonieme sessies (7d, anonId)</h3>
+              <h3 class="subhead" id="actSubTopAnon">Anonieme sessies (anonId)</h3>
               <div class="muted" style="margin:-4px 0 8px;font-size:11px">Alleen events zonder user_id; gehashte/random id uit de app.</div>
               <div id="actTopAnon"></div>
             </div>
           </div>
 
-          <h3 class="subhead">Eventtypes — 7 dagen vs 30 dagen</h3>
+          <h3 class="subhead" id="actByTypeHead">Eventtypes — perioden</h3>
           <div id="actByTypeCompare" style="font-size:12px;margin-bottom:16px"></div>
 
-          <h3 class="subhead">Server-only types (7d, geen client_*)</h3>
+          <h3 class="subhead" id="actServerHead">Server-only types (geen client_*)</h3>
           <div id="actServer7d" style="font-size:12px;margin-bottom:16px"></div>
+
+          <div class="admin-activity-panel" style="margin-bottom:16px;border:1px solid rgba(180,80,80,0.22);background:rgba(255,248,248,0.85);border-radius:var(--radius-sm);padding:12px 14px">
+            <h3 class="subhead">Event-log opschonen</h3>
+            <p class="muted" style="font-size:11px;margin:0 0 10px">Verwijdert rijen uit <code>plately_events</code> ouder dan N dagen. Minimum <strong>180</strong> dagen. Permanent.</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+              <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Ouder dan (dagen)
+                <input type="number" id="actPurgeDays" min="180" value="365" style="width:96px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+              </label>
+              <button type="button" class="btn" id="actPurgeBtn">Verwijder oude events</button>
+              <span class="muted" id="actPurgeStatus" style="font-size:12px"></span>
+            </div>
+          </div>
 
           <h3 class="subhead">Recente events (laatste 220)</h3>
           <div id="actRecent" style="overflow:auto;max-height:640px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)"></div>
@@ -1624,6 +1675,78 @@
       }
     }
 
+    function adminAnalyticsQueryParams() {
+      const daysEl = document.getElementById("actDaysSelect");
+      const cmpEl = document.getElementById("actCompareSelect");
+      let d = Number.parseInt(String(daysEl?.value || "7"), 10);
+      let c = Number.parseInt(String(cmpEl?.value || "30"), 10);
+      if (![7, 14, 30, 90].includes(d)) d = 7;
+      if (![7, 14, 30, 90].includes(c)) c = 30;
+      const qs = new URLSearchParams();
+      qs.set("days", String(d));
+      qs.set("compareDays", String(c));
+      return { qs: qs.toString(), activityDays: d, compareDays: c };
+    }
+
+    function initAnalyticsControls() {
+      document.getElementById("actAnalyticsRefresh")?.addEventListener("click", () => loadAnalytics());
+      document.getElementById("actDaysSelect")?.addEventListener("change", () => loadAnalytics());
+      document.getElementById("actCompareSelect")?.addEventListener("change", () => loadAnalytics());
+      document.getElementById("actAnalyticsCsv")?.addEventListener("click", () => downloadAdminAnalyticsCsv());
+      document.getElementById("actPurgeBtn")?.addEventListener("click", () => runAdminEventsPurge());
+    }
+
+    async function downloadAdminAnalyticsCsv() {
+      const { qs } = adminAnalyticsQueryParams();
+      try {
+        const res = await fetch(`/api/admin/analytics-export?${qs}`, adminFetchInit());
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || res.statusText);
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "plately-events.csv";
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        alert(`CSV export mislukt: ${e.message}`);
+      }
+    }
+
+    async function runAdminEventsPurge() {
+      const input = document.getElementById("actPurgeDays");
+      const st = document.getElementById("actPurgeStatus");
+      const n = Number.parseInt(String(input?.value || ""), 10);
+      if (!Number.isFinite(n) || n < 180) {
+        if (st) st.textContent = "Minimum 180 dagen.";
+        return;
+      }
+      const ok = window.confirm(
+        `Weet je het zeker? Alle events ouder dan ${n} dagen worden permanent verwijderd uit plately_events.`
+      );
+      if (!ok) return;
+      if (st) st.textContent = "Bezig…";
+      try {
+        const init = adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const res = await fetch("/api/admin/events-purge", {
+          ...init,
+          body: JSON.stringify({ olderThanDays: n }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Mislukt");
+        if (st) st.textContent = `Verwijderd: ${formatNumber(data.deleted ?? 0)} rijen.`;
+        await loadAnalytics();
+      } catch (e) {
+        if (st) st.textContent = `Fout: ${e.message}`;
+      }
+    }
+
     function activitySparkHtml(rows, valueKey, labelKey, maxHeight) {
       const arr = Array.isArray(rows) ? rows : [];
       if (!arr.length) return '<p class="muted">Nog geen events in deze periode.</p>';
@@ -1653,12 +1776,23 @@
 
     async function loadAnalytics() {
       try {
-        const response = await fetch("/api/admin/analytics", adminFetchInit());
+        const { qs } = adminAnalyticsQueryParams();
+        const response = await fetch(`/api/admin/analytics?${qs}`, adminFetchInit());
         const data = await response.json();
         if (!response.ok || !data.ok) {
           throw new Error(data.error || "Failed to load analytics");
         }
+        const meta = data.analytics?.meta;
+        const p = meta?.activityDays ?? 7;
+        const c = meta?.compareDays ?? 30;
+        const ch = meta?.chartDays ?? Math.max(p, c);
+        const signupChartDays = meta?.signupChartDays ?? 14;
+
         const imports = data.analytics?.imports || {};
+        const impHead = document.getElementById("importsSectionHead");
+        if (impHead) impHead.textContent = `Imports (trend ${ch} dagen)`;
+        setText("importsPrimaryLabel", `Imports (${p}d)`);
+        setText("importsCompareLabel", `Imports (${c}d)`);
         document.getElementById("imports7d").textContent = imports.total7d ?? 0;
         document.getElementById("imports30d").textContent = imports.total30d ?? 0;
 
@@ -1690,6 +1824,20 @@
         }
 
         const activity = data.analytics?.activity || {};
+        setText("actLblEventsPrimary", `Alle events (${p}d)`);
+        setText("actLblEventsCompare", `Alle events (${c}d)`);
+        setText("actLblClient", `Client-events (${p}d)`);
+        setText("actLblServer", `Server-events (${p}d)`);
+        setText("actLblActors", `Unieke actors (${p}d)`);
+        setText("actLblNewPrimary", `Nieuw (${p}d)`);
+        setText("actLblNewCompare", `Nieuw (${c}d)`);
+        setText("actLblReturning", `Terugkerend actief (${p}d)`);
+        setText("actLblDistinctImport", `Unieke importeurs (${p}d)`);
+        const rangeMeta = document.getElementById("actAnalyticsRangeMeta");
+        if (rangeMeta) {
+          rangeMeta.textContent = `Primair ${p}d · vergelijk ${c}d · import-trend ${ch}d · signup-spark ${signupChartDays}d`;
+        }
+
         setText("actEvents24h", formatNumber(activity.events24h ?? 0));
         setText("actEvents7d", formatNumber(activity.events7d ?? 0));
         setText("actEvents30d", formatNumber(activity.events30d ?? 0));
@@ -1705,17 +1853,55 @@
         setText("actReturning7d", hasUi ? formatNumber(ui.returningActive7d ?? 0) : "—");
         setText("actDistinctImportUsers7d", hasUi ? formatNumber(ui.distinctUsersWithImport7d ?? 0) : "—");
 
+        const fn = activity.funnel && typeof activity.funnel === "object" ? activity.funnel : null;
+        const cohortN = fn ? Number(fn.cohortSignups) || 0 : 0;
+        const impN = fn ? Number(fn.importInFirstWeek) || 0 : 0;
+        const saveN = fn ? Number(fn.savedReviewInFirstWeek) || 0 : 0;
+        setText("actFunnelSignups", fn ? formatNumber(cohortN) : "—");
+        setText("actFunnelImport", fn ? formatNumber(impN) : "—");
+        setText("actFunnelSave", fn ? formatNumber(saveN) : "—");
+        setText(
+          "actFunnelRates",
+          fn && cohortN > 0
+            ? `${formatFloat((100 * impN) / cohortN, 1)}% import · ${formatFloat((100 * saveN) / cohortN, 1)}% save`
+            : fn ? "0% import · 0% save" : "—"
+        );
+        setText("actFunnelCohortLbl", `Nieuwe accounts (laatste ${p}d)`);
+
         const signupBars = document.getElementById("actSignupBars");
         if (signupBars) {
           signupBars.innerHTML = hasUi
             ? activitySparkHtml(ui.signupDaily14d || [], "count", "day", 96)
             : `<p class="muted">Alleen met PostgreSQL.</p>`;
         }
+        const authTitle = document.getElementById("actAuthTitle");
+        if (authTitle) authTitle.textContent = `Auth-events (${c}d)`;
+        const signupTitle = document.getElementById("actSignupTitle");
+        if (signupTitle) signupTitle.textContent = `Nieuwe accounts per dag (${signupChartDays}d)`;
+        const actSubDaily = document.getElementById("actSubDaily");
+        if (actSubDaily) actSubDaily.textContent = `Volume per dag (alle types, ${p}d)`;
+        const actSubNav = document.getElementById("actSubNav");
+        if (actSubNav) actSubNav.textContent = `Schermen (client_navigation, ${p}d)`;
+        const actSubChannel = document.getElementById("actSubChannel");
+        if (actSubChannel) actSubChannel.textContent = `Kanaal-zoektermen (server, ${p}d)`;
+        const actSubImportPlat = document.getElementById("actSubImportPlat");
+        if (actSubImportPlat) actSubImportPlat.textContent = `Imports per platform (${p}d)`;
+        const actSubImportHost = document.getElementById("actSubImportHost");
+        if (actSubImportHost) actSubImportHost.textContent = `Imports per bron-host (${p}d)`;
+        const actSubTopUsers = document.getElementById("actSubTopUsers");
+        if (actSubTopUsers) actSubTopUsers.textContent = `Meest actieve accounts (${p}d)`;
+        const actSubTopAnon = document.getElementById("actSubTopAnon");
+        if (actSubTopAnon) actSubTopAnon.textContent = `Anonieme sessies (${p}d, anonId)`;
+        const actByTypeHead = document.getElementById("actByTypeHead");
+        if (actByTypeHead) actByTypeHead.textContent = `Eventtypes — ${p}d vs ${c}d`;
+        const actServerHead = document.getElementById("actServerHead");
+        if (actServerHead) actServerHead.textContent = `Server-only types (${p}d, geen client_*)`;
+
         const authEv = document.getElementById("actAuthEvents30d");
         if (authEv) {
           const rows = hasUi && Array.isArray(ui.authEvents30d) ? ui.authEvents30d : [];
           authEv.innerHTML = rows.length
-            ? `<table class="users-table"><thead><tr><th>type</th><th style="text-align:right">30d</th></tr></thead><tbody>${rows
+            ? `<table class="users-table"><thead><tr><th>type</th><th style="text-align:right">${c}d</th></tr></thead><tbody>${rows
                 .map(
                   (r) =>
                     `<tr><td><code>${escapeHtml(String(r.type || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
@@ -1769,7 +1955,7 @@
         const navEl = document.getElementById("actNavViews");
         if (navEl) {
           navEl.innerHTML = navRows.length
-            ? `<table class="users-table"><thead><tr><th>view</th><th style="text-align:right">7d</th></tr></thead><tbody>${navRows
+            ? `<table class="users-table"><thead><tr><th>view</th><th style="text-align:right">${p}d</th></tr></thead><tbody>${navRows
                 .map(
                   (r) =>
                     `<tr><td><code>${escapeHtml(String(r.view || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
@@ -1782,7 +1968,7 @@
         const chEl = document.getElementById("actChannelQueries");
         if (chEl) {
           chEl.innerHTML = chQ.length
-            ? `<table class="users-table"><thead><tr><th>query</th><th style="text-align:right">7d</th></tr></thead><tbody>${chQ
+            ? `<table class="users-table"><thead><tr><th>query</th><th style="text-align:right">${p}d</th></tr></thead><tbody>${chQ
                 .map(
                   (r) =>
                     `<tr><td><code>${escapeHtml(String(r.query || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
@@ -1797,7 +1983,7 @@
         const elHost = document.getElementById("actImportHosts7d");
         if (elPlat) {
           elPlat.innerHTML = ipPlat.length
-            ? `<table class="users-table"><thead><tr><th>platform</th><th style="text-align:right">7d</th></tr></thead><tbody>${ipPlat
+            ? `<table class="users-table"><thead><tr><th>platform</th><th style="text-align:right">${p}d</th></tr></thead><tbody>${ipPlat
                 .map(
                   (r) =>
                     `<tr><td>${escapeHtml(String(r.platform || ""))}</td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
@@ -1807,7 +1993,7 @@
         }
         if (elHost) {
           elHost.innerHTML = ipHost.length
-            ? `<table class="users-table"><thead><tr><th>host</th><th style="text-align:right">7d</th></tr></thead><tbody>${ipHost
+            ? `<table class="users-table"><thead><tr><th>host</th><th style="text-align:right">${p}d</th></tr></thead><tbody>${ipHost
                 .map(
                   (r) =>
                     `<tr><td><code>${escapeHtml(String(r.source_host || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
@@ -1822,7 +2008,7 @@
         const elTopA = document.getElementById("actTopAnon");
         if (elTopU) {
           elTopU.innerHTML = topU.length
-            ? `<table class="users-table"><thead><tr><th>email</th><th>user id</th><th style="text-align:right">events</th></tr></thead><tbody>${topU
+            ? `<table class="users-table"><thead><tr><th>email</th><th>user id</th><th style="text-align:right">events (${p}d)</th></tr></thead><tbody>${topU
                 .map((r) => {
                   const em = String(r.email || "").trim() || "—";
                   const id = String(r.user_id || "");
@@ -1834,7 +2020,7 @@
         }
         if (elTopA) {
           elTopA.innerHTML = topA.length
-            ? `<table class="users-table"><thead><tr><th>anonId</th><th style="text-align:right">events</th></tr></thead><tbody>${topA
+            ? `<table class="users-table"><thead><tr><th>anonId</th><th style="text-align:right">events (${p}d)</th></tr></thead><tbody>${topA
                 .map(
                   (r) =>
                     `<tr><td><code class="mono">${escapeHtml(String(r.anon_id || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
@@ -1852,7 +2038,7 @@
         types.sort((a, b) => (m30.get(b) || 0) - (m30.get(a) || 0));
         if (actCmp) {
           actCmp.innerHTML = types.length
-            ? `<table class="users-table"><thead><tr><th>type</th><th style="text-align:right">7d</th><th style="text-align:right">30d</th></tr></thead><tbody>${types
+            ? `<table class="users-table"><thead><tr><th>type</th><th style="text-align:right">${p}d</th><th style="text-align:right">${c}d</th></tr></thead><tbody>${types
                 .slice(0, 55)
                 .map(
                   (t) =>
@@ -1866,7 +2052,7 @@
         const rowsSrv = Array.isArray(activity.serverTypes7d) ? activity.serverTypes7d : [];
         if (actSrv) {
           actSrv.innerHTML = rowsSrv.length
-            ? `<table class="users-table"><thead><tr><th>type</th><th style="text-align:right">7d</th></tr></thead><tbody>${rowsSrv
+            ? `<table class="users-table"><thead><tr><th>type</th><th style="text-align:right">${p}d</th></tr></thead><tbody>${rowsSrv
                 .map(
                   (r) =>
                     `<tr><td><code>${escapeHtml(String(r.type || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
@@ -3572,6 +3758,7 @@
     }
 
     initAdminTabs();
+    initAnalyticsControls();
     refreshAll();
     loadChannelCatalog();
 

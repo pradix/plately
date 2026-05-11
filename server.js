@@ -11996,6 +11996,12 @@ async function serveStaticFile(requestPath, response) {
   }
 }
 
+function parseAdminAnalyticsDaysParam(raw, fallback = 7) {
+  const n = Number.parseInt(String(raw ?? ""), 10);
+  const fb = [7, 14, 30, 90].includes(Number(fallback)) ? Number(fallback) : 7;
+  return [7, 14, 30, 90].includes(n) ? n : fb;
+}
+
 const server = http.createServer(async (request, response) => {
   if (!request.url) {
     sendJson(response, 400, { error: "Invalid request." });
@@ -12061,7 +12067,7 @@ const server = http.createServer(async (request, response) => {
     <meta name="twitter:description" content="${escapeHtml(desc)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
-    <link rel="stylesheet" href="/styles.css?v=1.0.19.30" />
+    <link rel="stylesheet" href="/styles.css?v=1.0.19.31" />
     <script>
       (function () {
         document.addEventListener(
@@ -14144,10 +14150,12 @@ const server = http.createServer(async (request, response) => {
             importHosts7d: [],
             recent: [],
             userInsights: null,
+            funnel: null,
           };
           return sendJson(response, 200, {
             ok: true,
             analytics: {
+              meta: { activityDays: 7, compareDays: 30, chartDays: 30, signupChartDays: 14 },
               imports: { last30Days: [], total30d: 0, total7d: 0, topSources: [], topPlatforms: [] },
               activity: emptyActivity,
             },
@@ -14157,26 +14165,32 @@ const server = http.createServer(async (request, response) => {
         await ensurePostgresSchema();
         const pool = await getPostgresPool();
 
+        const activityDays = parseAdminAnalyticsDaysParam(requestUrl.searchParams.get("days"), 7);
+        const compareDays = parseAdminAnalyticsDaysParam(requestUrl.searchParams.get("compareDays"), 30);
+        const chartDays = Math.min(90, Math.max(activityDays, compareDays, 7));
+        const signupChartDays = Math.min(90, Math.max(14, activityDays));
+        const recentWindowDays = Math.min(180, Math.max(chartDays, 30));
+        const meta = { activityDays, compareDays, chartDays, signupChartDays };
+
         const daily = await pool.query(
           `
           SELECT date_trunc('day', created_at) AS day, COUNT(*)::int AS count
           FROM plately_events
           WHERE type = 'import'
-            AND created_at >= NOW() - INTERVAL '30 days'
+            AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
           GROUP BY 1
           ORDER BY 1 ASC
-          `
+          `,
+          [chartDays]
         );
 
         const totals = await pool.query(
           `
           SELECT
-            SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 ELSE 0 END)::int AS total7d,
-            COUNT(*)::int AS total30d
-          FROM plately_events
-          WHERE type = 'import'
-            AND created_at >= NOW() - INTERVAL '30 days'
-          `
+            (SELECT COUNT(*)::int FROM plately_events WHERE type = 'import' AND created_at >= NOW() - ($1::int * INTERVAL '1 day')) AS total_primary,
+            (SELECT COUNT(*)::int FROM plately_events WHERE type = 'import' AND created_at >= NOW() - ($2::int * INTERVAL '1 day')) AS total_compare
+          `,
+          [activityDays, compareDays]
         );
 
         const topSources = await pool.query(
@@ -14184,12 +14198,13 @@ const server = http.createServer(async (request, response) => {
           SELECT COALESCE(meta->>'sourceHost','') AS source, COUNT(*)::int AS count
           FROM plately_events
           WHERE type = 'import'
-            AND created_at >= NOW() - INTERVAL '30 days'
+            AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
           GROUP BY 1
           HAVING COALESCE(meta->>'sourceHost','') <> ''
           ORDER BY 2 DESC
           LIMIT 10
-          `
+          `,
+          [compareDays]
         );
 
         const topPlatforms = await pool.query(
@@ -14197,12 +14212,13 @@ const server = http.createServer(async (request, response) => {
           SELECT COALESCE(meta->>'platform','') AS platform, COUNT(*)::int AS count
           FROM plately_events
           WHERE type = 'import'
-            AND created_at >= NOW() - INTERVAL '30 days'
+            AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
           GROUP BY 1
           HAVING COALESCE(meta->>'platform','') <> ''
           ORDER BY 2 DESC
           LIMIT 10
-          `
+          `,
+          [compareDays]
         );
 
         const clientEvents7dRes = await pool.query(
@@ -14210,42 +14226,46 @@ const server = http.createServer(async (request, response) => {
           SELECT COUNT(*)::int AS n
           FROM plately_events
           WHERE type ~ '^client_'
-            AND created_at >= NOW() - INTERVAL '7 days'
-          `
+            AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
+          `,
+          [activityDays]
         );
 
         const activityByType7d = await pool.query(
           `
           SELECT type, COUNT(*)::int AS count
           FROM plately_events
-          WHERE created_at >= NOW() - INTERVAL '7 days'
+          WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
           GROUP BY type
           ORDER BY count DESC
           LIMIT 50
-          `
+          `,
+          [activityDays]
         );
 
         const activityByType30d = await pool.query(
           `
           SELECT type, COUNT(*)::int AS count
           FROM plately_events
-          WHERE created_at >= NOW() - INTERVAL '30 days'
+          WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
           GROUP BY type
           ORDER BY count DESC
           LIMIT 50
-          `
+          `,
+          [compareDays]
         );
 
         const serverOnlyTypes7d = await pool.query(
           `
           SELECT type, COUNT(*)::int AS count
           FROM plately_events
-          WHERE created_at >= NOW() - INTERVAL '7 days'
+          WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
             AND type !~ '^client_'
           GROUP BY type
           ORDER BY count DESC
           LIMIT 30
-          `
+          `,
+          [activityDays]
         );
 
         const uniqueActors7dRes = await pool.query(
@@ -14254,20 +14274,23 @@ const server = http.createServer(async (request, response) => {
           FROM (
             SELECT DISTINCT COALESCE(user_id::text, meta->>'anonId', '') AS actor
             FROM plately_events
-            WHERE created_at >= NOW() - INTERVAL '7 days'
+            WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
               AND ((user_id IS NOT NULL) OR ((meta->>'anonId') <> ''))
           ) s
           WHERE COALESCE(actor,'') <> ''
-          `
+          `,
+          [activityDays]
         );
 
         const recentEventsRes = await pool.query(
           `
           SELECT type, user_id, meta, created_at
           FROM plately_events
+          WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
           ORDER BY created_at DESC
           LIMIT 220
-          `
+          `,
+          [recentWindowDays]
         );
 
         const [
@@ -14281,22 +14304,29 @@ const server = http.createServer(async (request, response) => {
           importPlatform7dRes,
           importHost7dRes,
         ] = await Promise.all([
-          pool.query(`
+          pool.query(
+            `
             SELECT
               SUM(CASE WHEN created_at >= NOW() - INTERVAL '24 hours' THEN 1 ELSE 0 END)::int AS h24,
-              SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 ELSE 0 END)::int AS d7,
-              SUM(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END)::int AS d30,
-              SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' AND type ~ '^client_' THEN 1 ELSE 0 END)::int AS client7,
-              SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' AND type !~ '^client_' THEN 1 ELSE 0 END)::int AS server7
+              SUM(CASE WHEN created_at >= NOW() - ($1::int * INTERVAL '1 day') THEN 1 ELSE 0 END)::int AS d7,
+              SUM(CASE WHEN created_at >= NOW() - ($2::int * INTERVAL '1 day') THEN 1 ELSE 0 END)::int AS d30,
+              SUM(CASE WHEN created_at >= NOW() - ($1::int * INTERVAL '1 day') AND type ~ '^client_' THEN 1 ELSE 0 END)::int AS client7,
+              SUM(CASE WHEN created_at >= NOW() - ($1::int * INTERVAL '1 day') AND type !~ '^client_' THEN 1 ELSE 0 END)::int AS server7
             FROM plately_events
-          `),
-          pool.query(`
+            WHERE created_at >= NOW() - ($3::int * INTERVAL '1 day')
+            `,
+            [activityDays, compareDays, chartDays]
+          ),
+          pool.query(
+            `
             SELECT date_trunc('day', created_at) AS day, COUNT(*)::int AS count
             FROM plately_events
-            WHERE created_at >= NOW() - INTERVAL '7 days'
+            WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
             GROUP BY 1
             ORDER BY 1 ASC
-          `),
+            `,
+            [activityDays]
+          ),
           pool.query(`
             SELECT date_trunc('hour', created_at) AS hr, COUNT(*)::int AS count
             FROM plately_events
@@ -14304,64 +14334,82 @@ const server = http.createServer(async (request, response) => {
             GROUP BY 1
             ORDER BY 1 ASC
           `),
-          pool.query(`
+          pool.query(
+            `
             SELECT e.user_id, u.email, COUNT(*)::int AS count
             FROM plately_events e
             LEFT JOIN plately_users u ON u.id = e.user_id
-            WHERE e.created_at >= NOW() - INTERVAL '7 days'
+            WHERE e.created_at >= NOW() - ($1::int * INTERVAL '1 day')
               AND e.user_id IS NOT NULL
             GROUP BY e.user_id, u.email
             ORDER BY count DESC
             LIMIT 22
-          `),
-          pool.query(`
+            `,
+            [activityDays]
+          ),
+          pool.query(
+            `
             SELECT COALESCE(meta->>'anonId', '') AS anon_id, COUNT(*)::int AS count
             FROM plately_events
-            WHERE created_at >= NOW() - INTERVAL '7 days'
+            WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
               AND user_id IS NULL
               AND COALESCE(meta->>'anonId', '') <> ''
             GROUP BY 1
             ORDER BY count DESC
             LIMIT 12
-          `),
-          pool.query(`
+            `,
+            [activityDays]
+          ),
+          pool.query(
+            `
             SELECT COALESCE(meta->>'view', '') AS view, COUNT(*)::int AS count
             FROM plately_events
             WHERE type = 'client_navigation'
-              AND created_at >= NOW() - INTERVAL '7 days'
+              AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
               AND COALESCE(meta->>'view', '') <> ''
             GROUP BY 1
             ORDER BY count DESC
             LIMIT 24
-          `),
-          pool.query(`
+            `,
+            [activityDays]
+          ),
+          pool.query(
+            `
             SELECT COALESCE(meta->>'query', '') AS query, COUNT(*)::int AS count
             FROM plately_events
             WHERE type = 'channel_search'
-              AND created_at >= NOW() - INTERVAL '7 days'
+              AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
               AND COALESCE(meta->>'query', '') <> ''
             GROUP BY 1
             ORDER BY count DESC
             LIMIT 32
-          `),
-          pool.query(`
+            `,
+            [activityDays]
+          ),
+          pool.query(
+            `
             SELECT COALESCE(NULLIF(meta->>'platform', ''), '(onbekend)') AS platform, COUNT(*)::int AS count
             FROM plately_events
             WHERE type = 'import'
-              AND created_at >= NOW() - INTERVAL '7 days'
+              AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
             GROUP BY 1
             ORDER BY count DESC
             LIMIT 14
-          `),
-          pool.query(`
+            `,
+            [activityDays]
+          ),
+          pool.query(
+            `
             SELECT COALESCE(NULLIF(meta->>'sourceHost', ''), '(onbekend)') AS source_host, COUNT(*)::int AS count
             FROM plately_events
             WHERE type = 'import'
-              AND created_at >= NOW() - INTERVAL '7 days'
+              AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
             GROUP BY 1
             ORDER BY count DESC
             LIMIT 14
-          `),
+            `,
+            [activityDays]
+          ),
         ]);
 
         const [
@@ -14372,22 +14420,29 @@ const server = http.createServer(async (request, response) => {
           superRes,
           importDistinctUsers7dRes,
           authTypes30dRes,
+          funnelRes,
         ] = await Promise.all([
-          pool.query(`
+          pool.query(
+            `
             SELECT
-              SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 ELSE 0 END)::int AS new_users_7d,
-              SUM(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END)::int AS new_users_30d,
-              SUM(CASE WHEN created_at < NOW() - INTERVAL '7 days' AND updated_at >= NOW() - INTERVAL '7 days' THEN 1 ELSE 0 END)::int AS returning_active_7d,
+              SUM(CASE WHEN created_at >= NOW() - ($1::int * INTERVAL '1 day') THEN 1 ELSE 0 END)::int AS new_users_7d,
+              SUM(CASE WHEN created_at >= NOW() - ($2::int * INTERVAL '1 day') THEN 1 ELSE 0 END)::int AS new_users_30d,
+              SUM(CASE WHEN created_at < NOW() - ($1::int * INTERVAL '1 day') AND updated_at >= NOW() - ($1::int * INTERVAL '1 day') THEN 1 ELSE 0 END)::int AS returning_active_7d,
               COUNT(*)::int AS total_accounts
             FROM plately_users
-          `),
-          pool.query(`
+            `,
+            [activityDays, compareDays]
+          ),
+          pool.query(
+            `
             SELECT date_trunc('day', created_at) AS day, COUNT(*)::int AS count
             FROM plately_users
-            WHERE created_at >= NOW() - INTERVAL '14 days'
+            WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
             GROUP BY 1
             ORDER BY 1 ASC
-          `),
+            `,
+            [signupChartDays]
+          ),
           pool.query(`
             SELECT
               SUM(CASE WHEN COALESCE(jsonb_array_length(app_state->'importedRecipes'), 0) = 0 THEN 1 ELSE 0 END)::int AS b0,
@@ -14411,36 +14466,69 @@ const server = http.createServer(async (request, response) => {
             ORDER BY count DESC
             LIMIT 14
           `),
-          pool.query(`
+          pool.query(
+            `
             SELECT COUNT(DISTINCT user_id)::int AS n
             FROM plately_events
             WHERE type = 'import'
               AND user_id IS NOT NULL
-              AND created_at >= NOW() - INTERVAL '7 days'
-          `),
-          pool.query(`
+              AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
+            `,
+            [activityDays]
+          ),
+          pool.query(
+            `
             SELECT type, COUNT(*)::int AS count
             FROM plately_events
             WHERE type LIKE 'auth_%'
-              AND created_at >= NOW() - INTERVAL '30 days'
+              AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
             GROUP BY type
             ORDER BY count DESC
             LIMIT 20
-          `),
+            `,
+            [compareDays]
+          ),
+          pool.query(
+            `
+            WITH cohort AS (
+              SELECT id, created_at FROM plately_users
+              WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
+            )
+            SELECT
+              (SELECT COUNT(*)::int FROM cohort) AS signups,
+              (SELECT COUNT(DISTINCT c.id)::int FROM cohort c
+                WHERE EXISTS (
+                  SELECT 1 FROM plately_events e
+                  WHERE e.user_id = c.id AND e.type = 'import'
+                    AND e.created_at >= c.created_at
+                    AND e.created_at < c.created_at + INTERVAL '7 days'
+                )) AS did_import,
+              (SELECT COUNT(DISTINCT c.id)::int FROM cohort c
+                WHERE EXISTS (
+                  SELECT 1 FROM plately_events e
+                  WHERE e.user_id = c.id AND e.type = 'client_import_review_saved'
+                    AND e.created_at >= c.created_at
+                    AND e.created_at < c.created_at + INTERVAL '7 days'
+                )) AS did_save
+            `,
+            [activityDays]
+          ),
         ]);
 
         const vol = eventsVolumeRes.rows[0] || {};
         const ur = userRollupsRes.rows[0] || {};
         const rh = recipeHistRes.rows[0] || {};
         const gh = groceryHistRes.rows[0] || {};
+        const funnelRow = funnelRes.rows[0] || {};
 
         return sendJson(response, 200, {
           ok: true,
           analytics: {
+            meta,
             imports: {
               last30Days: daily.rows.map((r) => ({ day: r.day, count: r.count })),
-              total7d: totals.rows[0]?.total7d || 0,
-              total30d: totals.rows[0]?.total30d || 0,
+              total7d: totals.rows[0]?.total_primary || 0,
+              total30d: totals.rows[0]?.total_compare || 0,
               topSources: topSources.rows,
               topPlatforms: topPlatforms.rows,
             },
@@ -14493,6 +14581,13 @@ const server = http.createServer(async (request, response) => {
                 created_at: r.created_at,
                 meta: r.meta && typeof r.meta === "object" ? r.meta : {},
               })),
+              funnel: {
+                cohortSignupWindowDays: activityDays,
+                firstWeekDays: 7,
+                cohortSignups: Number(funnelRow.signups) || 0,
+                importInFirstWeek: Number(funnelRow.did_import) || 0,
+                savedReviewInFirstWeek: Number(funnelRow.did_save) || 0,
+              },
               userInsights: {
                 newUsers7d: ur.new_users_7d || 0,
                 newUsers30d: ur.new_users_30d || 0,
@@ -14526,6 +14621,103 @@ const server = http.createServer(async (request, response) => {
         });
       } catch (error) {
         console.error("❌ Error in /api/admin/analytics:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/analytics-export" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        if (!isPostgresEnabled()) {
+          return sendJson(response, 400, { ok: false, error: "PostgreSQL vereist voor export." });
+        }
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        const activityDays = parseAdminAnalyticsDaysParam(requestUrl.searchParams.get("days"), 7);
+        const compareDays = parseAdminAnalyticsDaysParam(requestUrl.searchParams.get("compareDays"), 30);
+        const exportDays = Math.min(90, Math.max(activityDays, compareDays, 7));
+        const limitRaw = Number.parseInt(String(requestUrl.searchParams.get("limit") || "8000"), 10);
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 20000) : 8000;
+        const res = await pool.query(
+          `
+          SELECT type, user_id, meta, created_at
+          FROM plately_events
+          WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
+          ORDER BY created_at DESC
+          LIMIT $2
+          `,
+          [exportDays, limit]
+        );
+        const csvEscape = (v) => {
+          const s = v == null ? "" : String(v);
+          if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+          return s;
+        };
+        const lines = ["type,user_id,created_at,meta_json"];
+        for (const row of res.rows) {
+          let metaJson = "{}";
+          try {
+            metaJson = JSON.stringify(row.meta && typeof row.meta === "object" ? row.meta : {});
+          } catch {
+            metaJson = "{}";
+          }
+          const ts =
+            row.created_at instanceof Date
+              ? row.created_at.toISOString()
+              : String(row.created_at || "");
+          lines.push(
+            [csvEscape(row.type), csvEscape(row.user_id ?? ""), csvEscape(ts), csvEscape(metaJson)].join(",")
+          );
+        }
+        const body = `${lines.join("\n")}\n`;
+        response.writeHead(200, {
+          ...HTTP_HEADERS,
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="plately-events-${exportDays}d.csv"`,
+        });
+        response.end(body);
+        return;
+      } catch (error) {
+        console.error("❌ Error in /api/admin/analytics-export:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/events-purge" && request.method === "POST") {
+      try {
+        await requireAdmin(request);
+        if (!isPostgresEnabled()) {
+          return sendJson(response, 400, { ok: false, error: "PostgreSQL vereist." });
+        }
+        let body = "";
+        for await (const chunk of request) body += chunk.toString();
+        let payload = {};
+        try {
+          payload = JSON.parse(body || "{}");
+        } catch {
+          return sendJson(response, 400, { ok: false, error: "Ongeldige JSON body." });
+        }
+        const olderThanDays = Number.parseInt(String(payload.olderThanDays ?? ""), 10);
+        const MIN_RETENTION = 180;
+        if (!Number.isFinite(olderThanDays) || olderThanDays < MIN_RETENTION) {
+          return sendJson(response, 400, {
+            ok: false,
+            error: `olderThanDays moet een geheel getal >= ${MIN_RETENTION} zijn.`,
+          });
+        }
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        const del = await pool.query(
+          `DELETE FROM plately_events WHERE created_at < NOW() - ($1::int * INTERVAL '1 day')`,
+          [olderThanDays]
+        );
+        return sendJson(response, 200, {
+          ok: true,
+          deleted: del.rowCount || 0,
+          olderThanDays,
+        });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/events-purge:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
       }
     }
