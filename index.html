@@ -8,7 +8,7 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.19.31" />
+    <meta name="plately-build" content="1.0.19.32" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -37,7 +37,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=1.0.19.31" />
+    <link rel="stylesheet" href="styles.css?v=1.0.19.32" />
   </head>
   <body>
     <main class="page">
@@ -949,34 +949,101 @@
               <button class="topbar-back-btn" id="profileSubTermsBack" type="button" aria-label="Terug">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
-              <h1 class="topbar-title">Voorwaarden</h1>
+              <h1 class="topbar-title">Algemene voorwaarden</h1>
               <span class="topbar-spacer"></span>
             </header>
-            <div class="profile-subpanel__body profile-legal">
-              <section class="profile-legal__block">
-                <h3 class="profile-legal__h">Over de dienst</h3>
-                <p class="profile-legal__p">Plately is een digitale assistant om recept-links te bewaren, te organiseren en te gebruiken bij boodschappen en koken. Plately is géén receptuitgeverij: inhoud wordt geïmporteerd uit bronnen van derden en kan onvolledig of onjuist zijn.</p>
-              </section>
-              <section class="profile-legal__block">
-                <h3 class="profile-legal__h">Inhoud en intellectueel eigendom</h3>
-                <p class="profile-legal__p">Jij gebruikt eigen geïmporteerde inhoud onder de voorwaarden die bij de bron gelden (copyright, merk, databankrecht). Respecteer makers — link naar hun site waar dat redelijk is.</p>
-              </section>
-              <section class="profile-legal__block">
-                <h3 class="profile-legal__h">Gebruik voor eigen risico</h3>
-                <p class="profile-legal__p">Allergieën, allergenen en voeding: controleer altijd verpakkingen en labels — Plately geeft geen garantie op volledige of juiste labeling in geïmporteerde tekst.</p>
-              </section>
-              <section class="profile-legal__block">
-                <h3 class="profile-legal__h">Beschikbaarheid</h3>
-                <p class="profile-legal__p">De app wordt “zoals ze is” geleverd. We streven naar hoge uptime; onderhoud, storingen bij hosting of bij derde partijen (supermarktkoppelingen) kunnen de dienst beperken.</p>
-              </section>
-              <section class="profile-legal__block">
-                <h3 class="profile-legal__h">Aansprakelijkheid</h3>
-                <p class="profile-legal__p">Plately en haar bedrijfsvoering zijn niet aansprakelijk voor schade door gebruik van de app buiten het wettelijk noodzakelijke, tenzij er sprake is van opzet of grove schuld zoals voorzien door dwingend recht.</p>
-              </section>
-              <section class="profile-legal__block">
-                <h3 class="profile-legal__h">Volledige tekst online</h3>
-                <p class="profile-legal__p">De laatste weergave van deze tekst vind je ook op <a href="terms.html" target="_blank" rel="noopener noreferrer">terms.html</a>. Bij vragen: <a href="mailto:support@plately.nl">support@plately.nl</a>.</p>
-              </section>
+            <div class="profile-subpanel__body profile-terms" id="profileTermsScroll">
+              <div class="profile-terms__intro">
+                <div class="profile-terms__intro-badge" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8"/><path d="M8 11h6"/></svg>
+                </div>
+                <p class="profile-terms__intro-kicker">Account &amp; juridisch</p>
+                <p class="profile-terms__intro-meta">Laatste update: mei 2026 · <a href="mailto:support@plately.nl">support@plately.nl</a></p>
+                <p class="profile-terms__intro-lead">
+                  Hieronder staat een leesbare samenvatting. De juridisch volledige tekst staat op de website — handig om te bewaren of te delen.
+                </p>
+              </div>
+
+              <div class="profile-terms__cards" role="list">
+                <article class="profile-terms__card" role="listitem">
+                  <div class="profile-terms__card-icon profile-terms__card-icon--brand" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+                  </div>
+                  <h3 class="profile-terms__card-title">Dienst</h3>
+                  <p class="profile-terms__card-text">
+                    Met Plately kun je recepten opslaan, organiseren, op een boodschappenlijst zetten en (waar beschikbaar) koppelen aan derden zoals Albert Heijn. Plately is gereedschap voor persoonlijke planning — géén medisch of dieetadvies.
+                  </p>
+                </article>
+
+                <article class="profile-terms__card" role="listitem">
+                  <div class="profile-terms__card-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  </div>
+                  <h3 class="profile-terms__card-title">Inhoud van derden</h3>
+                  <p class="profile-terms__card-text">
+                    Geïmporteerde teksten en beelden komen van externe aanbieders. Je verkrijgt daarmee géén eigendom op die inhoud. Respecteer rechten van makers en platforms; link waar redelijk naar de originele pagina.
+                  </p>
+                </article>
+
+                <article class="profile-terms__card" role="listitem">
+                  <div class="profile-terms__card-icon profile-terms__card-icon--amber" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  </div>
+                  <h3 class="profile-terms__card-title">Juistheid &amp; allergenen</h3>
+                  <p class="profile-terms__card-text">
+                    Automatisering kan fouten bevatten. Controleer altijd ingrediënten, allergenen op etiketten en voedselveiligheid zelf — vooral bij medische gevolgen.
+                  </p>
+                </article>
+
+                <article class="profile-terms__card" role="listitem">
+                  <div class="profile-terms__card-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  </div>
+                  <h3 class="profile-terms__card-title">Beschikbaarheid</h3>
+                  <p class="profile-terms__card-text">
+                    We streven naar hoge beschikbaarheid. Onderhoud, hosting of beleid bij derden kan functies tijdelijk beperken. Voorwaarden kunnen worden aangepast waar de wet dat vereist.
+                  </p>
+                </article>
+
+                <article class="profile-terms__card" role="listitem">
+                  <div class="profile-terms__card-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  </div>
+                  <h3 class="profile-terms__card-title">Aansprakelijkheid</h3>
+                  <p class="profile-terms__card-text">
+                    Aansprakelijkheid is beperkt zoals de wet toestaat, naast dwingend consumentenrecht in jouw rechtsgebied dat niet uitgesloten mag worden.
+                  </p>
+                </article>
+
+                <article class="profile-terms__card profile-terms__card--accent" role="listitem">
+                  <div class="profile-terms__card-icon profile-terms__card-icon--brand" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  </div>
+                  <h3 class="profile-terms__card-title">Privacy</h3>
+                  <p class="profile-terms__card-text">
+                    Hoe we omgaan met gegevens en statistiek staat in de privacyverklaring in de app.
+                  </p>
+                  <button type="button" class="profile-terms__inline-action" id="termsToPrivacyBtn">Open privacy</button>
+                </article>
+
+                <article class="profile-terms__card" role="listitem">
+                  <div class="profile-terms__card-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                  </div>
+                  <h3 class="profile-terms__card-title">Geschillen &amp; contact</h3>
+                  <p class="profile-terms__card-text">
+                    Vragen of klachten? Neem contact op via <a href="mailto:support@plately.nl">support@plately.nl</a>. Toepasselijke consumentenregels blijven gelden.
+                  </p>
+                </article>
+              </div>
+
+              <div class="profile-terms__footer">
+                <a class="profile-terms__footer-btn" href="terms.html" target="_blank" rel="noopener noreferrer">
+                  <span>Volledige juridische tekst</span>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </a>
+                <p class="profile-terms__footer-note">Opent <code class="profile-terms__code">terms.html</code> in een nieuw tabblad.</p>
+              </div>
             </div>
           </div>
 
@@ -2094,6 +2161,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=1.0.19.31"></script>
+    <script src="app.js?v=1.0.19.32"></script>
   </body>
 </html>
