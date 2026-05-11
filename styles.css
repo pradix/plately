@@ -11032,6 +11032,7 @@ body {
   position: sticky;
   left: 0;
   right: 0;
+  transform: none; /* override legacy fixed pill centering */
   bottom: calc(92px + env(safe-area-inset-bottom, 0px));
   z-index: 30;
   width: 100%;

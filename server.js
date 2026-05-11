@@ -3000,6 +3000,15 @@ function canonicalizeIngredientForStoreSearch(value) {
   // Gebruik dezelfde normalisatie als ingredient-zoek (AH): hoeveelheden eraf, pasta/olie/etc.
   let core = normalizeIngredientForSearch(compound);
   core = mapEnglishIngredientPhraseForNlStore(core || compound);
+  const rawFolded = String(compound || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const coreFolded = String(core || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 
   if (!core || !String(core).trim()) {
     const singular = singularizeDutchIngredientPhraseForSearch(compound.toLowerCase().trim());
@@ -3017,6 +3026,16 @@ function canonicalizeIngredientForStoreSearch(value) {
       return "Grana padano";
     }
     return singular ? singular.charAt(0).toLocaleUpperCase("nl-NL") + singular.slice(1) : "";
+  }
+
+  // Herbs: when the ingredient explicitly asks for "verse" herbs, keep that token for AH.
+  // This prevents matching spice mixes / dried variants when users mean fresh bunches.
+  if (/\bvers(?:e)?\b/.test(rawFolded) || /\bbosje\b/.test(rawFolded)) {
+    const herbBase = coreFolded.replace(/^biologisch\s+/i, "");
+    const HERBS = new Set(["koriander", "peterselie", "basilicum", "munt", "dille", "bieslook"]);
+    if (HERBS.has(herbBase)) {
+      core = `verse ${herbBase}`;
+    }
   }
 
   const cleaned = String(core).trim();
@@ -8235,6 +8254,13 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       (baseLower === "citroen" || baseLower === "citroenen") &&
       !/\b(sap|sapje|limonade|concentraat|drank|aroma|mix|ijs|tea|thee)\b/.test(rawLower);
 
+    const isFreshHerbQuery =
+      /^(?:biologisch\s+)?(?:verse\s+)?(koriander|peterselie|basilicum|munt|dille|bieslook)\b/.test(baseLower) ||
+      /\bvers(?:e)?\s+(koriander|peterselie|basilicum|munt|dille|bieslook)\b/.test(rawLower);
+
+    const isEggQuery =
+      /^(?:biologisch\s+)?(?:scharrel)?eieren?$/.test(baseLower) || baseLower === "ei" || baseLower === "eieren";
+
     const ingredientTokens = tokenizeForMatch(baseLower);
     const produceSynonymTokens = [];
     if (/\bcourgu?ettes?\b/.test(baseLower) || /\bcourgu?ettes?\b/.test(rawLower)) produceSynonymTokens.push("zucchini");
@@ -8369,6 +8395,30 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         if (/\b(pasta|puree|poeder|granulaat|zout)\b/.test(title)) {
           score += 15;
           adjustments.push({ kind: "penalty", label: "Verwerkt (poeder/pasta/zout)", delta: 15 });
+        }
+      }
+
+      // Fresh herbs: prefer "vers" / bunch-style products and avoid dried mixes/pastes.
+      if (isFreshHerbQuery) {
+        if (/\b(droog|gedroogd|kruidenmix|kruidenmixen|mix|pasta|puree|poeder|gemalen)\b/.test(title)) {
+          score += 70;
+          adjustments.push({ kind: "penalty", label: "Verse kruiden ≠ droog/mix/pasta", delta: 70 });
+        }
+        if (/\bvers\b/.test(title) || /\b(bosje|plant)\b/.test(title)) {
+          score -= 18;
+          adjustments.push({ kind: "bonus", label: "Verse kruiden match", delta: -18 });
+        }
+      }
+
+      // Eggs: avoid salad/bakery/candy results when searching for eggs.
+      if (isEggQuery) {
+        if (/\b(eiersalade|eierkoek|eierkoeken|paasei|paaseieren|chocolade)\b/.test(title)) {
+          score += 90;
+          adjustments.push({ kind: "penalty", label: "Ei ≠ salade/koek/chocolade", delta: 90 });
+        }
+        if (/\b(eieren|ei)\b/.test(title)) {
+          score -= 16;
+          adjustments.push({ kind: "bonus", label: "Ei in titel", delta: -16 });
         }
       }
 
@@ -11909,7 +11959,7 @@ const server = http.createServer(async (request, response) => {
     <meta name="twitter:description" content="${escapeHtml(desc)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
-    <link rel="stylesheet" href="/styles.css?v=1.0.19.14" />
+    <link rel="stylesheet" href="/styles.css?v=1.0.19.15" />
     <script>
       (function () {
         document.addEventListener(
