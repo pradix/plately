@@ -515,6 +515,34 @@ function wireRecipeCardImageFallbacks(root) {
 
 const HOME_GROWTH_DISMISS_KEY = "plately-home-growth-dismiss";
 
+function getHomeGrowthDismissed() {
+  try {
+    if (localStorage.getItem(HOME_GROWTH_DISMISS_KEY) === "1") return true;
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (sessionStorage.getItem(HOME_GROWTH_DISMISS_KEY) === "1") return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+function setHomeGrowthDismissed() {
+  try {
+    localStorage.setItem(HOME_GROWTH_DISMISS_KEY, "1");
+    return;
+  } catch {
+    /* ignore */
+  }
+  try {
+    sessionStorage.setItem(HOME_GROWTH_DISMISS_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
 function positionHomeGrowthTooltip(panel) {
   if (!panel) return;
   if (!panel.classList.contains("home-growth-panel--tooltip")) return;
@@ -572,21 +600,23 @@ function syncHomeGrowthPanelVisibility() {
     return;
   }
 
+  if (getHomeGrowthDismissed()) {
+    panel.classList.add("hidden");
+    panel.setAttribute("aria-hidden", "true");
+    return;
+  }
+
   try {
-    if (localStorage.getItem(HOME_GROWTH_DISMISS_KEY) === "1") {
-      panel.classList.add("hidden");
-      panel.setAttribute("aria-hidden", "true");
-    } else {
-      panel.classList.remove("hidden");
-      panel.removeAttribute("aria-hidden");
-      panel.classList.add("home-growth-panel--tooltip");
-      positionHomeGrowthTooltip(panel);
-    }
-  } catch {
     panel.classList.remove("hidden");
     panel.removeAttribute("aria-hidden");
     panel.classList.add("home-growth-panel--tooltip");
-    positionHomeGrowthTooltip(panel);
+    // Wait a frame so layout/width is settled before measuring and positioning.
+    window.requestAnimationFrame(() => positionHomeGrowthTooltip(panel));
+    window.requestAnimationFrame(() => positionHomeGrowthTooltip(panel));
+  } catch {
+    // Worst case: still show it in-page.
+    panel.classList.remove("hidden");
+    panel.removeAttribute("aria-hidden");
   }
 }
 
@@ -596,11 +626,7 @@ function installHomeGrowthPanelOnce() {
   const btn = document.getElementById("homeGrowthDismiss");
   if (!btn) return;
   bindEvent(btn, "click", () => {
-    try {
-      localStorage.setItem(HOME_GROWTH_DISMISS_KEY, "1");
-    } catch {
-      /* ignore */
-    }
+    setHomeGrowthDismissed();
     syncHomeGrowthPanelVisibility();
   });
 
