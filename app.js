@@ -5575,7 +5575,7 @@ function renderRecipeGrid() {
     if (isNewUser && state.auth.authenticated) {
       // New authenticated user: use the same "add recipe" card style as Recent.
       recipeGrid.innerHTML = `
-        <div style="grid-column:1/-1; display:flex; justify-content:center;">
+        <div style="grid-column:1/-1; display:flex; justify-content:flex-start;">
           <button class="recent-card recent-card--add" type="button" id="addRecipeCard" style="width:min(360px, 100%);">
             <div class="recent-card__add-icon">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
@@ -12076,7 +12076,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.24";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.25";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
