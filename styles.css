@@ -6412,6 +6412,9 @@ button.ingredient-item {
   flex-direction: column;
   gap: 28px;
   padding-top: 40px;
+  /* Keep "Overslaan" + "Volgende" within the viewport on short screens. */
+  min-height: calc(100svh - 132px);
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
 }
 .onboarding-step.hidden { display: none; }
 
@@ -7060,7 +7063,15 @@ button.ingredient-item {
   display: flex;
   gap: 12px;
   margin-top: auto;
-  padding-top: 16px;
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  padding-top: 14px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--color-bg) 84%, transparent);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent);
 }
 
 .onboarding-btn {
