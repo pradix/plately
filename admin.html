@@ -222,6 +222,56 @@
     .muted { color: var(--muted); font-size: 12px; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 
+    .admin-activity-spark {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      padding: 6px 0 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .admin-activity-spark > div {
+      flex: 1;
+      min-width: 2px;
+      max-width: 16px;
+      border-radius: 3px;
+      background: var(--green);
+    }
+    .admin-activity-panels {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 900px) {
+      .admin-activity-panels { grid-template-columns: 1fr; }
+    }
+    .admin-activity-panel {
+      margin: 0;
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.65);
+    }
+    .admin-activity-meta details summary {
+      cursor: pointer;
+      font-size: 11px;
+      color: var(--muted);
+      list-style: none;
+    }
+    .admin-activity-meta details summary::-webkit-details-marker { display: none; }
+    .admin-activity-meta pre {
+      margin: 8px 0 0;
+      padding: 8px;
+      font-size: 10px;
+      line-height: 1.35;
+      max-height: 200px;
+      overflow: auto;
+      background: rgba(0,0,0,0.04);
+      border-radius: 8px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
     /* ── Inputs ────────────────────────────────────────────────────────────── */
     .search-bar { display: flex; gap: 8px; margin-bottom: 12px; }
 
@@ -940,24 +990,88 @@
         <div class="section" id="activitySection">
           <div class="section-header">
             <h2>Activiteit in de app</h2>
-            <div class="muted">Client-tracking (UI) + server-events (import, zoeken). Alleen zichtbaar met PostgreSQL.</div>
+            <div class="muted">Client-events (UI) + server-events (import, zoeken, kanaal-zoek). Uitgebreid over 24u / 7d / 30d. Alleen met PostgreSQL.</div>
           </div>
           <div class="stats-grid" style="margin:0 0 14px">
+            <div class="stat-card">
+              <div class="stat-value" id="actEvents24h">—</div>
+              <div class="stat-label">Alle events (24u)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="actEvents7d">—</div>
+              <div class="stat-label">Alle events (7d)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="actEvents30d">—</div>
+              <div class="stat-label">Alle events (30d)</div>
+            </div>
             <div class="stat-card">
               <div class="stat-value" id="actClient7d">—</div>
               <div class="stat-label">Client-events (7d)</div>
             </div>
             <div class="stat-card">
+              <div class="stat-value" id="actServer7dKpi">—</div>
+              <div class="stat-label">Server-events (7d)</div>
+            </div>
+            <div class="stat-card">
               <div class="stat-value" id="actActors7d">—</div>
-              <div class="stat-label">Unieke gebruikers/anon (7d)</div>
+              <div class="stat-label">Unieke actors (7d)</div>
             </div>
           </div>
-          <h3 class="subhead">Alle eventtypes (7 dagen)</h3>
-          <div id="actByType7d" style="font-size:12px;color:rgba(0,0,0,0.82);margin-bottom:16px"></div>
-          <h3 class="subhead">Server-events (7 dagen, zonder client_*)</h3>
-          <div id="actServer7d" style="font-size:12px;color:rgba(0,0,0,0.82);margin-bottom:16px"></div>
-          <h3 class="subhead">Recente events</h3>
-          <div id="actRecent" style="overflow:auto;max-height:520px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)"></div>
+
+          <div class="admin-activity-panels">
+            <div class="admin-activity-panel">
+              <h3 class="subhead">Volume per dag (alle types, 7d)</h3>
+              <div id="actDailyBars"></div>
+            </div>
+            <div class="admin-activity-panel">
+              <h3 class="subhead">Volume per uur (24u)</h3>
+              <div id="actHourlyBars"></div>
+            </div>
+          </div>
+
+          <div class="admin-activity-panels">
+            <div class="admin-activity-panel">
+              <h3 class="subhead">Schermen (client_navigation, 7d)</h3>
+              <div id="actNavViews"></div>
+            </div>
+            <div class="admin-activity-panel">
+              <h3 class="subhead">Kanaal-zoektermen (server, 7d)</h3>
+              <div id="actChannelQueries"></div>
+            </div>
+          </div>
+
+          <div class="admin-activity-panels">
+            <div class="admin-activity-panel">
+              <h3 class="subhead">Imports per platform (7d)</h3>
+              <div id="actImportPlatforms7d"></div>
+            </div>
+            <div class="admin-activity-panel">
+              <h3 class="subhead">Imports per bron-host (7d)</h3>
+              <div id="actImportHosts7d"></div>
+            </div>
+          </div>
+
+          <div class="admin-activity-panels">
+            <div class="admin-activity-panel">
+              <h3 class="subhead">Meest actieve accounts (7d)</h3>
+              <div id="actTopUsers"></div>
+            </div>
+            <div class="admin-activity-panel">
+              <h3 class="subhead">Anonieme sessies (7d, anonId)</h3>
+              <div class="muted" style="margin:-4px 0 8px;font-size:11px">Alleen events zonder user_id; gehashte/random id uit de app.</div>
+              <div id="actTopAnon"></div>
+            </div>
+          </div>
+
+          <h3 class="subhead">Eventtypes — 7 dagen vs 30 dagen</h3>
+          <div id="actByTypeCompare" style="font-size:12px;margin-bottom:16px"></div>
+
+          <h3 class="subhead">Server-only types (7d, geen client_*)</h3>
+          <div id="actServer7d" style="font-size:12px;margin-bottom:16px"></div>
+
+          <h3 class="subhead">Recente events (laatste 220)</h3>
+          <div id="actRecent" style="overflow:auto;max-height:640px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)"></div>
         </div>
       </div>
     </div>
@@ -1460,6 +1574,33 @@
       }
     }
 
+    function activitySparkHtml(rows, valueKey, labelKey, maxHeight) {
+      const arr = Array.isArray(rows) ? rows : [];
+      if (!arr.length) return '<p class="muted">Nog geen events in deze periode.</p>';
+      const max = Math.max(1, ...arr.map((r) => Number(r[valueKey]) || 0));
+      const inner = arr
+        .map((r) => {
+          const v = Number(r[valueKey]) || 0;
+          const h = Math.max(2, Math.round((v / max) * maxHeight));
+          const raw = r[labelKey];
+          let title = "";
+          if (raw != null && raw !== "") {
+            const d = raw instanceof Date ? raw : new Date(raw);
+            title = Number.isFinite(d.getTime())
+              ? d.toLocaleString(
+                  "nl-NL",
+                  labelKey === "hr"
+                    ? { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }
+                    : { weekday: "short", day: "2-digit", month: "short" }
+                )
+              : String(raw);
+          }
+          return `<div title="${escapeHtml(title)}: ${v}" style="height:${h}px;opacity:${v ? 0.92 : 0.18}"></div>`;
+        })
+        .join("");
+      return `<div class="admin-activity-spark" style="height:${maxHeight + 22}px">${inner}</div>`;
+    }
+
     async function loadAnalytics() {
       try {
         const response = await fetch("/api/admin/analytics", adminFetchInit());
@@ -1499,24 +1640,133 @@
         }
 
         const activity = data.analytics?.activity || {};
+        setText("actEvents24h", formatNumber(activity.events24h ?? 0));
+        setText("actEvents7d", formatNumber(activity.events7d ?? 0));
+        setText("actEvents30d", formatNumber(activity.events30d ?? 0));
         setText("actClient7d", formatNumber(activity.clientEvents7d ?? 0));
+        setText("actServer7dKpi", formatNumber(activity.serverEvents7d ?? 0));
         setText("actActors7d", formatNumber(activity.uniqueActors7d ?? 0));
 
-        const act7 = document.getElementById("actByType7d");
-        const actSrv = document.getElementById("actServer7d");
-        const actRecent = document.getElementById("actRecent");
+        const dailyBars = document.getElementById("actDailyBars");
+        if (dailyBars) {
+          dailyBars.innerHTML = activitySparkHtml(activity.dailyEvents7d || [], "count", "day", 100);
+        }
+        const hourlyBars = document.getElementById("actHourlyBars");
+        if (hourlyBars) {
+          hourlyBars.innerHTML = activitySparkHtml(activity.hourlyEvents24h || [], "count", "hr", 88);
+        }
+
+        const navRows = Array.isArray(activity.navigationViews7d) ? activity.navigationViews7d : [];
+        const navEl = document.getElementById("actNavViews");
+        if (navEl) {
+          navEl.innerHTML = navRows.length
+            ? `<table class="users-table"><thead><tr><th>view</th><th style="text-align:right">7d</th></tr></thead><tbody>${navRows
+                .map(
+                  (r) =>
+                    `<tr><td><code>${escapeHtml(String(r.view || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
+                )
+                .join("")}</tbody></table>`
+            : `<p class="muted">Geen navigatie-events.</p>`;
+        }
+
+        const chQ = Array.isArray(activity.channelSearchQueries7d) ? activity.channelSearchQueries7d : [];
+        const chEl = document.getElementById("actChannelQueries");
+        if (chEl) {
+          chEl.innerHTML = chQ.length
+            ? `<table class="users-table"><thead><tr><th>query</th><th style="text-align:right">7d</th></tr></thead><tbody>${chQ
+                .map(
+                  (r) =>
+                    `<tr><td><code>${escapeHtml(String(r.query || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
+                )
+                .join("")}</tbody></table>`
+            : `<p class="muted">Geen kanaal-zoektermen (of nog geen server-log).</p>`;
+        }
+
+        const ipPlat = Array.isArray(activity.importPlatforms7d) ? activity.importPlatforms7d : [];
+        const ipHost = Array.isArray(activity.importHosts7d) ? activity.importHosts7d : [];
+        const elPlat = document.getElementById("actImportPlatforms7d");
+        const elHost = document.getElementById("actImportHosts7d");
+        if (elPlat) {
+          elPlat.innerHTML = ipPlat.length
+            ? `<table class="users-table"><thead><tr><th>platform</th><th style="text-align:right">7d</th></tr></thead><tbody>${ipPlat
+                .map(
+                  (r) =>
+                    `<tr><td>${escapeHtml(String(r.platform || ""))}</td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
+                )
+                .join("")}</tbody></table>`
+            : `<p class="muted">Geen import-events (7d).</p>`;
+        }
+        if (elHost) {
+          elHost.innerHTML = ipHost.length
+            ? `<table class="users-table"><thead><tr><th>host</th><th style="text-align:right">7d</th></tr></thead><tbody>${ipHost
+                .map(
+                  (r) =>
+                    `<tr><td><code>${escapeHtml(String(r.source_host || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
+                )
+                .join("")}</tbody></table>`
+            : `<p class="muted">Geen import-events (7d).</p>`;
+        }
+
+        const topU = Array.isArray(activity.topUsers7d) ? activity.topUsers7d : [];
+        const topA = Array.isArray(activity.topAnon7d) ? activity.topAnon7d : [];
+        const elTopU = document.getElementById("actTopUsers");
+        const elTopA = document.getElementById("actTopAnon");
+        if (elTopU) {
+          elTopU.innerHTML = topU.length
+            ? `<table class="users-table"><thead><tr><th>email</th><th>user id</th><th style="text-align:right">events</th></tr></thead><tbody>${topU
+                .map((r) => {
+                  const em = String(r.email || "").trim() || "—";
+                  const id = String(r.user_id || "");
+                  const idShort = id.length > 14 ? `${id.slice(0, 12)}…` : id;
+                  return `<tr><td>${escapeHtml(em)}</td><td><code title="${escapeHtml(id)}">${escapeHtml(idShort)}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`;
+                })
+                .join("")}</tbody></table>`
+            : `<p class="muted">Geen ingelogde events (7d).</p>`;
+        }
+        if (elTopA) {
+          elTopA.innerHTML = topA.length
+            ? `<table class="users-table"><thead><tr><th>anonId</th><th style="text-align:right">events</th></tr></thead><tbody>${topA
+                .map(
+                  (r) =>
+                    `<tr><td><code class="mono">${escapeHtml(String(r.anon_id || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
+                )
+                .join("")}</tbody></table>`
+            : `<p class="muted">Geen anonieme events met anonId.</p>`;
+        }
+
+        const actCmp = document.getElementById("actByTypeCompare");
         const rows7 = Array.isArray(activity.byType7d) ? activity.byType7d : [];
-        const rowsSrv = Array.isArray(activity.serverTypes7d) ? activity.serverTypes7d : [];
-        if (act7) {
-          act7.innerHTML = rows7.length
-            ? `<table class="users-table"><thead><tr><th>type</th><th class="sortable" style="text-align:right">7d</th></tr></thead><tbody>${rows7.map((r) => `<tr><td><code>${escapeHtml(String(r.type || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`).join("")}</tbody></table>`
+        const rows30 = Array.isArray(activity.byType30d) ? activity.byType30d : [];
+        const m7 = new Map(rows7.map((r) => [String(r.type || ""), Number(r.count) || 0]));
+        const m30 = new Map(rows30.map((r) => [String(r.type || ""), Number(r.count) || 0]));
+        const types = [...new Set([...m7.keys(), ...m30.keys()])].filter(Boolean);
+        types.sort((a, b) => (m30.get(b) || 0) - (m30.get(a) || 0));
+        if (actCmp) {
+          actCmp.innerHTML = types.length
+            ? `<table class="users-table"><thead><tr><th>type</th><th style="text-align:right">7d</th><th style="text-align:right">30d</th></tr></thead><tbody>${types
+                .slice(0, 55)
+                .map(
+                  (t) =>
+                    `<tr><td><code>${escapeHtml(t)}</code></td><td style="text-align:right">${formatNumber(m7.get(t) || 0)}</td><td style="text-align:right">${formatNumber(m30.get(t) || 0)}</td></tr>`
+                )
+                .join("")}</tbody></table>`
             : `<p class="muted">Geen events in de laatste 7 dagen (of database uit).</p>`;
         }
+
+        const actSrv = document.getElementById("actServer7d");
+        const rowsSrv = Array.isArray(activity.serverTypes7d) ? activity.serverTypes7d : [];
         if (actSrv) {
           actSrv.innerHTML = rowsSrv.length
-            ? `<table class="users-table"><thead><tr><th>type</th><th class="sortable" style="text-align:right">7d</th></tr></thead><tbody>${rowsSrv.map((r) => `<tr><td><code>${escapeHtml(String(r.type || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`).join("")}</tbody></table>`
+            ? `<table class="users-table"><thead><tr><th>type</th><th style="text-align:right">7d</th></tr></thead><tbody>${rowsSrv
+                .map(
+                  (r) =>
+                    `<tr><td><code>${escapeHtml(String(r.type || ""))}</code></td><td style="text-align:right">${formatNumber(r.count || 0)}</td></tr>`
+                )
+                .join("")}</tbody></table>`
             : `<p class="muted">Geen server-events.</p>`;
         }
+
+        const actRecent = document.getElementById("actRecent");
         const recent = Array.isArray(activity.recent) ? activity.recent : [];
         if (actRecent) {
           if (!recent.length) {
@@ -1534,19 +1784,19 @@
                 </thead>
                 <tbody>
                   ${recent.map((row) => {
-                    const ts = row.created_at ? new Date(row.created_at).toLocaleString('nl-NL') : "—";
+                    const ts = row.created_at ? new Date(row.created_at).toLocaleString("nl-NL") : "—";
                     const rawId = String(row.user_id || "");
                     const uid = rawId
                       ? `<code title="${escapeHtml(rawId)}">${escapeHtml(rawId.length > 12 ? `${rawId.slice(0, 10)}…` : rawId)}</code>`
                       : `<span class="muted">—</span>`;
-                    let metaStr = "";
+                    let metaJson = "";
                     try {
-                      metaStr = JSON.stringify(row.meta || {});
+                      metaJson = JSON.stringify(row.meta || {}, null, 2);
                     } catch {
-                      metaStr = "{}";
+                      metaJson = "{}";
                     }
-                    if (metaStr.length > 220) metaStr = metaStr.slice(0, 217) + "…";
-                    return `<tr><td style="white-space:nowrap;font-size:11px">${escapeHtml(ts)}</td><td><code>${escapeHtml(String(row.type || ""))}</code></td><td>${uid}</td><td style="font-size:11px;word-break:break-all">${escapeHtml(metaStr)}</td></tr>`;
+                    const metaCell = `<div class="admin-activity-meta"><details><summary>JSON tonen</summary><pre>${escapeHtml(metaJson)}</pre></details></div>`;
+                    return `<tr><td style="white-space:nowrap;font-size:11px">${escapeHtml(ts)}</td><td><code>${escapeHtml(String(row.type || ""))}</code></td><td>${uid}</td><td>${metaCell}</td></tr>`;
                   }).join("")}
                 </tbody>
               </table>

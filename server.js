@@ -12060,7 +12060,7 @@ const server = http.createServer(async (request, response) => {
     <meta name="twitter:description" content="${escapeHtml(desc)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
-    <link rel="stylesheet" href="/styles.css?v=1.0.19.28" />
+    <link rel="stylesheet" href="/styles.css?v=1.0.19.29" />
     <script>
       (function () {
         document.addEventListener(
@@ -14123,9 +14123,21 @@ const server = http.createServer(async (request, response) => {
           const emptyActivity = {
             clientEvents7d: 0,
             uniqueActors7d: 0,
+            events24h: 0,
+            events7d: 0,
+            events30d: 0,
+            serverEvents7d: 0,
             byType7d: [],
             byType30d: [],
             serverTypes7d: [],
+            dailyEvents7d: [],
+            hourlyEvents24h: [],
+            topUsers7d: [],
+            topAnon7d: [],
+            navigationViews7d: [],
+            channelSearchQueries7d: [],
+            importPlatforms7d: [],
+            importHosts7d: [],
             recent: [],
           };
           return sendJson(response, 200, {
@@ -14249,9 +14261,105 @@ const server = http.createServer(async (request, response) => {
           SELECT type, user_id, meta, created_at
           FROM plately_events
           ORDER BY created_at DESC
-          LIMIT 150
+          LIMIT 220
           `
         );
+
+        const [
+          eventsVolumeRes,
+          dailyEvents7dRes,
+          hourlyEvents24hRes,
+          topUsers7dRes,
+          topAnon7dRes,
+          navViews7dRes,
+          channelSearch7dRes,
+          importPlatform7dRes,
+          importHost7dRes,
+        ] = await Promise.all([
+          pool.query(`
+            SELECT
+              SUM(CASE WHEN created_at >= NOW() - INTERVAL '24 hours' THEN 1 ELSE 0 END)::int AS h24,
+              SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 ELSE 0 END)::int AS d7,
+              SUM(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END)::int AS d30,
+              SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' AND type ~ '^client_' THEN 1 ELSE 0 END)::int AS client7,
+              SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' AND type !~ '^client_' THEN 1 ELSE 0 END)::int AS server7
+            FROM plately_events
+          `),
+          pool.query(`
+            SELECT date_trunc('day', created_at) AS day, COUNT(*)::int AS count
+            FROM plately_events
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+            GROUP BY 1
+            ORDER BY 1 ASC
+          `),
+          pool.query(`
+            SELECT date_trunc('hour', created_at) AS hr, COUNT(*)::int AS count
+            FROM plately_events
+            WHERE created_at >= NOW() - INTERVAL '24 hours'
+            GROUP BY 1
+            ORDER BY 1 ASC
+          `),
+          pool.query(`
+            SELECT e.user_id, u.email, COUNT(*)::int AS count
+            FROM plately_events e
+            LEFT JOIN plately_users u ON u.id = e.user_id
+            WHERE e.created_at >= NOW() - INTERVAL '7 days'
+              AND e.user_id IS NOT NULL
+            GROUP BY e.user_id, u.email
+            ORDER BY count DESC
+            LIMIT 22
+          `),
+          pool.query(`
+            SELECT COALESCE(meta->>'anonId', '') AS anon_id, COUNT(*)::int AS count
+            FROM plately_events
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+              AND user_id IS NULL
+              AND COALESCE(meta->>'anonId', '') <> ''
+            GROUP BY 1
+            ORDER BY count DESC
+            LIMIT 12
+          `),
+          pool.query(`
+            SELECT COALESCE(meta->>'view', '') AS view, COUNT(*)::int AS count
+            FROM plately_events
+            WHERE type = 'client_navigation'
+              AND created_at >= NOW() - INTERVAL '7 days'
+              AND COALESCE(meta->>'view', '') <> ''
+            GROUP BY 1
+            ORDER BY count DESC
+            LIMIT 24
+          `),
+          pool.query(`
+            SELECT COALESCE(meta->>'query', '') AS query, COUNT(*)::int AS count
+            FROM plately_events
+            WHERE type = 'channel_search'
+              AND created_at >= NOW() - INTERVAL '7 days'
+              AND COALESCE(meta->>'query', '') <> ''
+            GROUP BY 1
+            ORDER BY count DESC
+            LIMIT 32
+          `),
+          pool.query(`
+            SELECT COALESCE(NULLIF(meta->>'platform', ''), '(onbekend)') AS platform, COUNT(*)::int AS count
+            FROM plately_events
+            WHERE type = 'import'
+              AND created_at >= NOW() - INTERVAL '7 days'
+            GROUP BY 1
+            ORDER BY count DESC
+            LIMIT 14
+          `),
+          pool.query(`
+            SELECT COALESCE(NULLIF(meta->>'sourceHost', ''), '(onbekend)') AS source_host, COUNT(*)::int AS count
+            FROM plately_events
+            WHERE type = 'import'
+              AND created_at >= NOW() - INTERVAL '7 days'
+            GROUP BY 1
+            ORDER BY count DESC
+            LIMIT 14
+          `),
+        ]);
+
+        const vol = eventsVolumeRes.rows[0] || {};
 
         return sendJson(response, 200, {
           ok: true,
@@ -14266,9 +14374,46 @@ const server = http.createServer(async (request, response) => {
             activity: {
               clientEvents7d: clientEvents7dRes.rows[0]?.n || 0,
               uniqueActors7d: uniqueActors7dRes.rows[0]?.n || 0,
+              events24h: vol.h24 || 0,
+              events7d: vol.d7 || 0,
+              events30d: vol.d30 || 0,
+              serverEvents7d: vol.server7 || 0,
               byType7d: activityByType7d.rows || [],
               byType30d: activityByType30d.rows || [],
               serverTypes7d: serverOnlyTypes7d.rows || [],
+              dailyEvents7d: (dailyEvents7dRes.rows || []).map((r) => ({
+                day: r.day,
+                count: r.count || 0,
+              })),
+              hourlyEvents24h: (hourlyEvents24hRes.rows || []).map((r) => ({
+                hr: r.hr,
+                count: r.count || 0,
+              })),
+              topUsers7d: (topUsers7dRes.rows || []).map((r) => ({
+                user_id: r.user_id,
+                email: r.email || "",
+                count: r.count || 0,
+              })),
+              topAnon7d: (topAnon7dRes.rows || []).map((r) => ({
+                anon_id: r.anon_id,
+                count: r.count || 0,
+              })),
+              navigationViews7d: (navViews7dRes.rows || []).map((r) => ({
+                view: r.view,
+                count: r.count || 0,
+              })),
+              channelSearchQueries7d: (channelSearch7dRes.rows || []).map((r) => ({
+                query: r.query,
+                count: r.count || 0,
+              })),
+              importPlatforms7d: (importPlatform7dRes.rows || []).map((r) => ({
+                platform: r.platform,
+                count: r.count || 0,
+              })),
+              importHosts7d: (importHost7dRes.rows || []).map((r) => ({
+                source_host: r.source_host,
+                count: r.count || 0,
+              })),
               recent: (recentEventsRes.rows || []).map((r) => ({
                 type: r.type,
                 user_id: r.user_id || null,
