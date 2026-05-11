@@ -8,7 +8,7 @@
       name="description"
       content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.19.25" />
+    <meta name="plately-build" content="1.0.19.26" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -37,7 +37,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="stylesheet" href="styles.css?v=1.0.19.25" />
+    <link rel="stylesheet" href="styles.css?v=1.0.19.26" />
   </head>
   <body>
     <main class="page">
@@ -1877,7 +1877,6 @@
           <span class="onboarding-progress-dot" data-step="1"></span>
           <span class="onboarding-progress-dot" data-step="2"></span>
           <span class="onboarding-progress-dot" data-step="3"></span>
-          <span class="onboarding-progress-dot" data-step="4"></span>
         </div>
 
         <!-- Step 1: Profiel afronden -->
@@ -1962,60 +1961,8 @@
           </div>
         </div>
 
-        <!-- Step 3: Je eerste kookboek -->
-        <div class="onboarding-step onboarding-step--cookbook hidden" id="onboardingStep3">
-          <div class="onboarding-header onboarding-header--cookbook">
-            <div class="onboarding-hero-icon onboarding-hero-icon--book" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z"/>
-                <path d="M4 16a4 4 0 0 1 4-4h12"/>
-              </svg>
-            </div>
-            <h2 class="onboarding-title">Extra kookboek</h2>
-            <p class="onboarding-subtitle">Optioneel. Je hebt al “Favorieten”. Maak hier een extra kookboek (later aanpasbaar).</p>
-          </div>
-
-          <div class="profile2-card onboarding-cookbook-app-card">
-            <div class="onboarding-cookbook-cover-preview">
-              <div class="onboarding-cookbook-cover-preview__wash" aria-hidden="true"></div>
-              <div class="onboarding-cookbook-cover-preview__content">
-                <p class="onboarding-cookbook-cover-preview__title" id="onboardingCookbookPreview">Jouw kookboek</p>
-              </div>
-            </div>
-            <div class="profile2-row-divider"></div>
-            <div class="onboarding-cookbook-body">
-              <div class="profile-subpanel__field">
-                <label class="profile-subpanel__label" for="onboardingCookbookName">Naam kookboek</label>
-                <input
-                  id="onboardingCookbookName"
-                  class="onboarding-cookbook-input"
-                  type="text"
-                  maxlength="40"
-                  placeholder="Bijv. Weekendkoken"
-                  autocomplete="off"
-                />
-              </div>
-              <div class="onboarding-cookbook-pills">
-                <span class="onboarding-cookbook-pills__kicker">Snel kiezen</span>
-                <div class="onboarding-suggestion-pills">
-                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Snel & makkelijk">Snel &amp; makkelijk</button>
-                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Weekendkoken">Weekendkoken</button>
-                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Pasta">Pasta</button>
-                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Aziatisch">Aziatisch</button>
-                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Bakken">Bakken</button>
-                  <button class="onboarding-suggestion-pill filter-chip" type="button" data-cookbook-suggest="Vegetarisch">Vegetarisch</button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="onboarding-actions">
-            <button class="onboarding-btn onboarding-btn--secondary" id="onboardingStep3Skip" type="button">Overslaan</button>
-            <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep3Next" type="button">Volgende →</button>
-          </div>
-        </div>
-
-        <!-- Step 4: Favoriete supermarkt -->
-        <div class="onboarding-step hidden" id="onboardingStep4">
+        <!-- Step 3: Favoriete supermarkt -->
+        <div class="onboarding-step hidden" id="onboardingStep3">
           <div class="onboarding-header">
             <div class="onboarding-hero-icon onboarding-hero-icon--supermarket" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2036,8 +1983,8 @@
             Op dit moment kun je alleen boodschappen doen via Albert Heijn. Andere supermarkten volgen binnenkort.
           </p>
           <div class="onboarding-actions">
-            <button class="onboarding-btn onboarding-btn--secondary" id="onboardingStep4Skip" type="button">Overslaan</button>
-            <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep4Next" type="button">Klaar! ✓</button>
+            <button class="onboarding-btn onboarding-btn--secondary" id="onboardingStep3Skip" type="button">Overslaan</button>
+            <button class="onboarding-btn onboarding-btn--primary" id="onboardingStep3Next" type="button">Klaar! ✓</button>
           </div>
         </div>
       </div>
@@ -2147,6 +2094,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=1.0.19.25"></script>
+    <script src="app.js?v=1.0.19.26"></script>
   </body>
 </html>

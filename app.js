@@ -12076,7 +12076,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.25";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.19.26";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
@@ -13899,7 +13899,6 @@ handleUrlSchemeImport();
 const onboardingScreen = document.getElementById("onboardingScreen");
 let onboardingData = {
   channels: [],
-  cookbook: "",
   supermarket: "ah",
   suggestedChannels: [],
   birthDate: "",
@@ -13911,7 +13910,6 @@ function resetOnboardingData() {
   const sortedSeed = getSeedChannelsSortedByName().filter((ch) => isSeedChannelEnabled(ch.id));
   onboardingData = {
     channels: sortedSeed.map((ch) => ch.id),
-    cookbook: "",
     supermarket: "ah",
     suggestedChannels: [],
     birthDate: "",
@@ -13920,23 +13918,11 @@ function resetOnboardingData() {
   };
 }
 
-function syncOnboardingCookbookPreview() {
-  const input = document.getElementById("onboardingCookbookName");
-  const preview = document.getElementById("onboardingCookbookPreview");
-  if (!(preview instanceof HTMLElement)) return;
-  const raw = input instanceof HTMLInputElement ? input.value.trim() : "";
-  preview.textContent = raw || "Jouw kookboek";
-}
-
 function showOnboarding() {
   resetOnboardingData();
   authModal.classList.add("hidden");
   authModal.setAttribute("aria-hidden", "true");
   onboardingScreen.classList.remove("hidden");
-
-  const cookbookInput = document.getElementById("onboardingCookbookName");
-  if (cookbookInput instanceof HTMLInputElement) cookbookInput.value = "";
-  syncOnboardingCookbookPreview();
 
   const overlay = document.getElementById("onboardingOverlay");
   if (overlay) overlay.setAttribute("hidden", "");
@@ -13949,13 +13935,12 @@ function showOnboarding() {
 }
 
 function showOnboardingStep(step) {
-  const safe = Math.min(Math.max(Number(step) || 1, 1), 4);
-  ["onboardingStep1", "onboardingStep2", "onboardingStep3", "onboardingStep4"].forEach((id) => {
+  const safe = Math.min(Math.max(Number(step) || 1, 1), 3);
+  ["onboardingStep1", "onboardingStep2", "onboardingStep3"].forEach((id) => {
     document.getElementById(id)?.classList.add("hidden");
   });
   document.getElementById(`onboardingStep${safe}`)?.classList.remove("hidden");
   updateOnboardingProgress(safe);
-  if (safe === 3) syncOnboardingCookbookPreview();
 }
 
 function updateOnboardingProgress(step) {
@@ -14113,33 +14098,13 @@ function renderOnboardingSupermarkets() {
 }
 
 function finishOnboarding() {
-  const cookbookInput = document.getElementById("onboardingCookbookName");
-  onboardingData.cookbook =
-    cookbookInput instanceof HTMLInputElement ? cookbookInput.value.trim() : String(onboardingData.cookbook || "").trim();
-
   state.followedChannelIds = [...new Set((onboardingData.channels || []).filter((id) => isSeedChannelEnabled(id)))];
 
   if (Array.isArray(onboardingData.suggestedChannels) && onboardingData.suggestedChannels.length > 0) {
     state.customChannels.push(...onboardingData.suggestedChannels);
   }
 
-  let newCookbookId = "";
-  if (onboardingData.cookbook) {
-    const newCb = {
-      id: "cb-" + Date.now(),
-      name: onboardingData.cookbook,
-      recipeIds: [],
-    };
-    state.cookbooks.push(newCb);
-    newCookbookId = newCb.id;
-    state.selectedCookbookId = newCb.id;
-  }
-
   ensureFavoritesCookbookExists({ persist: false });
-  const favoritesRow = state.cookbooks.find((cb) => cb && cb.name === FAVORITES_COOKBOOK_NAME);
-  const cookbookForRecipe =
-    newCookbookId || state.selectedCookbookId || favoritesRow?.id || state.cookbooks[0]?.id || "";
-
   state.profile.favoriteSupermarket = onboardingData.supermarket || "ah";
   if (onboardingData.birthDate) state.profile.birthDate = onboardingData.birthDate;
   if (onboardingData.gender) state.profile.gender = onboardingData.gender;
@@ -14183,36 +14148,11 @@ bindEvent(document.getElementById("onboardingStep2Next"), "click", () => {
   showOnboardingStep(3);
 });
 
-// Suggestion pills for cookbook names
-document.querySelectorAll(".onboarding-suggestion-pill").forEach((pill) => {
-  pill.addEventListener("click", () => {
-    const suggestedName = pill.dataset.cookbookSuggest;
-    const input = document.getElementById("onboardingCookbookName");
-    if (input instanceof HTMLInputElement) {
-      input.value = suggestedName || "";
-      input.focus();
-      syncOnboardingCookbookPreview();
-    }
-  });
-});
-
-bindEvent(document.getElementById("onboardingCookbookName"), "input", () => {
-  syncOnboardingCookbookPreview();
-});
-
 bindEvent(document.getElementById("onboardingStep3Skip"), "click", () => {
-  showOnboardingStep(4);
-});
-
-bindEvent(document.getElementById("onboardingStep3Next"), "click", () => {
-  showOnboardingStep(4);
-});
-
-bindEvent(document.getElementById("onboardingStep4Skip"), "click", () => {
   finishOnboarding();
 });
 
-bindEvent(document.getElementById("onboardingStep4Next"), "click", () => {
+bindEvent(document.getElementById("onboardingStep3Next"), "click", () => {
   finishOnboarding();
 });
 
