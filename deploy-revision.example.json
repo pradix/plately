@@ -2,5 +2,5 @@
   "gitCommit": "531fc89",
   "gitBranch": "main",
   "deployedAt": "2026-05-12T12:00:00.000Z",
-  "message": "optional: CI of handmatige deploy-notitie"
+  "message": "optional — op de VPS vult deploy-beta.sh dit automatisch (zie repo-root deploy-beta.sh)."
 }
