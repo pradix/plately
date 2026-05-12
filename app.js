@@ -1737,9 +1737,11 @@ function openAuthModal(mode = "login") {
   applyTranslations();
   syncAuthSocialVisibility();
   scrollAuthModalToTop();
+  attachEmbeddedBrowserAuthHint();
 }
 
 function closeAuthModal() {
+  removeEmbeddedBrowserAuthHint();
   authModal.classList.add("hidden");
   authModal.setAttribute("aria-hidden", "true");
 }
@@ -8845,7 +8847,7 @@ function applyPersistedAppState(user) {
   }
 
   state.session.userId = user.id || "";
-  state.auth.authenticated = Boolean(user.authenticated);
+  state.auth.authenticated = coerceJsonBoolean(user.authenticated);
   state.auth.email = user.email || "";
 
   if (user.profile && typeof user.profile === "object") {
@@ -9042,6 +9044,81 @@ function normalizeUiErrorMessage(message, code = "") {
   return text;
 }
 
+/**
+ * Strikte interpretatie van booleans uit JSON/API.
+ * `Boolean("false") === true` in JavaScript — dat zou ten onrechte "ingelogd" kunnen tonen.
+ */
+function coerceJsonBoolean(value) {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0 || value == null) return false;
+  if (typeof value === "string") {
+    const s = value.trim().toLowerCase();
+    return s === "true" || s === "1" || s === "yes";
+  }
+  return false;
+}
+
+/** Facebook / Instagram / enkele andere in-app browsers (WebView). */
+const PLATELY_EMBEDDED_SOCIAL_UA = /FBAN|FBAV|FB_IAB|FBIOS|Instagram|Line\/|MicroMessenger|;\s*wv\)/i;
+function isEmbeddedSocialInAppBrowser() {
+  try {
+    return PLATELY_EMBEDDED_SOCIAL_UA.test(String(navigator.userAgent || ""));
+  } catch {
+    return false;
+  }
+}
+
+let platelyEmbeddedBrowserHintEl = null;
+function removeEmbeddedBrowserAuthHint() {
+  try {
+    platelyEmbeddedBrowserHintEl?.remove();
+  } catch {
+    /* ignore */
+  }
+  platelyEmbeddedBrowserHintEl = null;
+}
+
+function attachEmbeddedBrowserAuthHint() {
+  removeEmbeddedBrowserAuthHint();
+  if (!authModal || !isEmbeddedSocialInAppBrowser()) return;
+  const wrap = document.createElement("div");
+  wrap.id = "platelyEmbeddedBrowserHint";
+  wrap.className = "plately-embedded-browser-hint";
+  wrap.setAttribute("role", "status");
+
+  const inner = document.createElement("div");
+  inner.className = "plately-embedded-browser-hint__inner";
+
+  const p = document.createElement("p");
+  p.className = "plately-embedded-browser-hint__text";
+  p.textContent =
+    "Je zit in een in-app browser (bijv. Facebook of Instagram). Daar kan inloggen misgaan — open Plately in Safari of Chrome.";
+
+  const open = document.createElement("a");
+  open.className = "plately-embedded-browser-hint__open";
+  try {
+    open.href = window.location.href;
+  } catch {
+    open.href = "https://app.plately.nl/";
+  }
+  open.target = "_blank";
+  open.rel = "noopener noreferrer";
+  open.textContent = "Open in externe browser";
+
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.className = "plately-embedded-browser-hint__dismiss";
+  dismiss.textContent = "Sluiten";
+  dismiss.addEventListener("click", () => removeEmbeddedBrowserAuthHint());
+
+  inner.appendChild(p);
+  inner.appendChild(open);
+  inner.appendChild(dismiss);
+  wrap.appendChild(inner);
+  authModal.insertBefore(wrap, authModal.firstChild);
+  platelyEmbeddedBrowserHintEl = wrap;
+}
+
 const AUTH_TOKEN_KEY = "plately-auth-token";
 
 function getStoredAuthToken() {
@@ -9163,8 +9240,8 @@ async function persistAppState() {
       state.session.userId = payload.user.id;
     }
     if (payload?.auth) {
-      state.auth.enabled = Boolean(payload.auth.enabled);
-      state.auth.authenticated = Boolean(payload.auth.authenticated);
+      state.auth.enabled = coerceJsonBoolean(payload.auth.enabled);
+      state.auth.authenticated = coerceJsonBoolean(payload.auth.authenticated);
       state.auth.email = payload.auth.email || "";
     }
   } catch {
@@ -9385,8 +9462,8 @@ async function bootstrapSession() {
     });
 
     if (payload?.auth) {
-      state.auth.enabled = Boolean(payload.auth.enabled);
-      state.auth.authenticated = Boolean(payload.auth.authenticated);
+      state.auth.enabled = coerceJsonBoolean(payload.auth.enabled);
+      state.auth.authenticated = coerceJsonBoolean(payload.auth.authenticated);
       state.auth.email = payload.auth.email || "";
       console.log("✅ Auth payload applied - authenticated:", state.auth.authenticated);
     }
@@ -9402,7 +9479,7 @@ async function bootstrapSession() {
     // applyPersistedAppState may have reset state.auth.authenticated based on
     // payload.user.authenticated — re-apply the auth payload as the source of truth
     if (payload?.auth) {
-      state.auth.authenticated = Boolean(payload.auth.authenticated);
+      state.auth.authenticated = coerceJsonBoolean(payload.auth.authenticated);
       state.auth.email = payload.auth.email || "";
       console.log("🔐 Auth re-applied after applyPersistedAppState - authenticated:", state.auth.authenticated);
     }
@@ -9513,7 +9590,9 @@ async function bootstrapSession() {
     const loginDisabledByConfig = sessionCheckSucceeded && state.auth.enabled === false;
     if (!state.auth.authenticated && !loginDisabledByConfig) {
       console.log("📱 User not authenticated, showing auth modal", { sessionCheckSucceeded });
-      openAuthModal(wantsRegisterFromUrl ? "register" : "login");
+      const authMode = wantsRegisterFromUrl ? "register" : "login";
+      // Iets uitstellen zodat andere sync DOM-updates (o.a. aankondiging) niet het modaal overschrijven.
+      window.setTimeout(() => openAuthModal(authMode), 0);
       stripSignupParamsFromUrl();
     } else {
       if (wantsRegisterFromUrl) stripSignupParamsFromUrl();
@@ -9532,8 +9611,8 @@ async function bootstrapSession() {
 
 function completeAuthSessionFromPayload(payload, { treatAsNewUser } = {}) {
   if (payload?.auth) {
-    state.auth.enabled = Boolean(payload.auth.enabled);
-    state.auth.authenticated = Boolean(payload.auth.authenticated);
+    state.auth.enabled = coerceJsonBoolean(payload.auth.enabled);
+    state.auth.authenticated = coerceJsonBoolean(payload.auth.authenticated);
     state.auth.email = payload.auth.email || "";
     if (payload.auth.token) storeAuthToken(payload.auth.token);
   }
@@ -9604,8 +9683,8 @@ async function logoutAccount() {
     });
 
     if (payload?.auth) {
-      state.auth.enabled = Boolean(payload.auth.enabled);
-      state.auth.authenticated = Boolean(payload.auth.authenticated);
+      state.auth.enabled = coerceJsonBoolean(payload.auth.enabled);
+      state.auth.authenticated = coerceJsonBoolean(payload.auth.authenticated);
       state.auth.email = payload.auth.email || "";
       console.log("✅ Logout auth state updated - authenticated:", state.auth.authenticated);
     }
@@ -13943,6 +14022,7 @@ function resetOnboardingData() {
 
 function showOnboarding() {
   resetOnboardingData();
+  removeEmbeddedBrowserAuthHint();
   authModal.classList.add("hidden");
   authModal.setAttribute("aria-hidden", "true");
   onboardingScreen.classList.remove("hidden");

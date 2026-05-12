@@ -5690,6 +5690,53 @@ button.ingredient-item {
 }
 .auth-screen.hidden { display: none !important; }
 
+/* Facebook / Instagram in-app: banner bovenaan het inlogscherm */
+.plately-embedded-browser-hint {
+  position: relative;
+  z-index: 5;
+  flex: 0 0 auto;
+  width: 100%;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 12px;
+  background: color-mix(in srgb, var(--color-surface, #fff) 96%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border, #ccc) 75%, transparent);
+  box-sizing: border-box;
+}
+.plately-embedded-browser-hint__inner {
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+}
+.plately-embedded-browser-hint__text {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--color-text, #222);
+}
+.plately-embedded-browser-hint__open {
+  display: inline-block;
+  text-align: center;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  background: var(--color-primary, #6b9e72);
+  color: #fff;
+  text-decoration: none;
+}
+.plately-embedded-browser-hint__dismiss {
+  align-self: center;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--muted-strong, #666);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .auth-screen__close-btn {
   position: absolute;
   top: calc(14px + env(safe-area-inset-top, 0px));
