@@ -42,6 +42,7 @@ describe("ingredientTermMatchesProductTitle", () => {
     assert.equal(ingredientTermMatchesProductTitle("ui", "Uiensoep"), false);
     assert.equal(ingredientTermMatchesProductTitle("ui", "Uienringen"), false);
     assert.equal(ingredientTermMatchesProductTitle("ui", "Uien poeder"), false);
+    assert.equal(ingredientTermMatchesProductTitle("rode ui", "AH Rode ui framboos dip kleintjes"), false);
   });
 
   it("tomaat/paprika/komkommer: vermijd obvious processed", () => {
@@ -59,7 +60,13 @@ describe("ingredientTermMatchesProductTitle", () => {
     assert.equal(ingredientTermMatchesProductTitle("citroen", "Citroensap"), false); // compound
     assert.equal(ingredientTermMatchesProductTitle("citroen", "Citroen sap"), false);
     assert.equal(ingredientTermMatchesProductTitle("citroen", "Limonade citroen"), false);
+    assert.equal(ingredientTermMatchesProductTitle("citroen", "AH Dextrose tabletten citroen smaak"), false);
     assert.equal(ingredientTermMatchesProductTitle("citroen", "Citroen"), true);
+  });
+
+  it("gember/citroengras: geen (bruis)water/drank blends", () => {
+    assert.equal(ingredientTermMatchesProductTitle("verse gember", "AH Ginger strawberry verse gember appel"), false);
+    assert.equal(ingredientTermMatchesProductTitle("citroengras", "AH Bruiswater gember citroengras"), false);
   });
 
   it("verse gember: beide woorden als heel woord", () => {

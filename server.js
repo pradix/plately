@@ -3041,10 +3041,11 @@ function getBasketEmoji(name) {
   if (/komkommer|courgette/.test(value)) return "🥒";
   if (/wortel/.test(value)) return "🥕";
   if (/aardappel|friet/.test(value)) return "🥔";
-  if (/burger|gehakt|vlees/.test(value)) return "🥩";
+  if (/\b(burger|gehakt|vlees|varken|varkens|varkenslappen|varkenshaas|karbonade|schnitzel|speklap|speklappen|procureur|worst|bacon|ham)\b/.test(value))
+    return "🥩";
   if (/kip/.test(value)) return "🍗";
   if (/zalm|vis|tonijn/.test(value)) return "🐟";
-  if (/ei/.test(value)) return "🥚";
+  if (/\b(ei|eieren)\b/.test(value)) return "🥚";
   if (/yoghurt|melk|room/.test(value)) return "🥛";
   if (/feta|kaas|parmezaan|pecorino|mascarpone/.test(value)) return "🧀";
   if (/honing/.test(value)) return "🍯";
@@ -3222,7 +3223,7 @@ function buildStoreProductChoices(store, item) {
       { title: `${bioPrefix} Trostomaten`, subtitle: amount, price: "€2,79", emoji: "🍅", searchTerm: `${bioPrefix} tomaten` }
     );
   }
-  if (/(ui|sjalot)/.test(value)) {
+  if (/\b(?:ui|uien|sjalot(?:ten)?)\b/.test(value)) {
     return choiceSet(
       { title: `${prefix} Gele uien`, subtitle: amount, price: "€1,19", emoji: "🧅", searchTerm: `${prefix} uien` },
       { title: `${prefix} Rode uien`, subtitle: amount, price: "€1,49", emoji: "🧅", searchTerm: `${prefix} rode uien` }
@@ -3259,7 +3260,7 @@ function buildStoreProductChoices(store, item) {
       { title: `${prefix} Basmatirijst`, subtitle: amount, price: "€2,69", emoji: "🍚", searchTerm: `${prefix} basmati rijst` }
     );
   }
-  if (/ei/.test(value)) {
+  if (/\b(?:ei|eieren)\b/.test(value)) {
     return choiceSet(
       { title: `${prefix} Scharreleieren`, subtitle: "6 stuks", price: "€2,69", emoji: "🥚", searchTerm: `${prefix} scharreleieren` },
       { title: `${bioPrefix} Eieren`, subtitle: "6 stuks", price: "€3,19", emoji: "🥚", searchTerm: `${bioPrefix} eieren` }
