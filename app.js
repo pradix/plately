@@ -2377,8 +2377,9 @@ function getBasketItemCategory(item, choice) {
     choice?.subtitle,
   ].filter(Boolean).join(" "));
   const groups = [
-    { key: "produce", label: "Groente & fruit", terms: ["aardappel", "appel", "avocado", "banaan", "bloemkool", "bosui", "champignon", "citroen", "courgette", "fruit", "groente", "komkommer", "knoflook", "limoen", "paprika", "prei", "rucola", "sla", "spinazie", "tomaat", "ui", "wortel"] },
+    // Vlees vóór groente: korte groente-termen (bv. "sla") zitten als substring in vleesnamen ("varkenslappen").
     { key: "meat", label: "Vlees, vis & vega", terms: ["bacon", "gehakt", "ham", "kip", "kabeljauw", "rookworst", "spek", "tonijn", "vega", "vegan", "vis", "vlees", "worst", "zalm", "varken", "varkens", "varkenslappen", "varkenshaas", "karbonade", "schnitzel", "speklap", "procureur"] },
+    { key: "produce", label: "Groente & fruit", terms: ["aardappel", "appel", "avocado", "banaan", "bloemkool", "bosui", "champignon", "citroen", "courgette", "fruit", "groente", "komkommer", "knoflook", "limoen", "paprika", "prei", "rucola", "sla", "spinazie", "tomaat", "ui", "wortel"] },
     { key: "dairy", label: "Zuivel & kaas", terms: ["boter", "creme", "crème", "ei", "eieren", "kaas", "kwark", "melk", "mozzarella", "room", "slagroom", "yoghurt", "zuivel"] },
     { key: "bakery", label: "Brood & granen", terms: ["brood", "wrap", "tortilla", "pasta", "rijst", "noedel", "couscous", "bloem", "paneermeel", "havermout"] },
     { key: "pantry", label: "Voorraadkast", terms: ["azijn", "bouillon", "honing", "ketchup", "mayonaise", "mosterd", "olie", "saus", "soja", "suiker", "tomatenpuree", "peper", "zout", "kruiden", "paprikapoeder"] },

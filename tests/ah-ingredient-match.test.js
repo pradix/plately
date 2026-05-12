@@ -44,6 +44,8 @@ describe("ingredientTermMatchesProductTitle", () => {
     assert.equal(ingredientTermMatchesProductTitle("ui", "Uien poeder"), false);
     assert.equal(ingredientTermMatchesProductTitle("rode ui", "AH Rode ui framboos dip kleintjes"), false);
     assert.equal(ingredientTermMatchesProductTitle("rode ui", "Verkade Ovengebakken shuttles kaas & ui"), false);
+    assert.equal(ingredientTermMatchesProductTitle("ui", "Knorr Cup-a-soup Franse ui"), false);
+    assert.equal(ingredientTermMatchesProductTitle("ui", "Knorr Franse uiensoep"), false);
   });
 
   it("tomaat/paprika/komkommer: vermijd obvious processed", () => {
@@ -115,6 +117,11 @@ describe("ingredientTermMatchesProductTitle", () => {
   it("verse gember: beide woorden als heel woord", () => {
     assert.equal(ingredientTermMatchesProductTitle("verse gember", "AH Verse gember"), true);
     assert.equal(ingredientTermMatchesProductTitle("verse gember", "Gemberbier"), false);
+    assert.equal(
+      ingredientTermMatchesProductTitle("verse gember", "AH 50% Groentesap wortel sinaas gember"),
+      false
+    );
+    assert.equal(ingredientTermMatchesProductTitle("gember", "AH Groentesap wortel gember"), false);
   });
 });
 
