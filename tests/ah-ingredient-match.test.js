@@ -85,6 +85,28 @@ describe("ingredientTermMatchesProductTitle", () => {
     assert.equal(ingredientTermMatchesProductTitle("olie", "Olijven groen"), false);
   });
 
+  it("meest voorkomende staples (kaas/kip/gehakt/rijst/bloem/suiker) guardrails", () => {
+    assert.equal(ingredientTermMatchesProductTitle("rijst", "Rijstwafels naturel"), false);
+    assert.equal(ingredientTermMatchesProductTitle("rijst", "Basmatirijst"), false); // compound; via matchTerms
+    const riceTerms = buildIngredientMatchTerms("rijst", "rijst");
+    assert.equal(ingredientMatchesAnyProductTerm(riceTerms, "Basmatirijst"), true);
+
+    assert.equal(ingredientTermMatchesProductTitle("bloem", "Bos bloemen"), false);
+    assert.equal(ingredientTermMatchesProductTitle("bloem", "Tarwebloem"), false); // compound; via matchTerms
+
+    assert.equal(ingredientTermMatchesProductTitle("suiker", "Zoetstof tabletten"), false);
+    assert.equal(ingredientTermMatchesProductTitle("suiker", "Suiker"), true);
+
+    assert.equal(ingredientTermMatchesProductTitle("kip", "Kippenbouillon"), false);
+    assert.equal(ingredientTermMatchesProductTitle("kip", "Kipfilet"), false); // compound; via matchTerms
+
+    assert.equal(ingredientTermMatchesProductTitle("gehakt", "Gehakt kruidenmix"), false);
+    assert.equal(ingredientTermMatchesProductTitle("gehakt", "Rundergehakt"), false); // compound; via matchTerms
+
+    assert.equal(ingredientTermMatchesProductTitle("kaas", "Kaassaus"), false);
+    assert.equal(ingredientTermMatchesProductTitle("kaas", "Jonge kaas"), true);
+  });
+
   it("verse gember: beide woorden als heel woord", () => {
     assert.equal(ingredientTermMatchesProductTitle("verse gember", "AH Verse gember"), true);
     assert.equal(ingredientTermMatchesProductTitle("verse gember", "Gemberbier"), false);
