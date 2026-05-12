@@ -78,5 +78,20 @@
     "matchAnyTerms": { "raw": "room", "base": "room" },
     "title": "Kookroom",
     "match": true
+  },
+  { "id": "oregano-not-tomatenblokjes-heinz", "ingredient": "oregano", "title": "Heinz Tomaten blokjes basilicum & oregano", "match": false },
+  { "id": "basilicum-not-tomatenblokjes-heinz", "ingredient": "basilicum", "title": "Heinz Tomaten blokjes basilicum & oregano", "match": false },
+  { "id": "oregano-strooier", "ingredient": "oregano", "title": "AH Oregano strooier", "match": true },
+  {
+    "id": "lasagne-bladen-not-italiaanse-pasta",
+    "matchAnyTerms": { "raw": "pakje lasagne bladen", "base": "lasagne bladen" },
+    "title": "AH Italiaanse pasta",
+    "match": false
+  },
+  {
+    "id": "lasagne-bladen-wel",
+    "matchAnyTerms": { "raw": "pakje lasagne bladen", "base": "lasagne bladen" },
+    "title": "AH Lasagne bladen",
+    "match": true
   }
 ]

@@ -2369,27 +2369,6 @@ function choiceMatchesBasketFilters(choice, filter, item) {
   return true;
 }
 
-function getBasketItemCategory(item, choice) {
-  const text = normalizeBasketToken([
-    item?.ingredientTitle,
-    item?.ingredientAmount,
-    choice?.title,
-    choice?.subtitle,
-  ].filter(Boolean).join(" "));
-  const groups = [
-    // Vlees vóór groente: korte groente-termen (bv. "sla") zitten als substring in vleesnamen ("varkenslappen").
-    { key: "meat", label: "Vlees, vis & vega", terms: ["bacon", "gehakt", "ham", "kip", "kabeljauw", "rookworst", "spek", "tonijn", "vega", "vegan", "vis", "vlees", "worst", "zalm", "varken", "varkens", "varkenslappen", "varkenshaas", "karbonade", "schnitzel", "speklap", "procureur"] },
-    { key: "produce", label: "Groente & fruit", terms: ["aardappel", "appel", "avocado", "banaan", "bloemkool", "bosui", "champignon", "citroen", "courgette", "fruit", "groente", "komkommer", "knoflook", "limoen", "paprika", "prei", "rucola", "sla", "spinazie", "tomaat", "ui", "wortel"] },
-    { key: "dairy", label: "Zuivel & kaas", terms: ["boter", "creme", "crème", "ei", "eieren", "kaas", "kwark", "melk", "mozzarella", "room", "slagroom", "yoghurt", "zuivel"] },
-    { key: "bakery", label: "Brood & granen", terms: ["brood", "wrap", "tortilla", "pasta", "rijst", "noedel", "couscous", "bloem", "paneermeel", "havermout"] },
-    { key: "pantry", label: "Voorraadkast", terms: ["azijn", "bouillon", "honing", "ketchup", "mayonaise", "mosterd", "olie", "saus", "soja", "suiker", "tomatenpuree", "peper", "zout", "kruiden", "paprikapoeder"] },
-    { key: "frozen", label: "Diepvries", terms: ["diepvries", "bevroren", "vriesvers"] },
-    { key: "drinks", label: "Drinken", terms: ["sap", "water", "wijn", "bier", "frisdrank", "drank"] },
-  ];
-  const hit = groups.find((group) => group.terms.some((term) => text.includes(term)));
-  return hit || { key: "other", label: "Overig" };
-}
-
 function getBasketMatchQuality(choice) {
   const score = Number(choice?.matchMeta?.score);
   if (!Number.isFinite(score)) return "unknown";
@@ -2517,15 +2496,15 @@ function renderBasketPreview() {
       ? `<span class="basket-product__bonus">${escapeHtml(promotionLabel)}</span>`
       : "";
 
-    const ingredientTitle = splitCompoundIngredientWords(item.ingredientTitle || "");
+    const ingredientTitle = splitCompoundIngredientWords(
+      stripRedundantLeadingUnitFromIngredientTitle(item.ingredientAmount || "", item.ingredientTitle || "")
+    );
     const itemId = String(item.id || `basket-item-${itemIndex}`);
 
-    const category = getBasketItemCategory(item, choice);
     const matchQuality = getBasketMatchQuality(choice);
     const matchBadge = matchQuality === "low"
       ? `<span class="basket-product__attention">Check match</span>`
       : "";
-    const aisleBadge = `<span class="basket-product__aisle">${escapeHtml(category.label)}</span>`;
 
     const html = `
       <div class="basket-product ${matchQuality === "low" ? "basket-product--attention" : ""}" data-basket-item="${itemIndex}">
@@ -2537,7 +2516,6 @@ function renderBasketPreview() {
           <p class="basket-product__meta">
             ${renderChoicePriceHtml(choice)}
             ${promotionBadge}
-            ${aisleBadge}
             ${matchBadge}
             ${choice.subtitle ? `<span>${escapeHtml(choice.subtitle)}</span>` : ""}
           </p>
@@ -2559,18 +2537,11 @@ function renderBasketPreview() {
         </div>
       </div>
     `;
-    return { html, category, matchQuality };
+    return { html, matchQuality };
   }).filter(Boolean);
 
   const attentionItems = renderedItems.filter((entry) => entry.matchQuality === "low");
   const regularItems = renderedItems.filter((entry) => entry.matchQuality !== "low");
-  const categoryOrder = ["produce", "meat", "dairy", "bakery", "pantry", "frozen", "drinks", "other"];
-  const grouped = new Map();
-  regularItems.forEach((entry) => {
-    const key = entry.category.key;
-    if (!grouped.has(key)) grouped.set(key, { label: entry.category.label, items: [] });
-    grouped.get(key).items.push(entry.html);
-  });
 
   const sectionHtml = [];
   if (attentionItems.length) {
@@ -2584,19 +2555,13 @@ function renderBasketPreview() {
       </section>
     `);
   }
-  categoryOrder.forEach((key) => {
-    const group = grouped.get(key);
-    if (!group?.items?.length) return;
+  if (regularItems.length) {
     sectionHtml.push(`
       <section class="basket-section">
-        <div class="basket-section__head">
-          <h3>${escapeHtml(group.label)}</h3>
-          <span>${group.items.length}</span>
-        </div>
-        <div class="basket-section__list">${group.items.join("")}</div>
+        <div class="basket-section__list">${regularItems.map((entry) => entry.html).join("")}</div>
       </section>
     `);
-  });
+  }
 
   const productsHtml = sectionHtml.join("") || `<p style="text-align:center;padding:26px 18px;color:#888;font-size:0.95rem">Geen producten gevonden.</p>`;
   listEl.innerHTML = `${productsHtml}${pantryOptionalHtml}`;
@@ -2612,7 +2577,10 @@ function renderBasketPreview() {
       if (url) window.open(url, "_blank", "noreferrer");
     };
   }
-}
+
+  try {
+    listEl.scrollTop = 0;
+  } catch {}
 
 async function researchBasketItem(itemIndex, { excludeCurrent = true } = {}) {
   const preview = state.basketPreview;
@@ -3122,7 +3090,11 @@ function renderAlternativesSheet(item) {
 
   if (ctxEl) {
     const amount = item?.ingredientAmount ? `${escapeHtml(item.ingredientAmount)} ` : "";
-    const title = escapeHtml(splitCompoundIngredientWords(item?.ingredientTitle || ""));
+    const title = escapeHtml(
+      splitCompoundIngredientWords(
+        stripRedundantLeadingUnitFromIngredientTitle(item?.ingredientAmount || "", item?.ingredientTitle || "")
+      )
+    );
     ctxEl.innerHTML = `<span class="alt-sheet__context-label">Voor</span> <span class="alt-sheet__context-value">${amount}${title}</span>`;
   }
 
@@ -3848,6 +3820,24 @@ function formatIngredientAmount(ingredient, factor = 1) {
   return `${quantity}${unit ? ` ${unit}` : ""}`.trim();
 }
 
+/** Voorkomt "1 stuk" + "Stuks bechamelsaus" in mand-weergave: eenheid niet dubbel in de titel. */
+function stripRedundantLeadingUnitFromIngredientTitle(amountStr, titleStr) {
+  let title = String(titleStr || "").trim();
+  if (!title) return "";
+  const amt = String(amountStr || "").trim().toLowerCase();
+  if (/\b(stuk|stuks|pak|pakje|pakken|zak|zakje|zakken|blik|blikje|rol|verpakking)\b/i.test(amt)) {
+    title = title
+      .replace(/^(stuks?|stukken?|pakjes?|pakken?|zakjes?|zakken?|blikjes?|blikken?|rollen?|verpakkingen?)\s+/i, "")
+      .trim();
+  }
+  let prev;
+  do {
+    prev = title;
+    title = title.replace(/\b(stuks?)\s+\1\b/gi, "$1").trim();
+  } while (title !== prev);
+  return title;
+}
+
 function formatUnitForQuantity(unit, quantity) {
   const u = String(unit || "").trim().toLowerCase();
   if (!u) return "";
@@ -3881,6 +3871,9 @@ function parseIngredientInput(value) {
     let unit = normalizeUnit((match[2] || "x").toLowerCase());
     // Clean ingredient name: remove leading/trailing punctuation and extra spaces
     let name = match[3].trim().replace(/^[.,\s]+|[.,\s]+$/g, "").trim();
+    if (/\b(stuk|pak|zak|blik|rol|verpakking)\b/i.test(unit)) {
+      name = name.replace(/^(stuks?|stukken?|pakjes?|pakken?|zakjes?|zakken?|blikjes?|blikken?|rollen?|verpakkingen?)\s+/i, "").trim();
+    }
 
     // Validate quantity: convert to number and check validity
     let quantity = match[1];
@@ -8251,8 +8244,10 @@ function addRecipeToGrocery(recipe) {
     }
     const isOptional = isOptionalGroceryIngredient(ingredient.name);
     const nextAmount = formatIngredientAmount(ingredient, state.currentServings / parseBaseServings(recipe.servings));
+    const rawTitle = isOptional ? buildOptionalTitle(ingredient.name) : ingredient.name;
+    const cleanedTitle = stripRedundantLeadingUnitFromIngredientTitle(nextAmount, rawTitle);
     const mergeKey = groceryMergeKeyForList({
-      title: isOptional ? buildOptionalTitle(ingredient.name) : ingredient.name,
+      title: cleanedTitle,
     });
     const existingItem = state.groceryItems.find(
       (item) => !item.checked && groceryMergeKeyForList(item) === mergeKey
@@ -8271,7 +8266,7 @@ function addRecipeToGrocery(recipe) {
 
     state.groceryItems.push({
       id: `${recipe.id}-${ingredient.name}-${Date.now()}-${added}`,
-      title: isOptional ? buildOptionalTitle(ingredient.name) : ingredient.name,
+      title: cleanedTitle,
       amount: nextAmount,
       recipeId: recipe.id,
       recipeTitle: recipe.title,
@@ -8286,6 +8281,8 @@ function addRecipeToGrocery(recipe) {
   renderGroceryGroups();
   schedulePersistAppState();
   if (added || merged) {
+    const gScreen = document.getElementById("groceryScreen");
+    scrollToTopSoon([gScreen, groceryGroups].filter(Boolean));
     trackClientEvent("client_grocery_add", { added: added || 0, merged: merged || 0 });
   }
   if (added && merged) {
@@ -8393,6 +8390,8 @@ function addCustomGroceryItem() {
   }
   renderGroceryGroups();
   schedulePersistAppState();
+  const gScreen = document.getElementById("groceryScreen");
+  scrollToTopSoon([gScreen, groceryGroups].filter(Boolean));
   showToast(existingItem ? `${cleanTitle} samengevoegd op je lijst.` : `${cleanTitle} toegevoegd.`);
 }
 

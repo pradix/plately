@@ -602,7 +602,16 @@ function normalizeIngredientForSearch(raw) {
   if (/\bbucatini\b/.test(t))   return "pasta";
   if (/\borecchiette\b/.test(t))return "pasta";
   if (/\btortellini\b/.test(t)) return "tortellini";
-  if (/lasagnebladen?/.test(t)) return "lasagne bladen";
+  if (
+    /\blasagne\s+bladen?\b|\blasagnebladen?\b|\blasagna\s+sheets?\b|\blasagne\s+vellen\b|\blasagne\s+blad\b/i.test(
+      t
+    )
+  ) {
+    return "lasagne bladen";
+  }
+
+  // Bechamel / witte saus (typo's + varianten)
+  if (/\bbechamelsaus\b|\bbechamel\b|becahamelsaus|becahamel/i.test(t)) return "bechamelsaus";
 
   // 4. Rice
   if (/\b(basmati|jasmijn|jasmine|zilvervlies|bruine|volkoren)\s*rijst/.test(t)) return "rijst";
