@@ -29,11 +29,19 @@ describe("ingredientTermMatchesProductTitle", () => {
     assert.equal(ingredientTermMatchesProductTitle("knoflook", "AH Biologisch knoflook"), true);
   });
 
-  it("ui: uien wel, uitjes niet, lente-ui niet", () => {
+  it("ui: uien wel, uitjes/lente-ui/sjalot/processed niet", () => {
     assert.equal(ingredientTermMatchesProductTitle("ui", "AH Uien"), true);
     assert.equal(ingredientTermMatchesProductTitle("ui", "Rode uien"), true);
     assert.equal(ingredientTermMatchesProductTitle("ui", "Amsterdamse uitjes"), false);
     assert.equal(ingredientTermMatchesProductTitle("ui", "verse lente-ui"), false);
+    assert.equal(ingredientTermMatchesProductTitle("ui", "Bosui"), false);
+    assert.equal(ingredientTermMatchesProductTitle("ui", "Sjalotten"), false);
+    assert.equal(ingredientTermMatchesProductTitle("ui", "Gebakken uien"), false);
+    assert.equal(ingredientTermMatchesProductTitle("ui", "Crispy uien"), false);
+    assert.equal(ingredientTermMatchesProductTitle("ui", "Uien soep"), false);
+    assert.equal(ingredientTermMatchesProductTitle("ui", "Uiensoep"), false);
+    assert.equal(ingredientTermMatchesProductTitle("ui", "Uienringen"), false);
+    assert.equal(ingredientTermMatchesProductTitle("ui", "Uien poeder"), false);
   });
 
   it("verse gember: beide woorden als heel woord", () => {
