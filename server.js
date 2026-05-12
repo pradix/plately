@@ -8193,6 +8193,11 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
     const isEggQuery =
       /^(?:biologisch\s+)?(?:scharrel)?eieren?$/.test(baseLower) || baseLower === "ei" || baseLower === "eieren";
 
+    const isPlainOnionQuery =
+      baseLower === "ui" ||
+      baseLower === "uien" ||
+      /^(rode|gele|witte|zilver|biologisch(?:e)?)\s+ui(en)?$/i.test(baseLower);
+
     const ingredientTokens = tokenizeForMatch(baseLower);
     const produceSynonymTokens = [];
     if (/\bcourgu?ettes?\b/.test(baseLower) || /\bcourgu?ettes?\b/.test(rawLower)) produceSynonymTokens.push("zucchini");
@@ -8340,6 +8345,26 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         if (/\b(pasta|puree|poeder|granulaat|zout)\b/.test(title)) {
           score += 15;
           adjustments.push({ kind: "penalty", label: "Verwerkt (poeder/pasta/zout)", delta: 15 });
+        }
+      }
+
+      // Ui (los / zak uien): liever uien in titel; merk-kant-en-klaar zonder zak uien strafpunten.
+      if (isPlainOnionQuery) {
+        if (/\buien\b/i.test(title)) {
+          score -= 20;
+          adjustments.push({ kind: "bonus", label: "Uien (verpakking)", delta: -20 });
+        }
+        if (/\b(knorr|unox|maggi)\b/i.test(title) && !/\buien\b/i.test(title)) {
+          score += 60;
+          adjustments.push({ kind: "penalty", label: "Merkgerecht (geen zak uien)", delta: 60 });
+        }
+        if (/\b(good\s+potatoes|oven\s+aardappel|aardappel\s*partjes|gratin)\b/i.test(title)) {
+          score += 70;
+          adjustments.push({ kind: "penalty", label: "Aardappel-/ovenschotel", delta: 70 });
+        }
+        if (/\b(bacon|spek|ham)\b.*\bui\b/i.test(title) || /\bui\b.*\b(bacon|spek|ham)\b/i.test(title)) {
+          score += 65;
+          adjustments.push({ kind: "penalty", label: "Ui als smaak bij vlees/aardappel", delta: 65 });
         }
       }
 

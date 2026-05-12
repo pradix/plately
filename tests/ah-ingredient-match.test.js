@@ -45,6 +45,7 @@ describe("ingredientTermMatchesProductTitle", () => {
     assert.equal(ingredientTermMatchesProductTitle("rode ui", "AH Rode ui framboos dip kleintjes"), false);
     assert.equal(ingredientTermMatchesProductTitle("rode ui", "Verkade Ovengebakken shuttles kaas & ui"), false);
     assert.equal(ingredientTermMatchesProductTitle("ui", "Knorr Cup-a-soup Franse ui"), false);
+    assert.equal(ingredientTermMatchesProductTitle("ui", "Knorr Good potatoes spek & ui"), false);
     assert.equal(ingredientTermMatchesProductTitle("ui", "Knorr Franse uiensoep"), false);
   });
 
