@@ -22,12 +22,16 @@ jobs:
             echo "::error::Secret VPS_SSH_KEY is empty. Settings → Secrets → Actions → VPS_SSH_KEY."
             exit 1
           fi
-          printf '%s\n' "$DEPLOY_KEY" | tr -d '\r' > "$KEY_FILE"
+          printf '%s\n' "$DEPLOY_KEY" | tr -d '\r' | sed '/./,$!d' > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
           echo "Key file: $(wc -l < "$KEY_FILE") lines, $(wc -c < "$KEY_FILE") bytes"
           FIRST=$(head -n 1 "$KEY_FILE")
+          if grep -qE '^ssh-(ed25519|rsa) ' "$KEY_FILE" && ! grep -q '^-----BEGIN' "$KEY_FILE"; then
+            echo "::error::VPS_SSH_KEY bevat de publieke key (.pub, begint met ssh-ed25519). Plak de private key: op je Mac: cat ~/.ssh/plately_github_actions (zonder .pub)."
+            exit 1
+          fi
           if [[ "$FIRST" != -----BEGIN* ]]; then
-            echo "::error::VPS_SSH_KEY must start with -----BEGIN … (private key). Not the .pub file."
+            echo "::error::VPS_SSH_KEY moet beginnen met -----BEGIN OPENSSH PRIVATE KEY----- (meerdere regels). Niet de .pub-regel. Mac: cat ~/.ssh/plately_github_actions"
             exit 1
           fi
           if ! ssh-keygen -y -f "$KEY_FILE" >/dev/null 2>&1; then
