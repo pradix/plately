@@ -126,6 +126,26 @@ describe("ingredientTermMatchesProductTitle", () => {
   });
 });
 
+describe("golden table (ah-ingredient-golden.json)", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const goldenPath = path.join(__dirname, "ah-ingredient-golden.json");
+  const rows = JSON.parse(fs.readFileSync(goldenPath, "utf8"));
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const label = row.id || JSON.stringify(row).slice(0, 80);
+    it(label, () => {
+      if (row.matchAnyTerms && typeof row.matchAnyTerms === "object") {
+        const { raw, base } = row.matchAnyTerms;
+        const terms = buildIngredientMatchTerms(raw || "", base || "");
+        assert.equal(ingredientMatchesAnyProductTerm(terms, row.title), row.match, label);
+      } else {
+        assert.equal(ingredientTermMatchesProductTitle(row.ingredient, row.title), row.match, label);
+      }
+    });
+  }
+});
+
 describe("buildIngredientMatchTerms + ingredientMatchesAnyProductTerm", () => {
   it("citroen: terms dekken citroenen in titel", () => {
     const terms = buildIngredientMatchTerms("citroen", "citroen");
