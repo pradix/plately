@@ -43,6 +43,7 @@ describe("ingredientTermMatchesProductTitle", () => {
     assert.equal(ingredientTermMatchesProductTitle("ui", "Uienringen"), false);
     assert.equal(ingredientTermMatchesProductTitle("ui", "Uien poeder"), false);
     assert.equal(ingredientTermMatchesProductTitle("rode ui", "AH Rode ui framboos dip kleintjes"), false);
+    assert.equal(ingredientTermMatchesProductTitle("rode ui", "Verkade Ovengebakken shuttles kaas & ui"), false);
   });
 
   it("tomaat/paprika/komkommer: vermijd obvious processed", () => {
@@ -67,6 +68,8 @@ describe("ingredientTermMatchesProductTitle", () => {
   it("gember/citroengras: geen (bruis)water/drank blends", () => {
     assert.equal(ingredientTermMatchesProductTitle("verse gember", "AH Ginger strawberry verse gember appel"), false);
     assert.equal(ingredientTermMatchesProductTitle("citroengras", "AH Bruiswater gember citroengras"), false);
+    assert.equal(ingredientTermMatchesProductTitle("citroengras", "AH Groene thee citroengras"), false);
+    assert.equal(ingredientTermMatchesProductTitle("verse gember", "AH Ginger passion gember passievrucht"), false);
   });
 
   it("meest voorkomende pantry/dairy guardrails (melk/room/boter/margarine/zout/peper/olie)", () => {
@@ -99,6 +102,8 @@ describe("ingredientTermMatchesProductTitle", () => {
 
     assert.equal(ingredientTermMatchesProductTitle("kip", "Kippenbouillon"), false);
     assert.equal(ingredientTermMatchesProductTitle("kip", "Kipfilet"), false); // compound; via matchTerms
+    assert.equal(ingredientTermMatchesProductTitle("kip bouillon", "H. Nandan Roti kip masala"), false);
+    assert.equal(ingredientTermMatchesProductTitle("kip bouillon", "Kippenbouillon blokjes"), true);
 
     assert.equal(ingredientTermMatchesProductTitle("gehakt", "Gehakt kruidenmix"), false);
     assert.equal(ingredientTermMatchesProductTitle("gehakt", "Rundergehakt"), false); // compound; via matchTerms
