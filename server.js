@@ -394,14 +394,34 @@ const NON_FOOD_INGREDIENT_PATTERN =
 const KITCHEN_TOOL_INGREDIENT_RE =
   /\b(?:knoflookpers|knoflook\s+[~-–]?\s*pers|garlic\s+press|(?:grill|grilles)[\s~-–]*pan(?:nen?)?|grillpan(?:nen?)?|(?:oven|bak)[\s~-–]+(?:schaal(?:en)?|bakplaat(?:en)?)|(?:oven|bak)schaal(?:en)?|ovenschalen?|ovenschotels?|siliconen(?:e)?\s*bakmat|staafmixer|(?:hand|keuken)?mixer)\b/i;
 
-// Check that an ingredient appears as a meaningful word start in a product title.
-// This prevents "pasta" from matching "tandpasta" (no word boundary before "pasta").
-function ingredientMatchesProduct(ingredient, productTitle) {
+/**
+ * AH: ingrediënt-term moet als afzonderlijk woord/deel in de producttitel voorkomen.
+ * Voorkomt o.a. "ui"→"uitjes"/"uien" (prefix), "citroen"→"citroengras", "ei"→"geleiding".
+ * Meerdere woorden in één term: elk woord apart als whole-word (bijv. "verse gember").
+ */
+function ingredientTermMatchesProductTitle(term, productTitle) {
+  const title = String(productTitle || "");
+  const cleaned = String(term || "")
+    .toLowerCase()
+    .replace(/^\d[\d\s/,.-]*/, "")
+    .trim();
+  if (!cleaned || cleaned.length < 2) return true;
+  const parts = cleaned.split(/\s+/).filter((p) => p.length >= 1);
+  if (!parts.length) return true;
   try {
-    const cleaned = ingredient.toLowerCase().replace(/^\d[\d\s/,.-]*/, "").trim();
-    if (!cleaned || cleaned.length < 2) return true;
-    const escaped = cleaned.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return new RegExp(`\\b${escaped}`, "i").test(productTitle);
+    for (const part of parts) {
+      if (part.length < 2) continue;
+      if (part === "ui") {
+        // Losse "ui" / "uien"; niet "ui" als suffix van "lente-ui"; geen "uitjes" (andere AH-categorie).
+        if (!/\buien\b|\b(rode|gele|witte|zilver)\s+ui(en)?\b|(?<![a-zà-ÿ-])ui\b/i.test(title)) {
+          return false;
+        }
+        continue;
+      }
+      const escaped = part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (!new RegExp(`\\b${escaped}\\b`, "i").test(title)) return false;
+    }
+    return true;
   } catch {
     return true;
   }
@@ -412,7 +432,7 @@ function ingredientMatchesAnyProductTerm(terms, productTitle) {
   if (!list.length) return true;
   for (const t of list) {
     if (!t) continue;
-    if (ingredientMatchesProduct(t, productTitle)) return true;
+    if (ingredientTermMatchesProductTitle(t, productTitle)) return true;
   }
   return false;
 }
@@ -510,6 +530,40 @@ function buildIngredientMatchTerms(rawIngredient, normalizedBase) {
   if (/\bgember\b/.test(base) || /\bgember\b/.test(raw) || /\bginger\b/.test(raw)) {
     terms.add("gember");
     terms.add("ginger");
+  }
+
+  // Ui (bol): AH-titels zeggen meestal "uien"; niet verwarren met sjalot/lente-ui.
+  if (
+    base === "ui" ||
+    base === "uien" ||
+    /\b(rode|gele|witte|zilver)\s+ui(en)?\b/.test(base) ||
+    /\b(rode|gele|witte|zilver)\s+ui(en)?\b/.test(raw)
+  ) {
+    terms.add("ui");
+    terms.add("uien");
+  }
+
+  // Citroengras ≠ citroen; AH gebruikt ook "lemongrass" / "sereh".
+  if (/\bcitroengras\b/.test(base) || /\bcitroengras\b/.test(raw) || /\blemongrass\b/i.test(raw)) {
+    terms.add("citroengras");
+    terms.add("lemongrass");
+    terms.add("sereh");
+  }
+
+  // Hele citroen / meerdere: AH schrijft vaak "citroenen" (één woord).
+  if (
+    (base === "citroen" || base === "citroenen" || /\bcitroen(?:en)?\b/.test(raw)) &&
+    !/\bcitroengras\b/.test(base) &&
+    !/\bcitroengras\b/.test(raw)
+  ) {
+    terms.add("citroen");
+    terms.add("citroenen");
+  }
+
+  // Ei / eieren: whole-word "ei" matcht niet op "eieren".
+  if (base === "ei" || base === "eieren" || /^(?:biologisch\s+)?(?:scharrel)?eieren?$/.test(base)) {
+    terms.add("ei");
+    terms.add("eieren");
   }
 
   return [...terms].filter(Boolean);
@@ -8370,7 +8424,20 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
           .toLowerCase();
       const titleFolded = fold(title);
       const baseFolded = fold(baseLower);
-      if (baseFolded.length >= 3 && titleFolded.includes(baseFolded)) {
+      // Hele woorden (geen "citroen" in "citroengras", geen substring-bonus op samenstellingen).
+      const phraseWholeWordsFolded =
+        baseFolded.length >= 3 &&
+        (() => {
+          const t = ` ${String(titleFolded || "").replace(/\s+/g, " ")} `;
+          const wds = String(baseFolded || "")
+            .split(/\s+/)
+            .map((w) => w.trim())
+            .filter((w) => w.length >= 2);
+          if (!wds.length) return false;
+          const inner = wds.map((w) => escapeRegex(w)).join("[^a-z0-9]+");
+          return new RegExp(`[^a-z0-9]${inner}([^a-z0-9]|$)`, "i").test(t);
+        })();
+      if (phraseWholeWordsFolded) {
         score -= 28;
         adjustments.push({ kind: "bonus", label: "Zoekterm in producttitel", delta: -28 });
       }
@@ -8415,7 +8482,7 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       if (baseLower === "knoflook") {
         // Prefer titles that are basically "knoflook" (fresh garlic) over
         // products that merely *contain* garlic.
-        if (!/^(?:ah\\s+)?(?:biologisch\\s+)?knoflook\\b/.test(title)) {
+        if (!/^(?:ah\s+)?(?:biologisch\s+)?(?:verse\s+)?knoflook\b/i.test(title)) {
           score += 45;
           adjustments.push({ kind: "penalty", label: "Niet puur knoflook", delta: 45 });
         }
