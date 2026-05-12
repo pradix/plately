@@ -26,6 +26,77 @@ try {
   // ignore
 }
 
+/**
+ * Optioneel bestand geschreven door deploy-script (VPS), zodat commit/tijd zichtbaar zijn
+ * zonder Render-env. Standaard: deploy-revision.json naast server.js, of PLATELY_DEPLOY_REVISION_FILE.
+ * @returns {{ gitCommit: string, gitBranch: string, deployedAt: string|null, message: string|null }|null}
+ */
+function readPlatelyDeployRevision() {
+  try {
+    const overridePath = String(process.env.PLATELY_DEPLOY_REVISION_FILE || "").trim();
+    const filePath = overridePath ? path.resolve(overridePath) : path.join(ROOT_DIR, "deploy-revision.json");
+    if (!fs.existsSync(filePath)) return null;
+    const raw = fs.readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const gitCommit = String(parsed.gitCommit || parsed.commit || "").trim();
+    const gitBranch = String(parsed.gitBranch || parsed.branch || "").trim();
+    const deployedAt = String(parsed.deployedAt || parsed.deployed_at || "").trim();
+    const message = String(parsed.message || "").trim();
+    if (!gitCommit && !gitBranch && !deployedAt && !message) return null;
+    return { gitCommit, gitBranch, deployedAt: deployedAt || null, message: message || null };
+  } catch {
+    return null;
+  }
+}
+
+function buildPlatelyDeployInfoPayload() {
+  const envCommit = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.GIT_SHA || "").trim();
+  const envBranch = String(process.env.RENDER_GIT_BRANCH || process.env.GIT_BRANCH || "").trim();
+  const fileRev = readPlatelyDeployRevision();
+  const effectiveCommit = String(fileRev?.gitCommit || envCommit).trim();
+  const effectiveBranch = String(fileRev?.gitBranch || envBranch).trim();
+  const repoSlug = String(process.env.PLATELY_SOURCE_REPO || "pradix/plately")
+    .trim()
+    .replace(/^github\.com\//i, "")
+    .replace(/^\//, "");
+  const safeRepo = repoSlug.includes("/") ? repoSlug : "pradix/plately";
+  const commitUrl =
+    effectiveCommit && /^[a-f0-9]{7,40}$/i.test(effectiveCommit)
+      ? `https://github.com/${safeRepo}/commit/${effectiveCommit}`
+      : "";
+
+  let lastPush = { source: null, gitCommit: "", gitBranch: "", deployedAt: null, message: null };
+  if (fileRev && (fileRev.gitCommit || fileRev.gitBranch || fileRev.deployedAt || fileRev.message)) {
+    lastPush = {
+      source: "file",
+      gitCommit: fileRev.gitCommit || envCommit || "",
+      gitBranch: fileRev.gitBranch || envBranch || "",
+      deployedAt: fileRev.deployedAt,
+      message: fileRev.message,
+    };
+  } else if (envCommit || envBranch) {
+    lastPush = { source: "env", gitCommit: envCommit || "", gitBranch: envBranch || "", deployedAt: null, message: null };
+  }
+
+  return {
+    ok: true,
+    clientBuild: CACHED_PLATELY_BUILD_META,
+    serverBootedAt: SERVER_BOOT_AT_ISO,
+    uptimeSeconds: Math.floor(process.uptime()),
+    nodeEnv: process.env.NODE_ENV || "development",
+    render: {
+      serviceName: String(process.env.RENDER_SERVICE_NAME || "").trim(),
+      externalUrl: String(process.env.RENDER_EXTERNAL_URL || "").trim(),
+      gitCommit: effectiveCommit,
+      gitBranch: effectiveBranch,
+      commitUrl,
+    },
+    lastPush,
+    database: { postgresEnabled: isPostgresEnabled() },
+  };
+}
+
 function hostnameOnly(hostHeader) {
   return String(hostHeader || "").split(":")[0].trim().toLowerCase();
 }
@@ -12135,30 +12206,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/api/deploy-info" && request.method === "GET") {
-      const commit = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.GIT_SHA || "").trim();
-      const branch = String(process.env.RENDER_GIT_BRANCH || process.env.GIT_BRANCH || "").trim();
-      const repoSlug = String(process.env.PLATELY_SOURCE_REPO || "pradix/plately")
-        .trim()
-        .replace(/^github\.com\//i, "")
-        .replace(/^\//, "");
-      const safeRepo = repoSlug.includes("/") ? repoSlug : "pradix/plately";
-      const commitUrl =
-        commit && /^[a-f0-9]{7,40}$/i.test(commit) ? `https://github.com/${safeRepo}/commit/${commit}` : "";
-      sendJson(response, 200, {
-        ok: true,
-        clientBuild: CACHED_PLATELY_BUILD_META,
-        serverBootedAt: SERVER_BOOT_AT_ISO,
-        uptimeSeconds: Math.floor(process.uptime()),
-        nodeEnv: process.env.NODE_ENV || "development",
-        render: {
-          serviceName: String(process.env.RENDER_SERVICE_NAME || "").trim(),
-          externalUrl: String(process.env.RENDER_EXTERNAL_URL || "").trim(),
-          gitCommit: commit,
-          gitBranch: branch,
-          commitUrl,
-        },
-        database: { postgresEnabled: isPostgresEnabled() },
-      });
+      sendJson(response, 200, buildPlatelyDeployInfoPayload());
       return;
     }
 
@@ -13534,6 +13582,17 @@ const server = http.createServer(async (request, response) => {
           error: error.message,
           dataFile: DATA_FILE,
         });
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/deploy-info" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        sendJson(response, 200, buildPlatelyDeployInfoPayload());
+      } catch (error) {
+        const status = error instanceof HttpError ? error.statusCode : 500;
+        sendJson(response, status, { ok: false, error: error.message || "Error" });
       }
       return;
     }

@@ -88,11 +88,17 @@
           return;
         }
         const r = data.render || {};
+        const lp = data.lastPush || {};
         const commit = r.gitCommit || "—";
         const branch = r.gitBranch || "—";
         const commitLink = r.commitUrl
           ? '<a href="' + esc(r.commitUrl) + '" target="_blank" rel="noopener">' + esc(commit.slice(0, 12)) + (commit.length > 12 ? "…" : "") + "</a>"
           : '<span class="mono">' + esc(commit) + "</span>";
+        const lastSrc = lp.source === "file" ? "deploy-revision.json" : lp.source === "env" ? "omgeving" : "—";
+        const deployedFile =
+          lp.deployedAt && !Number.isNaN(Date.parse(lp.deployedAt))
+            ? esc(new Date(lp.deployedAt).toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "medium" }))
+            : "—";
         el.innerHTML =
           '<h2>Git &amp; Render</h2><dl>' +
           "<dt>Branch</dt><dd><span class=\"mono\">" +
@@ -100,6 +106,12 @@
           "</span></dd>" +
           "<dt>Commit</dt><dd>" +
           commitLink +
+          "</dd>" +
+          "<dt>Laatste push (bron)</dt><dd><span class=\"pill mono\">" +
+          esc(lastSrc) +
+          "</span></dd>" +
+          "<dt>Deploytijd (bestand)</dt><dd class=\"mono\">" +
+          deployedFile +
           "</dd>" +
           "<dt>Service</dt><dd>" +
           esc(r.serviceName || "—") +
