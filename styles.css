@@ -108,6 +108,58 @@ body {
   color: var(--text);
 }
 
+body.app-booting {
+  overflow: hidden;
+}
+
+body.app-booting .page {
+  visibility: hidden;
+}
+
+.app-boot-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 30000;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 18px;
+  background: var(--app-body-bg);
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+}
+
+body:not(.app-booting) .app-boot-screen {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.app-boot-screen__logo {
+  width: min(164px, 46vw);
+  height: auto;
+}
+
+.app-boot-screen__spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 3px solid color-mix(in srgb, var(--color-brand) 20%, transparent);
+  border-top-color: var(--color-brand);
+  animation: appBootSpin 0.8s linear infinite;
+}
+
+@keyframes appBootSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-boot-screen,
+  .app-boot-screen__spinner {
+    transition: none;
+    animation: none;
+  }
+}
+
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 img {

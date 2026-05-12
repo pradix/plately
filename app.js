@@ -2583,6 +2583,7 @@ function renderBasketPreview() {
   try {
     listEl.scrollTop = 0;
   } catch {}
+}
 
 async function researchBasketItem(itemIndex, { excludeCurrent = true } = {}) {
   const preview = state.basketPreview;
@@ -9210,6 +9211,29 @@ function syncAppleSignInRowVisibility() {
   wrap.setAttribute("aria-hidden", show ? "false" : "true");
 }
 
+async function refreshAppleSignInConfig() {
+  try {
+    const appleRes = await fetchJson(`${state.apiBase}/api/auth/apple-config`);
+    state.appleSignIn = {
+      enabled: Boolean(appleRes?.apple?.enabled),
+      clientId: String(appleRes?.apple?.clientId || ""),
+      redirectUri: String(appleRes?.apple?.redirectUri || ""),
+    };
+  } catch {
+    state.appleSignIn = { enabled: false, clientId: "", redirectUri: "" };
+  }
+  syncAppleSignInRowVisibility();
+}
+
+function finishAppBoot() {
+  document.body.classList.remove("app-booting");
+  const bootScreen = document.getElementById("appBootScreen");
+  if (!bootScreen) return;
+  window.setTimeout(() => {
+    bootScreen.remove();
+  }, 240);
+}
+
 async function refreshBackendStatus() {
   try {
     await fetchJson(`${state.apiBase}/api/health`);
@@ -9494,17 +9518,6 @@ async function bootstrapSession() {
       if (saved !== null) state.groceryItems = JSON.parse(saved);
     } catch {}
   } finally {
-    try {
-      const appleRes = await fetchJson(`${state.apiBase}/api/auth/apple-config`);
-      state.appleSignIn = {
-        enabled: Boolean(appleRes?.apple?.enabled),
-        clientId: String(appleRes?.apple?.clientId || ""),
-        redirectUri: String(appleRes?.apple?.redirectUri || ""),
-      };
-    } catch {
-      state.appleSignIn = { enabled: false, clientId: "", redirectUri: "" };
-    }
-
     console.log("🔄 Bootstrap session finally block - authenticated:", state.auth.authenticated, "sessionCheckSucceeded:", sessionCheckSucceeded);
     state.session.ready = true;
 
@@ -9553,6 +9566,11 @@ async function bootstrapSession() {
     if (state.view !== "detail") {
       scrollToTopSoon();
     }
+
+    finishAppBoot();
+    refreshAppleSignInConfig().catch(() => {});
+    refreshBackendStatus();
+    refreshFeaturePushState().catch(() => {});
 
     // Handle announce deep links (/?announce=... or /?new=1)
     handleAnnouncementQueryParams().catch(() => {});
@@ -13919,12 +13937,10 @@ document.querySelectorAll(".brand-logo").forEach((logo) => {
   logo.addEventListener("click", () => switchView("home"));
 });
 
-refreshBackendStatus();
 registerServiceWorker();
 bindFeaturePushToggle();
 bindPushCategoryToggles();
 bindPushTriggerToggles();
-refreshFeaturePushState().catch(() => {});
 
 // Prevent browser history navigation from restoring scroll position.
 try {
