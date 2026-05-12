@@ -69,6 +69,22 @@ describe("ingredientTermMatchesProductTitle", () => {
     assert.equal(ingredientTermMatchesProductTitle("citroengras", "AH Bruiswater gember citroengras"), false);
   });
 
+  it("meest voorkomende pantry/dairy guardrails (melk/room/boter/margarine/zout/peper/olie)", () => {
+    assert.equal(ingredientTermMatchesProductTitle("melk", "Kokos melk"), false);
+    assert.equal(ingredientTermMatchesProductTitle("melk", "Koffiemelk cups"), false);
+    assert.equal(ingredientTermMatchesProductTitle("melk", "Halfvolle melk"), true);
+    assert.equal(ingredientTermMatchesProductTitle("room", "Roomkaas naturel"), false);
+    // "room" is strict whole-word; kookroom wordt via matchTerms afgevangen.
+    assert.equal(ingredientTermMatchesProductTitle("room", "Kookroom"), false);
+    const roomTerms = buildIngredientMatchTerms("room", "room");
+    assert.equal(ingredientMatchesAnyProductTerm(roomTerms, "Kookroom"), true);
+    assert.equal(ingredientTermMatchesProductTitle("boter", "Knoflookboter"), false);
+    assert.equal(ingredientTermMatchesProductTitle("margarine", "AH Scharreleieren"), false);
+    assert.equal(ingredientTermMatchesProductTitle("zout", "Zoutjes mix"), false);
+    assert.equal(ingredientTermMatchesProductTitle("peper", "Pepernoten"), false);
+    assert.equal(ingredientTermMatchesProductTitle("olie", "Olijven groen"), false);
+  });
+
   it("verse gember: beide woorden als heel woord", () => {
     assert.equal(ingredientTermMatchesProductTitle("verse gember", "AH Verse gember"), true);
     assert.equal(ingredientTermMatchesProductTitle("verse gember", "Gemberbier"), false);

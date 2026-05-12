@@ -3266,7 +3266,7 @@ function buildStoreProductChoices(store, item) {
       { title: `${bioPrefix} Eieren`, subtitle: "6 stuks", price: "€3,19", emoji: "🥚", searchTerm: `${bioPrefix} eieren` }
     );
   }
-  if (/melk|yoghurt|room/.test(value)) {
+  if (/\b(?:melk|yoghurt|room)\b/.test(value)) {
     return choiceSet(
       { title: `${prefix} ${/room/.test(value) ? "Kookroom" : "Halfvolle melk"}`, subtitle: amount, price: "€1,39", emoji: "🥛", searchTerm: `${prefix} ${/room/.test(value) ? "kookroom" : "melk"}` },
       { title: `${bioPrefix} ${/room/.test(value) ? "Room" : "Melk"}`, subtitle: amount, price: "€1,89", emoji: "🥛", searchTerm: `${bioPrefix} ${/room/.test(value) ? "room" : "melk"}` }
