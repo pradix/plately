@@ -64,6 +64,16 @@
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
     }
+    function fmtNlAmsterdam(isoOrDate) {
+      const d = typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate;
+      if (!d || Number.isNaN(d.getTime())) return "—";
+      return d.toLocaleString("nl-NL", {
+        timeZone: "Europe/Amsterdam",
+        dateStyle: "medium",
+        timeStyle: "short",
+        hour12: false,
+      });
+    }
     function fmtUptime(sec) {
       const s = Number(sec) || 0;
       const d = Math.floor(s / 86400);
@@ -94,11 +104,19 @@
         const commitLink = r.commitUrl
           ? '<a href="' + esc(r.commitUrl) + '" target="_blank" rel="noopener">' + esc(commit.slice(0, 12)) + (commit.length > 12 ? "…" : "") + "</a>"
           : '<span class="mono">' + esc(commit) + "</span>";
-        const lastSrc = lp.source === "file" ? "deploy-revision.json" : lp.source === "env" ? "omgeving" : "—";
-        const deployedFile =
-          lp.deployedAt && !Number.isNaN(Date.parse(lp.deployedAt))
-            ? esc(new Date(lp.deployedAt).toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "medium" }))
-            : "—";
+        const lastSrc =
+          lp.source === "file"
+            ? "deploy-revision.json"
+            : lp.source === "env"
+              ? "omgeving"
+              : lp.source === "git-worktree"
+                ? ".git HEAD"
+                : "—";
+        const deployedFile = lp.deployedAt && !Number.isNaN(Date.parse(lp.deployedAt)) ? esc(fmtNlAmsterdam(lp.deployedAt)) : "—";
+        const bootLine =
+          data.serverBootedAt && !Number.isNaN(Date.parse(data.serverBootedAt))
+            ? esc(fmtNlAmsterdam(data.serverBootedAt))
+            : esc(data.serverBootedAt || "—");
         el.innerHTML =
           '<h2>Git &amp; Render</h2><dl>' +
           "<dt>Branch</dt><dd><span class=\"mono\">" +
@@ -126,8 +144,8 @@
           "<dt>Node omgeving</dt><dd>" +
           esc(data.nodeEnv || "—") +
           "</dd>" +
-          "<dt>Proces gestart</dt><dd class=\"mono\">" +
-          esc(data.serverBootedAt || "—") +
+          "<dt>Proces gestart (Amsterdam)</dt><dd class=\"mono\">" +
+          bootLine +
           "</dd>" +
           "<dt>Uptime</dt><dd>" +
           esc(fmtUptime(data.uptimeSeconds)) +
@@ -137,8 +155,8 @@
           "</dd></dl>";
         if (ft) {
           ft.textContent =
-            "Opgevraagd: " +
-            new Date().toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "medium" }) +
+            "Opgevraagd (Amsterdam): " +
+            fmtNlAmsterdam(new Date()) +
             " · endpoint blijft JSON ook bruikbaar voor monitoring.";
         }
       } catch (e) {

@@ -4,7 +4,7 @@
 #
 # Optionele omgevingsvariabelen:
 #   PLATELY_DEPLOY_BRANCH   Git branch om te pullen (default: beta)
-#   PLATELY_POST_DEPLOY_CMD Commando om de app te herstarten, bijv.:
+#   PLATELY_GIT_DIR         Map met .git als die niet gelijk is aan de app-map (server.js).
 #                           sudo systemctl restart plately
 #                           of: pm2 restart plately
 

@@ -50,12 +50,28 @@ function readPlatelyDeployRevision() {
   }
 }
 
+/** Als deploy-revision.json en env ontbreken: probeer .git op de server (clone). */
+function readGitWorktreeMeta() {
+  try {
+    const { execSync } = require("node:child_process");
+    const gitCwd = String(process.env.PLATELY_GIT_DIR || "").trim() || ROOT_DIR;
+    const opts = { cwd: gitCwd, encoding: "utf8", timeout: 8000, stdio: ["ignore", "pipe", "ignore"] };
+    const head = String(execSync("git rev-parse HEAD", opts)).trim();
+    const br = String(execSync("git rev-parse --abbrev-ref HEAD", opts)).trim();
+    if (!/^[a-f0-9]{7,40}$/i.test(head)) return null;
+    return { gitCommit: head, gitBranch: br || "HEAD" };
+  } catch {
+    return null;
+  }
+}
+
 function buildPlatelyDeployInfoPayload() {
   const envCommit = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.GIT_SHA || "").trim();
   const envBranch = String(process.env.RENDER_GIT_BRANCH || process.env.GIT_BRANCH || "").trim();
   const fileRev = readPlatelyDeployRevision();
-  const effectiveCommit = String(fileRev?.gitCommit || envCommit).trim();
-  const effectiveBranch = String(fileRev?.gitBranch || envBranch).trim();
+  const gitMeta = readGitWorktreeMeta();
+  const effectiveCommit = String(fileRev?.gitCommit || envCommit || gitMeta?.gitCommit || "").trim();
+  const effectiveBranch = String(fileRev?.gitBranch || envBranch || gitMeta?.gitBranch || "").trim();
   const repoSlug = String(process.env.PLATELY_SOURCE_REPO || "pradix/plately")
     .trim()
     .replace(/^github\.com\//i, "")
@@ -77,6 +93,15 @@ function buildPlatelyDeployInfoPayload() {
     };
   } else if (envCommit || envBranch) {
     lastPush = { source: "env", gitCommit: envCommit || "", gitBranch: envBranch || "", deployedAt: null, message: null };
+  } else if (gitMeta) {
+    lastPush = {
+      source: "git-worktree",
+      gitCommit: gitMeta.gitCommit,
+      gitBranch: gitMeta.gitBranch,
+      deployedAt: null,
+      message:
+        "HEAD op deze server (.git). Zet deploy-revision.json (deploy-beta.sh) voor deploytijd en vaste registratie.",
+    };
   }
 
   return {
@@ -93,6 +118,7 @@ function buildPlatelyDeployInfoPayload() {
       commitUrl,
     },
     lastPush,
+    displayTimeZone: "Europe/Amsterdam",
     database: { postgresEnabled: isPostgresEnabled() },
   };
 }

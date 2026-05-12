@@ -2470,7 +2470,15 @@
     }
 
     function formatDate(date) {
-      return date.toLocaleDateString('nl-NL', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleString("nl-NL", {
+        timeZone: "Europe/Amsterdam",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
     }
 
     function filterUsers() {
@@ -2741,7 +2749,13 @@
             ? "deploy-revision.json (of PLATELY_DEPLOY_REVISION_FILE)"
             : lp.source === "env"
               ? "Omgeving (GIT_COMMIT / Render)"
-              : "Onbekend — zet deploy-revision.json op de server";
+              : lp.source === "git-worktree"
+                ? "Git checkout op server (.git HEAD)"
+                : "Geen commit gevonden (.git ontbreekt of geen repo op deze pad)";
+        const booted =
+          data.serverBootedAt && Number.isFinite(Date.parse(data.serverBootedAt))
+            ? escapeHtml(formatDate(new Date(data.serverBootedAt)))
+            : escapeHtml(data.serverBootedAt || "—");
         const msg = lp.message ? `<tr><th style="text-align:left;padding:8px 10px 0 0;vertical-align:top">Bericht</th><td style="padding-top:8px">${escapeHtml(lp.message)}</td></tr>` : "";
         inner.innerHTML = `
           <table class="users-table" style="margin-top:0;max-width:720px">
@@ -2750,14 +2764,15 @@
               <tr><th style="text-align:left;padding:6px 10px 6px 0">Branch</th><td class="mono" style="padding:6px 0">${escapeHtml(branch)}</td></tr>
               <tr><th style="text-align:left;padding:6px 10px 6px 0">Deploytijd (bestand)</th><td style="padding:6px 0">${deployed}</td></tr>
               <tr><th style="text-align:left;padding:6px 10px 6px 0">Client build</th><td style="padding:6px 0"><span class="mono">${escapeHtml(data.clientBuild || "—")}</span> <span class="muted">(meta plately-build)</span></td></tr>
-              <tr><th style="text-align:left;padding:6px 10px 6px 0">Node gestart</th><td class="mono" style="padding:6px 0">${escapeHtml(data.serverBootedAt || "—")}</td></tr>
+              <tr><th style="text-align:left;padding:6px 10px 6px 0">Node gestart</th><td style="padding:6px 0">${booted}</td></tr>
               <tr><th style="text-align:left;padding:6px 10px 6px 0">Uptime proces</th><td style="padding:6px 0">${escapeHtml(formatDeployUptime(data.uptimeSeconds))}</td></tr>
               <tr><th style="text-align:left;padding:6px 10px 6px 0">Bron registratie</th><td class="muted" style="padding:6px 0;font-size:12px">${escapeHtml(sourceLabel)}</td></tr>
+              <tr><th style="text-align:left;padding:6px 10px 6px 0">Tijdzone weergave</th><td class="muted" style="padding:6px 0;font-size:12px">Europe/Amsterdam (NL)</td></tr>
               ${msg}
             </tbody>
           </table>
           <p class="muted" style="margin-top:12px;font-size:12px;max-width:720px">
-            Tip voor VPS: na <code class="mono">git pull</code> schrijf <code class="mono">deploy-revision.json</code> naast de app (zie <code class="mono">deploy-revision.example.json</code> in de repo).
+            Tip voor VPS: <code class="mono">deploy-beta.sh</code> schrijft <code class="mono">deploy-revision.json</code>. Staat <code class="mono">.git</code> niet naast <code class="mono">server.js</code>? Zet <code class="mono">PLATELY_GIT_DIR=/pad/naar/clone</code> voor de Node-service.
           </p>`;
         loading.style.display = "none";
         inner.style.display = "block";
