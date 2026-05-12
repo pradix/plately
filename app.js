@@ -9505,15 +9505,23 @@ async function bootstrapSession() {
       }
     };
 
-    // Show auth modal to all unauthenticated users
-    // IMPORTANT: Check state.auth.authenticated (from server) NOT cached localStorage
-    if (sessionCheckSucceeded && state.auth.authenticated === false) {
-      console.log("📱 User not authenticated, showing auth modal");
+    // Show auth modal for unauthenticated users.
+    // - When /api/session succeeds and auth is disabled (geen Postgres), geen modaal.
+    // - When /api/session faalt (o.a. Facebook in-app browser / netwerk), wél modaal tonen:
+    //   anders bleef sessionCheckSucceeded false en opende het inlogscherm nooit — ook niet na
+    //   herstel van het detail-tabblad (switchView slaat auth daar bewust over).
+    const loginDisabledByConfig = sessionCheckSucceeded && state.auth.enabled === false;
+    if (!state.auth.authenticated && !loginDisabledByConfig) {
+      console.log("📱 User not authenticated, showing auth modal", { sessionCheckSucceeded });
       openAuthModal(wantsRegisterFromUrl ? "register" : "login");
       stripSignupParamsFromUrl();
     } else {
       if (wantsRegisterFromUrl) stripSignupParamsFromUrl();
-      console.log("✅ User is authenticated or session check failed. state.auth.authenticated:", state.auth.authenticated);
+      console.log("✅ Skipping auth modal.", {
+        authenticated: state.auth.authenticated,
+        loginDisabledByConfig,
+        sessionCheckSucceeded,
+      });
       // Show tooltips once per login session
       if (state.auth.authenticated) {
         startOnboarding();
