@@ -8782,10 +8782,14 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       .sort((a, b) => {
         const sa = getDetailedScore(a.title || "");
         const sb = getDetailedScore(b.title || "");
-        if (sa.score !== sb.score) return sa.score - sb.score;
         const pa = a.currentPrice ?? a.priceBeforeBonus ?? 9999;
         const pb = b.currentPrice ?? b.priceBeforeBonus ?? 9999;
-        return pa - pb;
+        if (pa !== pb) return pa - pb;
+        if (sa.score !== sb.score) return sa.score - sb.score;
+        const ba = a.isBonus || a.isBonusPrice ? 1 : 0;
+        const bb = b.isBonus || b.isBonusPrice ? 1 : 0;
+        if (ba !== bb) return bb - ba;
+        return 0;
       })
       .slice(0, count);
 
@@ -8814,8 +8818,8 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
 
 // Searches the AH catalog for a single ingredient using multiple label-specific
 // query variants in parallel so the basket alternatives screen can group by
-// dietary preference. Returns a deduplicated, price-sorted list of up to
-// `maxCount` products. Each product carries its inferred labels.
+// dietary preference. Returns a deduplicated list of up to `maxCount` products
+// (gesorteerd: eerst voordeligste prijs, dan match-score, dan bonus).
 async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) {
   const rawBase = sanitizeText(ingredient || "");
   const base = normalizeIngredientForSearch(rawBase) || rawBase;
@@ -8892,14 +8896,20 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) 
   const parseAhPriceNum = (p) =>
     parseFloat(String(p.price || "").replace("€", "").replace(",", ".").trim()) || 9999;
 
-  // Relevance first (lower match score is better), then price — was price-only and picked wrong products.
+  // Voordeligste eerst (actuele prijs), daarna match-score; bonus als extra tie-break.
   merged.sort((a, b) => {
+    const pa = parseAhPriceNum(a);
+    const pb = parseAhPriceNum(b);
+    if (pa !== pb) return pa - pb;
     const sa = Number(a.matchMeta?.score);
     const sb = Number(b.matchMeta?.score);
     const fa = Number.isFinite(sa) ? sa : 9999;
     const fb = Number.isFinite(sb) ? sb : 9999;
     if (fa !== fb) return fa - fb;
-    return parseAhPriceNum(a) - parseAhPriceNum(b);
+    const ba = a.isBonus ? 1 : 0;
+    const bb = b.isBonus ? 1 : 0;
+    if (ba !== bb) return bb - ba;
+    return 0;
   });
 
   return merged.slice(0, maxCount);
@@ -9020,8 +9030,8 @@ function isAhProductBioLabeled(product) {
 }
 
 /**
- * Standaard AH-productkeuze: beste match-score eerst, tie-break prijs, strakkere cutoff dan voorheen.
- * prefs.bio: kies biologisch variant binnen dezelfde kwaliteitsband indien mogelijk.
+ * Standaard AH-productkeuze: binnen de kwaliteitsband eerst **voordeligste prijs** (actuele prijs),
+ * dan match-score, dan BONUS-treffer. prefs.bio: pool beperken tot bio binnen dezelfde band.
  */
 function pickAhBasketDefaultProduct(products, prefs) {
   const list = Array.isArray(products) ? products.filter(Boolean) : [];
@@ -9034,6 +9044,7 @@ function pickAhBasketDefaultProduct(products, prefs) {
       score: Number.isFinite(Number(p?.matchMeta?.score)) ? Number(p.matchMeta.score) : null,
       price: parseAhBasketPriceEuro(p?.price),
       bio: isAhProductBioLabeled(p),
+      bonus: Boolean(p?.isBonus),
     }))
     .filter((x) => x.product);
 
@@ -9042,20 +9053,22 @@ function pickAhBasketDefaultProduct(products, prefs) {
   const finiteScores = scored.map((s) => s.score).filter((s) => Number.isFinite(s));
   const bestScore = finiteScores.length ? Math.min(...finiteScores) : null;
   const cutoff = bestScore === null ? null : Math.min(bestScore + 32, 76);
-  const good = cutoff === null ? scored : scored.filter((s) => s.score === null || s.score <= cutoff);
+  let pool = cutoff === null ? scored : scored.filter((s) => s.score === null || s.score <= cutoff);
 
-  const goodSorted = [...good].sort((a, b) => {
+  if (prefs?.bio) {
+    const bioOnly = pool.filter((s) => s.bio);
+    if (bioOnly.length) pool = bioOnly;
+  }
+
+  const goodSorted = [...pool].sort((a, b) => {
+    if (a.price !== b.price) return a.price - b.price;
     const sa = Number.isFinite(a.score) ? a.score : Infinity;
     const sb = Number.isFinite(b.score) ? b.score : Infinity;
     if (sa !== sb) return sa - sb;
-    if (a.price !== b.price) return a.price - b.price;
+    if (Boolean(a.bonus) !== Boolean(b.bonus)) return (b.bonus ? 1 : 0) - (a.bonus ? 1 : 0);
     return a.idx - b.idx;
   });
 
-  if (prefs?.bio) {
-    const bioGood = goodSorted.filter((s) => s.bio);
-    if (bioGood.length) return bioGood[0].product;
-  }
   return goodSorted[0].product;
 }
 
@@ -11907,7 +11920,7 @@ async function buildStoreBasket(body) {
     if (store === "albert-heijn" && result.products.length) {
       const ahChoices = result.products
         .map((product, i) =>
-          buildMatchedChoiceFromProduct(store, item, product, i === 0 ? "Beste match" : "Alternatief")
+          buildMatchedChoiceFromProduct(store, item, product, i === 0 ? "Meest voordelig" : "Alternatief")
         )
         .filter(Boolean);
       choices = ahChoices.length ? ahChoices : buildStoreProductChoices(store, item);
@@ -11991,7 +12004,7 @@ async function researchAHChoices(body) {
 
   const item = { title: ingredientTitle, amount: sanitizeText(body.amount || "1 verpakking") };
   const choices = filtered
-    .map((product, i) => buildMatchedChoiceFromProduct("albert-heijn", item, product, i === 0 ? "Beste match" : "Alternatief"))
+    .map((product, i) => buildMatchedChoiceFromProduct("albert-heijn", item, product, i === 0 ? "Meest voordelig" : "Alternatief"))
     .filter(Boolean);
 
   return {
