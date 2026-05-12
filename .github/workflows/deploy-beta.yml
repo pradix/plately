@@ -11,11 +11,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Meerregelige keys in `key:` raken soms kapot; naar bestand + key_path is stabieler.
+      - name: Prepare SSH key
+        env:
+          DEPLOY_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          KEY_FILE="${{ runner.temp }}/deploy_key.pem"
+          if [ -z "${DEPLOY_KEY:-}" ]; then
+            echo "::error::Secret VPS_SSH_KEY is empty. Settings → Secrets → Actions → VPS_SSH_KEY."
+            exit 1
+          fi
+          printf '%s\n' "$DEPLOY_KEY" | tr -d '\r' > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          echo "Key file: $(wc -l < "$KEY_FILE") lines, $(wc -c < "$KEY_FILE") bytes"
+          FIRST=$(head -n 1 "$KEY_FILE")
+          if [[ "$FIRST" != -----BEGIN* ]]; then
+            echo "::error::VPS_SSH_KEY must start with -----BEGIN … (private key). Not the .pub file."
+            exit 1
+          fi
+          if ! ssh-keygen -y -f "$KEY_FILE" >/dev/null 2>&1; then
+            echo "::error::VPS_SSH_KEY is not a valid private key. Paste the full key including END line."
+            exit 1
+          fi
+          echo "SSH private key OK on runner."
+
       - name: Deploy to beta VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
+          key_path: ${{ runner.temp }}/deploy_key.pem
           script: |
             /var/www/plately/deploy-beta.sh
