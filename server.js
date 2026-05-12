@@ -50,7 +50,7 @@ function readPlatelyDeployRevision() {
   }
 }
 
-/** Als deploy-revision.json en env ontbreken: probeer .git op de server (clone). */
+/** Als deploy-revision.json en env ontbreken: probeer .git (cwd ROOT_DIR of PLATELY_GIT_DIR). */
 function readGitWorktreeMeta() {
   try {
     const { execSync } = require("node:child_process");
