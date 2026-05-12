@@ -44,6 +44,24 @@ describe("ingredientTermMatchesProductTitle", () => {
     assert.equal(ingredientTermMatchesProductTitle("ui", "Uien poeder"), false);
   });
 
+  it("tomaat/paprika/komkommer: vermijd obvious processed", () => {
+    assert.equal(ingredientTermMatchesProductTitle("tomaat", "Tomaten puree"), false);
+    assert.equal(ingredientTermMatchesProductTitle("tomaat", "Tomatensaus"), false); // compound
+    assert.equal(ingredientTermMatchesProductTitle("tomaten", "Verse tomaten"), true);
+    assert.equal(ingredientTermMatchesProductTitle("paprika", "Paprikapoeder"), false);
+    assert.equal(ingredientTermMatchesProductTitle("paprika", "Paprika chips"), false);
+    assert.equal(ingredientTermMatchesProductTitle("paprika", "Rode paprika"), true);
+    assert.equal(ingredientTermMatchesProductTitle("komkommer", "Zoetzure komkommer"), false);
+    assert.equal(ingredientTermMatchesProductTitle("komkommer", "Komkommer"), true);
+  });
+
+  it("citroen: geen sap/limonade", () => {
+    assert.equal(ingredientTermMatchesProductTitle("citroen", "Citroensap"), false); // compound
+    assert.equal(ingredientTermMatchesProductTitle("citroen", "Citroen sap"), false);
+    assert.equal(ingredientTermMatchesProductTitle("citroen", "Limonade citroen"), false);
+    assert.equal(ingredientTermMatchesProductTitle("citroen", "Citroen"), true);
+  });
+
   it("verse gember: beide woorden als heel woord", () => {
     assert.equal(ingredientTermMatchesProductTitle("verse gember", "AH Verse gember"), true);
     assert.equal(ingredientTermMatchesProductTitle("verse gember", "Gemberbier"), false);
