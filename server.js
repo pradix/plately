@@ -12231,6 +12231,10 @@ function renderPublicSeoRecipePage(entry, origin) {
   const title = sanitizeText(recipe.title || "Recept");
   const description = sanitizeText(recipe.description || "Een recept op Plately.");
   const canonicalUrl = `${origin}${entry.urlPath}`;
+  const recipeParam = encodeURIComponent(entry.urlPath);
+  const saveUrl = `/?register=1&intent=save-recipe&recipe=${recipeParam}`;
+  const groceryUrl = `/?register=1&intent=shopping-list&recipe=${recipeParam}`;
+  const mealPlanUrl = `/?register=1&intent=meal-plan&recipe=${recipeParam}`;
   const sourceUrl = normalizePublicSourceUrl(recipe.sourceUrl);
   const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
   const instructions = Array.isArray(recipe.instructions) ? recipe.instructions : [];
@@ -12289,8 +12293,8 @@ function renderPublicSeoRecipePage(entry, origin) {
           <img src="/assets/plately.png" alt="" width="34" height="34" decoding="async" class="public-recipe__brand-logo" />
         </a>
         <div class="public-recipe__cta">
-          <a class="btn-secondary public-recipe__cta-btn" href="/">Open app</a>
-          <a class="btn-primary public-recipe__cta-btn" href="/?register=1">Account maken</a>
+          <a class="btn-secondary public-recipe__cta-btn" href="${escapeHtml(saveUrl)}">Bewaar recept</a>
+          <a class="btn-primary public-recipe__cta-btn" href="${escapeHtml(groceryUrl)}">Maak boodschappenlijst</a>
         </div>
       </header>
 
@@ -12301,10 +12305,20 @@ function renderPublicSeoRecipePage(entry, origin) {
           <h1 class="public-recipe__title">${escapeHtml(title)}</h1>
           <p class="public-recipe__sub">${escapeHtml(description)}</p>
           <div class="public-recipe__meta">${escapeHtml([recipe.time ? `Bereiding: ${recipe.time}` : "", recipe.servings ? `Porties: ${recipe.servings}` : ""].filter(Boolean).join(" · "))}</div>
+          <div class="public-recipe__action-band" aria-label="Plately acties">
+            <div>
+              <strong>Maak koken makkelijker met Plately</strong>
+              <span>Bewaar dit recept en zet de ingrediënten automatisch op je boodschappenlijst.</span>
+            </div>
+            <a class="btn-primary public-recipe__action-main" href="${escapeHtml(groceryUrl)}">Maak mijn boodschappenlijst</a>
+          </div>
 
           <div class="public-recipe__grid">
             <section class="public-recipe__panel" aria-label="Ingrediënten">
-              <h2 class="public-recipe__h2">Ingrediënten</h2>
+              <div class="public-recipe__panel-head">
+                <h2 class="public-recipe__h2">Ingrediënten</h2>
+                <a class="public-recipe__mini-cta" href="${escapeHtml(groceryUrl)}">Zet op lijst</a>
+              </div>
               <ul class="public-recipe__list">
                 ${ingredients
                   .slice(0, 80)
@@ -12332,6 +12346,16 @@ function renderPublicSeoRecipePage(entry, origin) {
             </section>
           </div>
 
+          <section class="public-recipe__conversion" aria-label="Recept bewaren">
+            <p class="section-kicker public-recipe__kicker">Kook je dit later?</p>
+            <h2 class="public-recipe__conversion-title">Stuur dit recept naar je eigen Plately.</h2>
+            <p class="public-recipe__conversion-copy">Dan staat het klaar tussen je recepten, kun je het plannen voor deze week en maak je met één klik een boodschappenlijst.</p>
+            <div class="public-recipe__conversion-actions">
+              <a class="btn-primary public-recipe__cta-btn" href="${escapeHtml(saveUrl)}">Bewaar gratis</a>
+              <a class="btn-secondary public-recipe__cta-btn" href="${escapeHtml(mealPlanUrl)}">Plan deze week</a>
+            </div>
+          </section>
+
           <p class="public-recipe__trust">Receptinhoud en beeld komen van de oorspronkelijke maker of bronsite. Plately bewaart het recept overzichtelijk en linkt waar mogelijk terug naar de bron.</p>
 
           <footer class="public-recipe__footer">
@@ -12341,6 +12365,9 @@ function renderPublicSeoRecipePage(entry, origin) {
         </div>
       </article>
     </main>
+    <nav class="public-recipe__sticky-cta" aria-label="Snelle actie">
+      <a class="btn-primary public-recipe__sticky-btn" href="${escapeHtml(groceryUrl)}">Bewaar + boodschappenlijst</a>
+    </nav>
   </body>
 </html>`;
 }
@@ -12442,6 +12469,26 @@ const server = http.createServer(async (request, response) => {
       const entries = await listPublicSeoRecipes(origin);
       response.writeHead(200, { ...HTTP_HEADERS, "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
       response.end(renderPublicRecipeIndexPage(entries, origin));
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/public-recipe" && request.method === "GET") {
+      const origin = getPublicOrigin(request);
+      const rawPath = sanitizeText(requestUrl.searchParams.get("path") || "");
+      const pathSlug = rawPath.startsWith("/recept/") ? rawPath.slice("/recept/".length) : rawPath;
+      const oldToken = pathSlug.match(/-([A-Za-z0-9_-]{10})$/)?.[1] || "";
+      const entry = oldToken
+        ? await findPublicSeoRecipeByToken(oldToken, origin)
+        : await findPublicSeoRecipeByPath(pathSlug, origin);
+      if (!entry) {
+        sendJson(response, 404, { error: "Recept niet gevonden." });
+        return;
+      }
+      sendJson(response, 200, {
+        ok: true,
+        url: entry.urlPath,
+        recipe: entry.recipe,
+      });
       return;
     }
 

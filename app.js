@@ -1700,7 +1700,17 @@ function openAuthModal(mode = "login") {
 
   const subtitleEl = document.getElementById("authSubtitle");
   if (subtitleEl) {
-    subtitleEl.textContent = isRegister ? t("auth.registerSubtitle") : t("auth.loginSubtitle");
+    const publicIntent = getPublicRecipeIntent();
+    if (publicIntent?.recipe) {
+      subtitleEl.textContent =
+        publicIntent.intent === "shopping-list"
+          ? "Maak gratis een account om dit recept te bewaren en de ingrediënten op je boodschappenlijst te zetten."
+          : publicIntent.intent === "meal-plan"
+            ? "Maak gratis een account om dit recept te bewaren en in je week te plannen."
+            : "Maak gratis een account om dit recept in je eigen Plately te bewaren.";
+    } else {
+      subtitleEl.textContent = isRegister ? t("auth.registerSubtitle") : t("auth.loginSubtitle");
+    }
   }
 
   syncAuthModeToggleButtons();
@@ -9284,6 +9294,7 @@ function schedulePersistAppState(delay = 350) {
 
 // Track if user has ever been authenticated (persisted across refreshes)
 const HAS_AUTHED_KEY = "plately-has-authed";
+const PUBLIC_RECIPE_INTENT_KEY = "plately-public-recipe-intent";
 function markUserAsAuthed() {
   try { localStorage.setItem(HAS_AUTHED_KEY, "1"); } catch {}
 }
@@ -9292,6 +9303,71 @@ function clearUserAuthedMark() {
 }
 function hasUserEverAuthed() {
   try { return localStorage.getItem(HAS_AUTHED_KEY) === "1"; } catch { return false; }
+}
+
+function getPublicRecipeIntent() {
+  try {
+    const raw = sessionStorage.getItem(PUBLIC_RECIPE_INTENT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setPublicRecipeIntent(intent) {
+  try {
+    sessionStorage.setItem(PUBLIC_RECIPE_INTENT_KEY, JSON.stringify(intent));
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearPublicRecipeIntent() {
+  try { sessionStorage.removeItem(PUBLIC_RECIPE_INTENT_KEY); } catch {}
+}
+
+async function applyPublicRecipeIntent() {
+  const intent = getPublicRecipeIntent();
+  const path = String(intent?.recipe || "").trim();
+  if (!path || !state.auth.authenticated) return false;
+
+  try {
+    const payload = await fetchJson(`${state.apiBase}/api/public-recipe?path=${encodeURIComponent(path)}`);
+    const recipe = normalizeImportedRecipe({
+      ...(payload.recipe || {}),
+      id: payload.recipe?.id || `public-${Date.now()}`,
+      platform: payload.recipe?.platform || "website",
+    });
+    const existing = state.recipes.find((r) => r.id === recipe.id);
+    const savedRecipe = existing || recipe;
+    if (!existing) {
+      state.recipes = [savedRecipe, ...state.recipes];
+    }
+
+    const favorites = getOrCreateFavoritesBookmark();
+    saveRecipeToCookbook(savedRecipe.id, favorites.id, { silentToast: true });
+
+    if (intent.intent === "shopping-list") {
+      addRecipeToGrocery(savedRecipe);
+      switchView("grocery");
+      showToast(`${savedRecipe.title} staat in je Plately en op je boodschappenlijst.`);
+    } else if (intent.intent === "meal-plan") {
+      switchView("mealplan");
+      showToast(`${savedRecipe.title} is bewaard. Plan hem nu in je week.`);
+    } else {
+      state.selectedRecipeId = savedRecipe.id;
+      switchView("detail");
+      renderDetailRecipe(false);
+      showToast(`${savedRecipe.title} is bewaard in je Plately.`);
+    }
+
+    clearPublicRecipeIntent();
+    schedulePersistAppState(50);
+    return true;
+  } catch {
+    showToast("Recept ophalen lukte niet. Probeer het nog een keer.");
+    return false;
+  }
 }
 
 async function refreshChannelStatusesFromServer() {
@@ -9580,12 +9656,20 @@ async function bootstrapSession() {
       signupUrlParams.get("register") === "1" ||
       signupUrlParams.get("signup") === "1" ||
       signupUrlParams.get("aanmelden") === "1";
+    const publicRecipeIntent = {
+      intent: signupUrlParams.get("intent") || "save-recipe",
+      recipe: signupUrlParams.get("recipe") || "",
+    };
+    const hasPublicRecipeIntent = Boolean(publicRecipeIntent.recipe);
+    if (hasPublicRecipeIntent) {
+      setPublicRecipeIntent(publicRecipeIntent);
+    }
 
     const stripSignupParamsFromUrl = () => {
       try {
         const next = new URL(window.location.href);
         let touched = false;
-        ["register", "signup", "aanmelden"].forEach((key) => {
+        ["register", "signup", "aanmelden", "intent", "recipe"].forEach((key) => {
           if (next.searchParams.has(key)) {
             next.searchParams.delete(key);
             touched = true;
@@ -9622,6 +9706,10 @@ async function bootstrapSession() {
       // Show tooltips once per login session
       if (state.auth.authenticated) {
         startOnboarding();
+        if (hasPublicRecipeIntent) {
+          applyPublicRecipeIntent().catch(() => {});
+          stripSignupParamsFromUrl();
+        }
       }
     }
   }
@@ -9643,14 +9731,30 @@ function completeAuthSessionFromPayload(payload, { treatAsNewUser } = {}) {
   if (state.auth.authenticated) markUserAsAuthed();
   renderAll();
 
+  const hasPublicIntent = Boolean(getPublicRecipeIntent()?.recipe);
   if (treatAsNewUser) {
-    showOnboarding();
-    showToast("Welkom! Nog een paar stappen, dan kun je beginnen.");
+    if (hasPublicIntent) {
+      closeAuthModal();
+      showToast("Welkom! We zetten je recept klaar.");
+      window.setTimeout(() => {
+        applyPublicRecipeIntent().catch(() => {});
+      }, 250);
+    } else {
+      showOnboarding();
+      showToast("Welkom! Nog een paar stappen, dan kun je beginnen.");
+    }
   } else {
     closeAuthModal();
-    showToast("Je bent ingelogd.");
-    scrollToTopSoon();
-    window.setTimeout(() => startOnboarding(), 450);
+    if (hasPublicIntent) {
+      showToast("Je bent ingelogd. We zetten je recept klaar.");
+      window.setTimeout(() => {
+        applyPublicRecipeIntent().catch(() => {});
+      }, 250);
+    } else {
+      showToast("Je bent ingelogd.");
+      scrollToTopSoon();
+      window.setTimeout(() => startOnboarding(), 450);
+    }
   }
 }
 
