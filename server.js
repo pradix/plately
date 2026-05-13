@@ -11180,6 +11180,125 @@ function lookupAhSearchRating(ratingMap, url, recipeId) {
   return null;
 }
 
+const AH_RECIPE_SEARCH_V2_QUERY = `
+query recipeSearchV2($searchText: String, $start: Int, $size: PageSize, $sortBy: RecipeSearchSortOption, $filters: [RecipeSearchQueryFilter!], $priorityRecipeIds: [Int!], $favoriteRecipeIds: [Int!], $recipeIds: [Int!]) {
+  recipeSearchV2(searchText: $searchText, start: $start, size: $size, sortBy: $sortBy, filters: $filters, priorityRecipeIds: $priorityRecipeIds, favoriteRecipeIds: $favoriteRecipeIds, recipeIds: $recipeIds) {
+    page { total __typename }
+    result {
+      id
+      title
+      slugifiedTitle: slug
+      time { cook oven wait __typename }
+      rating { average count __typename }
+      images(renditions: [D220X162, D302X220, D440X324, D612X450, D1024X748, D1224X900, XXS, XS, S, M, L, XL]) {
+        rendition
+        url
+        width
+        height
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}`;
+
+function formatAhRecipeTime(time) {
+  if (!time || typeof time !== "object") return "";
+  const minutes = ["cook", "oven", "wait"].reduce((sum, key) => {
+    const value = Number(time[key]);
+    return Number.isFinite(value) && value > 0 ? sum + value : sum;
+  }, 0);
+  return minutes > 0 ? `${minutes} min` : "";
+}
+
+function pickAhGraphqlRecipeImage(images) {
+  if (!Array.isArray(images) || images.length === 0) return "";
+  const ranked = images
+    .map((img) => ({
+      url: cleanImageUrl(img?.url || ""),
+      score: (Number(img?.width) || 0) * (Number(img?.height) || 0),
+    }))
+    .filter((img) => img.url && !isDecorativeImageUrl(img.url))
+    .sort((a, b) => b.score - a.score);
+  return ranked[0]?.url || "";
+}
+
+async function searchAhRecipesViaGraphql(query, count = 4) {
+  const searchText = sanitizeText(query || "").trim();
+  if (!searchText) return [];
+  const cap = Math.min(Math.max(Number(count) || 4, 1), 40);
+  try {
+    const resp = await fetch("https://www.ah.nl/gql", {
+      method: "POST",
+      headers: {
+        ...FETCH_HEADERS,
+        accept: "*/*",
+        "content-type": "application/json",
+        "x-client-name": "ah-allerhande",
+        "x-client-platform-type": "Web",
+        "x-client-version": "1.1025.2",
+        referer: `https://www.ah.nl/allerhande/recepten-zoeken?query=${encodeURIComponent(searchText)}`,
+      },
+      body: JSON.stringify({
+        operationName: "recipeSearchV2",
+        variables: {
+          searchText,
+          filters: [],
+          sortBy: null,
+          start: 0,
+          size: Math.max(9, cap),
+          recipeIds: null,
+          favoriteRecipeIds: null,
+          priorityRecipeIds: [],
+        },
+        query: AH_RECIPE_SEARCH_V2_QUERY,
+      }),
+      signal: AbortSignal.timeout(9000),
+    });
+    if (!resp?.ok) {
+      console.log(`AH GraphQL response: ${resp?.status || "failed"}`);
+      return [];
+    }
+    const json = await resp.json().catch(() => null);
+    const rows = json?.data?.recipeSearchV2?.result;
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+    const results = rows
+      .map((row) => {
+        const id = String(row?.id || "").replace(/\D+/g, "");
+        const title = sanitizeText(row?.title || "");
+        const slug = sanitizeText(row?.slugifiedTitle || row?.slug || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9-]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        if (!id || !title || !slug) return null;
+        const url = `https://www.ah.nl/allerhande/recept/R-R${id}/${slug}`;
+        if (!isAhAllerhandeRecipeUrl(url)) return null;
+        if (!ahSeoBackfillResultMatchesQuery(title, slug, searchText)) return null;
+        const ratingValue = Number(row?.rating?.average);
+        const ratingCount = Number(row?.rating?.count);
+        return {
+          title,
+          url,
+          thumbnail: pickAhGraphqlRecipeImage(row?.images),
+          channel: "Allerhande",
+          channelId: "ch-ah",
+          description: "",
+          time: formatAhRecipeTime(row?.time),
+          ...(Number.isFinite(ratingValue) && ratingValue > 0 ? { ratingValue } : {}),
+          ...(Number.isFinite(ratingCount) && ratingCount > 0 ? { ratingCount } : {}),
+        };
+      })
+      .filter(Boolean)
+      .slice(0, cap);
+    if (results.length) console.log(`✅ AH GraphQL returned ${results.length} results`);
+    return results;
+  } catch (err) {
+    console.log(`AH GraphQL fetch error: ${err.message}`);
+    return [];
+  }
+}
+
 function normalizeRecipeRatingCacheUrl(url) {
   try {
     const u = new URL(String(url || "").trim());
@@ -11723,7 +11842,10 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
 
   // Skip AH API - it requires authentication token we don't have
   // Use Jina reader fallback directly (much more reliable)
-  console.log(`⏭️  Skipping AH API (unauthorized), using Jina reader`);
+  console.log(`⏭️  Skipping old AH API (unauthorized), trying GraphQL + Jina reader`);
+
+  const graphqlResults = await searchAhRecipesViaGraphql(query, count);
+  if (graphqlResults.length > 0) return graphqlResults;
 
   // Fallback: Use Jina reader to get AH search results as markdown
   try {
