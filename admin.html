@@ -1092,7 +1092,7 @@
           </div>
           <p class="muted" style="font-size:12px;margin-bottom:12px;line-height:1.45">
             Roept <code class="mono">POST /api/admin/seo-recipe-backfill</code> aan: zoekt per <strong>seed-kanaal</strong> (je gevolgde kanalen, of anders de standaard ingeschakelde seed-kanalen) én per <strong>ingeschakeld custom-kanaal</strong> dat je volgt (zelfde regels als in de app-zoekbalk), importeert tot N recepten per doel naar het kookboek <strong>SEO recepten</strong> van je <strong>admin-account</strong>.
-            Kies handmatig zoekwoorden (tot 200 per import), of vink <strong>alle pool-zoekwoorden</strong> aan om in één keer de volledige lijst uit <code class="mono">assets/seo-recipe-keywords.nl.json</code> te doorlopen (kan lang duren).
+            Kies handmatig zoekwoorden (tot 200 per import), of vink <strong>alle pool-zoekwoorden</strong> aan om in één keer de volledige lijst uit <code class="mono">assets/seo-recipe-keywords.nl.json</code> te doorlopen (kan lang duren). Optioneel: <strong>top 100 populairste eerst</strong> (sorteer kandidaten op ratings vóór import).
           </p>
           <div id="seoBackfillKeywordHint" class="muted" style="font-size:12px;margin-bottom:8px">⏳ Zoekwoorden laden…</div>
           <div id="seoBackfillSelectedWrap" class="seo-kw-selected" style="display:none">
@@ -1125,6 +1125,10 @@
             <label class="muted" style="font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <input type="checkbox" id="seoBackfillForceReimport" />
               Opnieuw importeren (overschrijf zelfde bron-URL)
+            </label>
+            <label class="muted" style="font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input type="checkbox" id="seoBackfillPopularTop100" checked />
+              Top 100 populairste eerst (ratings)
             </label>
             <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Max per kanaal
               <input id="seoBackfillLimitPerChannel" type="number" min="1" max="40" value="10" style="width:56px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
@@ -2805,9 +2809,11 @@
       };
       const useProgress = Boolean(document.getElementById("seoBackfillLiveProgress")?.checked);
       const forceReimport = Boolean(document.getElementById("seoBackfillForceReimport")?.checked);
+      const popularTop100 = document.getElementById("seoBackfillPopularTop100")?.checked ?? true;
       let bodyPayload = { limitPerChannel, dryRun: Boolean(dryRun) };
       if (useProgress) bodyPayload.progress = true;
       if (!dryRun && forceReimport) bodyPayload.forceReimport = true;
+      if (popularTop100) bodyPayload.popularTopN = 100;
       if (allPool) {
         const approx = Array.isArray(seoBackfillKeywordSuggestions) ? seoBackfillKeywordSuggestions.length : 0;
         const poolHint = approx > 0 ? `${approx} woorden` : "de volledige server-pool";

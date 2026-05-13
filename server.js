@@ -11108,11 +11108,13 @@ function pickChannelSearchCandidateRating(candidate) {
 /**
  * Voor alle kanalen: ontbrekende beoordeling aanvullen via schema.org op de receptpagina.
  * Limiet + parallel om zoektijd te cappen.
+ * @param {any[]} results
+ * @param {{ maxUrls?: number, concurrency?: number, timeoutMs?: number }} [opts]
  */
-async function enrichChannelSearchResultsWithRatings(results) {
-  const MAX_URLS = 20;
-  const CONCURRENCY = 6;
-  const TIMEOUT_MS = 5000;
+async function enrichChannelSearchResultsWithRatings(results, opts = {}) {
+  const MAX_URLS = Number.isFinite(opts.maxUrls) ? Math.min(200, Math.max(1, opts.maxUrls)) : 20;
+  const CONCURRENCY = Number.isFinite(opts.concurrency) ? Math.min(16, Math.max(1, opts.concurrency)) : 6;
+  const TIMEOUT_MS = Number.isFinite(opts.timeoutMs) ? Math.min(12_000, Math.max(1500, opts.timeoutMs)) : 5000;
   if (!Array.isArray(results) || !results.length) return results;
 
   const candidates = [];
@@ -11222,6 +11224,33 @@ async function enrichChannelSearchResultsWithRatings(results) {
     const rt = ratingByUrl.get(u);
     return rt ? { ...r, ...rt } : r;
   });
+}
+
+/** Populariteitsscore voor SEO-backfill sortering (ratingCount × ratingValue). */
+function scoreSeoBackfillCandidatePopularity(candidate) {
+  const rv = Number(candidate?.ratingValue);
+  const rc = Number(candidate?.ratingCount);
+  if (Number.isFinite(rv) && rv >= 1 && rv <= 5 && Number.isFinite(rc) && rc >= 1) {
+    return rc * rv;
+  }
+  return 0;
+}
+
+/**
+ * Haalt waar nodig JSON-LD-ratings binnen, sorteert op populariteit, houdt top N.
+ */
+async function rankSeoBackfillCandidatesByPopularity(candidates, opts = {}) {
+  const topN = Math.min(200, Math.max(1, Number(opts.popularTopN) || 100));
+  if (!Array.isArray(candidates) || candidates.length <= 1) return candidates;
+  const maxEnrich = Math.min(topN, candidates.length, 120);
+  const enriched = await enrichChannelSearchResultsWithRatings([...candidates], {
+    maxUrls: maxEnrich,
+    concurrency: 8,
+    timeoutMs: 5500,
+  });
+  return [...enriched]
+    .sort((a, b) => scoreSeoBackfillCandidatePopularity(b) - scoreSeoBackfillCandidatePopularity(a))
+    .slice(0, topN);
 }
 
 async function backfillImportedRecipeRatingsForAllUsers({
@@ -12740,6 +12769,13 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
     .slice(0, 10);
   const channelSelection = requestedChannels.length ? "explicit" : followedSeedChannels.length ? "followed" : "fallback";
   const limitPerChannel = Math.min(40, Math.max(1, Number.parseInt(options.limitPerChannel, 10) || 10));
+  const popularTopRaw = options.popularTopN ?? options.preferPopularTop;
+  let popularTopN = 0;
+  if (popularTopRaw === true || popularTopRaw === "true") popularTopN = 100;
+  else {
+    const n = Number.parseInt(String(popularTopRaw ?? ""), 10);
+    if (Number.isFinite(n) && n > 0) popularTopN = Math.min(200, n);
+  }
   const allPoolKeywords = Boolean(options.allPoolKeywords || options.useAllPoolKeywords);
   const customKeywordList = Array.isArray(options.keywords)
     ? options.keywords.map((keyword) => sanitizeText(keyword || "")).filter((keyword) => keyword.length >= 2)
@@ -12874,6 +12910,21 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
       usedKeywords = res.usedKeywords;
     }
 
+    const candidatesDiscovered = candidates.length;
+    if (popularTopN > 0 && candidates.length > 1) {
+      onProgress?.(
+        mergeImportStats({
+          phase: "rank",
+          message: `Top-${popularTopN} op populariteit (ratings): ${candidatesDiscovered} kandidaten sorteren (${target.label})`,
+          targetKind: target.kind,
+          channelId: target.channelId,
+          targetIndex,
+          targetTotal: targets.length,
+        })
+      );
+      candidates = await rankSeoBackfillCandidatesByPopularity(candidates, { popularTopN });
+    }
+
     const imported = [];
     const failed = [];
     if (!dryRun) {
@@ -12913,7 +12964,9 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
       channelId: target.channelId,
       channel: target.name,
       customChannelUrl: target.kind === "custom" ? target.url : undefined,
+      candidatesDiscovered: popularTopN > 0 ? candidatesDiscovered : undefined,
       candidatesFound: candidates.length,
+      popularTopN: popularTopN > 0 ? popularTopN : undefined,
       imported: dryRun ? 0 : imported.length,
       failed: failed.length,
       usedKeywords,
@@ -12958,12 +13011,13 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
     keywordCount: keywords.length,
     keywordsUsed: keywords,
     customChannelTargets: customEntries.length,
+    ...(popularTopN > 0 ? { popularTopN } : {}),
     channels: report,
     totals: {
       targets: targets.length,
       seedTargets: channels.length,
       customTargets: customEntries.length,
-      candidates: report.reduce((sum, item) => sum + item.candidatesFound, 0),
+      candidates: report.reduce((sum, item) => sum + (item.candidatesFound || 0), 0),
       imported: report.reduce((sum, item) => sum + item.imported, 0),
       saved: saved.added,
       updated: saved.updated || 0,
