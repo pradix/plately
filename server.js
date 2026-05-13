@@ -7532,10 +7532,20 @@ async function importWebsite(sourceUrl) {
   }
 
   if (isAllerhande) {
-    const [document, readerDocument] = await Promise.all([
+    const [documentSettled, readerSettled] = await Promise.allSettled([
       fetchWebsiteDocument(sourceUrl),
-      fetchReaderFallback(sourceUrl).catch(() => null),
+      fetchReaderFallback(sourceUrl),
     ]);
+    const document =
+      documentSettled.status === "fulfilled"
+        ? documentSettled.value
+        : readerSettled.status === "fulfilled"
+          ? readerSettled.value
+          : null;
+    const readerDocument = readerSettled.status === "fulfilled" ? readerSettled.value : null;
+    if (!document) {
+      throw documentSettled.reason || readerSettled.reason || new HttpError(502, "Kon bronpagina niet ophalen.");
+    }
 
     const primaryRecipe =
       document.kind === "text"
