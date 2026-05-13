@@ -1695,6 +1695,7 @@
                   <th>${label}</th>
                   <th class="num" style="text-align:right">Totaal</th>
                   <th class="num" style="text-align:right">SEO recepten</th>
+                  <th style="text-align:right">Actie</th>
                 </tr>
               </thead>
               <tbody>
@@ -1703,12 +1704,37 @@
                     <td>${escapeHtml(String(r.label || r.id || ""))}</td>
                     <td style="text-align:right">${formatNumber(r.total || 0)}</td>
                     <td style="text-align:right">${formatNumber(r.seoCookbook || 0)}</td>
+                    <td style="text-align:right"><button class="btn btn-sm" type="button" onclick="deleteImportsByChannel(${JSON.stringify(String(r.id || ""))}, ${JSON.stringify(String(r.label || r.id || ""))})">Verwijder import</button></td>
                   </tr>
                 `).join("")}
               </tbody>
             </table>
           `;
         }
+      } catch (e) {
+        if (statusEl) statusEl.textContent = "❌ " + (e.message || String(e));
+      }
+    }
+
+    async function deleteImportsByChannel(id, label) {
+      const cleanId = String(id || "").trim();
+      if (!cleanId) return;
+      const ok = window.confirm(`Alle imports voor "${label || cleanId}" verwijderen uit het admin account?`);
+      if (!ok) return;
+      const statusEl = document.getElementById("importsByChannelStatus");
+      if (statusEl) statusEl.textContent = "⏳ Verwijderen…";
+      try {
+        const init = adminFetchInit();
+        const resp = await fetch(`/api/admin/imports-by-channel`, {
+          ...init,
+          method: "DELETE",
+          headers: { ...(init.headers || {}), "Content-Type": "application/json" },
+          body: JSON.stringify({ groupBy: importsByChannelGroupBy, id: cleanId }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) throw new Error(data.error || "Verwijderen mislukt");
+        if (statusEl) statusEl.textContent = `✅ ${formatNumber(data.removed || 0)} import(s) verwijderd.`;
+        await loadImportsByChannel();
       } catch (e) {
         if (statusEl) statusEl.textContent = "❌ " + (e.message || String(e));
       }
