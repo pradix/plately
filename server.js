@@ -726,6 +726,100 @@ const SEED_CHANNELS = [
   { id: "ch-culy", name: "Culy" },
 ];
 
+// Keep this aligned with the quick-search suggestions in app.js. These are used
+// for admin SEO backfills so public recipe pages are seeded from real search intent.
+const SEO_RECIPE_BACKFILL_KEYWORDS = [
+  "Bami",
+  "Nasi",
+  "Lasagne",
+  "Pad thai",
+  "Pannenkoeken",
+  "Saté",
+  "Sushi bowl",
+  "Poké bowl",
+  "Ovenschotel",
+  "Spaghetti Bolognese",
+  "Pasta Carbonara",
+  "Lasagne Bolognese",
+  "Pasta Pesto",
+  "Macaroni and Cheese",
+  "Tomatenrisotto met Parmezaan en citroen",
+  "Gnocchi met salieboter",
+  "Pizza Margherita",
+  "Pasta met feta uit de oven",
+  "Fettuccine Alfredo",
+  "Aubergine Parmigiana",
+  "Stamppot Boerenkool",
+  "Stamppot Hutspot",
+  "Hachee",
+  "Ovenschotel met prei en aardappel",
+  "Bloemkool met kaassaus en aardappels",
+  "Gehaktballen in jus",
+  "Hollandse pannenkoeken",
+  "Babi Pangang",
+  "Snert",
+  "Thaise Pad Thai",
+  "Massaman Curry",
+  "Indiase Butter Chicken",
+  "Indonesische Gado Gado",
+  "Mexicaanse Taco's met gehakt",
+  "Shakshuka",
+  "Spaanse Paella",
+  "Kip Tikka Masala",
+  "Nasi Goreng",
+  "Chili con Carne",
+  "Kip uit de oven",
+  "Kip Teriyaki",
+  "Saté met pindasaus",
+  "Steak met chimichurri",
+  "Pulled Pork",
+  "Gyros",
+  "Pasta",
+  "Kip",
+  "Avocado",
+  "Snelle lunch",
+  "Gezond",
+  "Vegetarisch",
+  "Vegan",
+  "Salade",
+  "Soep",
+  "Curry",
+  "Rijst",
+  "Noedels",
+  "Wrap",
+  "Taco",
+  "Bowl",
+  "Airfryer",
+  "30 minuten",
+  "Budget",
+  "Mealprep",
+  "Ontbijt",
+  "Smoothie",
+  "Eieren",
+  "Vis",
+  "Garnalen",
+  "Tofu",
+  "Kikkererwten",
+  "Linzen",
+  "Zoete aardappel",
+  "Broccoli",
+  "Bloemkool",
+  "Spinazie",
+  "Courgette",
+  "Aubergine",
+  "Tomaat",
+  "Paprika",
+  "Pesto",
+  "Parmezaan",
+  "Feta",
+  "Burrata",
+  "Stoof",
+  "BBQ",
+  "Dessert",
+  "Chocolate chip",
+  "Gezinsproof",
+];
+
 // Seed channel search defaults (admin can override baseUrl / searchUrlTemplate).
 // - baseUrl: used for WP REST and for building absolute links in scrapers
 // - searchUrlTemplate: URL with `{q}` placeholder where q is encodeURIComponent(query)
@@ -11976,6 +12070,238 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   return all.slice(0, 30); // Return more results (was 20, now 30) for better variety
 }
 
+function getSeedChannelName(channelId) {
+  return SEED_CHANNELS.find((channel) => channel.id === channelId)?.name || sanitizeText(channelId || "Kanaal");
+}
+
+function normalizeRecipeSourceKey(url) {
+  const raw = sanitizeText(url || "");
+  if (!raw) return "";
+  try {
+    const u = new URL(raw);
+    u.hash = "";
+    ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid"].forEach((key) => {
+      u.searchParams.delete(key);
+    });
+    return `${u.hostname.replace(/^www\./i, "").toLowerCase()}${u.pathname.replace(/\/+$/, "") || "/"}`;
+  } catch {
+    return raw.toLowerCase();
+  }
+}
+
+function isValidImportedSeoRecipe(recipe) {
+  if (!recipe || typeof recipe !== "object") return false;
+  const title = sanitizeText(recipe.title || "");
+  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients.filter((item) => sanitizeText(item?.name || item || "")) : [];
+  const instructions = Array.isArray(recipe.instructions) ? recipe.instructions.filter((step) => sanitizeText(step || "")) : [];
+  return Boolean(title && ingredients.length >= 2 && instructions.length >= 1);
+}
+
+async function searchSeoBackfillCandidatesForChannel({ channelId, keywords, limit }) {
+  const seen = new Set();
+  const candidates = [];
+  const usedKeywords = [];
+  for (const keyword of keywords) {
+    if (candidates.length >= limit) break;
+    const query = sanitizeText(keyword || "");
+    if (query.length < 2) continue;
+    usedKeywords.push(query);
+    let results = [];
+    try {
+      results = await searchChannelRecipes(query, [channelId]);
+    } catch {
+      results = [];
+    }
+    for (const result of Array.isArray(results) ? results : []) {
+      if (result?.channelId !== channelId) continue;
+      const url = sanitizeText(result.url || "");
+      const key = normalizeRecipeSourceKey(url);
+      if (!url || !key || seen.has(key)) continue;
+      seen.add(key);
+      candidates.push({
+        title: sanitizeText(result.title || ""),
+        url,
+        thumbnail: sanitizeText(result.thumbnail || ""),
+        channelId,
+        channel: sanitizeText(result.channel || getSeedChannelName(channelId)),
+        keyword: query,
+      });
+      if (candidates.length >= limit) break;
+    }
+  }
+  return { candidates, usedKeywords };
+}
+
+async function importSeoBackfillCandidate(candidate) {
+  const recipe = await importRecipe(candidate.url, "", candidate.thumbnail || "");
+  if (!isValidImportedSeoRecipe(recipe)) {
+    throw new HttpError(400, "Geen geldig recept gevonden.");
+  }
+  return sanitizeRecipeForStorage({
+    ...recipe,
+    id: recipe.id || `seo-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`,
+    sourceUrl: recipe.sourceUrl || candidate.url,
+    image: recipe.image || candidate.thumbnail || "assets/hero-burger.svg",
+    platform: recipe.platform || "website",
+    author: recipe.author || candidate.channel,
+  });
+}
+
+async function saveSeoBackfillRecipesForUser(userId, recipes) {
+  const cleanRecipes = (Array.isArray(recipes) ? recipes : []).map(sanitizeRecipeForStorage).filter(Boolean);
+  if (!cleanRecipes.length) return { added: 0, skipped: 0, importedRecipes: [] };
+
+  let currentUser = null;
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const result = await pool.query(`SELECT * FROM plately_users WHERE id = $1 LIMIT 1`, [userId]);
+    currentUser = result.rows[0] || null;
+  } else {
+    const db = await loadDatabase();
+    currentUser = db.users?.[userId] || null;
+  }
+  if (!currentUser) throw new HttpError(404, "Gebruiker niet gevonden.");
+
+  const appState = buildAppStateFromUser(currentUser);
+  const existingRecipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+  const existingSourceKeys = new Set(existingRecipes.map((recipe) => normalizeRecipeSourceKey(recipe.sourceUrl)).filter(Boolean));
+  const existingIds = new Set(existingRecipes.map((recipe) => sanitizeText(recipe.id || "")).filter(Boolean));
+  const addedRecipes = [];
+  let skipped = 0;
+
+  for (const recipe of cleanRecipes) {
+    const sourceKey = normalizeRecipeSourceKey(recipe.sourceUrl);
+    if ((sourceKey && existingSourceKeys.has(sourceKey)) || existingIds.has(recipe.id)) {
+      skipped += 1;
+      continue;
+    }
+    existingSourceKeys.add(sourceKey);
+    existingIds.add(recipe.id);
+    addedRecipes.push(recipe);
+  }
+
+  if (!addedRecipes.length) return { added: 0, skipped, importedRecipes: existingRecipes };
+
+  const cookbookName = "SEO recepten";
+  const cookbooks = Array.isArray(appState.cookbooks) && appState.cookbooks.length
+    ? appState.cookbooks.map((cookbook, index) => sanitizeCookbookForStorage(cookbook, `cookbook-${index + 1}`))
+    : DEFAULT_COOKBOOKS.map((cookbook) => ({ ...cookbook, recipeIds: [...cookbook.recipeIds] }));
+  let cookbook = cookbooks.find((item) => item.name === cookbookName);
+  if (!cookbook) {
+    cookbook = { id: "cookbook-seo-recipes", name: cookbookName, recipeIds: [] };
+    cookbooks.unshift(cookbook);
+  }
+  for (const recipe of addedRecipes) {
+    if (!cookbook.recipeIds.includes(recipe.id)) cookbook.recipeIds.unshift(recipe.id);
+  }
+
+  const nextState = {
+    ...appState,
+    importedRecipes: [...addedRecipes, ...existingRecipes],
+    cookbooks,
+    selectedCookbookId: appState.selectedCookbookId || cookbook.id,
+    featuredRecipeId: addedRecipes[0]?.id || appState.featuredRecipeId,
+    selectedRecipeId: addedRecipes[0]?.id || appState.selectedRecipeId,
+  };
+
+  if (isPostgresEnabled()) {
+    await updateAuthenticatedUserState(userId, nextState);
+  } else {
+    const db = await loadDatabase();
+    db.users[userId] = sanitizeUserStatePayload(nextState, currentUser);
+    await persistDatabase();
+  }
+
+  return {
+    added: addedRecipes.length,
+    skipped,
+    importedRecipes: nextState.importedRecipes,
+  };
+}
+
+async function runSeoRecipeBackfillForUser(authUser, options = {}) {
+  const appState = buildAppStateFromUser(authUser);
+  const channelEnabled = await getChannelEnabledState().catch(() => ({ seed: {}, custom: {} }));
+  const requestedChannels = Array.isArray(options.channels)
+    ? options.channels.map((id) => sanitizeText(id || "")).filter(Boolean)
+    : [];
+  const followedSeedChannels = Array.isArray(appState.followedChannelIds)
+    ? appState.followedChannelIds.filter((id) => SEED_CHANNEL_DEFAULTS[id] && isChannelEnabled("seed", id, channelEnabled))
+    : [];
+  const channels = (requestedChannels.length ? requestedChannels : followedSeedChannels)
+    .filter((id) => SEED_CHANNEL_DEFAULTS[id])
+    .slice(0, 10);
+  const limitPerChannel = Math.min(20, Math.max(1, Number.parseInt(options.limitPerChannel, 10) || 10));
+  const keywordLimit = Math.min(SEO_RECIPE_BACKFILL_KEYWORDS.length, Math.max(6, Number.parseInt(options.keywordLimit, 10) || 28));
+  const keywords = (Array.isArray(options.keywords) && options.keywords.length
+    ? options.keywords.map((keyword) => sanitizeText(keyword || "")).filter((keyword) => keyword.length >= 2)
+    : SEO_RECIPE_BACKFILL_KEYWORDS
+  ).slice(0, keywordLimit);
+  const dryRun = Boolean(options.dryRun);
+
+  if (!channels.length) {
+    throw new HttpError(400, "Geen actieve seed-kanalen gevonden om te vullen.");
+  }
+
+  const allImported = [];
+  const report = [];
+  for (const channelId of channels) {
+    const { candidates, usedKeywords } = await searchSeoBackfillCandidatesForChannel({
+      channelId,
+      keywords,
+      limit: limitPerChannel * 2,
+    });
+    const imported = [];
+    const failed = [];
+    if (!dryRun) {
+      for (const candidate of candidates) {
+        if (imported.length >= limitPerChannel) break;
+        try {
+          const recipe = await importSeoBackfillCandidate(candidate);
+          imported.push({ recipe, candidate });
+          allImported.push(recipe);
+        } catch (error) {
+          failed.push({
+            title: candidate.title,
+            url: candidate.url,
+            keyword: candidate.keyword,
+            error: sanitizeText(error?.message || "Import mislukt").slice(0, 180),
+          });
+        }
+      }
+    }
+    report.push({
+      channelId,
+      channel: getSeedChannelName(channelId),
+      candidatesFound: candidates.length,
+      imported: dryRun ? 0 : imported.length,
+      failed: failed.length,
+      usedKeywords,
+      candidates: dryRun ? candidates.slice(0, limitPerChannel) : undefined,
+      failures: failed.slice(0, 10),
+    });
+  }
+
+  const saved = dryRun
+    ? { added: 0, skipped: 0, importedRecipes: appState.importedRecipes || [] }
+    : await saveSeoBackfillRecipesForUser(authUser.id, allImported);
+
+  return {
+    ok: true,
+    dryRun,
+    channels: report,
+    totals: {
+      channels: channels.length,
+      candidates: report.reduce((sum, item) => sum + item.candidatesFound, 0),
+      imported: report.reduce((sum, item) => sum + item.imported, 0),
+      saved: saved.added,
+      skippedExisting: saved.skipped,
+      totalPublicRecipes: Array.isArray(saved.importedRecipes) ? saved.importedRecipes.length : 0,
+    },
+  };
+}
+
 async function buildStoreBasket(body) {
   const store = normalizeStoreSlug(body.store);
   const items = Array.isArray(body.items) ? body.items : [];
@@ -14502,6 +14828,23 @@ const server = http.createServer(async (request, response) => {
       } catch (error) {
         console.error("❌ Error in /api/admin/search-terms:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/seo-recipe-backfill" && request.method === "POST") {
+      console.log("🍽️ /api/admin/seo-recipe-backfill called");
+      try {
+        const adminUser = await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const result = await runSeoRecipeBackfillForUser(adminUser, body || {});
+        return sendJson(response, 200, result);
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/seo-recipe-backfill:", error.message);
+        return sendJson(response, statusCode, {
+          ok: false,
+          error: error.message || "SEO recepten aanvullen mislukt.",
+        });
       }
     }
 
