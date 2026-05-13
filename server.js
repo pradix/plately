@@ -9645,7 +9645,7 @@ function parse24Kitchen(html, baseUrl, channelName, channelId, count) {
 }
 
 let cached24KitchenFacPath = { path: "", at: 0 };
-async function search24KitchenFac(query, count, effectiveSeedConfig) {
+async function search24KitchenFac(query, count, effectiveSeedConfig, options = {}) {
   const channelName = "24 Kitchen";
   const channelId = "ch-24k";
   const eff = effectiveSeedConfig && typeof effectiveSeedConfig === "object" ? effectiveSeedConfig : {};
@@ -9699,7 +9699,7 @@ async function search24KitchenFac(query, count, effectiveSeedConfig) {
       const absUrl = rel && rel.startsWith("http") ? rel : (rel.startsWith("/") ? `${baseUrl}${rel}` : "");
       if (!title || !absUrl || seen.has(absUrl)) continue;
       if (/\.jpeg/i.test(absUrl)) continue;
-      if (!urlLooksLikeRecipe(absUrl) || !titleLooksLikeRecipe(title) || !titleMatchesQuery(title, q)) continue;
+      if (!urlLooksLikeRecipe(absUrl) || !titleLooksLikeRecipe(title) || !channelSearchResultTitleMatchesQuery(channelId, title, q, options)) continue;
       if (thumbnail && (/\.svg(?:\?|$)/i.test(thumbnail) || isDecorativeImageUrl(thumbnail))) continue;
       seen.add(absUrl);
       results.push({ title, url: absUrl, thumbnail, channel: channelName, channelId, description: "", time: "" });
@@ -9946,7 +9946,7 @@ function parseWPStandard(html, baseUrl, channelName, channelId, count) {
   return results;
 }
 
-function parseReaderSearchResults(markdown, channelName, channelId, count, query) {
+function parseReaderSearchResults(markdown, channelName, channelId, count, query, options = {}) {
   const results = [];
   const seenUrls = new Set();
   const text = String(markdown || "");
@@ -9972,7 +9972,7 @@ function parseReaderSearchResults(markdown, channelName, channelId, count, query
     if (!urlLooksLikeRecipe(url)) continue;
 
     const title = sanitizeText(alt);
-    if (!title || !titleLooksLikeRecipe(title) || !channelSearchResultTitleMatchesQuery(channelId, title, query)) continue;
+    if (!title || !titleLooksLikeRecipe(title) || !channelSearchResultTitleMatchesQuery(channelId, title, query, options)) continue;
 
     seenUrls.add(url);
     results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
@@ -9994,7 +9994,7 @@ function parseReaderSearchResults(markdown, channelName, channelId, count, query
       const url = sanitizeText(urlMatch?.[0] || "");
       const title = sanitizeText(alt);
       if (!url || seenUrls.has(url)) continue;
-      if (!urlLooksLikeRecipe(url) || !titleLooksLikeRecipe(title) || !channelSearchResultTitleMatchesQuery(channelId, title, query)) continue;
+      if (!urlLooksLikeRecipe(url) || !titleLooksLikeRecipe(title) || !channelSearchResultTitleMatchesQuery(channelId, title, query, options)) continue;
 
       seenUrls.add(url);
       results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
@@ -10012,7 +10012,7 @@ function parseReaderSearchResults(markdown, channelName, channelId, count, query
         try { return new URL(url).pathname.split("/").filter(Boolean).pop() || ""; } catch { return ""; }
       })();
       const title = sanitizeText(decodeURIComponent(slug).replace(/[-_]+/g, " ").trim());
-      if (!title || !titleLooksLikeRecipe(title) || !channelSearchResultTitleMatchesQuery(channelId, title, query))
+      if (!title || !titleLooksLikeRecipe(title) || !channelSearchResultTitleMatchesQuery(channelId, title, query, options))
         continue;
       seenUrls.add(url);
       results.push({ title, url, thumbnail: "", channel: channelName, channelId, description: "", time: "" });
@@ -10175,7 +10175,7 @@ function parseCulySearchHtml(html, baseUrl, channelName, channelId, count) {
   return results;
 }
 
-function finalizeCulySearchResults(rows, query, cap) {
+function finalizeCulySearchResults(rows, query, cap, options = {}) {
   const limit = Math.min(Math.max(Number(cap) || 12, 1), 24);
   const deduped = [];
   const byKey = new Map();
@@ -10198,7 +10198,7 @@ function finalizeCulySearchResults(rows, query, cap) {
     .filter((r) => urlLooksLikeRecipe(r.url))
     .filter((r) => titleLooksLikeRecipe(r.title))
     .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
-    .filter((r) => titleMatchesQuery(r.title, query))
+    .filter((r) => channelSearchResultTitleMatchesQuery(r.channelId, r.title, query, options))
     .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
     .slice(0, limit);
 }
@@ -10217,6 +10217,7 @@ async function searchCulyRecipes(query, count = 12, opts = {}) {
   const baseUrl = sanitizeText(eff.baseUrl || "") || "https://www.culy.nl";
   const searchUrl = buildSeedSearchUrlFromTemplate(template, query);
   if (!searchUrl) return [];
+  const matchOptions = { relaxedQueryMatch: shouldRelaxQueryTitleMatch(eff) };
 
   const qEnc = encodeURIComponent(query || "");
   const httpsOrigin = `https://www.culy.nl/?s=${qEnc}&category=Recepten`;
@@ -10308,13 +10309,15 @@ async function searchCulyRecipes(query, count = 12, opts = {}) {
     const htmlTry = finalizeCulySearchResults(
       parseCulySearchHtml(body, baseUrl, channelName, channelId, cap * 2),
       query,
-      cap
+      cap,
+      matchOptions
     );
     if (htmlTry.length) return htmlTry;
     const mdTry = finalizeCulySearchResults(
-      parseCulyReaderSearchResults(body, channelName, channelId, cap * 2, query),
+      parseCulyReaderSearchResults(body, channelName, channelId, cap * 2, query, matchOptions),
       query,
-      cap
+      cap,
+      matchOptions
     );
     return mdTry.length ? mdTry : [];
   }
@@ -10325,7 +10328,8 @@ async function searchCulyRecipes(query, count = 12, opts = {}) {
       ? finalizeCulySearchResults(
           parseCulySearchHtml(direct.html, baseUrl, channelName, channelId, cap * 2),
           query,
-          cap
+          cap,
+          matchOptions
         )
       : [];
 
@@ -10346,7 +10350,7 @@ async function searchCulyRecipes(query, count = 12, opts = {}) {
 }
 
 
-function parseCulyReaderSearchResults(markdown, channelName, channelId, count, query) {
+function parseCulyReaderSearchResults(markdown, channelName, channelId, count, query, options = {}) {
   const text = String(markdown || "");
   const results = [];
   const seen = new Set();
@@ -10418,7 +10422,7 @@ function parseCulyReaderSearchResults(markdown, channelName, channelId, count, q
     })();
 
     if (!title) continue;
-    if (!urlLooksLikeRecipe(url) || !titleLooksLikeRecipe(title) || !titleMatchesQuery(title, q)) continue;
+    if (!urlLooksLikeRecipe(url) || !titleLooksLikeRecipe(title) || !channelSearchResultTitleMatchesQuery(channelId, title, q, options)) continue;
     const thumbnail = findNearestThumbnail(u.index);
 
     results.push({ title, url, thumbnail, channel: channelName, channelId, description: "", time: "" });
@@ -10429,7 +10433,7 @@ function parseCulyReaderSearchResults(markdown, channelName, channelId, count, q
     .slice(0, count);
 }
 
-async function readerSearchFallback(searchUrl, channelName, channelId, count, query) {
+async function readerSearchFallback(searchUrl, channelName, channelId, count, query, options = {}) {
   try {
     const target = String(searchUrl || "").trim();
     if (!target) return [];
@@ -10442,10 +10446,10 @@ async function readerSearchFallback(searchUrl, channelName, channelId, count, qu
 
     const markdown = await response.text();
     if (channelId === "ch-culy") {
-      const parsed = parseCulyReaderSearchResults(markdown, channelName, channelId, count, query || "");
+      const parsed = parseCulyReaderSearchResults(markdown, channelName, channelId, count, query || "", options);
       if (parsed.length) return parsed;
     }
-    return parseReaderSearchResults(markdown, channelName, channelId, count, query || "");
+    return parseReaderSearchResults(markdown, channelName, channelId, count, query || "", options);
   } catch {
     return [];
   }
@@ -10787,19 +10791,24 @@ function titleMatchesQuery(title, query) {
   return titleQueryScore(title, query) >= 0.5;
 }
 
+function shouldRelaxQueryTitleMatch(options) {
+  return Boolean(options && (options.relaxedQueryMatch || options.seoBackfill));
+}
+
 function channelSearchTrustsSiteIndexer(channelId) {
   return CHANNEL_SEARCH_TRUST_SITE_INDEXER_IDS.has(String(channelId || ""));
 }
 
 /** Voor sommige kanalen: site-zoekindex is al relevant — geen verplichte woord-match in de titel. */
-function channelSearchResultTitleMatchesQuery(channelId, title, query) {
+function channelSearchResultTitleMatchesQuery(channelId, title, query, options = {}) {
   const q = String(query || "").trim();
   if (!q) return true;
+  if (shouldRelaxQueryTitleMatch(options)) return true;
   if (channelSearchTrustsSiteIndexer(channelId)) return true;
   return titleMatchesQuery(String(title || ""), q);
 }
 
-async function wpRestSearch(baseUrl, channelName, channelId, query, count, meta = null) {
+async function wpRestSearch(baseUrl, channelName, channelId, query, count, meta = null, options = {}) {
   const params = `search=${encodeURIComponent(query)}&per_page=${count}&_embed=wp:featuredmedia`;
   const headers = { ...FETCH_HEADERS, accept: "application/json" };
   const origins = wordpressOriginVariants(baseUrl);
@@ -10840,7 +10849,7 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count, meta 
             // Filter out posts whose title looks like a tip/review/guide
             .filter((r) => titleLooksLikeRecipe(r.title))
             .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
-            .filter((r) => channelSearchResultTitleMatchesQuery(channelId, r.title, query))
+            .filter((r) => channelSearchResultTitleMatchesQuery(channelId, r.title, query, options))
             // Sort by relevance — best title-match first
             .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
             .slice(0, count);
@@ -10856,7 +10865,7 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count, meta 
  * When a site blocks datacenter IPs (Cloudflare), Google "site:host query" via Serper still returns URLs.
  * API key: https://serper.dev/ — set SERPER_API_KEY or PLATELY_SERP_API_KEY.
  */
-async function serperGoogleSiteSearchRecipes({ baseUrl, channelName, channelId, query, count }) {
+async function serperGoogleSiteSearchRecipes({ baseUrl, channelName, channelId, query, count, relaxedQueryMatch = false }) {
   if (!channelIdUsesSerperFallback(channelId)) return [];
   const apiKey = sanitizeText(process.env.SERPER_API_KEY || process.env.PLATELY_SERP_API_KEY || "").trim();
   if (!apiKey) return [];
@@ -10921,7 +10930,7 @@ async function serperGoogleSiteSearchRecipes({ baseUrl, channelName, channelId, 
       .filter((r) => urlLooksLikeRecipe(r.url))
       .filter((r) => titleLooksLikeRecipe(r.title))
       .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
-      .filter((r) => titleMatchesQuery(r.title, query))
+      .filter((r) => channelSearchResultTitleMatchesQuery(channelId, r.title, query, { relaxedQueryMatch }))
       .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
       .slice(0, cap);
   } catch {
@@ -11545,7 +11554,8 @@ async function fetchAllerhandeSearchHtmlWithRetry(searchUrl) {
  * Search AH Allerhande — tries the API with anonymous token.
  */
 async function searchAHRecipes(query, count = 4, opts = {}) {
-  console.log(`🔍 AH recipe search for: "${query}"`);
+  const seoBackfill = Boolean(opts && opts.seoBackfill);
+  console.log(`🔍 AH recipe search for: "${query}"${seoBackfill ? " (seoBackfill)" : ""}`);
 
   // Skip AH API - it requires authentication token we don't have
   // Use Jina reader fallback directly (much more reliable)
@@ -11612,14 +11622,34 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
         console.log(`⭐ AH ratings map size: ${ahRatingByRecipeId.size}`);
       }
 
-      // Extract recipe links from Jina output — alleen `/recept/…` met Allerhande-id `r-r123…/slug`.
-      const allRecipeUrls = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recept\/([^\s\)]+)/g)];
+      // Extract recipe links from Jina markdown — `/recept/…` met Allerhande-id `r-r123…/slug`.
+      // seoBackfill: ook http(s), ah.nl zonder www, en relatieve `/allerhande/recept/` (Jina varieert).
+      const urlMatches = [];
+      const seenAhReceptUrls = new Set();
+      function pushAhJinaReceptMatch(fullUrl, slugPart) {
+        const canon = String(fullUrl || "").split("#")[0].split("?")[0];
+        if (!canon || seenAhReceptUrls.has(canon)) return;
+        seenAhReceptUrls.add(canon);
+        urlMatches.push([canon, slugPart]);
+      }
+      for (const m of markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recept\/([^\s\)]+)/g)) {
+        pushAhJinaReceptMatch(m[0], m[1]);
+      }
+      if (seoBackfill) {
+        for (const m of markdown.matchAll(/https?:\/\/(?:www\.)?ah\.nl\/allerhande\/recept\/([^\s\)\]]+)/gi)) {
+          const slug = m[1];
+          pushAhJinaReceptMatch(`https://www.ah.nl/allerhande/recept/${slug}`, slug);
+        }
+        for (const m of markdown.matchAll(/(?:^|[^\w/])(\/allerhande\/recept\/[^\s\)\]]+)/g)) {
+          const path = m[1];
+          const slug = path.replace(/^\/allerhande\/recept\//, "");
+          if (slug) pushAhJinaReceptMatch(`https://www.ah.nl/allerhande/recept/${slug}`, slug);
+        }
+      }
 
       // Strategy 2: Extract URLs and derive titles from slug (most reliable).
       // Alleen `/recept/…`: `/recepten/asperges` e.d. zijn hubs, geen recepten (veroorzaakte nutteloze logs).
       const urlsWithContext = [];
-
-      const urlMatches = [...markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recept\/([^\s\)]+)/g)];
 
       for (const match of urlMatches) {
         const url = match[0];
@@ -11653,7 +11683,7 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
 
       const pattern1 = [];
       const pattern2 = urlsWithContext.length > 0 ? urlsWithContext :
-        allRecipeUrls.map((m) => {
+        urlMatches.map((m) => {
           const url = m[0];
           const slug = m[1];
           if (!/^r-r\d+\//i.test(slug)) {
@@ -11794,29 +11824,31 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
           }
 
           // 4. Skip very short titles (likely not real recipes)
-          if (title.trim().length < 5) {
+          const minTitleLen = seoBackfill ? 3 : 5;
+          if (title.trim().length < minTitleLen) {
             return false;
           }
 
-          // 5. Search query relevance - STRICT matching
-          const searchWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-          const titleLower = title.toLowerCase();
-          const slugLower = slug;
+          // 5. Search query relevance — strict in app search; SEO backfill skips (pool keywords often miss titel/slug).
+          if (!seoBackfill) {
+            const searchWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+            const titleLower = title.toLowerCase();
+            const slugLower = slug;
 
-          // ALL major search words should be in title OR url
-          // This is strict - ensures we only get highly relevant results
-          const matchScore = searchWords.reduce((score, word) => {
-            if (titleLower.includes(word)) return score + 2;
-            if (slugLower.includes(word)) return score + 1;
-            return score;
-          }, 0);
+            const matchScore = searchWords.reduce((score, word) => {
+              if (titleLower.includes(word)) return score + 2;
+              if (slugLower.includes(word)) return score + 1;
+              return score;
+            }, 0);
 
-          // Need at least 50% of search words to match
-          const minMatches = Math.ceil(searchWords.length * 0.5);
-          console.log(`    🔍 Relevance: score=${matchScore}, min=${minMatches}, words=[${searchWords.join(',')}]`);
-          if (matchScore < minMatches) {
-            console.log(`    ❌ Relevance filter failed`);
-            return false;
+            const minMatches = Math.ceil(searchWords.length * 0.5);
+            console.log(`    🔍 Relevance: score=${matchScore}, min=${minMatches}, words=[${searchWords.join(',')}]`);
+            if (matchScore < minMatches) {
+              console.log(`    ❌ Relevance filter failed`);
+              return false;
+            }
+          } else {
+            console.log(`    🔍 Relevance: skipped (seoBackfill)`);
           }
 
           console.log(`    ✅ PASSED all filters`);
@@ -12313,7 +12345,12 @@ async function searchChannelRecipes(query, allowedChannels = null, options = {})
   const collected = [];
   const searches = [
     // FAST: Reliable, quick-responding channels
-    maybeSearch("ch-ah", () => searchAHRecipes(query, pc, { searchUrlTemplate: cfg("ch-ah").searchUrlTemplate })),
+    maybeSearch("ch-ah", () =>
+      searchAHRecipes(query, pc, {
+        searchUrlTemplate: cfg("ch-ah").searchUrlTemplate,
+        ...(seoBackfill ? { seoBackfill: true } : {}),
+      })
+    ),
     maybeSearch("ch-jumbo", () => searchJumboRecipes(query, pc, { searchUrlTemplate: cfg("ch-jumbo").searchUrlTemplate })),
     maybeSearch("ch-les", () => scrapeOrRest(cfg("ch-les").baseUrl || "https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les",
       buildSeedChannelSearchUrl("ch-les", cfg("ch-les"), query),
