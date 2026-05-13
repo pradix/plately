@@ -654,6 +654,7 @@ const state = {
   channelEnabled: { seed: {}, custom: {} },
   channelSearchFilter: null,
   channelSearchAllResults: [],
+  channelSearchIsSearching: false,
   openCookbookId: null,
   cookbookSelectMode: false,
   cookbookSelectedRecipeIds: [],
@@ -4785,6 +4786,13 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
     const all = state.channelSearchAllResults;
 
     if (!all || all.length === 0) {
+      // While searching, don't show the empty-state yet (SEO-first can be empty while external search is still running).
+      if (state.channelSearchIsSearching) {
+        channelSearchSection.classList.remove("hidden");
+        channelSearchResults.innerHTML = CHANNEL_SEARCH_SKELETON_MARKUP;
+        renderChannelFilterChips([]);
+        return;
+      }
       // Only hide if we're not actively searching
       if (!state.channelSearchQuery || state.channelSearchQuery.trim().length === 0) {
         // Only hide if truly no search is active AND no previous results
@@ -4890,10 +4898,12 @@ async function searchChannels(query) {
   if (!query || query.trim().length < 2) {
     channelSearchAbortController?.abort();
     channelSearchAbortController = null;
+    state.channelSearchIsSearching = false;
     renderChannelSearchResults([]);
     return;
   }
   state.channelSearchQuery = query.trim();
+  state.channelSearchIsSearching = true;
   pushRecentSearch(state.channelSearchQuery);
 
   // Skeleton loader: only show if the request isn't instant.
@@ -4977,8 +4987,12 @@ async function searchChannels(query) {
   } catch (error) {
     if (error?.name === "AbortError") return;
     if (requestId !== searchChannels._reqId) return;
+    state.channelSearchIsSearching = false;
     renderChannelSearchResults([]);
   } finally {
+    if (requestId === searchChannels._reqId) {
+      state.channelSearchIsSearching = false;
+    }
     if (skeletonTimer) clearTimeout(skeletonTimer);
   }
 }
