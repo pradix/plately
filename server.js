@@ -739,6 +739,7 @@ function loadStaticJsonArray(relPath, fallback = []) {
 
 // These are used for admin SEO backfills so public recipe pages are seeded from real search intent.
 // Shared with the client via static asset for consistency.
+// The NL keyword JSON is curated for dish/cuisine-style queries (not diet macros or “vrije” filters).
 const SEO_RECIPE_BACKFILL_KEYWORDS = loadStaticJsonArray("assets/seo-recipe-keywords.nl.json", [
   "Pasta",
   "Kip",
