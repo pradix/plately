@@ -1101,6 +1101,7 @@
           </div>
           <div class="seo-kw-toolbar">
             <button type="button" class="btn btn-sm" onclick="clearSeoBackfillKeywords()">Selectie wissen</button>
+            <button type="button" class="btn btn-sm" onclick="selectAllSeoBackfillKeywords()">Alles selecteren</button>
             <button type="button" class="btn btn-sm" onclick="suggestSeoBackfillKeywords()">Suggestie: 100</button>
             <label class="muted" style="font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:4px">
               <input type="checkbox" id="seoBackfillAllPoolKeywords" />
@@ -2555,6 +2556,35 @@
 
     function clearSeoBackfillKeywords() {
       seoBackfillSelectedKeywords = [];
+      renderSeoKeywordPills();
+    }
+
+    function selectAllSeoBackfillKeywords() {
+      const pool = Array.isArray(seoBackfillKeywordSuggestions) ? seoBackfillKeywordSuggestions : [];
+      if (!pool.length) {
+        alert("Suggesties zijn nog niet geladen.");
+        return;
+      }
+      const seen = new Set();
+      const picked = [];
+      for (const kw of pool) {
+        const clean = String(kw || "").trim();
+        if (clean.length < 2) continue;
+        const key = clean.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        picked.push(clean);
+        if (picked.length >= SEO_BACKFILL_KW_MAX) break;
+      }
+      if (!picked.length) {
+        alert("Geen geldige zoekwoorden in de suggestielijst.");
+        return;
+      }
+      seoBackfillSelectedKeywords = picked;
+      try {
+        const cb = document.getElementById("seoBackfillAllPoolKeywords");
+        if (cb) cb.checked = false;
+      } catch {}
       renderSeoKeywordPills();
     }
 
