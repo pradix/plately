@@ -11159,6 +11159,253 @@ async function enrichChannelSearchResultsWithRatings(results) {
   });
 }
 
+async function backfillImportedRecipeRatingsForAllUsers({
+  dryRun = true,
+  maxUsers = 250,
+  maxRecipes = 1200,
+  concurrency = 6,
+  timeoutMs = 6500,
+} = {}) {
+  const out = {
+    ok: true,
+    dryRun: Boolean(dryRun),
+    maxUsers,
+    maxRecipes,
+    concurrency,
+    timeoutMs,
+    scannedUsers: 0,
+    scannedRecipes: 0,
+    candidates: 0,
+    updatedRecipes: 0,
+    updatedUsers: 0,
+    skippedNotEligible: 0,
+    skippedNoSourceUrl: 0,
+    skippedAlreadyHasRating: 0,
+    httpErr: 0,
+    schemaMiss: 0,
+    cacheHitWithRating: 0,
+  };
+
+  const candidates = [];
+  const seen = new Set();
+
+  function addCandidate({ userId, recipeIndex, sourceUrl }) {
+    const u = String(sourceUrl || "").trim();
+    if (!u) return;
+    const key = `${sanitizeText(userId)}::${normalizeRecipeRatingCacheUrl(u)}::${recipeIndex}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push({ userId: sanitizeText(userId), recipeIndex, sourceUrl: u });
+  }
+
+  // 1) Collect candidates
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const res = await pool.query(
+      `
+      SELECT id, app_state
+      FROM plately_users
+      WHERE COALESCE(jsonb_array_length(COALESCE(app_state, '{}'::jsonb)->'importedRecipes'), 0) > 0
+      ORDER BY updated_at DESC NULLS LAST
+      LIMIT $1
+      `,
+      [Math.max(1, Math.min(Number(maxUsers) || 250, 2000))]
+    );
+    for (const row of res.rows || []) {
+      if (out.scannedUsers >= maxUsers) break;
+      out.scannedUsers += 1;
+      const userId = sanitizeText(row.id || "");
+      const appState = row.app_state && typeof row.app_state === "object" ? row.app_state : {};
+      const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+      for (let i = 0; i < recipes.length; i += 1) {
+        if (out.scannedRecipes >= maxRecipes) break;
+        const r = recipes[i];
+        out.scannedRecipes += 1;
+        const sourceUrl = sanitizeText(r?.sourceUrl || r?.source || "");
+        if (!sourceUrl) {
+          out.skippedNoSourceUrl += 1;
+          continue;
+        }
+        if (r?.ratingValue != null && r?.ratingCount != null) {
+          out.skippedAlreadyHasRating += 1;
+          continue;
+        }
+        if (!urlEligibleForChannelSearchRatingFetch(sourceUrl)) {
+          out.skippedNotEligible += 1;
+          continue;
+        }
+        out.candidates += 1;
+        addCandidate({ userId, recipeIndex: i, sourceUrl });
+        if (candidates.length >= maxRecipes) break;
+      }
+      if (out.scannedRecipes >= maxRecipes) break;
+    }
+  } else {
+    const db = await loadDatabase();
+    const users = Object.values(db.users || {}).slice(0, Math.max(1, Math.min(Number(maxUsers) || 250, 5000)));
+    for (const u of users) {
+      if (out.scannedUsers >= maxUsers) break;
+      if (!u || !u.id) continue;
+      out.scannedUsers += 1;
+      const userId = sanitizeText(u.id || "");
+      const recipes = Array.isArray(u.importedRecipes) ? u.importedRecipes : [];
+      for (let i = 0; i < recipes.length; i += 1) {
+        if (out.scannedRecipes >= maxRecipes) break;
+        const r = recipes[i];
+        out.scannedRecipes += 1;
+        const sourceUrl = sanitizeText(r?.sourceUrl || r?.source || "");
+        if (!sourceUrl) {
+          out.skippedNoSourceUrl += 1;
+          continue;
+        }
+        if (r?.ratingValue != null && r?.ratingCount != null) {
+          out.skippedAlreadyHasRating += 1;
+          continue;
+        }
+        if (!urlEligibleForChannelSearchRatingFetch(sourceUrl)) {
+          out.skippedNotEligible += 1;
+          continue;
+        }
+        out.candidates += 1;
+        addCandidate({ userId, recipeIndex: i, sourceUrl });
+        if (candidates.length >= maxRecipes) break;
+      }
+      if (out.scannedRecipes >= maxRecipes) break;
+    }
+  }
+
+  if (!candidates.length) return { ...out, message: "Geen recepten gevonden om ratings aan te vullen." };
+
+  // 2) Fetch ratings (parallel)
+  const ratingByKey = new Map(); // key: userId::recipeIndex -> ratingEntry
+  let next = 0;
+  async function worker() {
+    for (;;) {
+      const idx = next++;
+      if (idx >= candidates.length) return;
+      const c = candidates[idx];
+      const uKey = normalizeRecipeRatingCacheUrl(c.sourceUrl);
+      const cached = getCachedRecipeLdRating(uKey);
+      if (cached !== undefined) {
+        if (cached && typeof cached === "object") {
+          out.cacheHitWithRating += 1;
+          ratingByKey.set(`${c.userId}::${c.recipeIndex}`, cached);
+        }
+        continue;
+      }
+      try {
+        const resp = await fetch(uKey, {
+          headers: {
+            ...FETCH_HEADERS,
+            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
+          },
+          signal: AbortSignal.timeout(Math.max(1500, Math.min(Number(timeoutMs) || 6500, 20000))),
+          redirect: "follow",
+        });
+        if (!resp.ok) {
+          out.httpErr += 1;
+          continue;
+        }
+        const html = await resp.text();
+        const rt = extractAggregateRatingFromRecipeHtml(html);
+        if (rt) {
+          setCachedRecipeLdRating(uKey, rt);
+          ratingByKey.set(`${c.userId}::${c.recipeIndex}`, rt);
+        } else {
+          setCachedRecipeLdRating(uKey, null);
+          out.schemaMiss += 1;
+        }
+      } catch {
+        out.httpErr += 1;
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(Math.max(1, Number(concurrency) || 6), candidates.length) }, () => worker())
+  );
+
+  if (!ratingByKey.size) return { ...out, message: "Geen schema.org beoordelingen gevonden op de bronpagina's." };
+  if (out.dryRun) return { ...out, foundRatings: ratingByKey.size };
+
+  // 3) Persist updates
+  const touchedUsers = new Set();
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const byUser = new Map();
+    for (const c of candidates) {
+      const rt = ratingByKey.get(`${c.userId}::${c.recipeIndex}`);
+      if (!rt) continue;
+      if (!byUser.has(c.userId)) byUser.set(c.userId, []);
+      byUser.get(c.userId).push({ recipeIndex: c.recipeIndex, rt });
+    }
+    for (const [userId, patches] of byUser.entries()) {
+      const res = await pool.query(`SELECT app_state FROM plately_users WHERE id = $1 LIMIT 1`, [userId]);
+      const row = res.rows[0];
+      const appState = row?.app_state && typeof row.app_state === "object" ? row.app_state : {};
+      const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+      let changed = 0;
+      for (const p of patches) {
+        const r = recipes[p.recipeIndex];
+        if (!r || (r.ratingValue != null && r.ratingCount != null)) continue;
+        const rv = Number(p.rt.ratingValue);
+        const rc = Number(p.rt.ratingCount);
+        if (!Number.isFinite(rv) || rv < 1 || rv > 5 || !Number.isFinite(rc) || rc < 1) continue;
+        recipes[p.recipeIndex] = {
+          ...r,
+          ratingValue: rv,
+          ratingCount: rc,
+          ...(p.rt.ratingNormalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}),
+        };
+        changed += 1;
+      }
+      if (!changed) continue;
+      appState.importedRecipes = recipes;
+      await pool.query(
+        `
+          UPDATE plately_users
+          SET app_state = $2::jsonb,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [userId, JSON.stringify(appState)]
+      );
+      touchedUsers.add(userId);
+      out.updatedRecipes += changed;
+    }
+  } else {
+    const db = await loadDatabase();
+    for (const c of candidates) {
+      const rt = ratingByKey.get(`${c.userId}::${c.recipeIndex}`);
+      if (!rt) continue;
+      const user = db.users?.[c.userId];
+      if (!user) continue;
+      const recipes = Array.isArray(user.importedRecipes) ? user.importedRecipes : [];
+      const r = recipes[c.recipeIndex];
+      if (!r || (r.ratingValue != null && r.ratingCount != null)) continue;
+      const rv = Number(rt.ratingValue);
+      const rc = Number(rt.ratingCount);
+      if (!Number.isFinite(rv) || rv < 1 || rv > 5 || !Number.isFinite(rc) || rc < 1) continue;
+      recipes[c.recipeIndex] = {
+        ...r,
+        ratingValue: rv,
+        ratingCount: rc,
+        ...(rt.ratingNormalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}),
+      };
+      user.importedRecipes = recipes;
+      user.updatedAt = new Date().toISOString();
+      db.users[c.userId] = user;
+      touchedUsers.add(c.userId);
+      out.updatedRecipes += 1;
+    }
+    await persistDatabase();
+  }
+  out.updatedUsers = touchedUsers.size;
+  return out;
+}
+
 /** AH zoek-HTML voor datacenters die 403/lege body geven op de eerste fetch. */
 async function fetchAllerhandeSearchHtmlWithRetry(searchUrl) {
   const baseHeaders = {
@@ -12605,6 +12852,8 @@ function renderPublicSeoRecipePage(entry, origin) {
   const sourceUrl = normalizePublicSourceUrl(recipe.sourceUrl);
   const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
   const instructions = Array.isArray(recipe.instructions) ? recipe.instructions : [];
+  const ratingValue = Number(recipe.ratingValue);
+  const ratingCount = Number(recipe.ratingCount);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Recipe",
@@ -12615,6 +12864,16 @@ function renderPublicSeoRecipePage(entry, origin) {
     recipeCategory: sanitizeText(recipe.mealTag || ""),
     recipeYield: sanitizeText(recipe.servings || ""),
     totalTime: parseRecipeTimeToIsoDuration(recipe.time),
+    aggregateRating:
+      Number.isFinite(ratingValue) && ratingValue >= 1 && ratingValue <= 5 && Number.isFinite(ratingCount) && ratingCount >= 1
+        ? {
+            "@type": "AggregateRating",
+            ratingValue,
+            ratingCount,
+            bestRating: 5,
+            worstRating: 1,
+          }
+        : undefined,
     recipeIngredient: ingredients
       .map((i) => [i?.quantity, i?.unit, i?.name].map((part) => sanitizeText(part || "")).filter(Boolean).join(" "))
       .filter(Boolean),
@@ -14928,6 +15187,28 @@ const server = http.createServer(async (request, response) => {
         return sendJson(response, statusCode, {
           ok: false,
           error: error.message || "SEO recepten aanvullen mislukt.",
+        });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/seo-recipe-ratings-backfill" && request.method === "POST") {
+      console.log("⭐️ /api/admin/seo-recipe-ratings-backfill called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const dryRun = body?.dryRun !== false;
+        const maxUsers = Number.isFinite(Number(body?.maxUsers)) ? Math.max(1, Math.min(Number(body.maxUsers), 2000)) : 250;
+        const maxRecipes = Number.isFinite(Number(body?.maxRecipes)) ? Math.max(1, Math.min(Number(body.maxRecipes), 8000)) : 1200;
+        const concurrency = Number.isFinite(Number(body?.concurrency)) ? Math.max(1, Math.min(Number(body.concurrency), 10)) : 6;
+        const timeoutMs = Number.isFinite(Number(body?.timeoutMs)) ? Math.max(1500, Math.min(Number(body.timeoutMs), 20000)) : 6500;
+        const result = await backfillImportedRecipeRatingsForAllUsers({ dryRun, maxUsers, maxRecipes, concurrency, timeoutMs });
+        return sendJson(response, 200, result);
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/seo-recipe-ratings-backfill:", error.message);
+        return sendJson(response, statusCode, {
+          ok: false,
+          error: error.message || "SEO ratings aanvullen mislukt.",
         });
       }
     }

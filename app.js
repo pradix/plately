@@ -4930,6 +4930,8 @@ async function searchChannels(query) {
       return;
     }
 
+    let seoResults = [];
+
     // Fast path: search in Plately's indexed SEO recipes first (still scoped to selected channels).
     try {
       let seoUrl = `/api/seo-recipe-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}&limit=18`;
@@ -4937,7 +4939,12 @@ async function searchChannels(query) {
       const seoResp = await fetch(seoUrl, { signal: abortCtl.signal });
       const seoData = await seoResp.json().catch(() => null);
       if (requestId === searchChannels._reqId && Array.isArray(seoData?.results)) {
-        renderChannelSearchResults(seoData.results);
+        seoResults = seoData.results;
+        // Belangrijk: toon GEEN "geen resultaten" na alleen de SEO-zoek.
+        // Pas na de externe kanaal-zoek beslissen we of het echt leeg is.
+        if (seoResults.length) {
+          renderChannelSearchResults(seoResults);
+        }
       }
     } catch (e) {
       // ignore (fallback to channel-search below)
@@ -4951,7 +4958,7 @@ async function searchChannels(query) {
     if (requestId !== searchChannels._reqId) return;
     const merged = [];
     const seen = new Set();
-    for (const r of (Array.isArray(state.channelSearchAllResults) ? state.channelSearchAllResults : [])) {
+    for (const r of (Array.isArray(seoResults) ? seoResults : [])) {
       const key = String(r?.url || "");
       if (!key || seen.has(key)) continue;
       seen.add(key);
