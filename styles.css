@@ -2478,6 +2478,33 @@ button.ingredient-item {
   font-weight: 500;
 }
 
+.cb-detail__card-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cb-detail__favicon {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: rgba(0,0,0,0.03);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.cb-detail__favicon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .cb-detail__remove {
   top: 10px;
   right: 10px;
