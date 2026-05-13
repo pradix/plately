@@ -7546,6 +7546,11 @@ async function importWebsite(sourceUrl) {
   }
 
   if (isAllerhande) {
+    const graphqlRecipe = await importAhRecipeViaGraphql(sourceUrl);
+    if (graphqlRecipe && !graphqlRecipe.needsReview) {
+      return graphqlRecipe;
+    }
+
     const [documentSettled, readerSettled] = await Promise.allSettled([
       fetchWebsiteDocument(sourceUrl),
       fetchReaderFallback(sourceUrl),
@@ -11227,6 +11232,35 @@ query recipeSearchV2($searchText: String, $start: Int, $size: PageSize, $sortBy:
   }
 }`;
 
+const AH_RECIPE_DETAIL_QUERY = `
+query recipe($id: Int!) {
+  recipe(id: $id) {
+    id
+    title
+    description
+    cookTime
+    ovenTime
+    waitTime
+    servings { number type }
+    rating { average count }
+    images(renditions: [D1224X900, D1024X748, D612X450, D440X324, D302X220, D220X162]) {
+      url
+      width
+      height
+    }
+    ingredients {
+      text
+      quantity
+      name { singular plural }
+    }
+    preparation { steps }
+    author {
+      brand { name }
+      origin { hostName url }
+    }
+  }
+}`;
+
 function formatAhRecipeTime(time) {
   if (!time || typeof time !== "object") return "";
   const minutes = ["cook", "oven", "wait"].reduce((sum, key) => {
@@ -11246,6 +11280,83 @@ function pickAhGraphqlRecipeImage(images) {
     .filter((img) => img.url && !isDecorativeImageUrl(img.url))
     .sort((a, b) => b.score - a.score);
   return ranked[0]?.url || "";
+}
+
+function extractAhRecipeIdFromUrl(url) {
+  const match = String(url || "").match(/\/(?:recept\/)?R-R(\d+)(?:\/|$)/i) || String(url || "").match(/\/r\/(\d+)/i);
+  return match ? Number(match[1]) : 0;
+}
+
+function formatAhGraphqlMinutes(recipe) {
+  const minutes = ["cookTime", "ovenTime", "waitTime"].reduce((sum, key) => {
+    const value = Number(recipe?.[key]);
+    return Number.isFinite(value) && value > 0 ? sum + value : sum;
+  }, 0);
+  return minutes > 0 ? `${minutes} min` : "";
+}
+
+async function importAhRecipeViaGraphql(sourceUrl) {
+  const recipeId = extractAhRecipeIdFromUrl(sourceUrl);
+  if (!recipeId) return null;
+  try {
+    const resp = await fetch("https://www.ah.nl/gql", {
+      method: "POST",
+      headers: {
+        ...FETCH_HEADERS,
+        accept: "*/*",
+        "content-type": "application/json",
+        "x-client-name": "ah-allerhande",
+        "x-client-platform-type": "Web",
+        "x-client-version": "1.1025.2",
+        referer: sourceUrl,
+      },
+      body: JSON.stringify({
+        operationName: "recipe",
+        variables: { id: recipeId },
+        query: AH_RECIPE_DETAIL_QUERY,
+      }),
+      signal: AbortSignal.timeout(9000),
+    });
+    if (!resp?.ok) return null;
+    const json = await resp.json().catch(() => null);
+    const data = json?.data?.recipe;
+    if (!data?.id || !data?.title) return null;
+    const ingredients = normalizeIngredientList(
+      (Array.isArray(data.ingredients) ? data.ingredients : [])
+        .map((item) => parseIngredientLine(sanitizeText(item?.text || item?.name?.singular || item?.name?.plural || "")))
+    );
+    const instructions = cleanAllerhandeInstructionSteps(finalizeInstructionSteps(data?.preparation?.steps || []));
+    const ratingValue = Number(data?.rating?.average);
+    const ratingCount = Number(data?.rating?.count);
+    const servingsNumber = Number(data?.servings?.number);
+    const servingsType = sanitizeText(data?.servings?.type || "personen");
+    const author =
+      sanitizeText(data?.author?.brand?.name || "") ||
+      sanitizeText(data?.author?.origin?.hostName || "") ||
+      "Albert Heijn";
+    return {
+      platform: "website",
+      sourceUrl,
+      title: normalizeRecipeTitle(data.title) || sanitizeText(data.title || ""),
+      description: cleanAllerhandeUiFluff(sanitizeText(stripTags(data.description || ""))),
+      caption: cleanAllerhandeUiFluff(sanitizeText(stripTags(data.description || ""))),
+      image: pickAhGraphqlRecipeImage(data.images) || "assets/hero-burger.svg",
+      author,
+      ingredients,
+      instructions,
+      time: formatAhGraphqlMinutes(data),
+      servings: Number.isFinite(servingsNumber) && servingsNumber > 0
+        ? `${servingsNumber} ${servingsType}`.trim()
+        : "",
+      needsReview: ingredients.length < 2 || instructions.length < 1,
+      sourceLabel: "Imported from Allerhande",
+      ...(Number.isFinite(ratingValue) && ratingValue > 0 ? { ratingValue } : {}),
+      ...(Number.isFinite(ratingCount) && ratingCount > 0 ? { ratingCount } : {}),
+    };
+  } catch (err) {
+    console.log(`AH GraphQL import error: ${err.message}`);
+    return null;
+  }
 }
 
 async function searchAhRecipesViaGraphql(query, count = 4) {
