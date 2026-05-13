@@ -1586,6 +1586,30 @@ function buildSeedSearchUrlFromTemplate(template, query) {
   return t.replaceAll("{q}", q).replaceAll("<zoekwoord>", q);
 }
 
+function normalizeAhAllerhandeSearchQuery(queryOrUrl) {
+  const raw = sanitizeText(queryOrUrl || "").trim();
+  if (!raw) return "";
+  try {
+    const u = new URL(raw);
+    if (/(^|\.)ah\.nl$/i.test(u.hostname) && /^\/allerhande\/recepten-zoeken\/?$/i.test(u.pathname)) {
+      const q = sanitizeText(u.searchParams.get("query") || u.searchParams.get("q") || u.searchParams.get("s") || "");
+      return q || raw;
+    }
+  } catch {
+    // Not a URL; use as-is.
+  }
+  return raw;
+}
+
+function isAhAllerhandeSearchUrl(url) {
+  try {
+    const u = new URL(sanitizeText(url || ""));
+    return /(^|\.)ah\.nl$/i.test(u.hostname) && /^\/allerhande(?:\/recepten-zoeken\/?)?$/i.test(u.pathname);
+  } catch {
+    return false;
+  }
+}
+
 function getSeedChannelDefaultSearchUrlTemplate(channelId) {
   // Important: keep this in sync with the hardcoded fallbacks used by
   // `searchChannelRecipes` so admin channel testing builds the exact same URLs
@@ -11592,6 +11616,7 @@ async function fetchAllerhandeSearchHtmlWithRetry(searchUrl) {
  * Search AH Allerhande — tries the API with anonymous token.
  */
 async function searchAHRecipes(query, count = 4, opts = {}) {
+  query = normalizeAhAllerhandeSearchQuery(query);
   const seoBackfill = Boolean(opts && opts.seoBackfill);
   console.log(`🔍 AH recipe search for: "${query}"${seoBackfill ? " (seoBackfill)" : ""}`);
 
@@ -17682,7 +17707,9 @@ const server = http.createServer(async (request, response) => {
           const channelOverrides = await getChannelOverrides();
           const eff = getEffectiveCustomChannelConfig({ channelId: id, url }, channelOverrides);
           const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
-          const results = await scrapeOrRestPublic(eff.baseUrl, name, id, usedUrl, parseWPStandard, Math.min(limit, 15), query);
+          const results = isAhAllerhandeSearchUrl(eff.baseUrl) || isAhAllerhandeSearchUrl(usedUrl)
+            ? await searchAHRecipes(query, Math.min(limit, 15), { searchUrlTemplate: eff.searchUrlTemplate })
+            : await scrapeOrRestPublic(eff.baseUrl, name, id, usedUrl, parseWPStandard, Math.min(limit, 15), query, { relaxedQueryMatch: true });
           const slicedCustom = (results || []).slice(0, limit);
           const enrichedCustom =
             slicedCustom.length > 0 ? await enrichChannelSearchResultsWithRatings(slicedCustom) : slicedCustom;
