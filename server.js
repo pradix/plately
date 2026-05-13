@@ -12576,6 +12576,7 @@ function renderPublicSeoRecipePage(entry, origin) {
   const description = sanitizeText(recipe.description || "Een recept op Plately.");
   const canonicalUrl = `${origin}${entry.urlPath}`;
   const recipeParam = encodeURIComponent(entry.urlPath);
+  const loginUrl = `/?intent=save-recipe&recipe=${recipeParam}`;
   const saveUrl = `/?register=1&intent=save-recipe&recipe=${recipeParam}`;
   const groceryUrl = `/?register=1&intent=shopping-list&recipe=${recipeParam}`;
   const mealPlanUrl = `/?register=1&intent=meal-plan&recipe=${recipeParam}`;
@@ -12693,10 +12694,10 @@ function renderPublicSeoRecipePage(entry, origin) {
           <section class="public-recipe__conversion" aria-label="Recept bewaren">
             <p class="section-kicker public-recipe__kicker">Kook je dit later?</p>
             <h2 class="public-recipe__conversion-title">Stuur dit recept naar je eigen Plately.</h2>
-            <p class="public-recipe__conversion-copy">Dan staat het klaar tussen je recepten, kun je het plannen voor deze week en maak je met één klik een boodschappenlijst.</p>
+            <p class="public-recipe__conversion-copy">Dan staat het klaar tussen je recepten en maak je met één klik een boodschappenlijst.</p>
             <div class="public-recipe__conversion-actions">
               <a class="btn-primary public-recipe__cta-btn" href="${escapeHtml(saveUrl)}">Bewaar gratis</a>
-              <a class="btn-secondary public-recipe__cta-btn" href="${escapeHtml(mealPlanUrl)}">Plan deze week</a>
+              <a class="btn-secondary public-recipe__cta-btn" href="${escapeHtml(loginUrl)}">Inloggen voor Plately</a>
             </div>
           </section>
 
