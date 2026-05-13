@@ -3049,7 +3049,8 @@ function renderAlternativesSheet(item) {
   const choices = (() => {
     const seen = new Set();
     const out = [];
-    for (const c of rawChoices) {
+    for (let i = 0; i < rawChoices.length; i += 1) {
+      const c = rawChoices[i];
       if (!c) continue;
       const key =
         c.productId ||
@@ -3058,7 +3059,7 @@ function renderAlternativesSheet(item) {
         [c.title || "", c.imageUrl || "", c.subtitle || ""].join("|");
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push(c);
+      out.push({ ...c, __originalChoiceIndex: i });
     }
     return out;
   })();
@@ -3120,7 +3121,7 @@ function renderAlternativesSheet(item) {
   // Build a parallel list with original index + classification + price.
   const annotated = choices.map((choice, idx) => ({
     choice,
-    idx,
+    idx: Number.isInteger(choice.__originalChoiceIndex) ? choice.__originalChoiceIndex : idx,
     section: classifyAlternative(choice, item),
     priceNum: parseFloat(String(choice.price || "0").replace("€", "").replace(",", ".")) || 9999,
   }));
@@ -4584,6 +4585,61 @@ function getFollowedCustomChannelsForChannelSearch() {
   );
 }
 
+function inferFollowedChannelForRecipeSource(sourceUrl) {
+  const raw = String(sourceUrl || "").trim();
+  if (!raw) return null;
+  let host = "";
+  try {
+    host = new URL(raw).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return null;
+  }
+  for (const ch of SEED_CHANNELS) {
+    if (!state.followedChannelIds.includes(ch.id) || !isSeedChannelEnabled(ch.id)) continue;
+    try {
+      const chHost = new URL(ch.url || "").hostname.replace(/^www\./, "").toLowerCase();
+      if (chHost && host === chHost) return ch;
+    } catch {}
+  }
+  for (const ch of getFollowedCustomChannelsForChannelSearch()) {
+    try {
+      const chHost = new URL(ch.url || "").hostname.replace(/^www\./, "").toLowerCase();
+      if (chHost && (host === chHost || host.endsWith(`.${chHost}`))) return ch;
+    } catch {}
+  }
+  return null;
+}
+
+function searchSavedRecipesForChannelQuery(query, limit = 12) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q || q.length < 2) return [];
+  const words = q.split(/\s+/).filter((w) => w.length >= 2).slice(0, 6);
+  const scored = [];
+  for (const recipe of state.recipes || []) {
+    if (!recipe || SEED_RECIPE_IDS.has(recipe.id) || recipe.isSeed) continue;
+    const channel = inferFollowedChannelForRecipeSource(recipe.sourceUrl || "");
+    if (!channel) continue;
+    const hay = `${recipe.title || ""} ${recipe.mealTag || ""} ${recipe.description || ""}`.toLowerCase();
+    const exact = hay.includes(q);
+    const wordHits = words.filter((w) => hay.includes(w)).length;
+    if (!exact && wordHits < Math.max(1, Math.ceil(words.length * 0.5))) continue;
+    scored.push({ score: (exact ? 10 : 0) + wordHits, recipe, channel });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, Math.max(1, Number(limit) || 12)).map(({ recipe, channel }) => ({
+    url: `local:${recipe.id}`,
+    title: recipe.title || "Recept",
+    thumbnail: recipe.image || "",
+    channel: channel.name || "Plately",
+    channelId: channel.id || "plately-local",
+    description: recipe.description || "",
+    time: recipe.time || "",
+    sourceUrl: recipe.sourceUrl || "",
+    recipeId: recipe.id,
+    _source: "local",
+  }));
+}
+
 function countActiveFollowedChannels() {
   const seedActive = getActiveFollowedSeedChannelIds().length;
   const approvedCustomActive = state.customChannels.filter(
@@ -4843,8 +4899,10 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
       const channelColor = channel?.color || "#8da485";
       const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
       const thumbHtml = getChannelThumbnailMarkup(r, channel, channelColor);
+      const isLocalSaved = r && r._source === "local";
       const isPlatelyIndexed = r && (r._source === "plately" || String(r.url || "").startsWith("/recept/"));
-      const viewUrl = isPlatelyIndexed ? (r.sourceUrl || r.url) : r.url;
+      const viewUrl = isLocalSaved ? "#" : isPlatelyIndexed ? (r.sourceUrl || r.url) : r.url;
+      const actionLabel = isLocalSaved ? "Open" : "Importeer";
       return `
       <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}" data-ch-card-thumb="${escapeHtml(thumbUrl || "")}">
         <div class="ch-card__visual">
@@ -4858,17 +4916,18 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
           ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
         </div>
         <div class="ch-card__actions">
-          <a class="ch-card__view" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Bekijk ${escapeHtml(r.title)} op ${escapeHtml(r.channel)}">
+          <a class="ch-card__view" href="${escapeHtml(viewUrl)}" ${isLocalSaved ? "" : 'target="_blank" rel="noopener noreferrer"'} aria-label="Bekijk ${escapeHtml(r.title)} op ${escapeHtml(r.channel)}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z" fill="currentColor"/></svg>
             Bekijk
           </a>
           <button class="ch-card__import" type="button"
             data-channel-import-url="${escapeHtml(r.url)}"
             data-channel-import-thumb="${escapeHtml(thumbUrl || "")}"
-            data-channel-import-kind="${isPlatelyIndexed ? "plately" : "external"}"
+            data-channel-import-kind="${isLocalSaved ? "local" : isPlatelyIndexed ? "plately" : "external"}"
+            data-channel-import-recipe-id="${escapeHtml(r.recipeId || "")}"
             aria-label="Importeer ${escapeHtml(r.title)}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-            Importeer
+            ${actionLabel}
           </button>
         </div>
       </div>`;
@@ -4941,6 +5000,11 @@ async function searchChannels(query) {
       return;
     }
 
+    const savedResults = searchSavedRecipesForChannelQuery(query.trim(), 12);
+    if (savedResults.length && requestId === searchChannels._reqId) {
+      renderChannelSearchResults(savedResults);
+    }
+
     let seoResults = [];
 
     // Fast path: search in Plately's indexed SEO recipes first (still scoped to selected channels).
@@ -4969,6 +5033,12 @@ async function searchChannels(query) {
     if (requestId !== searchChannels._reqId) return;
     const merged = [];
     const seen = new Set();
+    for (const r of savedResults) {
+      const key = String(r?.url || "");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(r);
+    }
     for (const r of (Array.isArray(seoResults) ? seoResults : [])) {
       const key = String(r?.url || "");
       if (!key || seen.has(key)) continue;
@@ -11705,6 +11775,7 @@ bindEvent(channelSearchResults, "click", async (event) => {
   if (!url) return;
   const imageHint = btn.dataset.channelImportThumb || "";
   const kind = btn.dataset.channelImportKind || "external";
+  const localRecipeId = btn.dataset.channelImportRecipeId || "";
 
   btn.disabled = true;
   btn.innerHTML = getChannelImportLoadingMarkup();
@@ -11712,7 +11783,17 @@ bindEvent(channelSearchResults, "click", async (event) => {
   showImportSplash(url);
   try {
     let recipePayload = null;
-    if (kind === "plately" || String(url).startsWith("/recept/")) {
+    if (kind === "local") {
+      if (!localRecipeId || !getRecipeById(localRecipeId)) throw new Error("Recept niet gevonden.");
+      state.selectedRecipeId = localRecipeId;
+      switchView("detail");
+      renderDetailRecipe(true);
+      if (searchInput) searchInput.value = "";
+      state.searchQuery = "";
+      ensureChannelSearchClosed();
+      hideHomeFocusPanel();
+      return;
+    } else if (kind === "plately" || String(url).startsWith("/recept/")) {
       const resp = await fetch(`/api/public-recipe?path=${encodeURIComponent(String(url))}`);
       const data = await resp.json();
       if (!resp.ok || !data.recipe) throw new Error(data.error || "Recept niet gevonden.");
@@ -13281,7 +13362,10 @@ bindEvent(basketContinueButton, "click", async () => {
   // so swapping an alternative product is reflected in the handoff link.
   if (preview.store === "albert-heijn") {
     const selectedIds = (preview.items || [])
-      .map((item) => item.choices?.[item.selectedChoiceIndex || 0]?.productId)
+      .map((item) => {
+        const choice = item.choices?.[item.selectedChoiceIndex || 0];
+        return choice?.productId || choice?.id || "";
+      })
       .filter(Boolean);
     if (selectedIds.length) {
       url = `https://www.ah.nl/mijnlijst/add-multiple?${selectedIds

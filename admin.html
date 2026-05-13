@@ -1096,7 +1096,7 @@
           </p>
           <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px">
             <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-              Alleen dit seed-kanaal
+              Alleen dit kanaal
               <select id="seoBackfillChannelSelect" style="min-width:220px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
                 <option value="">Automatisch: gevolgd/fallback</option>
               </select>
@@ -1162,6 +1162,20 @@
           </div>
           <div id="seoBackfillStatus" class="muted" style="font-size:12px;margin-bottom:8px">Kies dry-run of import.</div>
           <pre id="seoBackfillOutput" class="mono" style="display:block;margin:0;padding:12px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto">—</pre>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
+            <div class="section-header" style="margin-bottom:8px">
+              <h3 style="margin:0;font-size:14px">Imports van kanaal verwijderen</h3>
+              <div class="muted" style="font-size:12px">Verwijdert recepten uit alle accounts + kookboeken</div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+              <select id="seoDeleteChannelSelect" style="min-width:260px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
+                <option value="">Kanaal kiezen…</option>
+              </select>
+              <button type="button" class="btn btn-sm" onclick="deleteImportsBySelectedChannel(true)">Dry-run</button>
+              <button type="button" class="btn btn-sm btn-danger" onclick="deleteImportsBySelectedChannel(false)">Verwijderen</button>
+            </div>
+            <div id="seoDeleteChannelStatus" class="muted" style="font-size:12px">Tip: kies Rutger Bakt om alle Rutgerbakt-imports eruit te halen.</div>
+          </div>
         </div>
 
         <div class="section" id="seoRatingsBackfillSection" style="margin-top:14px">
@@ -2606,20 +2620,43 @@
       return seen.size;
     }
 
-    function renderSeoBackfillChannelSelect(seedChannels) {
+    function renderSeoBackfillChannelSelect(seedChannels, customChannels = null) {
       const sel = document.getElementById("seoBackfillChannelSelect");
       if (!sel) return;
       const current = sel.value || "";
       const seed = (Array.isArray(seedChannels) ? seedChannels : [])
         .filter((ch) => ch && ch.id && ch.enabled !== false);
+      const approved = Array.isArray(customChannels?.approved) ? customChannels.approved.filter((ch) => ch && ch.enabled !== false) : [];
+      const seedOptions = seed
+        .map((ch) => `<option value="${escapeHtml(ch.id)}">${escapeHtml(ch.name || ch.id)}</option>`)
+        .join("");
+      const customOptions = approved
+        .map((ch) => `<option value="custom:${escapeHtml(ch.id)}">${escapeHtml(ch.name || ch.id)} (custom)</option>`)
+        .join("");
       sel.innerHTML =
         `<option value="">Automatisch: gevolgd/fallback</option>` +
-        seed
-          .map((ch) => `<option value="${escapeHtml(ch.id)}">${escapeHtml(ch.name || ch.id)}</option>`)
-          .join("");
-      if (current && seed.some((ch) => ch.id === current)) {
+        (seedOptions ? `<optgroup label="Seed-kanalen">${seedOptions}</optgroup>` : "") +
+        (customOptions ? `<optgroup label="Custom enabled">${customOptions}</optgroup>` : "");
+      if (current && Array.from(sel.options).some((option) => option.value === current)) {
         sel.value = current;
       }
+    }
+
+    function renderSeoDeleteChannelSelect(seedChannels, customChannels = null) {
+      const sel = document.getElementById("seoDeleteChannelSelect");
+      if (!sel) return;
+      const current = sel.value || "";
+      const seed = (Array.isArray(seedChannels) ? seedChannels : []).filter((ch) => ch && ch.id);
+      const approved = Array.isArray(customChannels?.approved) ? customChannels.approved : [];
+      const pending = Array.isArray(customChannels?.pending) ? customChannels.pending : [];
+      const rejected = Array.isArray(customChannels?.rejected) ? customChannels.rejected : [];
+      const allCustom = [...approved, ...pending, ...rejected];
+      const opt = (label, valueObj) => `<option value="${escapeHtml(JSON.stringify(valueObj))}">${escapeHtml(label)}</option>`;
+      const groups = [];
+      if (seed.length) groups.push(`<optgroup label="Seed-kanalen">${seed.map((ch) => opt(ch.name || ch.id, { channelId: ch.id, channelUrl: ch.url || "" })).join("")}</optgroup>`);
+      if (allCustom.length) groups.push(`<optgroup label="Custom kanalen">${allCustom.map((ch) => opt(`${ch.name}${ch.url ? ` — ${ch.url}` : ""}`, { channelId: ch.id, channelUrl: ch.url || "", host: "" })).join("")}</optgroup>`);
+      sel.innerHTML = `<option value="">Kanaal kiezen…</option>` + groups.join("");
+      if (current && Array.from(sel.options).some((option) => option.value === current)) sel.value = current;
     }
 
     function renderSeoSingleRecipeChannelSelect(seedChannels, customChannels) {
@@ -2627,7 +2664,7 @@
       if (!sel) return;
       const current = sel.value || "";
       const seed = (Array.isArray(seedChannels) ? seedChannels : []).filter((ch) => ch && ch.id && ch.enabled !== false);
-      const approved = Array.isArray(customChannels?.approved) ? customChannels.approved : [];
+      const approved = Array.isArray(customChannels?.approved) ? customChannels.approved.filter((ch) => ch && ch.enabled !== false) : [];
       const opt = (label, valueObj) => `<option value="${escapeHtml(JSON.stringify(valueObj))}">${escapeHtml(label)}</option>`;
       const groups = [];
       if (seed.length) {
@@ -2754,6 +2791,46 @@
         const action = data.saved?.updated ? "bijgewerkt" : data.saved?.added ? "geïmporteerd" : "al aanwezig";
         const link = data.publicPath ? ` · <a class="admin-inventory__link" href="${escapeHtml(data.publicPath)}" target="_blank" rel="noopener">open SEO-pagina</a>` : "";
         if (statusEl) statusEl.innerHTML = `✅ ${escapeHtml(data.recipe?.title || result.title || "Recept")} ${action}${link}`;
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "Fout: " + (error.message || String(error));
+      }
+    }
+
+    async function deleteImportsBySelectedChannel(dryRun) {
+      const sel = document.getElementById("seoDeleteChannelSelect");
+      const statusEl = document.getElementById("seoDeleteChannelStatus");
+      const raw = (sel?.value || "").trim();
+      if (!raw) {
+        if (statusEl) statusEl.textContent = "Kies eerst een kanaal.";
+        return;
+      }
+      let payload = null;
+      try {
+        payload = JSON.parse(raw);
+      } catch {
+        payload = null;
+      }
+      if (!payload) {
+        if (statusEl) statusEl.textContent = "Kanaalkeuze is ongeldig.";
+        return;
+      }
+      const label = sel?.selectedOptions?.[0]?.textContent || payload.channelId || payload.host || "kanaal";
+      if (!dryRun) {
+        const ok = confirm(`Alle imports van ${label} verwijderen uit alle accounts en kookboeken? Dit kan niet automatisch ongedaan gemaakt worden.`);
+        if (!ok) return;
+      }
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> ${dryRun ? "Dry-run" : "Verwijderen"}…`;
+      try {
+        const response = await fetch("/api/admin/delete-imports-by-channel", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, dryRun: Boolean(dryRun) }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Verwijderen mislukt");
+        if (statusEl) {
+          statusEl.textContent = `${dryRun ? "Dry-run" : "Klaar"}: ${data.removedRecipes || 0} recepten bij ${data.usersChanged || 0}/${data.usersScanned || 0} users${data.host ? ` · host ${data.host}` : ""}.`;
+        }
       } catch (error) {
         if (statusEl) statusEl.textContent = "Fout: " + (error.message || String(error));
       }
@@ -2997,7 +3074,14 @@
       if (useProgress) bodyPayload.progress = true;
       if (!dryRun && forceReimport) bodyPayload.forceReimport = true;
       if (popularTop100) bodyPayload.popularTopN = 100;
-      if (selectedChannelId) bodyPayload.channels = [selectedChannelId];
+      if (selectedChannelId) {
+        if (selectedChannelId.startsWith("custom:")) {
+          bodyPayload.channels = [];
+          bodyPayload.customChannels = [selectedChannelId.slice("custom:".length)];
+        } else {
+          bodyPayload.channels = [selectedChannelId];
+        }
+      }
       if (allPool) {
         const approx = Array.isArray(seoBackfillKeywordSuggestions) ? seoBackfillKeywordSuggestions.length : 0;
         const poolHint = approx > 0 ? `${approx} woorden` : "de volledige server-pool";
@@ -4093,8 +4177,9 @@
         const seed = Array.isArray(data.seedChannels) ? data.seedChannels : [];
         const custom = data.customChannels || { approved: [], pending: [], rejected: [] };
         channelCatalogState = { seedChannels: seed, customChannels: custom };
-        renderSeoBackfillChannelSelect(seed);
+        renderSeoBackfillChannelSelect(seed, custom);
         renderSeoSingleRecipeChannelSelect(seed, custom);
+        renderSeoDeleteChannelSelect(seed, custom);
         const approved = Array.isArray(custom.approved) ? custom.approved : [];
         const pending = Array.isArray(custom.pending) ? custom.pending : [];
         const rejected = Array.isArray(custom.rejected) ? custom.rejected : [];

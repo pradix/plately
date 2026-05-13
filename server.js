@@ -9830,7 +9830,7 @@ function parseWpSearchAnchorFallback(html, baseUrl, channelName, channelId, coun
 
   const lim = Math.min(Math.max(Number(count) || 12, 1), 48);
   const anchorRe =
-    /<a\b[^>]*\bhref\s*=\s*["'](https?:\/\/[^"'>\s]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    /<a\b[^>]*\bhref\s*=\s*["']([^"'>\s]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   let m;
   while ((m = anchorRe.exec(html)) !== null && results.length < lim * 4) {
     const rawHref = String(m[1] || "")
@@ -9838,7 +9838,7 @@ function parseWpSearchAnchorFallback(html, baseUrl, channelName, channelId, coun
       .replace(/&amp;/gi, "&");
     let u;
     try {
-      u = new URL(rawHref.split("#")[0]);
+      u = new URL(rawHref.split("#")[0], baseUrl);
     } catch {
       continue;
     }
@@ -11034,6 +11034,56 @@ function extractAhSearchRatingsFromAllerhandeHtml(html) {
   return map;
 }
 
+function decodeEscapedJsonString(value) {
+  const raw = String(value || "");
+  if (!raw) return "";
+  try {
+    return JSON.parse(`"${raw.replace(/"/g, '\\"')}"`);
+  } catch {
+    return raw
+      .replace(/\\u([0-9a-f]{4})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, "\\")
+      .replace(/\\\//g, "/");
+  }
+}
+
+function extractAhRecipeSummariesFromAllerhandeHtml(html, query, count) {
+  const text = String(html || "");
+  if (!text || text.length < 800 || !text.includes("RecipeSummary")) return [];
+  const cap = Math.min(Math.max(Number(count) || 4, 1), 40);
+  const ratingMap = extractAhSearchRatingsFromAllerhandeHtml(text);
+  const out = [];
+  const seen = new Set();
+  const rowRe = /\\?"__typename\\?"\s*:\s*\\?"RecipeSummary\\?"[\s\S]{0,9000}?\\?"id\\?"\s*:\s*"?(\d+)"?[\s\S]{0,9000}?\\?"title\\?"\s*:\s*\\?"((?:\\\\.|[^"\\]){2,220})\\?"[\s\S]{0,12000}?\\?"slug\\?"\s*:\s*\\?"((?:\\\\.|[^"\\]){2,220})\\?"/g;
+  let m;
+  while ((m = rowRe.exec(text)) !== null && out.length < cap * 3) {
+    const idDigits = String(m[1] || "").trim();
+    const title = sanitizeText(decodeEscapedJsonString(m[2] || ""));
+    const slug = sanitizeText(decodeEscapedJsonString(m[3] || ""));
+    if (!idDigits || !title || !slug) continue;
+    const recipeId = `r-r${idDigits}`;
+    const url = `https://www.ah.nl/allerhande/recept/${recipeId}/${slug}`;
+    const key = url.toLowerCase();
+    if (seen.has(key)) continue;
+    if (!isAhAllerhandeRecipeUrl(url)) continue;
+    if (!ahSeoBackfillResultMatchesQuery(title, slug, query)) continue;
+    seen.add(key);
+    const ratingEntry = lookupAhSearchRating(ratingMap, url, recipeId);
+    out.push({
+      title,
+      url,
+      thumbnail: "",
+      channel: "Allerhande",
+      channelId: "ch-ah",
+      description: "",
+      time: "",
+      ...(ratingEntry ? { ratingValue: ratingEntry.ratingValue, ratingCount: ratingEntry.ratingCount } : {}),
+    });
+  }
+  return out.slice(0, cap);
+}
+
 function lookupAhSearchRating(ratingMap, url, recipeId) {
   if (!ratingMap || !(ratingMap instanceof Map) || ratingMap.size === 0) return null;
   const rid = String(recipeId || "").trim().toLowerCase();
@@ -11607,13 +11657,15 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
 
     console.log(`📖 Trying Jina reader for: ${searchUrl}`);
 
-    // Also fetch raw HTML to extract images
-    const [markdownResp, htmlResp] = await Promise.all([
-      fetch(readerUrl, {
+    // Start Jina as fallback, but don't let it block if AH's own HTML already exposes RecipeSummary data.
+    const markdownPromise = fetch(readerUrl, {
         headers: { ...FETCH_HEADERS, ...jinaReaderAuthHeaders() },
         signal: AbortSignal.timeout(15000),
-      }),
-      fetch(searchUrl, {
+      }).catch((err) => {
+        console.log(`Jina fetch error: ${err.message}`);
+        return null;
+      });
+    const htmlResp = await fetch(searchUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -11626,38 +11678,46 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
       }).catch((err) => {
         console.log(`HTML fetch error: ${err.message}`);
         return null;
-      }),
-    ]);
+      });
 
-    console.log(`Jina response: ${markdownResp.status}, HTML response: ${htmlResp?.status || 'failed'}`);
-    if (markdownResp.ok) {
+    let html = "";
+    if (htmlResp?.ok) {
+      try {
+        html = await htmlResp.text();
+      } catch (err) {
+        console.log(`HTML text parse error: ${err.message}`);
+      }
+    }
+    console.log(`HTML response: ${htmlResp?.status || 'failed'}, HTML: ${html.length} chars`);
+
+    let ahRatingByRecipeId = extractAhSearchRatingsFromAllerhandeHtml(html);
+    if (ahRatingByRecipeId.size === 0) {
+      console.log("⭐ AH ratings: none from HTML — retrying dedicated fetch for RecipeSummary JSON");
+      const htmlRetry = await fetchAllerhandeSearchHtmlWithRetry(searchUrl);
+      if (htmlRetry) {
+        if (htmlRetry.length > (html || "").length) {
+          html = htmlRetry;
+        } else if (!(html || "").includes("RecipeSummary")) {
+          html = htmlRetry;
+        }
+        ahRatingByRecipeId = extractAhSearchRatingsFromAllerhandeHtml(html);
+      }
+      console.log(`⭐ AH ratings map size: ${ahRatingByRecipeId.size} (HTML after retry: ${(html || "").length} chars)`);
+    } else {
+      console.log(`⭐ AH ratings map size: ${ahRatingByRecipeId.size}`);
+    }
+
+    const summaryResults = extractAhRecipeSummariesFromAllerhandeHtml(html, query, count);
+    if (summaryResults.length > 0) {
+      console.log(`✅ AH RecipeSummary parser returned ${summaryResults.length} results`);
+      return summaryResults;
+    }
+
+    const markdownResp = await markdownPromise;
+    console.log(`Jina response: ${markdownResp?.status || "failed"}, HTML response: ${htmlResp?.status || "failed"}`);
+    if (markdownResp?.ok) {
       const markdown = await markdownResp.text();
-      let html = "";
-      if (htmlResp?.ok) {
-        try {
-          html = await htmlResp.text();
-        } catch (err) {
-          console.log(`HTML text parse error: ${err.message}`);
-        }
-      }
       console.log(`✅ Jina returned ${markdown.length} chars, HTML: ${html.length} chars`);
-
-      let ahRatingByRecipeId = extractAhSearchRatingsFromAllerhandeHtml(html);
-      if (ahRatingByRecipeId.size === 0) {
-        console.log("⭐ AH ratings: none from parallel HTML — retrying dedicated fetch for RecipeSummary JSON");
-        const htmlRetry = await fetchAllerhandeSearchHtmlWithRetry(searchUrl);
-        if (htmlRetry) {
-          if (htmlRetry.length > (html || "").length) {
-            html = htmlRetry;
-          } else if (!(html || "").includes("RecipeSummary")) {
-            html = htmlRetry;
-          }
-          ahRatingByRecipeId = extractAhSearchRatingsFromAllerhandeHtml(html);
-        }
-        console.log(`⭐ AH ratings map size: ${ahRatingByRecipeId.size} (HTML after retry: ${(html || "").length} chars)`);
-      } else {
-        console.log(`⭐ AH ratings map size: ${ahRatingByRecipeId.size}`);
-      }
 
       // Extract recipe links from Jina markdown — `/recept/…` met Allerhande-id `r-r123…/slug`.
       // seoBackfill: ook http(s), ah.nl zonder www, en relatieve `/allerhande/recept/` (Jina varieert).
@@ -12950,7 +13010,16 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
   }
   const dryRun = Boolean(options.dryRun);
 
-  const customEntries = await listSeoBackfillCustomChannelEntries(authUser, channels, channelEnabled);
+  const requestedCustomChannels = Array.isArray(options.customChannels)
+    ? options.customChannels.map((id) => sanitizeText(id || "")).filter(Boolean)
+    : Array.isArray(options.customChannelIds)
+      ? options.customChannelIds.map((id) => sanitizeText(id || "")).filter(Boolean)
+      : [];
+  let customEntries = await listSeoBackfillCustomChannelEntries(authUser, channels, channelEnabled);
+  if (requestedCustomChannels.length) {
+    const requestedCustomSet = new Set(requestedCustomChannels);
+    customEntries = customEntries.filter((ch) => requestedCustomSet.has(sanitizeText(ch.channelId || "")));
+  }
   const targets = [
     ...channels.map((channelId) => ({
       kind: "seed",
@@ -16002,6 +16071,108 @@ const server = http.createServer(async (request, response) => {
       } catch (error) {
         const statusCode = error.statusCode || 400;
         return sendJson(response, statusCode, { ok: false, error: error.message || "Kon imports per kanaal niet laden." });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/delete-imports-by-channel" && request.method === "POST") {
+      console.log("🧹 /api/admin/delete-imports-by-channel called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const channelId = sanitizeText(body?.channelId || "");
+        const channelUrl = sanitizeText(body?.channelUrl || "");
+        let host = sanitizeText(body?.host || "");
+        if (!host && channelUrl) {
+          try {
+            host = new URL(channelUrl).hostname.replace(/^www\./i, "").toLowerCase();
+          } catch {
+            host = "";
+          }
+        }
+        host = host.replace(/^www\./i, "").toLowerCase();
+        if (!channelId && !host) throw new HttpError(400, "channelId of host ontbreekt.");
+        const dryRun = body?.dryRun !== false;
+
+        const sourceMatches = (recipe) => {
+          const sourceUrl = sanitizeText(recipe?.sourceUrl || recipe?.source || "");
+          const inferred = inferSeedChannelIdFromSourceUrl(sourceUrl);
+          if (channelId && inferred && inferred === channelId) return true;
+          if (!host) return false;
+          try {
+            const sourceHost = new URL(sourceUrl).hostname.replace(/^www\./i, "").toLowerCase();
+            return sourceHost === host || sourceHost.endsWith(`.${host}`);
+          } catch {
+            return false;
+          }
+        };
+
+        const cleanState = (user) => {
+          const appState = buildAppStateFromUser(user);
+          const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+          const removedIds = new Set();
+          const keptRecipes = [];
+          for (const recipe of recipes) {
+            if (sourceMatches(recipe)) {
+              removedIds.add(sanitizeText(recipe?.id || ""));
+            } else {
+              keptRecipes.push(recipe);
+            }
+          }
+          if (!removedIds.size) return { changed: false, removed: 0, nextState: appState };
+          const nextCookbooks = (Array.isArray(appState.cookbooks) ? appState.cookbooks : []).map((cookbook) => ({
+            ...cookbook,
+            recipeIds: (Array.isArray(cookbook.recipeIds) ? cookbook.recipeIds : []).filter((id) => !removedIds.has(sanitizeText(id || ""))),
+          }));
+          const nextState = {
+            ...appState,
+            importedRecipes: keptRecipes,
+            cookbooks: nextCookbooks,
+            selectedRecipeId: removedIds.has(sanitizeText(appState.selectedRecipeId || "")) ? (keptRecipes[0]?.id || "") : appState.selectedRecipeId,
+            featuredRecipeId: removedIds.has(sanitizeText(appState.featuredRecipeId || "")) ? (keptRecipes[0]?.id || "") : appState.featuredRecipeId,
+          };
+          return { changed: true, removed: removedIds.size, nextState };
+        };
+
+        let usersScanned = 0;
+        let usersChanged = 0;
+        let removedRecipes = 0;
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const res = await pool.query(`SELECT * FROM plately_users`);
+          for (const row of res.rows || []) {
+            usersScanned += 1;
+            const { changed, removed, nextState } = cleanState(row);
+            if (!changed) continue;
+            usersChanged += 1;
+            removedRecipes += removed;
+            if (!dryRun) await updateAuthenticatedUserState(row.id, nextState);
+          }
+        } else {
+          const db = await loadDatabase();
+          for (const user of Object.values(db.users || {})) {
+            usersScanned += 1;
+            const { changed, removed, nextState } = cleanState(user);
+            if (!changed) continue;
+            usersChanged += 1;
+            removedRecipes += removed;
+            if (!dryRun) db.users[user.id] = sanitizeUserStatePayload(nextState, user);
+          }
+          if (!dryRun && usersChanged) await persistDatabase();
+        }
+        return sendJson(response, 200, {
+          ok: true,
+          dryRun,
+          channelId,
+          host,
+          usersScanned,
+          usersChanged,
+          removedRecipes,
+        });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/delete-imports-by-channel:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Imports verwijderen mislukt." });
       }
     }
 
