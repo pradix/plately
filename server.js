@@ -726,99 +726,31 @@ const SEED_CHANNELS = [
   { id: "ch-culy", name: "Culy" },
 ];
 
-// Keep this aligned with the quick-search suggestions in app.js. These are used
-// for admin SEO backfills so public recipe pages are seeded from real search intent.
-const SEO_RECIPE_BACKFILL_KEYWORDS = [
-  "Bami",
-  "Nasi",
-  "Lasagne",
-  "Pad thai",
-  "Pannenkoeken",
-  "Saté",
-  "Sushi bowl",
-  "Poké bowl",
-  "Ovenschotel",
-  "Spaghetti Bolognese",
-  "Pasta Carbonara",
-  "Lasagne Bolognese",
-  "Pasta Pesto",
-  "Macaroni and Cheese",
-  "Tomatenrisotto met Parmezaan en citroen",
-  "Gnocchi met salieboter",
-  "Pizza Margherita",
-  "Pasta met feta uit de oven",
-  "Fettuccine Alfredo",
-  "Aubergine Parmigiana",
-  "Stamppot Boerenkool",
-  "Stamppot Hutspot",
-  "Hachee",
-  "Ovenschotel met prei en aardappel",
-  "Bloemkool met kaassaus en aardappels",
-  "Gehaktballen in jus",
-  "Hollandse pannenkoeken",
-  "Babi Pangang",
-  "Snert",
-  "Thaise Pad Thai",
-  "Massaman Curry",
-  "Indiase Butter Chicken",
-  "Indonesische Gado Gado",
-  "Mexicaanse Taco's met gehakt",
-  "Shakshuka",
-  "Spaanse Paella",
-  "Kip Tikka Masala",
-  "Nasi Goreng",
-  "Chili con Carne",
-  "Kip uit de oven",
-  "Kip Teriyaki",
-  "Saté met pindasaus",
-  "Steak met chimichurri",
-  "Pulled Pork",
-  "Gyros",
+function loadStaticJsonArray(relPath, fallback = []) {
+  try {
+    const abs = path.join(ROOT_DIR, String(relPath || ""));
+    const raw = fs.readFileSync(abs, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map((s) => sanitizeText(s)).filter(Boolean) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// These are used for admin SEO backfills so public recipe pages are seeded from real search intent.
+// Shared with the client via static asset for consistency.
+const SEO_RECIPE_BACKFILL_KEYWORDS = loadStaticJsonArray("assets/seo-recipe-keywords.nl.json", [
   "Pasta",
   "Kip",
-  "Avocado",
-  "Snelle lunch",
-  "Gezond",
-  "Vegetarisch",
-  "Vegan",
-  "Salade",
-  "Soep",
-  "Curry",
-  "Rijst",
-  "Noedels",
-  "Wrap",
-  "Taco",
-  "Bowl",
-  "Airfryer",
-  "30 minuten",
+  "Lasagne",
+  "Nasi",
+  "Bami",
   "Budget",
   "Mealprep",
-  "Ontbijt",
-  "Smoothie",
-  "Eieren",
-  "Vis",
-  "Garnalen",
-  "Tofu",
-  "Kikkererwten",
-  "Linzen",
-  "Zoete aardappel",
-  "Broccoli",
-  "Bloemkool",
-  "Spinazie",
-  "Courgette",
-  "Aubergine",
-  "Tomaat",
-  "Paprika",
-  "Pesto",
-  "Parmezaan",
-  "Feta",
-  "Burrata",
-  "Stoof",
-  "BBQ",
-  "Dessert",
-  "Chocolate chip",
-  "Gezinsproof",
-];
+  "Ovenschotel",
+  "Soep",
+  "Salade",
+]);
 
 // Seed channel search defaults (admin can override baseUrl / searchUrlTemplate).
 // - baseUrl: used for WP REST and for building absolute links in scrapers

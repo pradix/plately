@@ -3490,13 +3490,34 @@ const HOME_QUICK_CHIP_GENERAL_POOL = [
   "Gezinsproof",
 ];
 
+let homeSeoRecipeKeywordPool = null;
+let homeSeoRecipeKeywordPoolLoaded = false;
+const HOME_SEO_KEYWORDS_ASSET = "/assets/seo-recipe-keywords.nl.json";
+
+async function loadHomeSeoRecipeKeywordsOnce() {
+  if (homeSeoRecipeKeywordPoolLoaded) return homeSeoRecipeKeywordPool;
+  homeSeoRecipeKeywordPoolLoaded = true;
+  try {
+    const resp = await fetch(HOME_SEO_KEYWORDS_ASSET, { credentials: "same-origin" });
+    if (!resp.ok) return null;
+    const parsed = await resp.json();
+    if (!Array.isArray(parsed)) return null;
+    const cleaned = parsed.map((s) => String(s || "").trim()).filter((s) => s.length >= 2);
+    homeSeoRecipeKeywordPool = cleaned.length ? cleaned : null;
+    return homeSeoRecipeKeywordPool;
+  } catch {
+    return null;
+  }
+}
+
 function pickHomeQuickChips(count, rng) {
-  const n = Math.max(0, Math.min(count, HOME_QUICK_CHIP_DISH_POOL.length + HOME_QUICK_CHIP_GENERAL_POOL.length));
+  const extra = Array.isArray(homeSeoRecipeKeywordPool) ? homeSeoRecipeKeywordPool : [];
+  const n = Math.max(0, Math.min(count, HOME_QUICK_CHIP_DISH_POOL.length + HOME_QUICK_CHIP_GENERAL_POOL.length + extra.length));
   if (n === 0) return [];
 
   const dishPick = pickUniqueRandom(HOME_QUICK_CHIP_DISH_POOL, 1, rng)[0];
   const remainingCount = Math.max(0, n - 1);
-  const combined = [...HOME_QUICK_CHIP_DISH_POOL, ...HOME_QUICK_CHIP_GENERAL_POOL].filter((x) => x !== dishPick);
+  const combined = [...HOME_QUICK_CHIP_DISH_POOL, ...HOME_QUICK_CHIP_GENERAL_POOL, ...extra].filter((x) => x !== dishPick);
   const rest = pickUniqueRandom(combined, remainingCount, rng);
 
   // Preserve randomness of display order.
@@ -3556,6 +3577,17 @@ function pushRecentRecipeId(recipeId) {
 
 function renderHomeQuickChips() {
   if (!homeSearchChipsWrap) return;
+  // Non-blocking: extend chip pool when the shared SEO keyword list loads.
+  if (!homeSeoRecipeKeywordPoolLoaded) {
+    loadHomeSeoRecipeKeywordsOnce().then(() => {
+      try {
+        // Re-render only if the user hasn't navigated away.
+        if (homeSearchChipsWrap) renderHomeQuickChips();
+      } catch {
+        // ignore
+      }
+    });
+  }
   const isWide = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(min-width: 768px)").matches;
   const chipCount = isWide ? 6 : Math.random() < 0.55 ? 4 : 5;
 
