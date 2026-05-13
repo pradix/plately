@@ -12229,19 +12229,35 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
   const followedSeedChannels = Array.isArray(appState.followedChannelIds)
     ? appState.followedChannelIds.filter((id) => SEED_CHANNEL_DEFAULTS[id] && isChannelEnabled("seed", id, channelEnabled))
     : [];
-  const channels = (requestedChannels.length ? requestedChannels : followedSeedChannels)
-    .filter((id) => SEED_CHANNEL_DEFAULTS[id])
+  const fallbackSeedChannels = SEED_CHANNELS.map((c) => sanitizeText(c.id || "")).filter(
+    (id) => SEED_CHANNEL_DEFAULTS[id] && isChannelEnabled("seed", id, channelEnabled)
+  );
+  const channelSource = requestedChannels.length
+    ? requestedChannels
+    : followedSeedChannels.length
+      ? followedSeedChannels
+      : fallbackSeedChannels;
+  const channels = channelSource
+    .filter((id) => SEED_CHANNEL_DEFAULTS[id] && isChannelEnabled("seed", id, channelEnabled))
     .slice(0, 10);
+  const channelSelection = requestedChannels.length ? "explicit" : followedSeedChannels.length ? "followed" : "fallback";
   const limitPerChannel = Math.min(20, Math.max(1, Number.parseInt(options.limitPerChannel, 10) || 10));
-  const keywordLimit = Math.min(SEO_RECIPE_BACKFILL_KEYWORDS.length, Math.max(6, Number.parseInt(options.keywordLimit, 10) || 28));
-  const keywords = (Array.isArray(options.keywords) && options.keywords.length
+  const customKeywordList = Array.isArray(options.keywords)
     ? options.keywords.map((keyword) => sanitizeText(keyword || "")).filter((keyword) => keyword.length >= 2)
-    : SEO_RECIPE_BACKFILL_KEYWORDS
-  ).slice(0, keywordLimit);
+    : [];
+  const usingCustomKeywords = customKeywordList.length > 0;
+  const parsedKeywordCap = Number.parseInt(options.keywordLimit, 10);
+  const keywordLimit = usingCustomKeywords
+    ? Math.min(60, Math.max(1, Number.isFinite(parsedKeywordCap) ? parsedKeywordCap : customKeywordList.length))
+    : Math.min(SEO_RECIPE_BACKFILL_KEYWORDS.length, Math.max(6, Number.isFinite(parsedKeywordCap) ? parsedKeywordCap : 28));
+  const keywords = (usingCustomKeywords ? customKeywordList : SEO_RECIPE_BACKFILL_KEYWORDS).slice(0, keywordLimit);
   const dryRun = Boolean(options.dryRun);
 
   if (!channels.length) {
-    throw new HttpError(400, "Geen actieve seed-kanalen gevonden om te vullen.");
+    throw new HttpError(
+      400,
+      "Geen actieve seed-kanalen gevonden om te vullen. Zet kanalen aan in admin, volg seed-kanalen in de app, of stuur body.channels met id's (bijv. [\"ch-ah\",\"ch-jumbo\"])."
+    );
   }
 
   const allImported = [];
@@ -12290,6 +12306,8 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
   return {
     ok: true,
     dryRun,
+    channelSelection,
+    keywordsUsed: keywords,
     channels: report,
     totals: {
       channels: channels.length,
@@ -14828,6 +14846,19 @@ const server = http.createServer(async (request, response) => {
       } catch (error) {
         console.error("❌ Error in /api/admin/search-terms:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/seo-recipe-keyword-suggestions" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        return sendJson(response, 200, { ok: true, suggestions: SEO_RECIPE_BACKFILL_KEYWORDS });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        return sendJson(response, statusCode, {
+          ok: false,
+          error: error.message || "Kon zoeksuggesties niet laden.",
+        });
       }
     }
 

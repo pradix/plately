@@ -583,6 +583,86 @@
       .header-actions { width: 100%; justify-content: flex-start; }
     }
 
+    .seo-kw-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .seo-kw-pills-wrap {
+      max-height: 220px;
+      overflow: auto;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: rgba(0, 0, 0, 0.02);
+      margin-bottom: 10px;
+    }
+    .seo-kw-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .seo-kw-pill {
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      background: #fff;
+      font-size: 11px;
+      font-weight: 650;
+      cursor: pointer;
+      color: rgba(0, 0, 0, 0.78);
+      max-width: 100%;
+      text-align: left;
+    }
+    .seo-kw-pill:hover {
+      border-color: rgba(120, 147, 111, 0.45);
+      background: rgba(120, 147, 111, 0.06);
+    }
+    .seo-kw-pill.is-on {
+      border-color: var(--green);
+      background: var(--green-soft);
+      color: var(--green-ink);
+    }
+    .seo-kw-selected {
+      font-size: 11px;
+      line-height: 1.45;
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      background: rgba(120, 147, 111, 0.08);
+      border: 1px solid rgba(120, 147, 111, 0.2);
+    }
+    .seo-kw-selected__tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .seo-kw-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      font-size: 11px;
+    }
+    .seo-kw-tag button {
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0 2px;
+      color: rgba(0, 0, 0, 0.45);
+    }
+    .seo-kw-tag button:hover {
+      color: rgba(140, 23, 35, 0.95);
+    }
+
     /* Geïntegreerd in de Plately-app (iframe) */
     html.admin-embedded .container {
       max-width: none;
@@ -994,6 +1074,42 @@
           <div id="searchTermsStatus" class="muted" style="margin-top:-6px">Laden…</div>
           <div id="searchTermsTableWrap" style="margin-top:10px"></div>
         </div>
+
+        <div class="section" id="seoBackfillSection" style="margin-top:14px">
+          <div class="section-header">
+            <h2>SEO-recepten backfill</h2>
+            <div class="muted">Publieke recepten + sitemap</div>
+          </div>
+          <p class="muted" style="font-size:12px;margin-bottom:12px;line-height:1.45">
+            Roept <code class="mono">POST /api/admin/seo-recipe-backfill</code> aan: zoekt per seed-kanaal (je gevolgde kanalen, of anders de standaard ingeschakelde seed-kanalen), importeert tot N recepten per kanaal naar het kookboek <strong>SEO recepten</strong> van je <strong>admin-account</strong>.
+            Kies hieronder <strong>10–20 zoekwoorden</strong> uit dezelfde suggesties als in de app-zoekbalk (plus gerechten), daarna dry-run of import.
+          </p>
+          <div id="seoBackfillKeywordHint" class="muted" style="font-size:12px;margin-bottom:8px">⏳ Zoekwoorden laden…</div>
+          <div id="seoBackfillSelectedWrap" class="seo-kw-selected" style="display:none">
+            <strong>Volgorde</strong> <span class="muted">(eerste = eerst gezocht)</span>
+            <div id="seoBackfillSelectedTags" class="seo-kw-selected__tags"></div>
+          </div>
+          <div class="seo-kw-toolbar">
+            <button type="button" class="btn btn-sm" onclick="clearSeoBackfillKeywords()">Selectie wissen</button>
+            <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center;flex:1;min-width:200px">
+              Eigen woord
+              <input id="seoBackfillCustomKw" type="text" maxlength="80" placeholder="bv. Lasagne" style="flex:1;min-width:120px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+            </label>
+            <button type="button" class="btn btn-sm" onclick="addCustomSeoBackfillKeyword()">Toevoegen</button>
+          </div>
+          <div id="seoBackfillKeywordPillsWrap" class="seo-kw-pills-wrap">
+            <div id="seoBackfillKeywordPills" class="seo-kw-pills"></div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px">
+            <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Max per kanaal
+              <input id="seoBackfillLimitPerChannel" type="number" min="1" max="20" value="10" style="width:56px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+            </label>
+            <button type="button" class="btn" id="seoBackfillBtnDry" onclick="runSeoRecipeBackfill(true)">Dry-run (geen import)</button>
+            <button type="button" class="btn btn-primary" id="seoBackfillBtnGo" onclick="runSeoRecipeBackfill(false)">Import uitvoeren</button>
+          </div>
+          <div id="seoBackfillStatus" class="muted" style="font-size:12px;margin-bottom:8px">Kies dry-run of import.</div>
+          <pre id="seoBackfillOutput" class="mono" style="display:block;margin:0;padding:12px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto">—</pre>
+        </div>
       </div>
 
       <div class="admin-tab-section" id="adminTabActivity" data-tab="activity">
@@ -1221,6 +1337,11 @@
     let inventorySearchTimer = null;
     let channelCatalogState = { seedChannels: [], customChannels: { approved: [], pending: [], rejected: [] } };
 
+    const SEO_BACKFILL_KW_MAX = 20;
+    const SEO_BACKFILL_KW_MIN_IMPORT = 10;
+    let seoBackfillKeywordSuggestions = [];
+    let seoBackfillSelectedKeywords = [];
+
     const PLATELY_AUTH_TOKEN_KEY = "plately-auth-token";
 
     /** Match app.js fetchJson: send cookies + Bearer token from localStorage when present. */
@@ -1350,6 +1471,7 @@
         loadAnalytics();
         loadOverview(); // independent block (own loading/error)
         loadSearchTerms(); // independent block (own loading/error)
+        loadSeoKeywordSuggestions().catch(() => {});
         initInventoryUserFilter();
         loadInventory(); // independent block (own loading/error)
         await loadAdminDeployInfo();
@@ -2242,6 +2364,192 @@
         if (statusEl) statusEl.textContent = `❌ ${error.message}`;
         if (metaEl) metaEl.textContent = "Kon niet laden";
         wrapEl.innerHTML = "";
+      }
+    }
+
+    function isSeoKeywordSelected(kw) {
+      return seoBackfillSelectedKeywords.some((k) => k === kw);
+    }
+
+    function syncSeoKeywordHintAndTags() {
+      const hint = document.getElementById("seoBackfillKeywordHint");
+      const wrap = document.getElementById("seoBackfillSelectedWrap");
+      const tags = document.getElementById("seoBackfillSelectedTags");
+      const n = seoBackfillSelectedKeywords.length;
+      if (hint && !String(hint.textContent || "").startsWith("❌")) {
+        hint.textContent = `${n} / ${SEO_BACKFILL_KW_MAX} geselecteerd · dry-run: 1–${SEO_BACKFILL_KW_MAX} woorden · import: ${SEO_BACKFILL_KW_MIN_IMPORT}–${SEO_BACKFILL_KW_MAX} woorden`;
+      }
+      if (wrap && tags) {
+        if (!n) {
+          wrap.style.display = "none";
+          tags.innerHTML = "";
+        } else {
+          wrap.style.display = "block";
+          tags.innerHTML = seoBackfillSelectedKeywords
+            .map(
+              (kw, i) => `
+            <span class="seo-kw-tag">
+              <span>${escapeHtml(kw)}</span>
+              <button type="button" aria-label="Verwijder" onclick="removeSeoBackfillKeywordAt(${i})">×</button>
+            </span>
+          `
+            )
+            .join("");
+        }
+      }
+    }
+
+    function renderSeoKeywordPills() {
+      const root = document.getElementById("seoBackfillKeywordPills");
+      if (!root) return;
+      if (!seoBackfillKeywordSuggestions.length) {
+        root.innerHTML = "";
+        syncSeoKeywordHintAndTags();
+        return;
+      }
+      root.innerHTML = seoBackfillKeywordSuggestions
+        .map((kw, idx) => {
+          const on = isSeoKeywordSelected(kw) ? " is-on" : "";
+          return `<button type="button" class="seo-kw-pill${on}" data-seo-kw-idx="${idx}" onclick="toggleSeoBackfillKeywordByIdx(${idx})">${escapeHtml(kw)}</button>`;
+        })
+        .join("");
+      syncSeoKeywordHintAndTags();
+    }
+
+    function toggleSeoBackfillKeywordByIdx(idx) {
+      const kw = seoBackfillKeywordSuggestions[idx];
+      if (!kw) return;
+      const pos = seoBackfillSelectedKeywords.indexOf(kw);
+      if (pos >= 0) {
+        seoBackfillSelectedKeywords.splice(pos, 1);
+      } else if (seoBackfillSelectedKeywords.length >= SEO_BACKFILL_KW_MAX) {
+        alert(`Maximaal ${SEO_BACKFILL_KW_MAX} zoekwoorden.`);
+        return;
+      } else {
+        seoBackfillSelectedKeywords.push(kw);
+      }
+      renderSeoKeywordPills();
+    }
+
+    function removeSeoBackfillKeywordAt(i) {
+      if (i < 0 || i >= seoBackfillSelectedKeywords.length) return;
+      seoBackfillSelectedKeywords.splice(i, 1);
+      renderSeoKeywordPills();
+    }
+
+    function clearSeoBackfillKeywords() {
+      seoBackfillSelectedKeywords = [];
+      renderSeoKeywordPills();
+    }
+
+    function addCustomSeoBackfillKeyword() {
+      const input = document.getElementById("seoBackfillCustomKw");
+      const raw = (input?.value || "").trim();
+      if (raw.length < 2) {
+        alert("Minimaal 2 tekens.");
+        return;
+      }
+      if (seoBackfillSelectedKeywords.length >= SEO_BACKFILL_KW_MAX) {
+        alert(`Maximaal ${SEO_BACKFILL_KW_MAX} zoekwoorden.`);
+        return;
+      }
+      const dup = seoBackfillSelectedKeywords.some((k) => k.toLowerCase() === raw.toLowerCase());
+      if (dup) {
+        alert("Dat woord staat al in je selectie.");
+        return;
+      }
+      seoBackfillSelectedKeywords.push(raw);
+      if (input) input.value = "";
+      renderSeoKeywordPills();
+    }
+
+    async function loadSeoKeywordSuggestions() {
+      const hint = document.getElementById("seoBackfillKeywordHint");
+      if (hint) hint.textContent = "⏳ Zoekwoorden laden…";
+      try {
+        const res = await fetch("/api/admin/seo-recipe-keyword-suggestions", adminFetchInit());
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Kon suggesties niet laden");
+        seoBackfillKeywordSuggestions = Array.isArray(data.suggestions)
+          ? data.suggestions.map((s) => String(s || "").trim()).filter(Boolean)
+          : [];
+        renderSeoKeywordPills();
+      } catch (e) {
+        if (hint) hint.textContent = "❌ " + (e.message || String(e));
+      }
+    }
+
+    async function runSeoRecipeBackfill(dryRun) {
+      const statusEl = document.getElementById("seoBackfillStatus");
+      const outEl = document.getElementById("seoBackfillOutput");
+      const limitRaw = document.getElementById("seoBackfillLimitPerChannel")?.value ?? "10";
+      const limitPerChannel = Math.min(20, Math.max(1, parseInt(String(limitRaw), 10) || 10));
+      const btnDry = document.getElementById("seoBackfillBtnDry");
+      const btnGo = document.getElementById("seoBackfillBtnGo");
+      const setBusy = (busy) => {
+        if (btnDry) btnDry.disabled = busy;
+        if (btnGo) btnGo.disabled = busy;
+      };
+      const keywords = seoBackfillSelectedKeywords.slice();
+      if (!keywords.length) {
+        alert("Kies eerst zoekwoorden uit de suggesties of voeg een eigen woord toe.");
+        return;
+      }
+      if (keywords.length > SEO_BACKFILL_KW_MAX) {
+        alert(`Maximaal ${SEO_BACKFILL_KW_MAX} zoekwoorden.`);
+        return;
+      }
+      if (!dryRun && (keywords.length < SEO_BACKFILL_KW_MIN_IMPORT || keywords.length > SEO_BACKFILL_KW_MAX)) {
+        alert(`Import vereist tussen ${SEO_BACKFILL_KW_MIN_IMPORT} en ${SEO_BACKFILL_KW_MAX} zoekwoorden (nu: ${keywords.length}).`);
+        return;
+      }
+      if (!dryRun) {
+        const ok = confirm(
+          "Recepten echt importeren naar het admin-account (kookboek «SEO recepten») en als publieke SEO-pagina's beschikbaar maken?"
+        );
+        if (!ok) return;
+      }
+      setBusy(true);
+      if (statusEl) statusEl.textContent = dryRun ? "⏳ Dry-run…" : "⏳ Bezig met importeren…";
+      if (outEl) outEl.textContent = "";
+      try {
+        const response = await fetch("/api/admin/seo-recipe-backfill", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            limitPerChannel,
+            dryRun: Boolean(dryRun),
+            keywords,
+            keywordLimit: keywords.length,
+          }),
+        }));
+        const text = await response.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { _parseError: true, status: response.status, bodyPreview: text.slice(0, 800) };
+        }
+        if (!response.ok) {
+          const msg = data?.error || data?.message || `HTTP ${response.status}`;
+          throw new Error(msg);
+        }
+        if (statusEl) {
+          const tag = data.channelSelection ? ` (${data.channelSelection})` : "";
+          statusEl.textContent = (dryRun ? "✅ Dry-run klaar" : "✅ Import klaar") + tag;
+        }
+        if (outEl) {
+          try {
+            outEl.textContent = JSON.stringify(data, null, 2);
+          } catch {
+            outEl.textContent = String(data);
+          }
+        }
+      } catch (e) {
+        if (statusEl) statusEl.textContent = "❌ " + (e.message || String(e));
+        if (outEl) outEl.textContent = "";
+      } finally {
+        setBusy(false);
       }
     }
 
