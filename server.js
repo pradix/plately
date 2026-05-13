@@ -11109,6 +11109,57 @@ function extractAhRecipeSummariesFromAllerhandeHtml(html, query, count) {
   return out.slice(0, cap);
 }
 
+function extractAhRecipeCardsFromAllerhandeHtml(html, query, count) {
+  const text = String(html || "");
+  if (!text || text.length < 800) return [];
+  const cap = Math.min(Math.max(Number(count) || 4, 1), 40);
+  const out = [];
+  const seen = new Set();
+  const push = (titleRaw, urlRaw, thumbRaw = "") => {
+    if (out.length >= cap) return;
+    const title = sanitizeText(decodeHtmlEntities(titleRaw || "").replace(/^Recept:\s*/i, ""));
+    let url = sanitizeText(decodeHtmlEntities(urlRaw || ""));
+    if (!url) return;
+    if (url.startsWith("/")) url = `https://www.ah.nl${url}`;
+    if (!/^https?:\/\//i.test(url)) return;
+    if (!isAhAllerhandeRecipeUrl(url)) return;
+    const slug = (() => {
+      try {
+        return new URL(url).pathname.split("/").filter(Boolean).pop() || "";
+      } catch {
+        return "";
+      }
+    })();
+    if (!title || !ahSeoBackfillResultMatchesQuery(title, slug, query)) return;
+    const key = url.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({
+      title,
+      url,
+      thumbnail: cleanImageUrl(thumbRaw || ""),
+      channel: "Allerhande",
+      channelId: "ch-ah",
+      description: "",
+      time: "",
+    });
+  };
+
+  const itemListRe = /"name"\s*:\s*"([^"]{3,220})"\s*,\s*"url"\s*:\s*"(https:\/\/www\.ah\.nl\/allerhande\/recept\/R-R\d+\/[^"]+)"/g;
+  let m;
+  while ((m = itemListRe.exec(text)) !== null) push(m[1], m[2]);
+
+  if (out.length < cap) {
+    const anchorRe = /<a\b[^>]*\btitle\s*=\s*"Recept:\s*([^"]{3,220})"[^>]*\bhref\s*=\s*"([^"]*\/allerhande\/recept\/R-R\d+\/[^"]+)"[\s\S]{0,1800}?<img\b[^>]*(?:srcSet|srcset)\s*=\s*"([^"]*)"/gi;
+    while ((m = anchorRe.exec(text)) !== null) {
+      const srcset = pickLargestSrcsetImage(m[3] || "");
+      push(m[1], m[2], srcset);
+    }
+  }
+
+  return out.slice(0, cap);
+}
+
 function lookupAhSearchRating(ratingMap, url, recipeId) {
   if (!ratingMap || !(ratingMap instanceof Map) || ratingMap.size === 0) return null;
   const rid = String(recipeId || "").trim().toLowerCase();
@@ -11679,7 +11730,7 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
     const searchUrlTemplate = sanitizeText(opts?.searchUrlTemplate || SEED_CHANNEL_DEFAULTS["ch-ah"]?.searchUrlTemplate || "") ||
       "https://www.ah.nl/allerhande/recepten-zoeken?query={q}";
     const searchUrl = buildSeedSearchUrlFromTemplate(searchUrlTemplate, query);
-    const readerUrl = `https://r.jina.ai/${encodeURIComponent(searchUrl)}`;
+    const readerUrl = `https://r.jina.ai/http://${searchUrl}`;
 
     console.log(`📖 Trying Jina reader for: ${searchUrl}`);
 
@@ -11738,12 +11789,22 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
       console.log(`✅ AH RecipeSummary parser returned ${summaryResults.length} results`);
       return summaryResults;
     }
+    const cardResults = extractAhRecipeCardsFromAllerhandeHtml(html, query, count);
+    if (cardResults.length > 0) {
+      console.log(`✅ AH card/ItemList parser returned ${cardResults.length} results`);
+      return cardResults;
+    }
 
     const markdownResp = await markdownPromise;
     console.log(`Jina response: ${markdownResp?.status || "failed"}, HTML response: ${htmlResp?.status || "failed"}`);
     if (markdownResp?.ok) {
       const markdown = await markdownResp.text();
       console.log(`✅ Jina returned ${markdown.length} chars, HTML: ${html.length} chars`);
+      const markdownCardResults = extractAhRecipeCardsFromAllerhandeHtml(markdown, query, count);
+      if (markdownCardResults.length > 0) {
+        console.log(`✅ AH Jina card/ItemList parser returned ${markdownCardResults.length} results`);
+        return markdownCardResults;
+      }
 
       // Extract recipe links from Jina markdown — `/recept/…` met Allerhande-id `r-r123…/slug`.
       // seoBackfill: ook http(s), ah.nl zonder www, en relatieve `/allerhande/recept/` (Jina varieert).
