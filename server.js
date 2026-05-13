@@ -12085,6 +12085,7 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
 async function searchJumboRecipes(query, count = 4, opts = {}) {
   const channelName = "Jumbo";
   const channelId = "ch-jumbo";
+  const matchOptions = { relaxedQueryMatch: shouldRelaxQueryTitleMatch(opts) };
   const searchUrlTemplate = sanitizeText(opts?.searchUrlTemplate || SEED_CHANNEL_DEFAULTS["ch-jumbo"]?.searchUrlTemplate || "") ||
     "https://www.jumbo.com/recepten/zoeken?searchTerms={q}";
   const searchUrl = buildSeedSearchUrlFromTemplate(searchUrlTemplate, query || "");
@@ -12211,7 +12212,7 @@ async function searchJumboRecipes(query, count = 4, opts = {}) {
       .filter((r) => urlLooksLikeRecipe(r.url))
       .filter((r) => titleLooksLikeRecipe(r.title))
       .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
-      .filter((r) => titleMatchesQuery(r.title, query || ""))
+      .filter((r) => channelSearchResultTitleMatchesQuery(channelId, r.title, query || "", matchOptions))
       .sort((a, b) => titleQueryScore(b.title, query || "") - titleQueryScore(a.title, query || ""))
       .slice(0, count);
 
@@ -12221,7 +12222,8 @@ async function searchJumboRecipes(query, count = 4, opts = {}) {
   }
 }
 
-async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, parser, count, query) {
+async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, parser, count, query, options = {}) {
+  const matchOptions = { relaxedQueryMatch: shouldRelaxQueryTitleMatch(options) };
   // Miljuschka / Eef Kookt Zo block datacenter + reader IPs (403 / Cloudflare). Serper runs in
   // parallel so we don't wait on slow HTML → REST → Jina timeouts before hitting Google site:.
   const serpEarly =
@@ -12232,11 +12234,12 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
       channelId,
       query: query || "",
       count,
+      relaxedQueryMatch: matchOptions.relaxedQueryMatch,
     });
   // ch-mj / ch-ek: WP REST eerst — HTML-zoekpagina is vrijwel altijd achter Cloudflare,
   // JSON-endpoints worden minder agressief geblokkeerd.
   if (SEARCH_WP_REST_FIRST_IDS.has(channelId)) {
-    const rest = await wpRestSearch(baseUrl, channelName, channelId, query || "", count);
+    const rest = await wpRestSearch(baseUrl, channelName, channelId, query || "", count, null, matchOptions);
     if (rest.length > 0) return rest;
   }
   try {
@@ -12248,14 +12251,14 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
         .filter((r) => urlLooksLikeRecipe(r.url))
         .filter((r) => titleLooksLikeRecipe(r.title))
         .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
-        .filter((r) => channelSearchResultTitleMatchesQuery(channelId, r.title, query || ""))
+        .filter((r) => channelSearchResultTitleMatchesQuery(channelId, r.title, query || "", matchOptions))
         .sort((a, b) => titleQueryScore(b.title, query || "") - titleQueryScore(a.title, query || ""))
         .slice(0, count);
       if (filtered.length > 0) return filtered;
     }
   } catch { /* fall through */ }
   if (!SEARCH_WP_REST_FIRST_IDS.has(channelId)) {
-    const rest = await wpRestSearch(baseUrl, channelName, channelId, query || "", count);
+    const rest = await wpRestSearch(baseUrl, channelName, channelId, query || "", count, null, matchOptions);
     if (rest.length > 0) return rest;
   }
   // Bij MJ/EEF is Jina-langzaam vaak useless (Cloudflare); Google site: eerst als SERPER aan staat.
@@ -12265,7 +12268,7 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
   } catch {
     /* ignore */
   }
-  const reader = await readerSearchFallback(searchUrl, channelName, channelId, count, query || "");
+  const reader = await readerSearchFallback(searchUrl, channelName, channelId, count, query || "", matchOptions);
   if (reader.length > 0) return reader;
   return [];
 }
@@ -12278,6 +12281,7 @@ async function searchChannelRecipes(query, allowedChannels = null, options = {})
   const pcTight = seoBackfill ? 12 : 3;
   const pcCuly = seoBackfill ? 24 : 12;
   const maxMerged = seoBackfill ? 80 : 30;
+  const matchOptions = { relaxedQueryMatch: seoBackfill };
   // null = alle seed-kanalen; [] = géén seeds (alleen custom via /api/channel-search); anders = alleen die IDs
   const allow =
     allowedChannels === null
@@ -12295,11 +12299,12 @@ async function searchChannelRecipes(query, allowedChannels = null, options = {})
         channelId,
         query,
         count,
+        relaxedQueryMatch: matchOptions.relaxedQueryMatch,
       });
     // ch-mj / ch-ek: WP REST eerst — HTML-zoekpagina is vrijwel altijd achter Cloudflare,
     // JSON-endpoints worden minder agressief geblokkeerd.
     if (SEARCH_WP_REST_FIRST_IDS.has(channelId)) {
-      const rest = await wpRestSearch(baseUrl, channelName, channelId, query, count);
+      const rest = await wpRestSearch(baseUrl, channelName, channelId, query, count, null, matchOptions);
       if (rest.length > 0) return rest;
     }
     try {
@@ -12313,14 +12318,14 @@ async function searchChannelRecipes(query, allowedChannels = null, options = {})
           .filter((r) => urlLooksLikeRecipe(r.url))
           .filter((r) => titleLooksLikeRecipe(r.title))
           .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
-          .filter((r) => channelSearchResultTitleMatchesQuery(channelId, r.title, query))
+          .filter((r) => channelSearchResultTitleMatchesQuery(channelId, r.title, query, matchOptions))
           .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
           .slice(0, count);
         if (filtered.length > 0) return filtered;
       }
     } catch { /* fall through */ }
     if (!SEARCH_WP_REST_FIRST_IDS.has(channelId)) {
-      const rest = await wpRestSearch(baseUrl, channelName, channelId, query, count);
+      const rest = await wpRestSearch(baseUrl, channelName, channelId, query, count, null, matchOptions);
       if (rest.length > 0) return rest;
     }
     try {
@@ -12329,7 +12334,7 @@ async function searchChannelRecipes(query, allowedChannels = null, options = {})
     } catch {
       /* ignore */
     }
-    const reader = await readerSearchFallback(searchUrl, channelName, channelId, count, query);
+    const reader = await readerSearchFallback(searchUrl, channelName, channelId, count, query, matchOptions);
     if (reader.length > 0) return reader;
     return [];
   }
@@ -12351,7 +12356,7 @@ async function searchChannelRecipes(query, allowedChannels = null, options = {})
         ...(seoBackfill ? { seoBackfill: true } : {}),
       })
     ),
-    maybeSearch("ch-jumbo", () => searchJumboRecipes(query, pc, { searchUrlTemplate: cfg("ch-jumbo").searchUrlTemplate })),
+    maybeSearch("ch-jumbo", () => searchJumboRecipes(query, pc, { searchUrlTemplate: cfg("ch-jumbo").searchUrlTemplate, seoBackfill })),
     maybeSearch("ch-les", () => scrapeOrRest(cfg("ch-les").baseUrl || "https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les",
       buildSeedChannelSearchUrl("ch-les", cfg("ch-les"), query),
       parseLekkerSimpel, pc)),
@@ -12363,7 +12368,7 @@ async function searchChannelRecipes(query, allowedChannels = null, options = {})
           console.warn("🧹 Filtered 24Kitchen .jpeg search result(s)");
         }
         if (cleaned.length) return cleaned;
-        const fac = await search24KitchenFac(query, pc, cfg("ch-24k"));
+        const fac = await search24KitchenFac(query, pc, cfg("ch-24k"), matchOptions);
         const facCleaned = (Array.isArray(fac) ? fac : []).filter((r) => r && r.url && !/\.jpeg/i.test(String(r.url)));
         if (process.env.NODE_ENV !== "production" && Array.isArray(fac) && facCleaned.length !== fac.length) {
           console.warn("🧹 Filtered 24Kitchen FAC .jpeg result(s)");
@@ -12384,7 +12389,7 @@ async function searchChannelRecipes(query, allowedChannels = null, options = {})
     maybeSearch("ch-clf", () => scrapeOrRest(cfg("ch-clf").baseUrl || "https://www.chickslovefood.com", "Chicks Love Food", "ch-clf",
       buildSeedChannelSearchUrl("ch-clf", cfg("ch-clf"), query),
       parseChicksLoveFood, pcTight)),
-    maybeSearch("ch-culy", () => searchCulyRecipes(query, pcCuly, cfg("ch-culy"))),
+    maybeSearch("ch-culy", () => searchCulyRecipes(query, pcCuly, { ...cfg("ch-culy"), seoBackfill })),
 
     // SLOW: Include but expect timeouts
     maybeSearch("ch-mj", () => scrapeOrRest(cfg("ch-mj").baseUrl || "https://miljuschka.nl", "Miljuschka", "ch-mj",
@@ -12613,9 +12618,9 @@ async function searchSeoBackfillCandidatesForCustomChannel({
     let results = [];
     try {
       const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
-      const merged = await scrapeOrRestPublic(eff.baseUrl, channelName, channelId, usedUrl, parseWPStandard, 14, query);
+      const merged = await scrapeOrRestPublic(eff.baseUrl, channelName, channelId, usedUrl, parseWPStandard, 14, query, { relaxedQueryMatch: true });
       results = (Array.isArray(merged) ? merged : []).filter((r) =>
-        channelSearchResultTitleMatchesQuery(channelId, r.title, query)
+        channelSearchResultTitleMatchesQuery(channelId, r.title, query, { relaxedQueryMatch: true })
       );
     } catch {
       results = [];
