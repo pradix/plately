@@ -7671,17 +7671,15 @@ function renderCookbookDetail(cookbookId) {
             <div class="cb-detail__item ${selecting && selectedIds.has(recipe.id) ? "is-selected" : ""}">
               <button class="cb-detail__card" type="button" data-open-recipe-id="${escapeHtml(recipe.id)}">
                 <img class="cb-detail__img" src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.title)}" loading="lazy" />
+                ${(() => {
+                  const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
+                  return faviconUrl
+                    ? `<span class="cb-detail__favicon-overlay" aria-hidden="true"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'"/></span>`
+                    : "";
+                })()}
                 <div class="cb-detail__card-body">
                   <span class="cb-detail__card-title">${escapeHtml(recipe.title)}</span>
-                  <span class="cb-detail__card-meta">
-                    ${(() => {
-                      const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
-                      return faviconUrl
-                        ? `<span class="cb-detail__favicon" aria-hidden="true"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'"/></span>`
-                        : "";
-                    })()}
-                    <span class="cb-detail__card-time">${escapeHtml(recipe.time)}</span>
-                  </span>
+                  <span class="cb-detail__card-time">${escapeHtml(recipe.time)}</span>
                 </div>
               </button>
               <button class="cb-detail__select" type="button"

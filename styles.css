@@ -2440,8 +2440,33 @@ button.ingredient-item {
   height: 100%;
   color: inherit;
   -webkit-tap-highlight-color: transparent;
+  position: relative;
 }
 .cb-detail__card:active { transform: scale(0.98); }
+
+.cb-detail__favicon-overlay {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.14);
+  pointer-events: none;
+  z-index: 2;
+}
+.cb-detail__favicon-overlay img {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+  border-radius: 3px;
+  display: block;
+}
 
 .cb-detail__img {
   width: 100%;
@@ -2478,32 +2503,6 @@ button.ingredient-item {
   font-weight: 500;
 }
 
-.cb-detail__card-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.cb-detail__favicon {
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid rgba(0,0,0,0.08);
-  background: rgba(0,0,0,0.03);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-
-.cb-detail__favicon img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
 
 .cb-detail__remove {
   top: 10px;
