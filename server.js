@@ -691,7 +691,7 @@ const DEFAULT_COOKBOOKS = [
 
 // Keep in sync with frontend `SEED_CHANNELS` for admin display / resolving names.
 /** WordPress sites met harde bot/WAF-blokkade: scraping + WP-REST falen op VPS; optioneel Serper site:-fallback. */
-const CHANNEL_SEARCH_SERPER_FALLBACK_IDS = new Set(["ch-mj", "ch-ek"]);
+const CHANNEL_SEARCH_SERPER_FALLBACK_IDS = new Set(["ch-ah", "ch-mj", "ch-ek"]);
 /** WP REST API eerst proberen vóór HTML-scrape: Cloudflare blokkeert HTML-zoekpagina's vaker dan JSON-endpoints. */
 const SEARCH_WP_REST_FIRST_IDS = new Set(["ch-mj", "ch-ek"]);
 
@@ -10927,8 +10927,8 @@ async function wpRestSearch(baseUrl, channelName, channelId, query, count, meta 
  * When a site blocks datacenter IPs (Cloudflare), Google "site:host query" via Serper still returns URLs.
  * API key: https://serper.dev/ — set SERPER_API_KEY or PLATELY_SERP_API_KEY.
  */
-async function serperGoogleSiteSearchRecipes({ baseUrl, channelName, channelId, query, count, relaxedQueryMatch = false }) {
-  if (!channelIdUsesSerperFallback(channelId)) return [];
+async function serperGoogleSiteSearchRecipes({ baseUrl, channelName, channelId, query, count, relaxedQueryMatch = false, force = false }) {
+  if (!force && !channelIdUsesSerperFallback(channelId)) return [];
   const apiKey = sanitizeText(process.env.SERPER_API_KEY || process.env.PLATELY_SERP_API_KEY || "").trim();
   if (!apiKey) return [];
   let host = "";
@@ -12256,6 +12256,19 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
     console.log(`⚠️  Jina failed: ${err.message}`);
   }
 
+  const serperResults = await serperGoogleSiteSearchRecipes({
+    baseUrl: "https://www.ah.nl/allerhande",
+    channelName: "Allerhande",
+    channelId: "ch-ah",
+    query,
+    count,
+    relaxedQueryMatch: seoBackfill,
+  });
+  if (serperResults.length > 0) {
+    console.log(`✅ AH Serper fallback returned ${serperResults.length} results`);
+    return serperResults;
+  }
+
   // Final fallback: Direct HTML scraping with browser-like headers
   try {
     const searchUrl = `https://www.ah.nl/allerhande/recepten-zoeken?query=${encodeURIComponent(query)}`;
@@ -12532,10 +12545,11 @@ async function searchJumboRecipes(query, count = 4, opts = {}) {
 
 async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, parser, count, query, options = {}) {
   const matchOptions = { relaxedQueryMatch: shouldRelaxQueryTitleMatch(options) };
+  const forceSerperFallback = Boolean(options && options.forceSerperFallback);
   // Miljuschka / Eef Kookt Zo block datacenter + reader IPs (403 / Cloudflare). Serper runs in
   // parallel so we don't wait on slow HTML → REST → Jina timeouts before hitting Google site:.
   const serpEarly =
-    channelIdUsesSerperFallback(channelId) &&
+    (forceSerperFallback || channelIdUsesSerperFallback(channelId)) &&
     serperGoogleSiteSearchRecipes({
       baseUrl,
       channelName,
@@ -12543,6 +12557,7 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
       query: query || "",
       count,
       relaxedQueryMatch: matchOptions.relaxedQueryMatch,
+      force: forceSerperFallback,
     });
   // ch-mj / ch-ek: WP REST eerst — HTML-zoekpagina is vrijwel altijd achter Cloudflare,
   // JSON-endpoints worden minder agressief geblokkeerd.
@@ -12979,7 +12994,10 @@ async function searchSeoBackfillCandidatesForCustomChannel({
     let results = [];
     try {
       const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
-      const merged = await scrapeOrRestPublic(eff.baseUrl, channelName, channelId, usedUrl, parseWPStandard, 14, query, { relaxedQueryMatch: true });
+      const merged = await scrapeOrRestPublic(eff.baseUrl, channelName, channelId, usedUrl, parseWPStandard, 14, query, {
+        relaxedQueryMatch: true,
+        forceSerperFallback: true,
+      });
       results = (Array.isArray(merged) ? merged : []).filter((r) =>
         channelSearchResultTitleMatchesQuery(channelId, r.title, query, { relaxedQueryMatch: true })
       );
@@ -15331,7 +15349,10 @@ const server = http.createServer(async (request, response) => {
           dedupedCustomChannelEntries.map((ch) => {
             const eff = getEffectiveCustomChannelConfig({ channelId: ch.id, url: ch.url }, channelOverrides);
             const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
-            return scrapeOrRestPublic(eff.baseUrl, ch.name, ch.id, usedUrl, parseWPStandard, 4, query, { relaxedQueryMatch: true });
+            return scrapeOrRestPublic(eff.baseUrl, ch.name, ch.id, usedUrl, parseWPStandard, 4, query, {
+              relaxedQueryMatch: true,
+              forceSerperFallback: true,
+            });
           })
         );
         const merged = [];
@@ -18058,7 +18079,10 @@ const server = http.createServer(async (request, response) => {
           const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
           const results = isAhAllerhandeSearchUrl(eff.baseUrl) || isAhAllerhandeSearchUrl(usedUrl)
             ? await searchAHRecipes(query, Math.min(limit, 15), { searchUrlTemplate: eff.searchUrlTemplate })
-            : await scrapeOrRestPublic(eff.baseUrl, name, id, usedUrl, parseWPStandard, Math.min(limit, 15), query, { relaxedQueryMatch: true });
+            : await scrapeOrRestPublic(eff.baseUrl, name, id, usedUrl, parseWPStandard, Math.min(limit, 15), query, {
+              relaxedQueryMatch: true,
+              forceSerperFallback: true,
+            });
           const slicedCustom = (results || []).slice(0, limit);
           const enrichedCustom =
             slicedCustom.length > 0 ? await enrichChannelSearchResultsWithRatings(slicedCustom) : slicedCustom;
