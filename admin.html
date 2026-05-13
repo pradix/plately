@@ -1092,7 +1092,7 @@
           </div>
           <p class="muted" style="font-size:12px;margin-bottom:12px;line-height:1.45">
             Roept <code class="mono">POST /api/admin/seo-recipe-backfill</code> aan: zoekt per <strong>seed-kanaal</strong> (je gevolgde kanalen, of anders de standaard ingeschakelde seed-kanalen) én per <strong>ingeschakeld custom-kanaal</strong> dat je volgt (zelfde regels als in de app-zoekbalk), importeert tot N recepten per doel naar het kookboek <strong>SEO recepten</strong> van je <strong>admin-account</strong>.
-            Kies handmatig zoekwoorden (tot 100), of vink <strong>alle pool-zoekwoorden</strong> aan om in één keer de volledige lijst uit <code class="mono">assets/seo-recipe-keywords.nl.json</code> te doorlopen (kan lang duren).
+            Kies handmatig zoekwoorden (tot 200 per import), of vink <strong>alle pool-zoekwoorden</strong> aan om in één keer de volledige lijst uit <code class="mono">assets/seo-recipe-keywords.nl.json</code> te doorlopen (kan lang duren).
           </p>
           <div id="seoBackfillKeywordHint" class="muted" style="font-size:12px;margin-bottom:8px">⏳ Zoekwoorden laden…</div>
           <div id="seoBackfillSelectedWrap" class="seo-kw-selected" style="display:none">
@@ -1394,7 +1394,8 @@
     let inventorySearchTimer = null;
     let channelCatalogState = { seedChannels: [], customChannels: { approved: [], pending: [], rejected: [] } };
 
-    const SEO_BACKFILL_KW_MAX = 100;
+    /** Gelijk aan server: max. handmatige zoekwoorden per import (custom mode). */
+    const SEO_BACKFILL_KW_MAX = 200;
     const SEO_BACKFILL_KW_MIN_IMPORT = 10;
     const SEO_BACKFILL_KW_SUGGEST_DEFAULT = 100;
     const SEO_BACKFILL_KW_HISTORY_KEY = "plately-seo-backfill-used-keywords-v1";
@@ -2567,10 +2568,34 @@
       renderSeoKeywordPills();
     }
 
+    function countUniqueSeoBackfillPool(pool) {
+      const seen = new Set();
+      for (const kw of pool) {
+        const clean = String(kw || "").trim();
+        if (clean.length < 2) continue;
+        seen.add(clean.toLowerCase());
+      }
+      return seen.size;
+    }
+
     function selectAllSeoBackfillKeywords() {
       const pool = Array.isArray(seoBackfillKeywordSuggestions) ? seoBackfillKeywordSuggestions : [];
       if (!pool.length) {
         alert("Suggesties zijn nog niet geladen.");
+        return;
+      }
+      const uniqueCount = countUniqueSeoBackfillPool(pool);
+      if (uniqueCount > SEO_BACKFILL_KW_MAX) {
+        try {
+          const cb = document.getElementById("seoBackfillAllPoolKeywords");
+          if (cb) cb.checked = true;
+        } catch {}
+        seoBackfillSelectedKeywords = [];
+        renderSeoKeywordPills();
+        const hint = document.getElementById("seoBackfillKeywordHint");
+        if (hint) {
+          hint.textContent = `✅ «Alle pool-zoekwoorden» staat aan (${pool.length} regels in lijst). Een handmatige import gebruikt max. ${SEO_BACKFILL_KW_MAX} woorden; voor de hele pool gebruik je deze modus.`;
+        }
         return;
       }
       const seen = new Set();
@@ -2582,7 +2607,6 @@
         if (seen.has(key)) continue;
         seen.add(key);
         picked.push(clean);
-        if (picked.length >= SEO_BACKFILL_KW_MAX) break;
       }
       if (!picked.length) {
         alert("Geen geldige zoekwoorden in de suggestielijst.");
