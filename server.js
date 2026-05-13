@@ -12605,9 +12605,16 @@ async function listSeoBackfillCustomChannelEntries(authUser, enabledSeedChannelI
   const followed = Array.isArray(appState.followedChannelIds)
     ? appState.followedChannelIds.map((id) => sanitizeText(id)).filter(Boolean)
     : [];
+  const globalCustomIds = new Set(
+    (Array.isArray(globalCustom) ? globalCustom : [])
+      .map((ch) => sanitizeText(ch?.id || ""))
+      .filter(Boolean)
+  );
   const customList = (Array.isArray(appState.customChannels) ? appState.customChannels : []).filter((ch) => {
     const id = sanitizeText(ch?.id || "");
-    if (!id || !followed.includes(id)) return false;
+    if (!id) return false;
+    const isGlobalAdminChannel = Boolean(ch?.managedByAdmin) || globalCustomIds.has(id);
+    if (!isGlobalAdminChannel && !followed.includes(id)) return false;
     if (String(ch?.status || "approved") === "rejected") return false;
     return isChannelEnabled("custom", id, channelEnabledState);
   });
