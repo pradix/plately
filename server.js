@@ -10526,6 +10526,17 @@ const ratingEnrichHostStats = new Map();
 const SEO_RECIPE_SEARCH_CACHE_TTL_MS = 2 * 60_000;
 const seoRecipeSearchCache = new Map(); // origin -> { at:number, entries:any[] }
 
+/** Admin SEO-recepten backfill: async job-status (in-memory; herstart wist jobs). */
+const seoBackfillJobStore = new Map();
+const SEO_BACKFILL_JOB_TTL_MS = 2 * 60 * 60 * 1000;
+
+function pruneSeoBackfillJobs() {
+  const now = Date.now();
+  for (const [id, job] of seoBackfillJobStore) {
+    if (now - (job.createdAt || 0) > SEO_BACKFILL_JOB_TTL_MS) seoBackfillJobStore.delete(id);
+  }
+}
+
 function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam }) {
   const q = String(query || "").trim().toLowerCase();
   let channels;
@@ -12420,14 +12431,25 @@ function isValidImportedSeoRecipe(recipe) {
   return Boolean(title && ingredients.length >= 2 && instructions.length >= 1);
 }
 
-async function searchSeoBackfillCandidatesForChannel({ channelId, keywords, limit }) {
+async function searchSeoBackfillCandidatesForChannel({ channelId, keywords, limit, onKeyword }) {
   const seen = new Set();
   const candidates = [];
   const usedKeywords = [];
+  const keywordTotal = Array.isArray(keywords) ? keywords.length : 0;
+  let keywordIndex = 0;
+  const shouldReportKeyword = (idx) => {
+    if (keywordTotal <= 40) return true;
+    if (keywordTotal <= 200) return idx % 5 === 0 || idx === keywordTotal;
+    return idx % 25 === 0 || idx === keywordTotal;
+  };
   for (const keyword of keywords) {
     if (candidates.length >= limit) break;
     const query = sanitizeText(keyword || "");
     if (query.length < 2) continue;
+    keywordIndex += 1;
+    if (shouldReportKeyword(keywordIndex)) {
+      onKeyword?.({ keyword: query, keywordIndex, keywordTotal, channelId, targetKind: "seed" });
+    }
     usedKeywords.push(query);
     let results = [];
     try {
@@ -12447,6 +12469,96 @@ async function searchSeoBackfillCandidatesForChannel({ channelId, keywords, limi
         thumbnail: sanitizeText(result.thumbnail || ""),
         channelId,
         channel: sanitizeText(result.channel || getSeedChannelName(channelId)),
+        keyword: query,
+      });
+      if (candidates.length >= limit) break;
+    }
+  }
+  return { candidates, usedKeywords };
+}
+
+async function listSeoBackfillCustomChannelEntries(authUser, enabledSeedChannelIds, channelEnabledState) {
+  const globalCustom = await getGlobalCustomChannels().catch(() => []);
+  const appState = withGlobalCustomChannels(buildAppStateFromUser(authUser), globalCustom);
+  const followed = Array.isArray(appState.followedChannelIds)
+    ? appState.followedChannelIds.map((id) => sanitizeText(id)).filter(Boolean)
+    : [];
+  const customList = (Array.isArray(appState.customChannels) ? appState.customChannels : []).filter((ch) => {
+    const id = sanitizeText(ch?.id || "");
+    if (!id || !followed.includes(id)) return false;
+    if (String(ch?.status || "approved") === "rejected") return false;
+    return isChannelEnabled("custom", id, channelEnabledState);
+  });
+  const enabledSeedBaseUrls = (Array.isArray(enabledSeedChannelIds) ? enabledSeedChannelIds : [])
+    .map((id) => SEED_CHANNEL_DEFAULTS[sanitizeText(id)]?.baseUrl || "")
+    .filter(Boolean);
+  return customList
+    .map((ch) => ({
+      channelId: sanitizeText(ch.id || ""),
+      name: sanitizeText(ch.name || "").slice(0, 80),
+      url: sanitizeText(ch.url || "").slice(0, 500),
+    }))
+    .filter((ch) => ch.channelId && ch.name && ch.url)
+    .filter((ch) => {
+      for (const seedBaseUrl of enabledSeedBaseUrls) {
+        if (channelUrlsMatchByBaseOrPrefix(ch.url, seedBaseUrl)) return false;
+      }
+      return true;
+    })
+    .slice(0, 10);
+}
+
+async function searchSeoBackfillCandidatesForCustomChannel({
+  channelId,
+  channelName,
+  channelUrl,
+  keywords,
+  limit,
+  onKeyword,
+}) {
+  const seen = new Set();
+  const candidates = [];
+  const usedKeywords = [];
+  const channelOverrides = await getChannelOverrides();
+  const eff = getEffectiveCustomChannelConfig({ channelId, url: channelUrl }, channelOverrides);
+  const keywordTotal = Array.isArray(keywords) ? keywords.length : 0;
+  let keywordIndex = 0;
+  const shouldReportKeyword = (idx) => {
+    if (keywordTotal <= 40) return true;
+    if (keywordTotal <= 200) return idx % 5 === 0 || idx === keywordTotal;
+    return idx % 25 === 0 || idx === keywordTotal;
+  };
+  for (const keyword of keywords) {
+    if (candidates.length >= limit) break;
+    const query = sanitizeText(keyword || "");
+    if (query.length < 2) continue;
+    keywordIndex += 1;
+    if (shouldReportKeyword(keywordIndex)) {
+      onKeyword?.({ keyword: query, keywordIndex, keywordTotal, channelId, targetKind: "custom" });
+    }
+    usedKeywords.push(query);
+    let results = [];
+    try {
+      const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
+      const merged = await scrapeOrRestPublic(eff.baseUrl, channelName, channelId, usedUrl, parseWPStandard, 8, query);
+      results = (Array.isArray(merged) ? merged : []).filter((r) =>
+        channelSearchResultTitleMatchesQuery(channelId, r.title, query)
+      );
+    } catch {
+      results = [];
+    }
+    for (const result of results) {
+      if (result?.channelId !== channelId) continue;
+      const url = sanitizeText(result.url || "");
+      const key = normalizeRecipeSourceKey(url);
+      if (!url || !key || seen.has(key)) continue;
+      seen.add(key);
+      candidates.push({
+        title: sanitizeText(result.title || ""),
+        url,
+        thumbnail: sanitizeText(result.thumbnail || ""),
+        channelId,
+        channel: sanitizeText(result.channel || channelName),
         keyword: query,
       });
       if (candidates.length >= limit) break;
@@ -12492,9 +12604,10 @@ async function importSeoBackfillCandidate(candidate) {
   return sanitizeRecipeForStorage(merged);
 }
 
-async function saveSeoBackfillRecipesForUser(userId, recipes) {
+async function saveSeoBackfillRecipesForUser(userId, recipes, options = {}) {
+  const forceReimport = Boolean(options.forceReimport);
   const cleanRecipes = (Array.isArray(recipes) ? recipes : []).map(sanitizeRecipeForStorage).filter(Boolean);
-  if (!cleanRecipes.length) return { added: 0, skipped: 0, importedRecipes: [] };
+  if (!cleanRecipes.length) return { added: 0, updated: 0, skipped: 0, importedRecipes: [] };
 
   let currentUser = null;
   if (isPostgresEnabled()) {
@@ -12509,24 +12622,55 @@ async function saveSeoBackfillRecipesForUser(userId, recipes) {
   if (!currentUser) throw new HttpError(404, "Gebruiker niet gevonden.");
 
   const appState = buildAppStateFromUser(currentUser);
-  const existingRecipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+  const existingRecipes = (Array.isArray(appState.importedRecipes) ? appState.importedRecipes : []).map((r) => ({ ...r }));
   const existingSourceKeys = new Set(existingRecipes.map((recipe) => normalizeRecipeSourceKey(recipe.sourceUrl)).filter(Boolean));
   const existingIds = new Set(existingRecipes.map((recipe) => sanitizeText(recipe.id || "")).filter(Boolean));
-  const addedRecipes = [];
+  const newRecipes = [];
   let skipped = 0;
+  let updated = 0;
 
   for (const recipe of cleanRecipes) {
     const sourceKey = normalizeRecipeSourceKey(recipe.sourceUrl);
-    if ((sourceKey && existingSourceKeys.has(sourceKey)) || existingIds.has(recipe.id)) {
+    const existingIdx =
+      sourceKey !== "" ? existingRecipes.findIndex((r) => normalizeRecipeSourceKey(r.sourceUrl) === sourceKey) : -1;
+
+    if (existingIdx >= 0) {
+      if (forceReimport) {
+        const old = existingRecipes[existingIdx];
+        const next = sanitizeRecipeForStorage({ ...old, ...recipe, id: old.id });
+        if (!next) {
+          skipped += 1;
+          continue;
+        }
+        existingRecipes[existingIdx] = next;
+        updated += 1;
+        continue;
+      }
+      skipped += 1;
+      continue;
+    }
+
+    if (existingIds.has(recipe.id)) {
+      skipped += 1;
+      continue;
+    }
+    if (sourceKey && existingSourceKeys.has(sourceKey)) {
       skipped += 1;
       continue;
     }
     existingSourceKeys.add(sourceKey);
     existingIds.add(recipe.id);
-    addedRecipes.push(recipe);
+    newRecipes.push(recipe);
   }
 
-  if (!addedRecipes.length) return { added: 0, skipped, importedRecipes: existingRecipes };
+  if (!newRecipes.length && !updated) {
+    return {
+      added: 0,
+      updated: 0,
+      skipped,
+      importedRecipes: existingRecipes,
+    };
+  }
 
   const cookbookName = "SEO recepten";
   const cookbooks = Array.isArray(appState.cookbooks) && appState.cookbooks.length
@@ -12537,17 +12681,17 @@ async function saveSeoBackfillRecipesForUser(userId, recipes) {
     cookbook = { id: "cookbook-seo-recipes", name: cookbookName, recipeIds: [] };
     cookbooks.unshift(cookbook);
   }
-  for (const recipe of addedRecipes) {
+  for (const recipe of newRecipes) {
     if (!cookbook.recipeIds.includes(recipe.id)) cookbook.recipeIds.unshift(recipe.id);
   }
 
   const nextState = {
     ...appState,
-    importedRecipes: [...addedRecipes, ...existingRecipes],
+    importedRecipes: newRecipes.length ? [...newRecipes, ...existingRecipes] : existingRecipes,
     cookbooks,
     selectedCookbookId: appState.selectedCookbookId || cookbook.id,
-    featuredRecipeId: addedRecipes[0]?.id || appState.featuredRecipeId,
-    selectedRecipeId: addedRecipes[0]?.id || appState.selectedRecipeId,
+    featuredRecipeId: newRecipes[0]?.id || appState.featuredRecipeId,
+    selectedRecipeId: newRecipes[0]?.id || appState.selectedRecipeId,
   };
 
   if (isPostgresEnabled()) {
@@ -12559,13 +12703,16 @@ async function saveSeoBackfillRecipesForUser(userId, recipes) {
   }
 
   return {
-    added: addedRecipes.length,
+    added: newRecipes.length,
+    updated,
     skipped,
     importedRecipes: nextState.importedRecipes,
   };
 }
 
 async function runSeoRecipeBackfillForUser(authUser, options = {}) {
+  const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
+  const forceReimport = Boolean(options.forceReimport);
   const appState = buildAppStateFromUser(authUser);
   const channelEnabled = await getChannelEnabledState().catch(() => ({ seed: {}, custom: {} }));
   const requestedChannels = Array.isArray(options.channels)
@@ -12618,29 +12765,114 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
   }
   const dryRun = Boolean(options.dryRun);
 
-  if (!channels.length) {
+  const customEntries = await listSeoBackfillCustomChannelEntries(authUser, channels, channelEnabled);
+  const targets = [
+    ...channels.map((channelId) => ({
+      kind: "seed",
+      channelId,
+      name: getSeedChannelName(channelId),
+      url: "",
+      label: getSeedChannelName(channelId),
+    })),
+    ...customEntries.map((ch) => ({
+      kind: "custom",
+      channelId: ch.channelId,
+      name: ch.name,
+      url: ch.url,
+      label: `${ch.name} (custom)`,
+    })),
+  ];
+
+  if (!targets.length) {
     throw new HttpError(
       400,
-      "Geen actieve seed-kanalen gevonden om te vullen. Zet kanalen aan in admin, volg seed-kanalen in de app, of stuur body.channels met id's (bijv. [\"ch-ah\",\"ch-jumbo\"])."
+      "Geen actieve seed- of custom-kanalen gevonden. Zet kanalen aan in admin, volg (custom)kanalen in de app, of stuur body.channels met seed-id's (bijv. [\"ch-ah\",\"ch-jumbo\"])."
     );
   }
   if (!keywords.length) {
     throw new HttpError(400, "Geen zoekwoorden om te gebruiken (pool leeg of keywordLimit te klein).");
   }
 
+  onProgress?.({
+    phase: "init",
+    message: `${targets.length} kanaal/kanalen, ${keywords.length} zoekwoorden`,
+    targetTotal: targets.length,
+    keywordTotal: keywords.length,
+    dryRun,
+  });
+
   const allImported = [];
   const report = [];
-  for (const channelId of channels) {
-    const { candidates, usedKeywords } = await searchSeoBackfillCandidatesForChannel({
-      channelId,
-      keywords,
-      limit: limitPerChannel * 2,
+  let targetIndex = 0;
+  for (const target of targets) {
+    targetIndex += 1;
+    onProgress?.({
+      phase: "search",
+      message: `Zoeken: ${target.label}`,
+      targetKind: target.kind,
+      channelId: target.channelId,
+      targetIndex,
+      targetTotal: targets.length,
+      importedSoFar: allImported.length,
     });
+
+    const searchLimit = limitPerChannel * 2;
+    const onKw = (kw) =>
+      onProgress?.({
+        phase: "search",
+        message: `Zoeken: ${target.label} — ${kw.keyword} (${kw.keywordIndex}/${kw.keywordTotal})`,
+        targetKind: kw.targetKind || target.kind,
+        channelId: target.channelId,
+        targetIndex,
+        targetTotal: targets.length,
+        keyword: kw.keyword,
+        keywordIndex: kw.keywordIndex,
+        keywordTotal: kw.keywordTotal,
+        importedSoFar: allImported.length,
+      });
+
+    let candidates = [];
+    let usedKeywords = [];
+    if (target.kind === "seed") {
+      const res = await searchSeoBackfillCandidatesForChannel({
+        channelId: target.channelId,
+        keywords,
+        limit: searchLimit,
+        onKeyword: onKw,
+      });
+      candidates = res.candidates;
+      usedKeywords = res.usedKeywords;
+    } else {
+      const res = await searchSeoBackfillCandidatesForCustomChannel({
+        channelId: target.channelId,
+        channelName: target.name,
+        channelUrl: target.url,
+        keywords,
+        limit: searchLimit,
+        onKeyword: onKw,
+      });
+      candidates = res.candidates;
+      usedKeywords = res.usedKeywords;
+    }
+
     const imported = [];
     const failed = [];
     if (!dryRun) {
+      let candIdx = 0;
       for (const candidate of candidates) {
         if (imported.length >= limitPerChannel) break;
+        candIdx += 1;
+        onProgress?.({
+          phase: "import",
+          message: `Importeren: ${target.label} (${imported.length + 1}/${Math.min(candidates.length, limitPerChannel)})`,
+          targetKind: target.kind,
+          channelId: target.channelId,
+          targetIndex,
+          targetTotal: targets.length,
+          candidateUrl: candidate.url,
+          candidateIndex: candIdx,
+          importedSoFar: allImported.length,
+        });
         try {
           const recipe = await importSeoBackfillCandidate(candidate);
           imported.push({ recipe, candidate });
@@ -12656,8 +12888,10 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
       }
     }
     report.push({
-      channelId,
-      channel: getSeedChannelName(channelId),
+      targetKind: target.kind,
+      channelId: target.channelId,
+      channel: target.name,
+      customChannelUrl: target.kind === "custom" ? target.url : undefined,
       candidatesFound: candidates.length,
       imported: dryRun ? 0 : imported.length,
       failed: failed.length,
@@ -12667,9 +12901,15 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
     });
   }
 
+  onProgress?.({
+    phase: "save",
+    message: dryRun ? "Dry-run: geen opslag" : "Recepten opslaan…",
+    importedSoFar: allImported.length,
+  });
+
   const saved = dryRun
-    ? { added: 0, skipped: 0, importedRecipes: appState.importedRecipes || [] }
-    : await saveSeoBackfillRecipesForUser(authUser.id, allImported);
+    ? { added: 0, updated: 0, skipped: 0, importedRecipes: appState.importedRecipes || [] }
+    : await saveSeoBackfillRecipesForUser(authUser.id, allImported, { forceReimport });
 
   return {
     ok: true,
@@ -12678,12 +12918,16 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
     keywordMode,
     keywordCount: keywords.length,
     keywordsUsed: keywords,
+    customChannelTargets: customEntries.length,
     channels: report,
     totals: {
-      channels: channels.length,
+      targets: targets.length,
+      seedTargets: channels.length,
+      customTargets: customEntries.length,
       candidates: report.reduce((sum, item) => sum + item.candidatesFound, 0),
       imported: report.reduce((sum, item) => sum + item.imported, 0),
       saved: saved.added,
+      updated: saved.updated || 0,
       skippedExisting: saved.skipped,
       totalPublicRecipes: Array.isArray(saved.importedRecipes) ? saved.importedRecipes.length : 0,
     },
@@ -15286,11 +15530,88 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/seo-recipe-backfill/status" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        pruneSeoBackfillJobs();
+        const jobId = sanitizeText(requestUrl.searchParams.get("jobId") || "");
+        if (!jobId) throw new HttpError(400, "jobId ontbreekt.");
+        const job = seoBackfillJobStore.get(jobId);
+        if (!job) throw new HttpError(404, "Job niet gevonden of verlopen.");
+        return sendJson(response, 200, {
+          ok: true,
+          jobId,
+          status: job.status,
+          progress: job.progress || null,
+          result: job.result,
+          error: job.error || null,
+        });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        return sendJson(response, statusCode, {
+          ok: false,
+          error: error.message || "Status niet beschikbaar.",
+        });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/seo-recipe-backfill" && request.method === "POST") {
       console.log("🍽️ /api/admin/seo-recipe-backfill called");
       try {
         const adminUser = await requireAdmin(request);
         const body = await readRequestBody(request);
+        const wantProgress = Boolean(body?.progress);
+        const { progress: _progressIgnored, ...runBody } = body || {};
+
+        if (wantProgress) {
+          pruneSeoBackfillJobs();
+          const jobId = crypto.randomBytes(12).toString("hex");
+          seoBackfillJobStore.set(jobId, {
+            status: "running",
+            createdAt: Date.now(),
+            progress: { phase: "start", message: "Gestart…", at: Date.now() },
+            result: null,
+            error: null,
+          });
+          void (async () => {
+            try {
+              const result = await runSeoRecipeBackfillForUser(adminUser, {
+                ...runBody,
+                onProgress: (patch) => {
+                  const job = seoBackfillJobStore.get(jobId);
+                  if (job?.status === "running") {
+                    job.progress = { ...(job.progress || {}), ...patch, at: Date.now() };
+                  }
+                },
+              });
+              const job = seoBackfillJobStore.get(jobId);
+              if (job) {
+                job.status = "done";
+                job.result = result;
+                job.progress = { ...(job.progress || {}), phase: "done", message: "Klaar", at: Date.now() };
+              }
+            } catch (error) {
+              const job = seoBackfillJobStore.get(jobId);
+              if (job) {
+                job.status = "error";
+                job.error = error.message || "SEO recepten aanvullen mislukt.";
+                job.progress = {
+                  ...(job.progress || {}),
+                  phase: "error",
+                  message: job.error,
+                  at: Date.now(),
+                };
+              }
+            }
+          })();
+          return sendJson(response, 202, {
+            ok: true,
+            jobId,
+            status: "running",
+            message: "Job gestart. Haal voortgang op met GET /api/admin/seo-recipe-backfill/status?jobId=…",
+          });
+        }
+
         const result = await runSeoRecipeBackfillForUser(adminUser, body || {});
         return sendJson(response, 200, result);
       } catch (error) {

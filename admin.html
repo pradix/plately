@@ -1091,7 +1091,7 @@
             <div class="muted">Publieke recepten + sitemap</div>
           </div>
           <p class="muted" style="font-size:12px;margin-bottom:12px;line-height:1.45">
-            Roept <code class="mono">POST /api/admin/seo-recipe-backfill</code> aan: zoekt per seed-kanaal (je gevolgde kanalen, of anders de standaard ingeschakelde seed-kanalen), importeert tot N recepten per kanaal naar het kookboek <strong>SEO recepten</strong> van je <strong>admin-account</strong>.
+            Roept <code class="mono">POST /api/admin/seo-recipe-backfill</code> aan: zoekt per <strong>seed-kanaal</strong> (je gevolgde kanalen, of anders de standaard ingeschakelde seed-kanalen) én per <strong>ingeschakeld custom-kanaal</strong> dat je volgt (zelfde regels als in de app-zoekbalk), importeert tot N recepten per doel naar het kookboek <strong>SEO recepten</strong> van je <strong>admin-account</strong>.
             Kies handmatig zoekwoorden (tot 100), of vink <strong>alle pool-zoekwoorden</strong> aan om in één keer de volledige lijst uit <code class="mono">assets/seo-recipe-keywords.nl.json</code> te doorlopen (kan lang duren).
           </p>
           <div id="seoBackfillKeywordHint" class="muted" style="font-size:12px;margin-bottom:8px">⏳ Zoekwoorden laden…</div>
@@ -1118,6 +1118,14 @@
             <div id="seoBackfillKeywordPills" class="seo-kw-pills"></div>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px">
+            <label class="muted" style="font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input type="checkbox" id="seoBackfillLiveProgress" />
+              Live voortgang (poll status)
+            </label>
+            <label class="muted" style="font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input type="checkbox" id="seoBackfillForceReimport" />
+              Opnieuw importeren (overschrijf zelfde bron-URL)
+            </label>
             <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Max per kanaal
               <input id="seoBackfillLimitPerChannel" type="number" min="1" max="20" value="10" style="width:56px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
             </label>
@@ -2724,6 +2732,19 @@
       } catch (_) {}
       seoBackfillAbortController = null;
     }
+    function formatSeoBackfillJobStatus(sj) {
+      const p = sj && sj.progress && typeof sj.progress === "object" ? sj.progress : null;
+      if (!p) return "";
+      const parts = [];
+      if (p.phase) parts.push(String(p.phase));
+      if (p.message) parts.push(String(p.message));
+      if (typeof p.targetIndex === "number" && typeof p.targetTotal === "number") {
+        parts.push(`doel ${p.targetIndex}/${p.targetTotal}`);
+      }
+      if (typeof p.importedSoFar === "number") parts.push(`${p.importedSoFar} in deze run`);
+      return parts.join(" · ");
+    }
+
     async function runSeoRecipeBackfill(dryRun) {
       const statusEl = document.getElementById("seoBackfillStatus");
       const outEl = document.getElementById("seoBackfillOutput");
@@ -2738,13 +2759,17 @@
         const cancelBtn = document.getElementById("seoBackfillBtnCancel");
         if (cancelBtn) cancelBtn.disabled = !busy;
       };
+      const useProgress = Boolean(document.getElementById("seoBackfillLiveProgress")?.checked);
+      const forceReimport = Boolean(document.getElementById("seoBackfillForceReimport")?.checked);
       let bodyPayload = { limitPerChannel, dryRun: Boolean(dryRun) };
+      if (useProgress) bodyPayload.progress = true;
+      if (!dryRun && forceReimport) bodyPayload.forceReimport = true;
       if (allPool) {
         const approx = Array.isArray(seoBackfillKeywordSuggestions) ? seoBackfillKeywordSuggestions.length : 0;
         const poolHint = approx > 0 ? `${approx} woorden` : "de volledige server-pool";
         if (!dryRun) {
           const ok = confirm(
-            `ALLE pool-zoekwoorden gebruiken (${poolHint}). Dit kan zeer lang duren en doet voor elk kanaal heel veel zoek-requests. Recepten worden geïmporteerd naar «SEO recepten» en worden publiek. Doorgaan?`
+            `ALLE pool-zoekwoorden gebruiken (${poolHint}). Dit kan zeer lang duren en doet voor elk kanaal heel veel zoek-requests. Recepten worden geïmporteerd naar «SEO recepten» en worden publiek.${forceReimport ? " Bestaande recepten met dezelfde bron-URL worden overschreven." : ""} Doorgaan?`
           );
           if (!ok) return;
         }
@@ -2767,7 +2792,7 @@
         bodyPayload.keywordLimit = keywords.length;
         if (!dryRun) {
           const ok = confirm(
-            "Recepten echt importeren naar het admin-account (kookboek «SEO recepten») en als publieke SEO-pagina's beschikbaar maken?"
+            `Recepten echt importeren naar het admin-account (kookboek «SEO recepten») en als publieke SEO-pagina's beschikbaar maken?${forceReimport ? " Bestaande recepten met dezelfde bron-URL worden overschreven." : ""}`
           );
           if (!ok) return;
         }
@@ -2778,10 +2803,14 @@
       if (outEl) outEl.textContent = dryRun ? "⏳ Dry-run gestart…" : "⏳ Import gestart…";
       const startedAt = Date.now();
       if (seoBackfillElapsedTimer) clearInterval(seoBackfillElapsedTimer);
-      seoBackfillElapsedTimer = setInterval(() => {
-        const sec = Math.floor((Date.now() - startedAt) / 1000);
-        if (statusEl) statusEl.textContent = `${dryRun ? "⏳ Dry-run bezig" : "⏳ Import bezig"} • ${sec}s`;
-      }, 250);
+      if (useProgress) {
+        seoBackfillElapsedTimer = null;
+      } else {
+        seoBackfillElapsedTimer = setInterval(() => {
+          const sec = Math.floor((Date.now() - startedAt) / 1000);
+          if (statusEl) statusEl.textContent = `${dryRun ? "⏳ Dry-run bezig" : "⏳ Import bezig"} • ${sec}s`;
+        }, 250);
+      }
       try {
         const response = await fetch("/api/admin/seo-recipe-backfill", adminFetchInit({
           method: "POST",
@@ -2796,21 +2825,74 @@
         } catch {
           data = { _parseError: true, status: response.status, bodyPreview: text.slice(0, 800) };
         }
+
         if (!response.ok) {
           const msg = data?.error || data?.message || `HTTP ${response.status}`;
           throw new Error(msg);
         }
-        if (statusEl) {
-          const tag = data.channelSelection ? ` (${data.channelSelection})` : "";
-          const sec = Math.floor((Date.now() - startedAt) / 1000);
-          statusEl.textContent = `${dryRun ? "✅ Dry-run klaar" : "✅ Import klaar"} • ${sec}s${tag}`;
-        }
-        if (outEl) {
-          try {
-            outEl.textContent = JSON.stringify(data, null, 2);
-          } catch {
-            outEl.textContent = String(data);
+
+        if (response.status === 202 && data?.jobId) {
+          if (seoBackfillElapsedTimer) clearInterval(seoBackfillElapsedTimer);
+          seoBackfillElapsedTimer = null;
+          for (;;) {
+            await new Promise((r) => setTimeout(r, 750));
+            if (seoBackfillAbortController?.signal?.aborted) {
+              const err = new Error("AbortError");
+              err.name = "AbortError";
+              throw err;
+            }
+            const stRes = await fetch(
+              `/api/admin/seo-recipe-backfill/status?jobId=${encodeURIComponent(data.jobId)}`,
+              adminFetchInit({ signal: seoBackfillAbortController.signal })
+            );
+            const stText = await stRes.text();
+            let sj;
+            try {
+              sj = JSON.parse(stText);
+            } catch {
+              throw new Error(`Status: ongeldige JSON (HTTP ${stRes.status})`);
+            }
+            if (!stRes.ok || !sj.ok) {
+              throw new Error(sj?.error || `Status HTTP ${stRes.status}`);
+            }
+            const sec = Math.floor((Date.now() - startedAt) / 1000);
+            const line = formatSeoBackfillJobStatus(sj);
+            if (statusEl) {
+              statusEl.textContent = `${dryRun ? "⏳ Dry-run" : "⏳ Import"} • ${sec}s${line ? ` · ${line}` : ""}`;
+            }
+            if (sj.status === "done") {
+              if (outEl) {
+                try {
+                  outEl.textContent = JSON.stringify(sj.result, null, 2);
+                } catch {
+                  outEl.textContent = String(sj.result);
+                }
+              }
+              if (statusEl) {
+                const tag = sj.result?.channelSelection ? ` (${sj.result.channelSelection})` : "";
+                statusEl.textContent = `${dryRun ? "✅ Dry-run klaar" : "✅ Import klaar"} • ${sec}s${tag}`;
+              }
+              break;
+            }
+            if (sj.status === "error") {
+              throw new Error(sj.error || "Job mislukt");
+            }
           }
+        } else if (response.status === 200) {
+          if (statusEl) {
+            const tag = data.channelSelection ? ` (${data.channelSelection})` : "";
+            const sec = Math.floor((Date.now() - startedAt) / 1000);
+            statusEl.textContent = `${dryRun ? "✅ Dry-run klaar" : "✅ Import klaar"} • ${sec}s${tag}`;
+          }
+          if (outEl) {
+            try {
+              outEl.textContent = JSON.stringify(data, null, 2);
+            } catch {
+              outEl.textContent = String(data);
+            }
+          }
+        } else {
+          throw new Error(`Onverwachte serverresponse (HTTP ${response.status})`);
         }
       } catch (e) {
         const aborted = e && (e.name === "AbortError" || String(e).includes("AbortError"));
