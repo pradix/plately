@@ -932,6 +932,16 @@
             <div id="topChannelsByImports30d"></div>
             <p class="muted" id="topChannelsNote" style="margin-top:8px"></p>
           </div>
+
+          <div style="margin-top:16px">
+            <h3 class="subhead">Imports per kanaal — admin account</h3>
+            <div class="muted" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 8px">
+              <button class="btn btn-sm" type="button" onclick="setImportsByChannelGroupBy('channel')" id="importsByChannelTabChannel">Per kanaal</button>
+              <button class="btn btn-sm" type="button" onclick="setImportsByChannelGroupBy('source')" id="importsByChannelTabSource">Per source</button>
+            </div>
+            <div id="importsByChannelStatus" class="muted">⏳ Laden…</div>
+            <div id="importsByChannelTable"></div>
+          </div>
         </div>
       </div>
       </div>
@@ -1477,6 +1487,10 @@
         loadOverview(); // independent block (own loading/error)
         loadSearchTerms(); // independent block (own loading/error)
         loadSeoKeywordSuggestions().catch(() => {});
+        try {
+          const stored = localStorage.getItem("plately-admin-imports-groupby");
+          if (stored) importsByChannelGroupBy = stored === "source" ? "source" : "channel";
+        } catch {}
         initInventoryUserFilter();
         loadInventory(); // independent block (own loading/error)
         await loadAdminDeployInfo();
@@ -1539,6 +1553,7 @@
         })));
 
         renderTopChannelsTable("topChannelsByImports30d", top.channelsByImports30d || []);
+        loadImportsByChannel().catch(() => {});
 
         const hasChannels = Array.isArray(top.channelsByImports30d) && top.channelsByImports30d.length > 0;
         const noteEl = document.getElementById("topChannelsNote");
@@ -1562,6 +1577,67 @@
         errorEl.style.display = "block";
         errorEl.textContent = "❌ " + error.message;
         if (metaEl) metaEl.textContent = "Kon niet laden";
+      }
+    }
+
+    let importsByChannelGroupBy = "channel";
+
+    function setImportsByChannelGroupBy(next) {
+      importsByChannelGroupBy = next === "source" ? "source" : "channel";
+      try { localStorage.setItem("plately-admin-imports-groupby", importsByChannelGroupBy); } catch {}
+      loadImportsByChannel().catch(() => {});
+    }
+
+    function syncImportsByChannelTabs() {
+      const a = document.getElementById("importsByChannelTabChannel");
+      const b = document.getElementById("importsByChannelTabSource");
+      if (a) a.classList.toggle("btn-primary", importsByChannelGroupBy === "channel");
+      if (b) b.classList.toggle("btn-primary", importsByChannelGroupBy === "source");
+    }
+
+    async function loadImportsByChannel() {
+      const statusEl = document.getElementById("importsByChannelStatus");
+      const tableEl = document.getElementById("importsByChannelTable");
+      if (statusEl) statusEl.textContent = "⏳ Laden…";
+      if (tableEl) tableEl.innerHTML = "";
+      syncImportsByChannelTabs();
+      try {
+        const resp = await fetch(`/api/admin/imports-by-channel?groupBy=${encodeURIComponent(importsByChannelGroupBy)}`, adminFetchInit());
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) throw new Error(data.error || "Failed to load imports by channel");
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        if (!rows.length) {
+          if (statusEl) statusEl.textContent = "Nog geen imports gevonden.";
+          return;
+        }
+        if (statusEl) statusEl.textContent = importsByChannelGroupBy === "source"
+          ? `Per source (hostname) — totaal recepten vs. SEO kookboek`
+          : `Per kanaal — totaal recepten vs. SEO kookboek`;
+        if (tableEl) {
+          const label = importsByChannelGroupBy === "source" ? "Source" : "Kanaal";
+          tableEl.innerHTML = `
+            <table class="users-table" style="margin-top:0">
+              <thead>
+                <tr>
+                  <th>${label}</th>
+                  <th class="num" style="text-align:right">Totaal</th>
+                  <th class="num" style="text-align:right">SEO recepten</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.slice(0, 30).map((r) => `
+                  <tr>
+                    <td>${escapeHtml(String(r.label || r.id || ""))}</td>
+                    <td style="text-align:right">${formatNumber(r.total || 0)}</td>
+                    <td style="text-align:right">${formatNumber(r.seoCookbook || 0)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          `;
+        }
+      } catch (e) {
+        if (statusEl) statusEl.textContent = "❌ " + (e.message || String(e));
       }
     }
 

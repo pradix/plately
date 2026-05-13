@@ -4835,6 +4835,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
       const channelColor = channel?.color || "#8da485";
       const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
       const thumbHtml = getChannelThumbnailMarkup(r, channel, channelColor);
+      const isPlatelyIndexed = r && (r._source === "plately" || String(r.url || "").startsWith("/recept/"));
       return `
       <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}" data-ch-card-thumb="${escapeHtml(thumbUrl || "")}">
         <div class="ch-card__visual">
@@ -4855,6 +4856,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
           <button class="ch-card__import" type="button"
             data-channel-import-url="${escapeHtml(r.url)}"
             data-channel-import-thumb="${escapeHtml(thumbUrl || "")}"
+            data-channel-import-kind="${isPlatelyIndexed ? "plately" : "external"}"
             aria-label="Importeer ${escapeHtml(r.title)}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
             Importeer
@@ -4928,16 +4930,43 @@ async function searchChannels(query) {
       return;
     }
 
+    // Fast path: search in Plately's indexed SEO recipes first (still scoped to selected channels).
+    try {
+      let seoUrl = `/api/seo-recipe-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}&limit=18`;
+      if (customChannelsParam) seoUrl += `&customChannels=${encodeURIComponent(customChannelsParam)}`;
+      const seoResp = await fetch(seoUrl, { signal: abortCtl.signal });
+      const seoData = await seoResp.json().catch(() => null);
+      if (requestId === searchChannels._reqId && Array.isArray(seoData?.results)) {
+        renderChannelSearchResults(seoData.results);
+      }
+    } catch (e) {
+      // ignore (fallback to channel-search below)
+    }
+
     let url = `/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`;
     if (customChannelsParam) url += `&customChannels=${encodeURIComponent(customChannelsParam)}`;
 
     const resp = await fetch(url, { signal: abortCtl.signal });
     const data = await resp.json();
     if (requestId !== searchChannels._reqId) return;
-    if (Array.isArray(data.results) && data.results.length) {
-      setCachedClientChannelSearch(cacheKey, data.results);
+    const merged = [];
+    const seen = new Set();
+    for (const r of (Array.isArray(state.channelSearchAllResults) ? state.channelSearchAllResults : [])) {
+      const key = String(r?.url || "");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(r);
     }
-    renderChannelSearchResults(data.results || []);
+    for (const r of (data.results || [])) {
+      const key = String(r?.url || "");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(r);
+    }
+    if (Array.isArray(merged) && merged.length) {
+      setCachedClientChannelSearch(cacheKey, merged);
+    }
+    renderChannelSearchResults(merged);
   } catch (error) {
     if (error?.name === "AbortError") return;
     if (requestId !== searchChannels._reqId) return;
@@ -11667,28 +11696,37 @@ bindEvent(channelSearchResults, "click", async (event) => {
   const url = btn.dataset.channelImportUrl;
   if (!url) return;
   const imageHint = btn.dataset.channelImportThumb || "";
+  const kind = btn.dataset.channelImportKind || "external";
 
   btn.disabled = true;
   btn.innerHTML = getChannelImportLoadingMarkup();
 
   showImportSplash(url);
   try {
-    const resp = await fetch("/api/import", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, imageHint }),
-    });
-    const data = await resp.json();
-    if (!resp.ok || !data.recipe)
-      throw new Error(data.message || data.error || "Importeren mislukt");
-    const recipe = normalizeImportedRecipe({ ...data.recipe, needsReview: true });
+    let recipePayload = null;
+    if (kind === "plately" || String(url).startsWith("/recept/")) {
+      const resp = await fetch(`/api/public-recipe?path=${encodeURIComponent(String(url))}`);
+      const data = await resp.json();
+      if (!resp.ok || !data.recipe) throw new Error(data.error || "Recept niet gevonden.");
+      recipePayload = data.recipe;
+    } else {
+      const resp = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, imageHint }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.recipe) throw new Error(data.message || data.error || "Importeren mislukt");
+      recipePayload = data.recipe;
+    }
+    const recipe = normalizeImportedRecipe({ ...recipePayload, needsReview: true });
     // Keep as preview until user actually saves it to a cookbook
     recipe._previewCreatedAt = Date.now();
     state.importPreviews[recipe.id] = recipe;
     state.selectedRecipeId = recipe.id;
     trackClientEvent("client_channel_search_import", {
       surface: "home_search",
-      host: hostnameForAnalytics(url),
+      host: kind === "plately" ? "plately" : hostnameForAnalytics(url),
     });
     openImportReview(recipe.id);
     showToast(`${recipe.title} klaar om na te lopen.`, { variant: "success" });
@@ -13688,21 +13726,30 @@ bindEvent(document.getElementById("importChannelSearchResults"), "click", async 
   const url = btn.dataset.channelImportUrl;
   if (!url) return;
   const imageHint = btn.dataset.channelImportThumb || "";
+  const kind = btn.dataset.channelImportKind || "external";
 
   btn.disabled = true;
   btn.innerHTML = getChannelImportLoadingMarkup();
 
   showImportSplash(url);
   try {
-    const resp = await fetch("/api/import", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, imageHint }),
-    });
-    const data = await resp.json();
-    if (!resp.ok || !data.recipe)
-      throw new Error(data.message || data.error || "Importeren mislukt");
-    const recipe = normalizeImportedRecipe({ ...data.recipe, needsReview: true });
+    let recipePayload = null;
+    if (kind === "plately" || String(url).startsWith("/recept/")) {
+      const resp = await fetch(`/api/public-recipe?path=${encodeURIComponent(String(url))}`);
+      const data = await resp.json();
+      if (!resp.ok || !data.recipe) throw new Error(data.error || "Recept niet gevonden.");
+      recipePayload = data.recipe;
+    } else {
+      const resp = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, imageHint }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.recipe) throw new Error(data.message || data.error || "Importeren mislukt");
+      recipePayload = data.recipe;
+    }
+    const recipe = normalizeImportedRecipe({ ...recipePayload, needsReview: true });
     // Keep as preview until user actually saves it to a cookbook
     recipe._previewCreatedAt = Date.now();
     state.importPreviews[recipe.id] = recipe;
@@ -13713,7 +13760,7 @@ bindEvent(document.getElementById("importChannelSearchResults"), "click", async 
     if (section) section.classList.add("hidden");
     trackClientEvent("client_channel_search_import", {
       surface: "import_screen_search",
-      host: hostnameForAnalytics(url),
+      host: kind === "plately" ? "plately" : hostnameForAnalytics(url),
     });
     openImportReview(recipe.id);
     showToast(`${recipe.title} klaar om na te lopen.`, { variant: "success" });

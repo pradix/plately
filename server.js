@@ -3321,6 +3321,7 @@ function buildSeoRecipeEntry({ userId, email, recipe, updatedAt, origin }) {
   if (!clean?.id || !clean?.title) return null;
   const token = getSeoRecipeToken(userId, clean.id);
   const slug = slugify(clean.title) || "recept";
+  const seedChannelId = inferSeedChannelIdFromSourceUrl(clean.sourceUrl || "");
   const description =
     sanitizeText(clean.description || "")
       .slice(0, 220) ||
@@ -3329,6 +3330,7 @@ function buildSeoRecipeEntry({ userId, email, recipe, updatedAt, origin }) {
     token,
     slug,
     urlPath: `/recept/${slug}`,
+    channelId: seedChannelId,
     userId: sanitizeText(userId),
     email: sanitizeText(email || ""),
     updatedAt: sanitizeText(updatedAt || ""),
@@ -10510,6 +10512,10 @@ const recipeRatingLdCache = new Map(); // normalizedUrl -> { at, value }
 /** Cumulatieve statistieken JSON-LD enrich (per hostname, voor logs/monitoring). */
 const ratingEnrichHostStats = new Map();
 
+// Public SEO recipes index: fast, in-memory search helper.
+const SEO_RECIPE_SEARCH_CACHE_TTL_MS = 2 * 60_000;
+const seoRecipeSearchCache = new Map(); // origin -> { at:number, entries:any[] }
+
 function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam }) {
   const q = String(query || "").trim().toLowerCase();
   let channels;
@@ -10589,6 +10595,90 @@ function setCachedChannelSearch(key, results) {
   const entries = [...channelSearchCache.entries()].sort((a, b) => a[1].at - b[1].at);
   const toRemove = Math.max(0, entries.length - CHANNEL_SEARCH_CACHE_MAX_ENTRIES);
   for (let i = 0; i < toRemove; i++) channelSearchCache.delete(entries[i][0]);
+}
+
+function inferSeedChannelIdFromSourceUrl(sourceUrl) {
+  const raw = sanitizeText(sourceUrl || "");
+  if (!raw) return "";
+  let host = "";
+  try {
+    host = new URL(raw).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return "";
+  }
+  for (const [id, cfg] of Object.entries(SEED_CHANNEL_DEFAULTS || {})) {
+    const base = sanitizeText(cfg?.baseUrl || "");
+    if (!base) continue;
+    try {
+      const baseHost = new URL(base).hostname.replace(/^www\./i, "").toLowerCase();
+      if (baseHost && host === baseHost) return sanitizeText(id);
+    } catch {
+      // ignore
+    }
+  }
+  return "";
+}
+
+async function listPublicSeoRecipesCached(origin) {
+  const o = sanitizeText(origin || "");
+  if (!o) return await listPublicSeoRecipes(origin);
+  const entry = seoRecipeSearchCache.get(o);
+  if (entry && Date.now() - entry.at <= SEO_RECIPE_SEARCH_CACHE_TTL_MS && Array.isArray(entry.entries)) {
+    return entry.entries;
+  }
+  const entries = await listPublicSeoRecipes(origin);
+  seoRecipeSearchCache.set(o, { at: Date.now(), entries });
+  return entries;
+}
+
+function searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit }) {
+  const q = sanitizeText(query || "").trim().toLowerCase();
+  if (!q || q.length < 2) return [];
+  const words = q.split(/\s+/).map((w) => w.trim()).filter(Boolean).slice(0, 6);
+  const cap = Math.min(60, Math.max(1, Number(limit) || 18));
+
+  const allowAllSeeds = allowedChannels === null;
+  const allowNoneSeeds = Array.isArray(allowedChannels) && allowedChannels.length === 0;
+  const allowedSet = Array.isArray(allowedChannels) ? new Set(allowedChannels.map((s) => sanitizeText(s)).filter(Boolean)) : null;
+
+  if (allowNoneSeeds) return [];
+
+  const scored = [];
+  for (const e of Array.isArray(entries) ? entries : []) {
+    const r = e?.recipe || {};
+    const title = sanitizeText(r.title || "");
+    if (!title) continue;
+    const channelId = sanitizeText(e.channelId || "");
+    if (!allowAllSeeds && allowedSet && channelId && !allowedSet.has(channelId)) continue;
+    if (!allowAllSeeds && allowedSet && !channelId) continue;
+
+    const hay = `${title} ${sanitizeText(r.mealTag || "")}`.toLowerCase();
+    let ok = hay.includes(q);
+    if (!ok && words.length) {
+      ok = words.every((w) => hay.includes(w));
+    }
+    if (!ok) continue;
+
+    // naive score: exact phrase > all words > partial
+    const score = hay.includes(q) ? 3 : 2;
+    scored.push({ score, e });
+  }
+  scored.sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, cap).map(({ e }) => {
+    const r = e.recipe || {};
+    const channelId = sanitizeText(e.channelId || "") || "plately";
+    return {
+      url: e.urlPath,
+      title: sanitizeText(r.title || ""),
+      thumbnail: sanitizeText(r.image || ""),
+      channelId,
+      channel: channelId === "plately" ? "Plately" : getSeedChannelName(channelId),
+      time: sanitizeText(r.time || ""),
+      sourceUrl: sanitizeText(r.sourceUrl || ""),
+      _source: "plately",
+    };
+  });
 }
 
 /**
@@ -14120,6 +14210,36 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/seo-recipe-search" && request.method === "GET") {
+      const searchStarted = Date.now();
+      const responseTimeMs = () => Date.now() - searchStarted;
+      const queryRaw = sanitizeText(requestUrl.searchParams.get("q") || "");
+      const query = queryRaw;
+      if (!query || query.length < 2) {
+        sendJson(response, 200, { ok: true, results: [], responseTimeMs: responseTimeMs() });
+        return;
+      }
+      const channelsParamPresent = requestUrl.searchParams.has("channels");
+      const channelsParam = sanitizeText(requestUrl.searchParams.get("channels") || "");
+      const customChannelsRaw = requestUrl.searchParams.get("customChannels") || "";
+      const limitRaw = Number.parseInt(String(requestUrl.searchParams.get("limit") || ""), 10);
+      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 60) : 18;
+
+      const authUser = await getAuthenticatedUser(request).catch(() => null);
+      const { allowedChannels } = await resolveAllowedChannelSearchForRequest(
+        authUser,
+        channelsParamPresent,
+        channelsParam,
+        customChannelsRaw
+      );
+
+      const origin = getPublicOrigin(request);
+      const entries = await listPublicSeoRecipesCached(origin);
+      const results = searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit });
+      sendJson(response, 200, { ok: true, results, responseTimeMs: responseTimeMs() });
+      return;
+    }
+
     if (requestUrl.pathname === "/api/grocery-photos" && request.method === "POST") {
       const body = await readRequestBody(request);
       const items = Array.isArray(body.items) ? body.items.slice(0, 20) : [];
@@ -14809,6 +14929,68 @@ const server = http.createServer(async (request, response) => {
           ok: false,
           error: error.message || "SEO recepten aanvullen mislukt.",
         });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/imports-by-channel" && request.method === "GET") {
+      try {
+        const adminUser = await requireAdmin(request);
+        const userId = sanitizeText(requestUrl.searchParams.get("userId") || adminUser.id || "");
+        const groupByRaw = sanitizeText(requestUrl.searchParams.get("groupBy") || "channel");
+        const groupBy = groupByRaw === "source" ? "source" : "channel";
+        if (!userId) throw new HttpError(400, "userId ontbreekt.");
+
+        let currentUser = null;
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const res = await pool.query(`SELECT * FROM plately_users WHERE id = $1 LIMIT 1`, [userId]);
+          currentUser = res.rows[0] || null;
+        } else {
+          const db = await loadDatabase();
+          currentUser = db.users?.[userId] || null;
+        }
+        if (!currentUser) throw new HttpError(404, "Gebruiker niet gevonden.");
+
+        const appState = buildAppStateFromUser(currentUser);
+        const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+        const cookbooks = Array.isArray(appState.cookbooks) ? appState.cookbooks : [];
+        const seoCb = cookbooks.find((c) => sanitizeText(c?.name || "") === "SEO recepten");
+        const seoIds = new Set(Array.isArray(seoCb?.recipeIds) ? seoCb.recipeIds.map((id) => sanitizeText(id)).filter(Boolean) : []);
+
+        const rowsById = new Map();
+        const bump = (idRaw, label, { seo = false, channelId = "" } = {}) => {
+          const id = sanitizeText(idRaw || "") || "unknown";
+          const row = rowsById.get(id) || { id, label: label || id, channelId: sanitizeText(channelId || ""), total: 0, seoCookbook: 0 };
+          row.total += 1;
+          if (seo) row.seoCookbook += 1;
+          rowsById.set(id, row);
+        };
+
+        for (const r of recipes) {
+          const sourceUrl = sanitizeText(r?.sourceUrl || r?.source || "");
+          const channelId = inferSeedChannelIdFromSourceUrl(sourceUrl) || sanitizeText(r?.channelId || "");
+          const isSeo = seoIds.has(sanitizeText(r?.id || ""));
+          if (groupBy === "source") {
+            let host = "";
+            try {
+              host = sourceUrl ? new URL(sourceUrl).hostname.replace(/^www\./i, "").toLowerCase() : "";
+            } catch {
+              host = "";
+            }
+            bump(host || "unknown", host ? host : "Onbekend", { seo: isSeo, channelId });
+          } else {
+            const label = channelId ? getSeedChannelName(channelId) : "Onbekend";
+            const id = channelId || "unknown";
+            bump(id, label, { seo: isSeo, channelId });
+          }
+        }
+
+        const rows = Array.from(rowsById.values()).sort((a, b) => (b.seoCookbook - a.seoCookbook) || (b.total - a.total));
+        return sendJson(response, 200, { ok: true, userId: sanitizeText(userId), groupBy, rows });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Kon imports per kanaal niet laden." });
       }
     }
 
