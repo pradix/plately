@@ -3234,6 +3234,144 @@ function slugify(value) {
     .replace(/^-+|-+$/g, "");
 }
 
+function xmlEscape(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function safeJsonForHtml(value) {
+  return JSON.stringify(value || {}).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
+}
+
+function getPublicOrigin(request) {
+  const host = sanitizeText(request?.headers?.["x-forwarded-host"] || request?.headers?.host || "localhost");
+  const protoHeader = sanitizeText(request?.headers?.["x-forwarded-proto"] || "").split(",")[0].trim();
+  const proto = protoHeader || (request?.socket?.encrypted ? "https" : "http");
+  return `${proto}://${host}`;
+}
+
+function normalizePublicImageUrl(image, origin) {
+  const raw = sanitizeText(image || "");
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("/")) return `${origin}${raw}`;
+  if (raw && !raw.startsWith("data:")) return `${origin}/${raw.replace(/^\/+/, "")}`;
+  return `${origin}/assets/icon-512.png?v=7`;
+}
+
+function normalizePublicSourceUrl(url) {
+  const raw = sanitizeText(url || "");
+  if (!/^https?:\/\//i.test(raw)) return "";
+  return raw;
+}
+
+function parseRecipeTimeToIsoDuration(value) {
+  const text = sanitizeText(value || "");
+  const hoursMatch = text.match(/(\d+(?:[.,]\d+)?)\s*(?:u|uur|hour|hours|h)\b/i);
+  const minsMatch = text.match(/(\d+)\s*(?:min|mins|minute|minutes|minuten)\b/i);
+  const hours = hoursMatch ? Number(String(hoursMatch[1]).replace(",", ".")) : 0;
+  const mins = minsMatch ? Number(minsMatch[1]) : (!hoursMatch && /^\d{1,3}$/.test(text) ? Number(text) : 0);
+  const totalMinutes = Math.max(0, Math.round(hours * 60 + mins));
+  if (!totalMinutes) return "";
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `PT${h ? `${h}H` : ""}${m ? `${m}M` : ""}`;
+}
+
+function getSeoRecipeToken(userId, recipeId) {
+  return crypto
+    .createHash("sha1")
+    .update(`${sanitizeText(userId)}:${sanitizeText(recipeId)}`)
+    .digest("base64url")
+    .slice(0, 10);
+}
+
+function buildSeoRecipeEntry({ userId, email, recipe, updatedAt, origin }) {
+  if (!recipe || typeof recipe !== "object") return null;
+  const clean = sanitizeRecipeForStorage(recipe);
+  if (!clean?.id || !clean?.title) return null;
+  const token = getSeoRecipeToken(userId, clean.id);
+  const slug = slugify(clean.title) || "recept";
+  const description =
+    sanitizeText(clean.description || "")
+      .slice(0, 220) ||
+    `Maak ${clean.title} met dit recept op Plately: ingrediënten, bereiding en bron overzichtelijk bij elkaar.`;
+  return {
+    token,
+    slug,
+    urlPath: `/recept/${slug}-${token}`,
+    userId: sanitizeText(userId),
+    email: sanitizeText(email || ""),
+    updatedAt: sanitizeText(updatedAt || ""),
+    recipe: {
+      ...clean,
+      description,
+      image: normalizePublicImageUrl(clean.image, origin),
+      sourceUrl: normalizePublicSourceUrl(clean.sourceUrl),
+    },
+  };
+}
+
+async function listPublicSeoRecipes(origin) {
+  const entries = [];
+
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const result = await pool.query(`
+      SELECT id, email, app_state, updated_at
+      FROM plately_users
+      WHERE COALESCE(jsonb_array_length(COALESCE(app_state, '{}'::jsonb)->'importedRecipes'), 0) > 0
+      ORDER BY updated_at DESC
+    `);
+    for (const row of result.rows || []) {
+      const appState = row.app_state && typeof row.app_state === "object" ? row.app_state : {};
+      const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+      for (const recipe of recipes) {
+        const entry = buildSeoRecipeEntry({
+          userId: row.id,
+          email: row.email,
+          recipe,
+          updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : "",
+          origin,
+        });
+        if (entry) entries.push(entry);
+      }
+    }
+  } else {
+    const db = await loadDatabase();
+    for (const user of Object.values(db.users || {})) {
+      const recipes = Array.isArray(user?.importedRecipes) ? user.importedRecipes : [];
+      for (const recipe of recipes) {
+        const entry = buildSeoRecipeEntry({
+          userId: user.id,
+          email: user.email || "",
+          recipe,
+          updatedAt: user.updatedAt || user.createdAt || "",
+          origin,
+        });
+        if (entry) entries.push(entry);
+      }
+    }
+  }
+
+  const byToken = new Map();
+  for (const entry of entries) {
+    if (!byToken.has(entry.token)) byToken.set(entry.token, entry);
+  }
+  return Array.from(byToken.values());
+}
+
+async function findPublicSeoRecipeByToken(token, origin) {
+  const safeToken = sanitizeText(token || "");
+  if (!safeToken) return null;
+  const entries = await listPublicSeoRecipes(origin);
+  return entries.find((entry) => entry.token === safeToken) || null;
+}
+
 function buildStoreChoiceUrl(store, choice) {
   if (choice.url) {
     return choice.url;
@@ -12073,6 +12211,165 @@ async function serveStaticFile(requestPath, response) {
   }
 }
 
+function renderPublicSeoRecipePage(entry, origin) {
+  const recipe = entry.recipe || {};
+  const title = sanitizeText(recipe.title || "Recept");
+  const description = sanitizeText(recipe.description || "Een recept op Plately.");
+  const canonicalUrl = `${origin}${entry.urlPath}`;
+  const sourceUrl = normalizePublicSourceUrl(recipe.sourceUrl);
+  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+  const instructions = Array.isArray(recipe.instructions) ? recipe.instructions : [];
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Recipe",
+    name: title,
+    description,
+    image: recipe.image ? [recipe.image] : undefined,
+    author: recipe.author ? { "@type": "Person", name: sanitizeText(recipe.author) } : { "@type": "Organization", name: "Plately" },
+    recipeCategory: sanitizeText(recipe.mealTag || ""),
+    recipeYield: sanitizeText(recipe.servings || ""),
+    totalTime: parseRecipeTimeToIsoDuration(recipe.time),
+    recipeIngredient: ingredients
+      .map((i) => [i?.quantity, i?.unit, i?.name].map((part) => sanitizeText(part || "")).filter(Boolean).join(" "))
+      .filter(Boolean),
+    recipeInstructions: instructions
+      .map((step, index) => ({
+        "@type": "HowToStep",
+        position: index + 1,
+        text: sanitizeText(step || ""),
+      }))
+      .filter((step) => step.text),
+    mainEntityOfPage: canonicalUrl,
+    isBasedOn: sourceUrl || undefined,
+  };
+
+  return `<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtml(title)} recept — Plately</title>
+    <meta name="description" content="${escapeHtml(description)}" />
+    <meta name="robots" content="index,follow,max-image-preview:large" />
+    <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
+    <meta name="theme-color" content="#8da485" />
+    <meta property="og:site_name" content="Plately" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="${escapeHtml(title)} recept" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
+    <meta property="og:image" content="${escapeHtml(recipe.image || `${origin}/assets/icon-512.png?v=7`)}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(title)} recept" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${escapeHtml(recipe.image || `${origin}/assets/icon-512.png?v=7`)}" />
+    <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
+    <link rel="stylesheet" href="/styles.css?v=${escapeHtml(CACHED_PLATELY_BUILD_META || "1.0.19.36")}" />
+    <script type="application/ld+json">${safeJsonForHtml(jsonLd)}</script>
+  </head>
+  <body class="public-recipe-page">
+    <main class="public-recipe" id="publicRecipeRoot">
+      <header class="public-recipe__top">
+        <a class="public-recipe__brand" href="/" aria-label="Open Plately">
+          <img src="/assets/plately.png" alt="" width="34" height="34" decoding="async" class="public-recipe__brand-logo" />
+        </a>
+        <div class="public-recipe__cta">
+          <a class="btn-secondary public-recipe__cta-btn" href="/">Open app</a>
+          <a class="btn-primary public-recipe__cta-btn" href="/?register=1">Account maken</a>
+        </div>
+      </header>
+
+      <article class="public-recipe__card">
+        ${recipe.image ? `<div class="public-recipe__hero"><img src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.alt || title)}" draggable="false" loading="eager" decoding="async"/><div class="public-recipe__hero-fade" aria-hidden="true"></div></div>` : ""}
+        <div class="public-recipe__card-inner">
+          <p class="section-kicker public-recipe__kicker">${escapeHtml(recipe.mealTag || "Recept")}</p>
+          <h1 class="public-recipe__title">${escapeHtml(title)}</h1>
+          <p class="public-recipe__sub">${escapeHtml(description)}</p>
+          <div class="public-recipe__meta">${escapeHtml([recipe.time ? `Bereiding: ${recipe.time}` : "", recipe.servings ? `Porties: ${recipe.servings}` : ""].filter(Boolean).join(" · "))}</div>
+
+          <div class="public-recipe__grid">
+            <section class="public-recipe__panel" aria-label="Ingrediënten">
+              <h2 class="public-recipe__h2">Ingrediënten</h2>
+              <ul class="public-recipe__list">
+                ${ingredients
+                  .slice(0, 80)
+                  .map((i) => {
+                    const n = sanitizeText(i?.name || "");
+                    const q = sanitizeText(i?.quantity || "");
+                    const u = sanitizeText(i?.unit || "");
+                    const right = [q, u].filter(Boolean).join(" ").trim();
+                    return n ? `<li><strong>${escapeHtml(n)}</strong>${right ? `<span>${escapeHtml(right)}</span>` : ""}</li>` : "";
+                  })
+                  .join("")}
+              </ul>
+            </section>
+
+            <section class="public-recipe__panel" aria-label="Bereiding">
+              <h2 class="public-recipe__h2">Bereiding</h2>
+              <ol class="public-recipe__steps">
+                ${instructions
+                  .slice(0, 80)
+                  .map((s) => sanitizeText(s || ""))
+                  .filter(Boolean)
+                  .map((s) => `<li>${escapeHtml(s)}</li>`)
+                  .join("")}
+              </ol>
+            </section>
+          </div>
+
+          <p class="public-recipe__trust">Receptinhoud en beeld komen van de oorspronkelijke maker of bronsite. Plately bewaart het recept overzichtelijk en linkt waar mogelijk terug naar de bron.</p>
+
+          <footer class="public-recipe__footer">
+            ${sourceUrl ? `<a class="public-recipe__source" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">Bekijk originele bron</a>` : `<a class="public-recipe__source" href="/">Open in Plately</a>`}
+            <button class="btn-secondary public-recipe__copy" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(location.href)">Link kopiëren</button>
+          </footer>
+        </div>
+      </article>
+    </main>
+  </body>
+</html>`;
+}
+
+function renderPublicRecipeIndexPage(entries, origin) {
+  const items = entries
+    .slice(0, 200)
+    .map((entry) => {
+      const recipe = entry.recipe || {};
+      return `<a class="recent-card" href="${escapeHtml(entry.urlPath)}">
+        <img class="recent-card__img" src="${escapeHtml(recipe.image || "/assets/hero-burger.svg")}" alt="" loading="lazy" decoding="async" />
+        <span class="recent-card__body">
+          <strong class="recent-card__title">${escapeHtml(recipe.title || "Recept")}</strong>
+          <span class="recent-card__meta">${escapeHtml([recipe.mealTag, recipe.time].filter(Boolean).join(" · "))}</span>
+        </span>
+      </a>`;
+    })
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recepten — Plately</title>
+    <meta name="description" content="Ontdek recepten die met Plately zijn opgeslagen: ingrediënten, bereiding en originele bron overzichtelijk bij elkaar." />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="${escapeHtml(origin)}/recepten" />
+    <link rel="stylesheet" href="/styles.css?v=${escapeHtml(CACHED_PLATELY_BUILD_META || "1.0.19.36")}" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="app-shell" style="padding:24px 18px 90px">
+        <header class="section-heading">
+          <h1>Recepten</h1>
+          <a class="ghost-link" href="/">Open Plately</a>
+        </header>
+        <section class="recipe-grid recipe-grid--cookbook">${items || `<p class="recipe-slider__empty">Nog geen publieke recepten.</p>`}</section>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
 function parseAdminAnalyticsDaysParam(raw, fallback = 7) {
   const n = Number.parseInt(String(raw ?? ""), 10);
   const fb = [7, 14, 30, 90].includes(Number(fallback)) ? Number(fallback) : 7;
@@ -12094,6 +12391,64 @@ const server = http.createServer(async (request, response) => {
   }
 
   try {
+    // ── Public SEO recipe pages ─────────────────────────────────────────────
+    if (requestUrl.pathname === "/robots.txt" && request.method === "GET") {
+      const origin = getPublicOrigin(request);
+      response.writeHead(200, { ...HTTP_HEADERS, "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache" });
+      response.end(`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
+      return;
+    }
+
+    if (requestUrl.pathname === "/sitemap.xml" && request.method === "GET") {
+      const origin = getPublicOrigin(request);
+      const entries = await listPublicSeoRecipes(origin);
+      const urls = [
+        { loc: `${origin}/`, lastmod: SERVER_BOOT_AT_ISO, priority: "0.8" },
+        { loc: `${origin}/recepten`, lastmod: SERVER_BOOT_AT_ISO, priority: "0.7" },
+        ...entries.map((entry) => ({
+          loc: `${origin}${entry.urlPath}`,
+          lastmod: entry.updatedAt || SERVER_BOOT_AT_ISO,
+          priority: "0.6",
+        })),
+      ];
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>\n` +
+        `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+        urls
+          .map((url) => `  <url><loc>${xmlEscape(url.loc)}</loc><lastmod>${xmlEscape(url.lastmod)}</lastmod><priority>${url.priority}</priority></url>`)
+          .join("\n") +
+        `\n</urlset>\n`;
+      response.writeHead(200, { ...HTTP_HEADERS, "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "no-cache" });
+      response.end(xml);
+      return;
+    }
+
+    if (requestUrl.pathname === "/recepten" && request.method === "GET") {
+      const origin = getPublicOrigin(request);
+      const entries = await listPublicSeoRecipes(origin);
+      response.writeHead(200, { ...HTTP_HEADERS, "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
+      response.end(renderPublicRecipeIndexPage(entries, origin));
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith("/recept/") && request.method === "GET") {
+      const origin = getPublicOrigin(request);
+      const raw = decodeURIComponent(requestUrl.pathname.slice("/recept/".length) || "");
+      const token = raw.match(/-([A-Za-z0-9_-]{10})$/)?.[1] || "";
+      const entry = await findPublicSeoRecipeByToken(token, origin);
+      if (!entry) {
+        sendJson(response, 404, { error: "Recept niet gevonden." });
+        return;
+      }
+      if (requestUrl.pathname !== entry.urlPath) {
+        response.writeHead(301, { Location: entry.urlPath, ...HTTP_HEADERS });
+        response.end();
+        return;
+      }
+      response.writeHead(200, { ...HTTP_HEADERS, "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
+      response.end(renderPublicSeoRecipePage(entry, origin));
+      return;
+    }
+
     // ── Public recipe share shortlinks ───────────────────────────────────────
     if ((requestUrl.pathname === "/share" || requestUrl.pathname.startsWith("/share/")) && request.method === "GET") {
       const token =
@@ -12112,7 +12467,7 @@ const server = http.createServer(async (request, response) => {
       const desc = sanitizeText(payload.description || "Een recept gedeeld via Plately.");
       const rawImage = sanitizeText(payload.image || "");
       const image = /^https?:\/\//i.test(rawImage) ? rawImage : "/assets/icon-512.png?v=7";
-      const canonicalUrl = `${requestUrl.origin}${requestUrl.pathname}`;
+      const canonicalUrl = `${getPublicOrigin(request)}${requestUrl.pathname}`;
 
       // Track basic share views (anonymous aggregate)
       try {
@@ -12309,6 +12664,23 @@ const server = http.createServer(async (request, response) => {
           ? payload.instructions.slice(0, 80).map((s) => sanitizeText(String(s || "")).slice(0, 500))
           : [],
       };
+
+      try {
+        const authUser = await getAuthenticatedUser(request);
+        if (authUser && safePayload.id) {
+          const appState = buildAppStateFromUser(authUser);
+          const isSavedRecipe = Array.isArray(appState.importedRecipes)
+            ? appState.importedRecipes.some((recipe) => sanitizeText(recipe?.id || "") === safePayload.id)
+            : false;
+          if (isSavedRecipe) {
+            const seoPath = `/recept/${slugify(safePayload.title) || "recept"}-${getSeoRecipeToken(authUser.id, safePayload.id)}`;
+            sendJson(response, 200, { ok: true, url: seoPath, seo: true });
+            return;
+          }
+        }
+      } catch {
+        // Fall back to stored shortlink below.
+      }
 
       const token = crypto.randomBytes(5).toString("base64url"); // ~8 chars, URL-safe
       const db = await loadDatabase();
