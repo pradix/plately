@@ -711,7 +711,7 @@ function channelIdUsesSerperFallback(channelId) {
  * (bv. query „surinaamse” → „Klassieke roti zelf maken”).
  * Miljuschka / Eef: vaak Serper Google `site:` hits — titel/snippet komen van Google, geen strikte woordmatch.
  */
-const CHANNEL_SEARCH_TRUST_SITE_INDEXER_IDS = new Set(["ch-clf", "ch-mj", "ch-ek"]);
+const CHANNEL_SEARCH_TRUST_SITE_INDEXER_IDS = new Set(["ch-ah", "ch-clf", "ch-mj", "ch-ek"]);
 
 const SEED_CHANNELS = [
   { id: "ch-ah", name: "Allerhande" },
@@ -1584,6 +1584,30 @@ function buildSeedSearchUrlFromTemplate(template, query) {
   // Support both legacy `{q}` and the explicit `<zoekwoord>` placeholder.
   // (Admin overrides may use either; seed defaults can evolve over time.)
   return t.replaceAll("{q}", q).replaceAll("<zoekwoord>", q);
+}
+
+function normalizeAhAllerhandeSearchQuery(queryOrUrl) {
+  const raw = sanitizeText(queryOrUrl || "").trim();
+  if (!raw) return "";
+  try {
+    const u = new URL(raw);
+    if (/(^|\.)ah\.nl$/i.test(u.hostname) && /^\/allerhande\/recepten-zoeken\/?$/i.test(u.pathname)) {
+      const q = sanitizeText(u.searchParams.get("query") || u.searchParams.get("q") || u.searchParams.get("s") || "");
+      return q || raw;
+    }
+  } catch {
+    // Not a URL; use as-is.
+  }
+  return raw;
+}
+
+function isAhAllerhandeSearchUrl(url) {
+  try {
+    const u = new URL(sanitizeText(url || ""));
+    return /(^|\.)ah\.nl$/i.test(u.hostname) && /^\/allerhande(?:\/recepten-zoeken\/?)?$/i.test(u.pathname);
+  } catch {
+    return false;
+  }
 }
 
 function getSeedChannelDefaultSearchUrlTemplate(channelId) {
@@ -10816,7 +10840,8 @@ function shouldRelaxQueryTitleMatch(options) {
 }
 
 function channelSearchTrustsSiteIndexer(channelId) {
-  return CHANNEL_SEARCH_TRUST_SITE_INDEXER_IDS.has(String(channelId || ""));
+  const id = String(channelId || "");
+  return CHANNEL_SEARCH_TRUST_SITE_INDEXER_IDS.has(id) || id.startsWith("ch-custom-") || id.startsWith("ch-preview-");
 }
 
 /** Voor sommige kanalen: site-zoekindex is al relevant — geen verplichte woord-match in de titel. */
@@ -11641,6 +11666,7 @@ async function fetchAllerhandeSearchHtmlWithRetry(searchUrl) {
  * Search AH Allerhande — tries the API with anonymous token.
  */
 async function searchAHRecipes(query, count = 4, opts = {}) {
+  query = normalizeAhAllerhandeSearchQuery(query);
   const seoBackfill = Boolean(opts && opts.seoBackfill);
   console.log(`🔍 AH recipe search for: "${query}"${seoBackfill ? " (seoBackfill)" : ""}`);
 
@@ -13500,6 +13526,10 @@ function renderPublicSeoRecipePage(entry, origin) {
   const groceryUrl = `/?register=1&intent=shopping-list&recipe=${recipeParam}`;
   const mealPlanUrl = `/?register=1&intent=meal-plan&recipe=${recipeParam}`;
   const sourceUrl = normalizePublicSourceUrl(recipe.sourceUrl);
+  const shareText = `${title} recept via Plately`;
+  const imageUrl = recipe.image
+    ? (/^https?:\/\//i.test(recipe.image) ? recipe.image : `${origin}${String(recipe.image).startsWith("/") ? "" : "/"}${recipe.image}`)
+    : `${origin}/assets/icon-512.png?v=7`;
   const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
   const instructions = Array.isArray(recipe.instructions) ? recipe.instructions : [];
   const ratingValue = Number(recipe.ratingValue);
@@ -13553,11 +13583,14 @@ function renderPublicSeoRecipePage(entry, origin) {
     <meta property="og:title" content="${escapeHtml(title)} recept" />
     <meta property="og:description" content="${escapeHtml(description)}" />
     <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
-    <meta property="og:image" content="${escapeHtml(recipe.image || `${origin}/assets/icon-512.png?v=7`)}" />
+    <meta property="og:image" content="${escapeHtml(imageUrl)}" />
+    <meta property="og:image:secure_url" content="${escapeHtml(imageUrl)}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(title)} recept" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
-    <meta name="twitter:image" content="${escapeHtml(recipe.image || `${origin}/assets/icon-512.png?v=7`)}" />
+    <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
     <link rel="stylesheet" href="/styles.css?v=${escapeHtml(CACHED_PLATELY_BUILD_META || "1.0.19.36")}" />
     <script type="application/ld+json">${safeJsonForHtml(jsonLd)}</script>
@@ -13579,6 +13612,7 @@ function renderPublicSeoRecipePage(entry, origin) {
         <div class="public-recipe__card-inner">
           <p class="section-kicker public-recipe__kicker">${escapeHtml(recipe.mealTag || "Recept")}</p>
           <h1 class="public-recipe__title">${escapeHtml(title)}</h1>
+          <button class="btn-secondary public-recipe__copy" type="button" data-public-share>Deel recept</button>
           <p class="public-recipe__sub">${escapeHtml(description)}</p>
           <div class="public-recipe__meta">${escapeHtml([recipe.time ? `Bereiding: ${recipe.time}` : "", recipe.servings ? `Porties: ${recipe.servings}` : ""].filter(Boolean).join(" · "))}</div>
           <div class="public-recipe__action-band" aria-label="Plately acties">
@@ -13636,7 +13670,7 @@ function renderPublicSeoRecipePage(entry, origin) {
 
           <footer class="public-recipe__footer">
             ${sourceUrl ? `<a class="public-recipe__source" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">Bekijk originele bron</a>` : `<a class="public-recipe__source" href="/">Open in Plately</a>`}
-            <button class="btn-secondary public-recipe__copy" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(location.href)">Link kopiëren</button>
+            <button class="btn-secondary public-recipe__copy" type="button" data-public-share>Deel recept</button>
           </footer>
         </div>
       </article>
@@ -13644,6 +13678,28 @@ function renderPublicSeoRecipePage(entry, origin) {
     <nav class="public-recipe__sticky-cta" aria-label="Snelle actie">
       <a class="btn-primary public-recipe__sticky-btn" href="${escapeHtml(groceryUrl)}">Bewaar + boodschappenlijst</a>
     </nav>
+    <script>
+      (function () {
+        var shareData = { title: ${safeJsonForHtml(`${title} recept`)}, text: ${safeJsonForHtml(shareText)}, url: location.href };
+        function fallback(button) {
+          if (!navigator.clipboard) return;
+          navigator.clipboard.writeText(location.href).then(function () {
+            var old = button.textContent;
+            button.textContent = "Link gekopieerd";
+            setTimeout(function () { button.textContent = old || "Deel recept"; }, 1400);
+          }).catch(function () {});
+        }
+        document.querySelectorAll("[data-public-share]").forEach(function (button) {
+          button.addEventListener("click", function () {
+            if (navigator.share) {
+              navigator.share(shareData).catch(function () {});
+              return;
+            }
+            fallback(button);
+          });
+        });
+      })();
+    </script>
   </body>
 </html>`;
 }
@@ -15097,7 +15153,7 @@ const server = http.createServer(async (request, response) => {
           dedupedCustomChannelEntries.map((ch) => {
             const eff = getEffectiveCustomChannelConfig({ channelId: ch.id, url: ch.url }, channelOverrides);
             const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
-            return scrapeOrRestPublic(eff.baseUrl, ch.name, ch.id, usedUrl, parseWPStandard, 4, query);
+            return scrapeOrRestPublic(eff.baseUrl, ch.name, ch.id, usedUrl, parseWPStandard, 4, query, { relaxedQueryMatch: true });
           })
         );
         const merged = [];
@@ -15105,7 +15161,7 @@ const server = http.createServer(async (request, response) => {
           if (s.status === "fulfilled" && Array.isArray(s.value)) {
             merged.push(
               ...s.value
-                .filter((r) => channelSearchResultTitleMatchesQuery(r.channelId, r.title, query))
+                .filter((r) => channelSearchResultTitleMatchesQuery(r.channelId, r.title, query, { relaxedQueryMatch: true }))
                 .slice(0, 4)
             );
           }
@@ -16173,6 +16229,66 @@ const server = http.createServer(async (request, response) => {
         const statusCode = error.statusCode || 400;
         console.error("❌ Error in /api/admin/delete-imports-by-channel:", error.message);
         return sendJson(response, statusCode, { ok: false, error: error.message || "Imports verwijderen mislukt." });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/imports-by-channel" && request.method === "DELETE") {
+      try {
+        const adminUser = await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const userId = sanitizeText(body.userId || adminUser.id || "");
+        const groupBy = sanitizeText(body.groupBy || "channel") === "source" ? "source" : "channel";
+        const id = sanitizeText(body.id || "");
+        if (!userId) throw new HttpError(400, "userId ontbreekt.");
+        if (!id) throw new HttpError(400, "Kanaal/source ontbreekt.");
+
+        let currentUser = null;
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const res = await pool.query(`SELECT * FROM plately_users WHERE id = $1 LIMIT 1`, [userId]);
+          currentUser = res.rows[0] || null;
+        } else {
+          const db = await loadDatabase();
+          currentUser = db.users?.[userId] || null;
+        }
+        if (!currentUser) throw new HttpError(404, "Gebruiker niet gevonden.");
+
+        const appState = buildAppStateFromUser(currentUser);
+        const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+        const removedIds = new Set();
+        const keptRecipes = recipes.filter((r) => {
+          const sourceUrl = sanitizeText(r?.sourceUrl || r?.source || "");
+          const channelId = inferSeedChannelIdFromSourceUrl(sourceUrl) || sanitizeText(r?.channelId || "");
+          let sourceId = "unknown";
+          try {
+            sourceId = sourceUrl ? new URL(sourceUrl).hostname.replace(/^www\./i, "").toLowerCase() : "unknown";
+          } catch {
+            sourceId = "unknown";
+          }
+          const matches = groupBy === "source" ? sourceId === id : (channelId || "unknown") === id;
+          if (matches) removedIds.add(sanitizeText(r?.id || ""));
+          return !matches;
+        });
+
+        const nextCookbooks = (Array.isArray(appState.cookbooks) ? appState.cookbooks : []).map((cookbook) => ({
+          ...cookbook,
+          recipeIds: (Array.isArray(cookbook?.recipeIds) ? cookbook.recipeIds : []).filter((recipeId) => !removedIds.has(sanitizeText(recipeId))),
+        }));
+        const nextState = { ...appState, importedRecipes: keptRecipes, cookbooks: nextCookbooks };
+
+        if (isPostgresEnabled()) {
+          await updateAuthenticatedUserState(userId, nextState);
+        } else {
+          const db = await loadDatabase();
+          db.users[userId] = sanitizeUserStatePayload(nextState, currentUser);
+          await persistDatabase();
+        }
+        seoRecipeSearchCache.clear();
+        return sendJson(response, 200, { ok: true, removed: removedIds.size, userId, groupBy, id });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Kon imports niet verwijderen." });
       }
     }
 
@@ -17762,7 +17878,9 @@ const server = http.createServer(async (request, response) => {
           const channelOverrides = await getChannelOverrides();
           const eff = getEffectiveCustomChannelConfig({ channelId: id, url }, channelOverrides);
           const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
-          const results = await scrapeOrRestPublic(eff.baseUrl, name, id, usedUrl, parseWPStandard, Math.min(limit, 15), query);
+          const results = isAhAllerhandeSearchUrl(eff.baseUrl) || isAhAllerhandeSearchUrl(usedUrl)
+            ? await searchAHRecipes(query, Math.min(limit, 15), { searchUrlTemplate: eff.searchUrlTemplate })
+            : await scrapeOrRestPublic(eff.baseUrl, name, id, usedUrl, parseWPStandard, Math.min(limit, 15), query, { relaxedQueryMatch: true });
           const slicedCustom = (results || []).slice(0, limit);
           const enrichedCustom =
             slicedCustom.length > 0 ? await enrichChannelSearchResultsWithRatings(slicedCustom) : slicedCustom;

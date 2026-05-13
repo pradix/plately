@@ -2196,6 +2196,19 @@ function getBasketHandoffUrl(preview) {
   if (!preview) {
     return "";
   }
+  if (preview.store === "albert-heijn") {
+    const selectedIds = (preview.items || [])
+      .map((item) => {
+        const choice = item.choices?.[item.selectedChoiceIndex || 0];
+        return choice?.productId || choice?.id || "";
+      })
+      .filter(Boolean);
+    if (selectedIds.length) {
+      return `https://www.ah.nl/mijnlijst/add-multiple?${selectedIds
+        .map((id) => `p=${encodeURIComponent(id)}:1`)
+        .join("&")}`;
+    }
+  }
   const storeConfig = getStoreConfig(preview.store);
   return (
     preview.directUrl ||
@@ -2586,7 +2599,7 @@ function renderBasketPreview() {
   // CTA button
   if (ctaBtn) {
     ctaBtn.onclick = () => {
-      const url = preview.directUrl || preview.fallbackUrl || "";
+      const url = getBasketHandoffUrl(preview);
       if (url) window.open(url, "_blank", "noreferrer");
     };
   }
@@ -13357,22 +13370,6 @@ bindEvent(basketContinueButton, "click", async () => {
   }
 
   let url = getBasketHandoffUrl(preview);
-
-  // For AH: rebuild the add-multiple URL from the currently selected choice per item
-  // so swapping an alternative product is reflected in the handoff link.
-  if (preview.store === "albert-heijn") {
-    const selectedIds = (preview.items || [])
-      .map((item) => {
-        const choice = item.choices?.[item.selectedChoiceIndex || 0];
-        return choice?.productId || choice?.id || "";
-      })
-      .filter(Boolean);
-    if (selectedIds.length) {
-      url = `https://www.ah.nl/mijnlijst/add-multiple?${selectedIds
-        .map((id) => `p=${encodeURIComponent(id)}:1`)
-        .join("&")}`;
-    }
-  }
 
   if (!url) {
     showToast("Kon geen supermarktlink opbouwen.");

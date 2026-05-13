@@ -1709,6 +1709,7 @@
                   <th>${label}</th>
                   <th class="num" style="text-align:right">Totaal</th>
                   <th class="num" style="text-align:right">SEO recepten</th>
+                  <th style="text-align:right">Actie</th>
                 </tr>
               </thead>
               <tbody>
@@ -1717,12 +1718,37 @@
                     <td>${escapeHtml(String(r.label || r.id || ""))}</td>
                     <td style="text-align:right">${formatNumber(r.total || 0)}</td>
                     <td style="text-align:right">${formatNumber(r.seoCookbook || 0)}</td>
+                    <td style="text-align:right"><button class="btn btn-sm" type="button" onclick="deleteImportsByChannel(${JSON.stringify(String(r.id || ""))}, ${JSON.stringify(String(r.label || r.id || ""))})">Verwijder import</button></td>
                   </tr>
                 `).join("")}
               </tbody>
             </table>
           `;
         }
+      } catch (e) {
+        if (statusEl) statusEl.textContent = "❌ " + (e.message || String(e));
+      }
+    }
+
+    async function deleteImportsByChannel(id, label) {
+      const cleanId = String(id || "").trim();
+      if (!cleanId) return;
+      const ok = window.confirm(`Alle imports voor "${label || cleanId}" verwijderen uit het admin account?`);
+      if (!ok) return;
+      const statusEl = document.getElementById("importsByChannelStatus");
+      if (statusEl) statusEl.textContent = "⏳ Verwijderen…";
+      try {
+        const init = adminFetchInit();
+        const resp = await fetch(`/api/admin/imports-by-channel`, {
+          ...init,
+          method: "DELETE",
+          headers: { ...(init.headers || {}), "Content-Type": "application/json" },
+          body: JSON.stringify({ groupBy: importsByChannelGroupBy, id: cleanId }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) throw new Error(data.error || "Verwijderen mislukt");
+        if (statusEl) statusEl.textContent = `✅ ${formatNumber(data.removed || 0)} import(s) verwijderd.`;
+        await loadImportsByChannel();
       } catch (e) {
         if (statusEl) statusEl.textContent = "❌ " + (e.message || String(e));
       }
@@ -2751,9 +2777,16 @@
         }));
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || "Zoeken mislukt");
-        const results = Array.isArray(data.results) ? data.results : [];
+        let results = Array.isArray(data.results) ? data.results : [];
+        let fallbackMs = null;
+        if (!results.length) {
+          const fallback = await fallbackChannelSearchForAdmin(channel, query, 10);
+          results = fallback.results || [];
+          fallbackMs = Number(fallback.responseTimeMs);
+        }
         const ms = Number(data.responseTimeMs);
-        if (statusEl) statusEl.textContent = `${results.length ? `Top ${results.length} resultaten` : "Geen resultaten"}${Number.isFinite(ms) ? ` · ${ms} ms` : ""}`;
+        const timing = Number.isFinite(fallbackMs) ? ` · fallback ${fallbackMs} ms` : Number.isFinite(ms) ? ` · ${ms} ms` : "";
+        if (statusEl) statusEl.textContent = `${results.length ? `Top ${results.length} resultaten` : "Geen resultaten"}${timing}`;
         renderSeoSingleRecipeResults(results, String(data.searchBackendNote || ""));
       } catch (error) {
         if (statusEl) statusEl.textContent = "Fout: " + (error.message || String(error));
@@ -4262,6 +4295,28 @@
       runChannelTestImport();
     }
 
+    async function fallbackChannelSearchForAdmin(channel, query, limit = 10) {
+      if (!channel || !query) return { results: [], responseTimeMs: 0 };
+      const params = new URLSearchParams({ q: query });
+      if (channel.kind === "custom") {
+        const ch = channel.customChannel || {};
+        const id = String(ch.id || "").trim();
+        const name = String(ch.name || "").trim();
+        const url = String(ch.url || "").trim();
+        params.set("channels", "");
+        if (id && name && url) params.set("customChannels", `${id}|${name}|${url}`);
+      } else {
+        params.set("channels", String(channel.channelId || ""));
+      }
+      const response = await fetch(`/api/channel-search?${params.toString()}`, adminFetchInit());
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Fallback search failed");
+      return {
+        results: (Array.isArray(data.results) ? data.results : []).slice(0, limit),
+        responseTimeMs: data.responseTimeMs,
+      };
+    }
+
     async function runChannelTestSearch() {
       showChannelTestError("");
       const channel = getSelectedChannelFromUi();
@@ -4292,7 +4347,13 @@
         }));
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || "Search test failed");
-        const results = data.results || [];
+        let results = data.results || [];
+        let fallbackMs = null;
+        if (!results.length) {
+          const fallback = await fallbackChannelSearchForAdmin(channel, query, 10);
+          results = fallback.results || [];
+          fallbackMs = Number(fallback.responseTimeMs);
+        }
         const usedQuery = String(data.usedQuery || query || "").trim();
         const usedUrl = String(data.usedUrl || "").trim();
         if (metaEl && (usedUrl || usedQuery)) {
@@ -4310,7 +4371,7 @@
         }
         const note = String(data.searchBackendNote || "").trim();
         const ms = Number(data.responseTimeMs);
-        const timing = Number.isFinite(ms) ? ` · ${ms} ms` : "";
+        const timing = Number.isFinite(fallbackMs) ? ` · fallback ${fallbackMs} ms` : Number.isFinite(ms) ? ` · ${ms} ms` : "";
         if (statusEl) statusEl.textContent = `${results.length ? `Top ${results.length} resultaten` : "Geen resultaten"}${timing}`;
         renderChannelTestSearchResults(results, note);
       } catch (error) {
