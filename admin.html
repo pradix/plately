@@ -1091,7 +1091,8 @@
           </div>
           <div class="seo-kw-toolbar">
             <button type="button" class="btn btn-sm" onclick="clearSeoBackfillKeywords()">Selectie wissen</button>
-            <button type="button" class="btn btn-sm" onclick="suggestSeoBackfillKeywords()">Suggestie: 50</button>
+            <button type="button" class="btn btn-sm" onclick="suggestSeoBackfillKeywords()">Suggestie: 100</button>
+            <button type="button" class="btn btn-sm btn-danger" onclick="resetSeoBackfillKeywordHistory()">Reset suggestie-historie</button>
             <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center;flex:1;min-width:200px">
               Eigen woord
               <input id="seoBackfillCustomKw" type="text" maxlength="80" placeholder="bv. Lasagne" style="flex:1;min-width:120px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff" />
@@ -1339,9 +1340,10 @@
     let inventorySearchTimer = null;
     let channelCatalogState = { seedChannels: [], customChannels: { approved: [], pending: [], rejected: [] } };
 
-    const SEO_BACKFILL_KW_MAX = 50;
+    const SEO_BACKFILL_KW_MAX = 100;
     const SEO_BACKFILL_KW_MIN_IMPORT = 10;
-    const SEO_BACKFILL_KW_SUGGEST_DEFAULT = 50;
+    const SEO_BACKFILL_KW_SUGGEST_DEFAULT = 100;
+    const SEO_BACKFILL_KW_HISTORY_KEY = "plately-seo-backfill-used-keywords-v1";
     let seoBackfillKeywordSuggestions = [];
     let seoBackfillSelectedKeywords = [];
 
@@ -2445,17 +2447,59 @@
       renderSeoKeywordPills();
     }
 
+    function loadSeoBackfillKeywordHistory() {
+      try {
+        const raw = localStorage.getItem(SEO_BACKFILL_KW_HISTORY_KEY);
+        if (!raw) return new Set();
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return new Set();
+        return new Set(parsed.map((s) => String(s || "").trim().toLowerCase()).filter(Boolean));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveSeoBackfillKeywordHistory(set) {
+      try {
+        const arr = Array.from(set || new Set()).filter(Boolean);
+        localStorage.setItem(SEO_BACKFILL_KW_HISTORY_KEY, JSON.stringify(arr.slice(0, 5000)));
+      } catch {
+        // ignore
+      }
+    }
+
+    function resetSeoBackfillKeywordHistory() {
+      const ok = confirm("Suggestie-historie wissen? Dan kunnen keywords opnieuw gesuggereerd worden.");
+      if (!ok) return;
+      try {
+        localStorage.removeItem(SEO_BACKFILL_KW_HISTORY_KEY);
+      } catch {}
+      const hint = document.getElementById("seoBackfillKeywordHint");
+      if (hint) hint.textContent = "✅ Historie gewist. Klik opnieuw op Suggestie.";
+    }
+
     function suggestSeoBackfillKeywords() {
       const pool = Array.isArray(seoBackfillKeywordSuggestions) ? seoBackfillKeywordSuggestions : [];
       if (!pool.length) {
         alert("Suggesties zijn nog niet geladen.");
         return;
       }
-      const target = Math.min(SEO_BACKFILL_KW_SUGGEST_DEFAULT, SEO_BACKFILL_KW_MAX, pool.length);
+      const history = loadSeoBackfillKeywordHistory();
+      const available = pool.filter((kw) => {
+        const clean = String(kw || "").trim();
+        if (!clean) return false;
+        const key = clean.toLowerCase();
+        return !history.has(key);
+      });
+      if (!available.length) {
+        alert("Alle keywords zijn al eens gesuggereerd. Gebruik 'Reset suggestie-historie' om opnieuw te starten.");
+        return;
+      }
+      const target = Math.min(SEO_BACKFILL_KW_SUGGEST_DEFAULT, SEO_BACKFILL_KW_MAX, available.length);
       const picked = [];
       const seen = new Set();
       // Prefer a few "top" items first so the list is more human-like.
-      const head = pool.slice(0, Math.min(80, pool.length));
+      const head = available.slice(0, Math.min(120, available.length));
       const chooseFrom = (arr, maxTries) => {
         for (let i = 0; i < maxTries && picked.length < target; i++) {
           const idx = Math.floor(Math.random() * arr.length);
@@ -2466,11 +2510,11 @@
           picked.push(kw);
         }
       };
-      chooseFrom(head, 400);
-      chooseFrom(pool, 4000);
+      chooseFrom(head, 900);
+      chooseFrom(available, 9000);
       // Fill deterministically if randomness didn't hit enough uniques.
       if (picked.length < target) {
-        for (const kw of pool) {
+        for (const kw of available) {
           if (picked.length >= target) break;
           const clean = String(kw || "").trim();
           const key = clean.toLowerCase();
@@ -2480,10 +2524,16 @@
         }
       }
       seoBackfillSelectedKeywords = picked.slice(0, target);
+      for (const kw of seoBackfillSelectedKeywords) {
+        const key = String(kw || "").trim().toLowerCase();
+        if (key) history.add(key);
+      }
+      saveSeoBackfillKeywordHistory(history);
       renderSeoKeywordPills();
       try {
         const el = document.getElementById("seoBackfillKeywordHint");
-        if (el) el.textContent = `✅ Suggestie gemaakt: ${seoBackfillSelectedKeywords.length} zoekwoorden`;
+        const left = Math.max(0, available.length - seoBackfillSelectedKeywords.length);
+        if (el) el.textContent = `✅ Suggestie gemaakt: ${seoBackfillSelectedKeywords.length} zoekwoorden · over: ${left}`;
       } catch {}
     }
 

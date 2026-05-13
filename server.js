@@ -12180,7 +12180,7 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
   const usingCustomKeywords = customKeywordList.length > 0;
   const parsedKeywordCap = Number.parseInt(options.keywordLimit, 10);
   const keywordLimit = usingCustomKeywords
-    ? Math.min(60, Math.max(1, Number.isFinite(parsedKeywordCap) ? parsedKeywordCap : customKeywordList.length))
+    ? Math.min(200, Math.max(1, Number.isFinite(parsedKeywordCap) ? parsedKeywordCap : customKeywordList.length))
     : Math.min(SEO_RECIPE_BACKFILL_KEYWORDS.length, Math.max(6, Number.isFinite(parsedKeywordCap) ? parsedKeywordCap : 28));
   const keywords = (usingCustomKeywords ? customKeywordList : SEO_RECIPE_BACKFILL_KEYWORDS).slice(0, keywordLimit);
   const dryRun = Boolean(options.dryRun);
