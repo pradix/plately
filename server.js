@@ -12793,43 +12793,56 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
     throw new HttpError(400, "Geen zoekwoorden om te gebruiken (pool leeg of keywordLimit te klein).");
   }
 
-  onProgress?.({
-    phase: "init",
-    message: `${targets.length} kanaal/kanalen, ${keywords.length} zoekwoorden`,
-    targetTotal: targets.length,
-    keywordTotal: keywords.length,
-    dryRun,
+  const recipesInAccountBefore = Array.isArray(appState.importedRecipes) ? appState.importedRecipes.length : 0;
+  const allImported = [];
+  const mergeImportStats = (patch) => ({
+    recipesInAccountBefore,
+    importedThisRun: allImported.length,
+    importedSoFar: allImported.length,
+    recipesApproxInAccount: recipesInAccountBefore + allImported.length,
+    ...patch,
   });
 
-  const allImported = [];
+  onProgress?.(
+    mergeImportStats({
+      phase: "init",
+      message: `${targets.length} kanaal/kanalen, ${keywords.length} zoekwoorden · ${recipesInAccountBefore} recepten in account vóór run`,
+      targetTotal: targets.length,
+      keywordTotal: keywords.length,
+      dryRun,
+    })
+  );
+
   const report = [];
   let targetIndex = 0;
   for (const target of targets) {
     targetIndex += 1;
-    onProgress?.({
-      phase: "search",
-      message: `Zoeken: ${target.label}`,
-      targetKind: target.kind,
-      channelId: target.channelId,
-      targetIndex,
-      targetTotal: targets.length,
-      importedSoFar: allImported.length,
-    });
-
-    const searchLimit = limitPerChannel * 2;
-    const onKw = (kw) =>
-      onProgress?.({
+    onProgress?.(
+      mergeImportStats({
         phase: "search",
-        message: `Zoeken: ${target.label} — ${kw.keyword} (${kw.keywordIndex}/${kw.keywordTotal})`,
-        targetKind: kw.targetKind || target.kind,
+        message: `Zoeken: ${target.label}`,
+        targetKind: target.kind,
         channelId: target.channelId,
         targetIndex,
         targetTotal: targets.length,
-        keyword: kw.keyword,
-        keywordIndex: kw.keywordIndex,
-        keywordTotal: kw.keywordTotal,
-        importedSoFar: allImported.length,
-      });
+      })
+    );
+
+    const searchLimit = limitPerChannel * 2;
+    const onKw = (kw) =>
+      onProgress?.(
+        mergeImportStats({
+          phase: "search",
+          message: `Zoeken: ${target.label} — ${kw.keyword} (${kw.keywordIndex}/${kw.keywordTotal})`,
+          targetKind: kw.targetKind || target.kind,
+          channelId: target.channelId,
+          targetIndex,
+          targetTotal: targets.length,
+          keyword: kw.keyword,
+          keywordIndex: kw.keywordIndex,
+          keywordTotal: kw.keywordTotal,
+        })
+      );
 
     let candidates = [];
     let usedKeywords = [];
@@ -12859,24 +12872,26 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
     const failed = [];
     if (!dryRun) {
       let candIdx = 0;
+      const capThisTarget = Math.min(candidates.length, limitPerChannel);
       for (const candidate of candidates) {
         if (imported.length >= limitPerChannel) break;
         candIdx += 1;
-        onProgress?.({
-          phase: "import",
-          message: `Importeren: ${target.label} (${imported.length + 1}/${Math.min(candidates.length, limitPerChannel)})`,
-          targetKind: target.kind,
-          channelId: target.channelId,
-          targetIndex,
-          targetTotal: targets.length,
-          candidateUrl: candidate.url,
-          candidateIndex: candIdx,
-          importedSoFar: allImported.length,
-        });
         try {
           const recipe = await importSeoBackfillCandidate(candidate);
           imported.push({ recipe, candidate });
           allImported.push(recipe);
+          onProgress?.(
+            mergeImportStats({
+              phase: "import",
+              message: `${target.label}: ${imported.length}/${capThisTarget} in dit kanaal · ${allImported.length} geïmporteerd in deze run`,
+              targetKind: target.kind,
+              channelId: target.channelId,
+              targetIndex,
+              targetTotal: targets.length,
+              candidateUrl: candidate.url,
+              candidateIndex: candIdx,
+            })
+          );
         } catch (error) {
           failed.push({
             title: candidate.title,
@@ -12901,15 +12916,33 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
     });
   }
 
-  onProgress?.({
-    phase: "save",
-    message: dryRun ? "Dry-run: geen opslag" : "Recepten opslaan…",
-    importedSoFar: allImported.length,
-  });
+  onProgress?.(
+    mergeImportStats({
+      phase: "save",
+      message: dryRun
+        ? `Dry-run: geen opslag · ${recipesInAccountBefore} recepten in account`
+        : `${allImported.length} geïmporteerd in deze run, opslaan… · was ${recipesInAccountBefore} in account`,
+    })
+  );
 
   const saved = dryRun
     ? { added: 0, updated: 0, skipped: 0, importedRecipes: appState.importedRecipes || [] }
     : await saveSeoBackfillRecipesForUser(authUser.id, allImported, { forceReimport });
+
+  if (!dryRun && onProgress && Array.isArray(saved.importedRecipes)) {
+    const recipesInAccountAfter = saved.importedRecipes.length;
+    onProgress?.(
+      mergeImportStats({
+        phase: "saved",
+        message: `+${saved.added} nieuw, ${saved.updated || 0} bijgewerkt, ${saved.skipped} overgeslagen`,
+        recipesInAccountAfter,
+        recipesApproxInAccount: recipesInAccountAfter,
+        savedAdded: saved.added,
+        savedUpdated: saved.updated || 0,
+        skippedExisting: saved.skipped,
+      })
+    );
+  }
 
   return {
     ok: true,

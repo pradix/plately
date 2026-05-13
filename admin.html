@@ -2757,15 +2757,35 @@
       seoBackfillAbortController = null;
     }
     function formatSeoBackfillJobStatus(sj) {
-      const p = sj && sj.progress && typeof sj.progress === "object" ? sj.progress : null;
-      if (!p) return "";
+      if (sj?.status === "done" && sj?.result?.totals) {
+        const t = sj.result.totals;
+        const parts = [];
+        if (typeof t.totalPublicRecipes === "number") {
+          parts.push(`${t.totalPublicRecipes} recepten in account`);
+        }
+        parts.push(`+${t.saved || 0} nieuw opgeslagen`);
+        if (t.updated) parts.push(`${t.updated} bijgewerkt`);
+        if (typeof t.imported === "number") parts.push(`${t.imported} geïmporteerd in run`);
+        return parts.filter(Boolean).join(" · ");
+      }
+      const p = sj?.progress && typeof sj.progress === "object" ? sj.progress : null;
+      if (!p) return sj?.status === "error" ? String(sj.error || "") : "";
       const parts = [];
       if (p.phase) parts.push(String(p.phase));
       if (p.message) parts.push(String(p.message));
       if (typeof p.targetIndex === "number" && typeof p.targetTotal === "number") {
         parts.push(`doel ${p.targetIndex}/${p.targetTotal}`);
       }
-      if (typeof p.importedSoFar === "number") parts.push(`${p.importedSoFar} in deze run`);
+      const run = typeof p.importedThisRun === "number" ? p.importedThisRun : typeof p.importedSoFar === "number" ? p.importedSoFar : null;
+      const before = typeof p.recipesInAccountBefore === "number" ? p.recipesInAccountBefore : null;
+      if (before !== null && run !== null) {
+        parts.push(`deze run ${run} · account ${before}→~${before + run}`);
+      } else if (run !== null && run > 0) {
+        parts.push(`${run} geïmporteerd in deze run`);
+      }
+      if (typeof p.recipesInAccountAfter === "number") {
+        parts.push(`${p.recipesInAccountAfter} recepten in account`);
+      }
       return parts.join(" · ");
     }
 
