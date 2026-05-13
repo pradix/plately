@@ -12587,15 +12587,35 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
     .slice(0, 10);
   const channelSelection = requestedChannels.length ? "explicit" : followedSeedChannels.length ? "followed" : "fallback";
   const limitPerChannel = Math.min(20, Math.max(1, Number.parseInt(options.limitPerChannel, 10) || 10));
+  const allPoolKeywords = Boolean(options.allPoolKeywords || options.useAllPoolKeywords);
   const customKeywordList = Array.isArray(options.keywords)
     ? options.keywords.map((keyword) => sanitizeText(keyword || "")).filter((keyword) => keyword.length >= 2)
     : [];
-  const usingCustomKeywords = customKeywordList.length > 0;
+  const usingCustomKeywords = !allPoolKeywords && customKeywordList.length > 0;
   const parsedKeywordCap = Number.parseInt(options.keywordLimit, 10);
-  const keywordLimit = usingCustomKeywords
-    ? Math.min(200, Math.max(1, Number.isFinite(parsedKeywordCap) ? parsedKeywordCap : customKeywordList.length))
-    : Math.min(SEO_RECIPE_BACKFILL_KEYWORDS.length, Math.max(6, Number.isFinite(parsedKeywordCap) ? parsedKeywordCap : 28));
-  const keywords = (usingCustomKeywords ? customKeywordList : SEO_RECIPE_BACKFILL_KEYWORDS).slice(0, keywordLimit);
+  const poolLen = Array.isArray(SEO_RECIPE_BACKFILL_KEYWORDS) ? SEO_RECIPE_BACKFILL_KEYWORDS.length : 0;
+  const maxPoolSlice = 5000;
+
+  let keywords = [];
+  let keywordMode = "defaultSlice";
+  if (allPoolKeywords) {
+    keywordMode = "allPool";
+    const cap = Number.isFinite(parsedKeywordCap) && parsedKeywordCap > 0
+      ? Math.min(maxPoolSlice, Math.max(1, parsedKeywordCap))
+      : Math.min(maxPoolSlice, poolLen);
+    keywords = (SEO_RECIPE_BACKFILL_KEYWORDS || []).slice(0, cap);
+  } else if (usingCustomKeywords) {
+    keywordMode = "custom";
+    const keywordLimit = Math.min(200, Math.max(1, Number.isFinite(parsedKeywordCap) ? parsedKeywordCap : customKeywordList.length));
+    keywords = customKeywordList.slice(0, keywordLimit);
+  } else {
+    keywordMode = "defaultSlice";
+    const keywordLimit = Math.min(
+      poolLen,
+      Math.max(6, Number.isFinite(parsedKeywordCap) ? parsedKeywordCap : 28)
+    );
+    keywords = (SEO_RECIPE_BACKFILL_KEYWORDS || []).slice(0, keywordLimit);
+  }
   const dryRun = Boolean(options.dryRun);
 
   if (!channels.length) {
@@ -12603,6 +12623,9 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
       400,
       "Geen actieve seed-kanalen gevonden om te vullen. Zet kanalen aan in admin, volg seed-kanalen in de app, of stuur body.channels met id's (bijv. [\"ch-ah\",\"ch-jumbo\"])."
     );
+  }
+  if (!keywords.length) {
+    throw new HttpError(400, "Geen zoekwoorden om te gebruiken (pool leeg of keywordLimit te klein).");
   }
 
   const allImported = [];
@@ -12652,6 +12675,8 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
     ok: true,
     dryRun,
     channelSelection,
+    keywordMode,
+    keywordCount: keywords.length,
     keywordsUsed: keywords,
     channels: report,
     totals: {

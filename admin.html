@@ -1092,7 +1092,7 @@
           </div>
           <p class="muted" style="font-size:12px;margin-bottom:12px;line-height:1.45">
             Roept <code class="mono">POST /api/admin/seo-recipe-backfill</code> aan: zoekt per seed-kanaal (je gevolgde kanalen, of anders de standaard ingeschakelde seed-kanalen), importeert tot N recepten per kanaal naar het kookboek <strong>SEO recepten</strong> van je <strong>admin-account</strong>.
-            Kies hieronder <strong>10–20 zoekwoorden</strong> uit dezelfde suggesties als in de app-zoekbalk (plus gerechten), daarna dry-run of import.
+            Kies handmatig zoekwoorden (tot 100), of vink <strong>alle pool-zoekwoorden</strong> aan om in één keer de volledige lijst uit <code class="mono">assets/seo-recipe-keywords.nl.json</code> te doorlopen (kan lang duren).
           </p>
           <div id="seoBackfillKeywordHint" class="muted" style="font-size:12px;margin-bottom:8px">⏳ Zoekwoorden laden…</div>
           <div id="seoBackfillSelectedWrap" class="seo-kw-selected" style="display:none">
@@ -1102,6 +1102,10 @@
           <div class="seo-kw-toolbar">
             <button type="button" class="btn btn-sm" onclick="clearSeoBackfillKeywords()">Selectie wissen</button>
             <button type="button" class="btn btn-sm" onclick="suggestSeoBackfillKeywords()">Suggestie: 100</button>
+            <label class="muted" style="font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:4px">
+              <input type="checkbox" id="seoBackfillAllPoolKeywords" />
+              Alle pool-zoekwoorden (één run)
+            </label>
             <button type="button" class="btn btn-sm btn-danger" onclick="resetSeoBackfillKeywordHistory()">Reset suggestie-historie</button>
             <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center;flex:1;min-width:200px">
               Eigen woord
@@ -2489,7 +2493,7 @@
       const tags = document.getElementById("seoBackfillSelectedTags");
       const n = seoBackfillSelectedKeywords.length;
       if (hint && !String(hint.textContent || "").startsWith("❌")) {
-        hint.textContent = `${n} / ${SEO_BACKFILL_KW_MAX} geselecteerd · dry-run: 1–${SEO_BACKFILL_KW_MAX} woorden · import: ${SEO_BACKFILL_KW_MIN_IMPORT}–${SEO_BACKFILL_KW_MAX} woorden`;
+        hint.textContent = `${n} / ${SEO_BACKFILL_KW_MAX} geselecteerd · dry-run: 1–${SEO_BACKFILL_KW_MAX} woorden · import: ${SEO_BACKFILL_KW_MIN_IMPORT}–${SEO_BACKFILL_KW_MAX} woorden · of vink «Alle pool-zoekwoorden» voor de volledige JSON-lijst`;
       }
       if (wrap && tags) {
         if (!n) {
@@ -2697,30 +2701,46 @@
       const limitPerChannel = Math.min(20, Math.max(1, parseInt(String(limitRaw), 10) || 10));
       const btnDry = document.getElementById("seoBackfillBtnDry");
       const btnGo = document.getElementById("seoBackfillBtnGo");
+      const allPool = Boolean(document.getElementById("seoBackfillAllPoolKeywords")?.checked);
       const setBusy = (busy) => {
         if (btnDry) btnDry.disabled = busy;
         if (btnGo) btnGo.disabled = busy;
         const cancelBtn = document.getElementById("seoBackfillBtnCancel");
         if (cancelBtn) cancelBtn.disabled = !busy;
       };
-      const keywords = seoBackfillSelectedKeywords.slice();
-      if (!keywords.length) {
-        alert("Kies eerst zoekwoorden uit de suggesties of voeg een eigen woord toe.");
-        return;
-      }
-      if (keywords.length > SEO_BACKFILL_KW_MAX) {
-        alert(`Maximaal ${SEO_BACKFILL_KW_MAX} zoekwoorden.`);
-        return;
-      }
-      if (!dryRun && (keywords.length < SEO_BACKFILL_KW_MIN_IMPORT || keywords.length > SEO_BACKFILL_KW_MAX)) {
-        alert(`Import vereist tussen ${SEO_BACKFILL_KW_MIN_IMPORT} en ${SEO_BACKFILL_KW_MAX} zoekwoorden (nu: ${keywords.length}).`);
-        return;
-      }
-      if (!dryRun) {
-        const ok = confirm(
-          "Recepten echt importeren naar het admin-account (kookboek «SEO recepten») en als publieke SEO-pagina's beschikbaar maken?"
-        );
-        if (!ok) return;
+      let bodyPayload = { limitPerChannel, dryRun: Boolean(dryRun) };
+      if (allPool) {
+        const approx = Array.isArray(seoBackfillKeywordSuggestions) ? seoBackfillKeywordSuggestions.length : 0;
+        const poolHint = approx > 0 ? `${approx} woorden` : "de volledige server-pool";
+        if (!dryRun) {
+          const ok = confirm(
+            `ALLE pool-zoekwoorden gebruiken (${poolHint}). Dit kan zeer lang duren en doet voor elk kanaal heel veel zoek-requests. Recepten worden geïmporteerd naar «SEO recepten» en worden publiek. Doorgaan?`
+          );
+          if (!ok) return;
+        }
+        bodyPayload.allPoolKeywords = true;
+      } else {
+        const keywords = seoBackfillSelectedKeywords.slice();
+        if (!keywords.length) {
+          alert("Kies eerst zoekwoorden uit de suggesties, voeg eigen woorden toe, of vink «Alle pool-zoekwoorden» aan.");
+          return;
+        }
+        if (keywords.length > SEO_BACKFILL_KW_MAX) {
+          alert(`Maximaal ${SEO_BACKFILL_KW_MAX} zoekwoorden.`);
+          return;
+        }
+        if (!dryRun && (keywords.length < SEO_BACKFILL_KW_MIN_IMPORT || keywords.length > SEO_BACKFILL_KW_MAX)) {
+          alert(`Import vereist tussen ${SEO_BACKFILL_KW_MIN_IMPORT} en ${SEO_BACKFILL_KW_MAX} zoekwoorden (nu: ${keywords.length}).`);
+          return;
+        }
+        bodyPayload.keywords = keywords;
+        bodyPayload.keywordLimit = keywords.length;
+        if (!dryRun) {
+          const ok = confirm(
+            "Recepten echt importeren naar het admin-account (kookboek «SEO recepten») en als publieke SEO-pagina's beschikbaar maken?"
+          );
+          if (!ok) return;
+        }
       }
       setBusy(true);
       cancelSeoRecipeBackfill();
@@ -2737,12 +2757,7 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: seoBackfillAbortController.signal,
-          body: JSON.stringify({
-            limitPerChannel,
-            dryRun: Boolean(dryRun),
-            keywords,
-            keywordLimit: keywords.length,
-          }),
+          body: JSON.stringify(bodyPayload),
         }));
         const text = await response.text();
         let data;
