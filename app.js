@@ -10575,27 +10575,15 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
       }
     };
 
-    const normalizeTitleForDedup = (title) =>
-      normalizeImportedTitle(String(title || ""))
-        .toLowerCase()
-        .replace(/[^\p{L}\p{N}]+/gu, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-
     const findDuplicateImportedRecipe = (candidate) => {
-      const urlKey = normalizeImportUrlForDedup(candidate?.sourceUrl || "");
-      const titleKey = normalizeTitleForDedup(candidate?.title || "");
+      const urlKey = normalizeImportUrlForDedup(
+        String(candidate?.sourceUrl || "").trim() || String(url || "").trim()
+      );
       const saved = getSavedImportedRecipes();
-      if (!saved.length) return null;
+      if (!urlKey || !saved.length) return null;
 
-      if (urlKey) {
-        const byUrl = saved.find((r) => normalizeImportUrlForDedup(r?.sourceUrl || "") === urlKey);
-        if (byUrl) return { recipe: byUrl, reason: "url" };
-      }
-      if (titleKey) {
-        const byTitle = saved.find((r) => normalizeTitleForDedup(r?.title || "") === titleKey);
-        if (byTitle) return { recipe: byTitle, reason: "title" };
-      }
+      const byUrl = saved.find((r) => normalizeImportUrlForDedup(r?.sourceUrl || "") === urlKey);
+      if (byUrl) return { recipe: byUrl, reason: "url" };
       return null;
     };
 
@@ -10610,9 +10598,7 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
       const choice = await confirmWithAlt({
         title: "Dubbel recept gevonden",
         subtitle:
-          dupe.reason === "url"
-            ? "Dit recept lijkt al eerder geïmporteerd (zelfde link). Wil je het bestaande recept overschrijven of als nieuw bewaren?"
-            : "Dit recept lijkt al eerder geïmporteerd (zelfde titel). Wil je het bestaande recept overschrijven of als nieuw bewaren?",
+          "Dit recept lijkt al eerder geïmporteerd (zelfde bronlink). Wil je het bestaande recept overschrijven of als nieuw bewaren?",
         confirmLabel: "Overschrijven",
         altLabel: "Nieuw bewaren",
       });
