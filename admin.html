@@ -1092,13 +1092,13 @@
           </div>
           <p class="muted" style="font-size:12px;margin-bottom:12px;line-height:1.45">
             Roept <code class="mono">POST /api/admin/seo-recipe-backfill</code> aan: zoekt per <strong>seed-kanaal</strong> (je gevolgde kanalen, of anders de standaard ingeschakelde seed-kanalen) én per <strong>ingeschakeld custom-kanaal</strong> dat je volgt (zelfde regels als in de app-zoekbalk), importeert tot N recepten per doel naar het kookboek <strong>SEO recepten</strong> van je <strong>admin-account</strong>.
-            Kies handmatig zoekwoorden (tot 200 per import), of vink <strong>alle pool-zoekwoorden</strong> aan om in één keer de volledige lijst uit <code class="mono">assets/seo-recipe-keywords.nl.json</code> te doorlopen (kan lang duren). Optioneel: <strong>top 100 populairste eerst</strong> (sorteer kandidaten op ratings vóór import).
+            Kies handmatig zoekwoorden (tot 200 per import), of vink <strong>alle pool-zoekwoorden</strong> aan om in één keer de volledige lijst uit <code class="mono">assets/seo-recipe-keywords.nl.json</code> te doorlopen (kan lang duren). Gebruik <strong>Alleen dit seed-kanaal</strong> om bijvoorbeeld alleen Allerhande of Jumbo te backfillen. Optioneel: <strong>top 100 populairste eerst</strong> (sorteer kandidaten op ratings vóór import).
           </p>
           <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px">
             <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-              Seed-kanaal
+              Alleen dit seed-kanaal
               <select id="seoBackfillChannelSelect" style="min-width:220px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
-                <option value="">Automatisch (gevolgd/fallback)</option>
+                <option value="">Automatisch: gevolgd/fallback</option>
               </select>
             </label>
           </div>
@@ -1151,7 +1151,7 @@
 
         <div class="section" id="seoRatingsBackfillSection" style="margin-top:14px">
           <div class="section-header">
-            <h2>SEO-recepten ratings backfill</h2>
+            <h2>Beoordelingen opnieuw ophalen</h2>
             <div class="muted">Beoordelingen ophalen van bronsites</div>
           </div>
           <p class="muted" style="font-size:12px;margin-bottom:12px;line-height:1.45">
@@ -2597,7 +2597,7 @@
       const seed = (Array.isArray(seedChannels) ? seedChannels : [])
         .filter((ch) => ch && ch.id && ch.enabled !== false);
       sel.innerHTML =
-        `<option value="">Automatisch (gevolgd/fallback)</option>` +
+        `<option value="">Automatisch: gevolgd/fallback</option>` +
         seed
           .map((ch) => `<option value="${escapeHtml(ch.id)}">${escapeHtml(ch.name || ch.id)}</option>`)
           .join("");
@@ -2788,6 +2788,10 @@
       if (sj?.status === "done" && sj?.result?.totals) {
         const t = sj.result.totals;
         const parts = [];
+        const channelLabel = Array.isArray(sj.result.channels) && sj.result.channels.length === 1
+          ? (sj.result.channels[0]?.channel || sj.result.channels[0]?.channelId || "")
+          : "";
+        if (channelLabel) parts.push(`kanaal ${channelLabel}`);
         if (typeof t.totalPublicRecipes === "number") {
           parts.push(`${t.totalPublicRecipes} recepten in account`);
         }
@@ -2801,6 +2805,7 @@
       const parts = [];
       if (p.phase) parts.push(String(p.phase));
       if (p.message) parts.push(String(p.message));
+      if (p.channelId) parts.push(`kanaal ${p.channelId}`);
       if (typeof p.targetIndex === "number" && typeof p.targetTotal === "number") {
         parts.push(`doel ${p.targetIndex}/${p.targetTotal}`);
       }
@@ -2948,7 +2953,10 @@
               }
               if (statusEl) {
                 const tag = sj.result?.channelSelection ? ` (${sj.result.channelSelection})` : "";
-                statusEl.textContent = `${dryRun ? "✅ Dry-run klaar" : "✅ Import klaar"} • ${sec}s${tag}`;
+                const channelName = Array.isArray(sj.result?.channels) && sj.result.channels.length === 1
+                  ? (sj.result.channels[0]?.channel || sj.result.channels[0]?.channelId || "")
+                  : "";
+                statusEl.textContent = `${dryRun ? "✅ Dry-run klaar" : "✅ Import klaar"} • ${sec}s${tag}${channelName ? ` · kanaal ${channelName}` : ""}`;
               }
               break;
             }
@@ -2960,7 +2968,10 @@
           if (statusEl) {
             const tag = data.channelSelection ? ` (${data.channelSelection})` : "";
             const sec = Math.floor((Date.now() - startedAt) / 1000);
-            statusEl.textContent = `${dryRun ? "✅ Dry-run klaar" : "✅ Import klaar"} • ${sec}s${tag}`;
+            const channelName = Array.isArray(data.channels) && data.channels.length === 1
+              ? (data.channels[0]?.channel || data.channels[0]?.channelId || "")
+              : "";
+            statusEl.textContent = `${dryRun ? "✅ Dry-run klaar" : "✅ Import klaar"} • ${sec}s${tag}${channelName ? ` · kanaal ${channelName}` : ""}`;
           }
           if (outEl) {
             try {
