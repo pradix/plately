@@ -1127,7 +1127,7 @@
               Opnieuw importeren (overschrijf zelfde bron-URL)
             </label>
             <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Max per kanaal
-              <input id="seoBackfillLimitPerChannel" type="number" min="1" max="20" value="10" style="width:56px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+              <input id="seoBackfillLimitPerChannel" type="number" min="1" max="40" value="10" style="width:56px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
             </label>
             <button type="button" class="btn" id="seoBackfillBtnDry" onclick="runSeoRecipeBackfill(true)">Dry-run (geen import)</button>
             <button type="button" class="btn btn-primary" id="seoBackfillBtnGo" onclick="runSeoRecipeBackfill(false)">Import uitvoeren</button>
@@ -2793,7 +2793,7 @@
       const statusEl = document.getElementById("seoBackfillStatus");
       const outEl = document.getElementById("seoBackfillOutput");
       const limitRaw = document.getElementById("seoBackfillLimitPerChannel")?.value ?? "10";
-      const limitPerChannel = Math.min(20, Math.max(1, parseInt(String(limitRaw), 10) || 10));
+      const limitPerChannel = Math.min(40, Math.max(1, parseInt(String(limitRaw), 10) || 10));
       const btnDry = document.getElementById("seoBackfillBtnDry");
       const btnGo = document.getElementById("seoBackfillBtnGo");
       const allPool = Boolean(document.getElementById("seoBackfillAllPoolKeywords")?.checked);

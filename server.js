@@ -12208,8 +12208,14 @@ async function scrapeOrRestPublic(baseUrl, channelName, channelId, searchUrl, pa
   return [];
 }
 
-async function searchChannelRecipes(query, allowedChannels = null) {
+async function searchChannelRecipes(query, allowedChannels = null, options = {}) {
   const q = encodeURIComponent(query);
+  const seoBackfill = Boolean(options && options.seoBackfill);
+  /** Iets hogere caps voor SEO-backfill (normale app-zoek blijft snel met 3–4/12). */
+  const pc = seoBackfill ? 14 : 4;
+  const pcTight = seoBackfill ? 12 : 3;
+  const pcCuly = seoBackfill ? 24 : 12;
+  const maxMerged = seoBackfill ? 80 : 30;
   // null = alle seed-kanalen; [] = géén seeds (alleen custom via /api/channel-search); anders = alleen die IDs
   const allow =
     allowedChannels === null
@@ -12277,20 +12283,20 @@ async function searchChannelRecipes(query, allowedChannels = null) {
   const collected = [];
   const searches = [
     // FAST: Reliable, quick-responding channels
-    maybeSearch("ch-ah", () => searchAHRecipes(query, 4, { searchUrlTemplate: cfg("ch-ah").searchUrlTemplate })),
-    maybeSearch("ch-jumbo", () => searchJumboRecipes(query, 4, { searchUrlTemplate: cfg("ch-jumbo").searchUrlTemplate })),
+    maybeSearch("ch-ah", () => searchAHRecipes(query, pc, { searchUrlTemplate: cfg("ch-ah").searchUrlTemplate })),
+    maybeSearch("ch-jumbo", () => searchJumboRecipes(query, pc, { searchUrlTemplate: cfg("ch-jumbo").searchUrlTemplate })),
     maybeSearch("ch-les", () => scrapeOrRest(cfg("ch-les").baseUrl || "https://www.lekkerensimpel.com", "Lekker & Simpel", "ch-les",
       buildSeedChannelSearchUrl("ch-les", cfg("ch-les"), query),
-      parseLekkerSimpel, 4)),
+      parseLekkerSimpel, pc)),
     maybeSearch("ch-24k", () => scrapeOrRest(cfg("ch-24k").baseUrl || "https://www.24kitchen.nl", "24 Kitchen", "ch-24k",
       buildSeedChannelSearchUrl("ch-24k", cfg("ch-24k"), query),
-      parse24Kitchen, 4).then(async (items) => {
+      parse24Kitchen, pc).then(async (items) => {
         const cleaned = (Array.isArray(items) ? items : []).filter((r) => r && r.url && !/\.jpeg/i.test(String(r.url)));
         if (process.env.NODE_ENV !== "production" && Array.isArray(items) && cleaned.length !== items.length) {
           console.warn("🧹 Filtered 24Kitchen .jpeg search result(s)");
         }
         if (cleaned.length) return cleaned;
-        const fac = await search24KitchenFac(query, 4, cfg("ch-24k"));
+        const fac = await search24KitchenFac(query, pc, cfg("ch-24k"));
         const facCleaned = (Array.isArray(fac) ? fac : []).filter((r) => r && r.url && !/\.jpeg/i.test(String(r.url)));
         if (process.env.NODE_ENV !== "production" && Array.isArray(fac) && facCleaned.length !== fac.length) {
           console.warn("🧹 Filtered 24Kitchen FAC .jpeg result(s)");
@@ -12301,22 +12307,22 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     // MEDIUM: May be slower, but try anyway
     maybeSearch("ch-lb", () => scrapeOrRest(cfg("ch-lb").baseUrl || "https://www.laurasbakery.nl", "Laura's Bakery", "ch-lb",
       buildSeedChannelSearchUrl("ch-lb", cfg("ch-lb"), query),
-      parseLaurasBakery, 4)),
+      parseLaurasBakery, pc)),
     maybeSearch("ch-ek", () => scrapeOrRest(cfg("ch-ek").baseUrl || "https://www.eefkooktzo.nl", "Eef Kookt Zo", "ch-ek",
       buildSeedChannelSearchUrl("ch-ek", cfg("ch-ek"), query),
-      parseWPStandard, 3)),
+      parseWPStandard, pcTight)),
     maybeSearch("ch-up", () => scrapeOrRest(cfg("ch-up").baseUrl || "https://uitpaulineskeuken.nl", "Uit Paulines Keuken", "ch-up",
       buildSeedChannelSearchUrl("ch-up", cfg("ch-up"), query),
-      parsePaulineSearch, 4)),
+      parsePaulineSearch, pc)),
     maybeSearch("ch-clf", () => scrapeOrRest(cfg("ch-clf").baseUrl || "https://www.chickslovefood.com", "Chicks Love Food", "ch-clf",
       buildSeedChannelSearchUrl("ch-clf", cfg("ch-clf"), query),
-      parseChicksLoveFood, 3)),
-    maybeSearch("ch-culy", () => searchCulyRecipes(query, 12, cfg("ch-culy"))),
+      parseChicksLoveFood, pcTight)),
+    maybeSearch("ch-culy", () => searchCulyRecipes(query, pcCuly, cfg("ch-culy"))),
 
     // SLOW: Include but expect timeouts
     maybeSearch("ch-mj", () => scrapeOrRest(cfg("ch-mj").baseUrl || "https://miljuschka.nl", "Miljuschka", "ch-mj",
       buildSeedChannelSearchUrl("ch-mj", cfg("ch-mj"), query),
-      parseWPStandard, 4)),
+      parseWPStandard, pc)),
   ];
 
   const instrumented = searches.map((p) =>
@@ -12401,7 +12407,7 @@ async function searchChannelRecipes(query, allowedChannels = null) {
     }
   }
 
-  return all.slice(0, 30); // Return more results (was 20, now 30) for better variety
+  return all.slice(0, maxMerged);
 }
 
 function getSeedChannelName(channelId) {
@@ -12453,7 +12459,7 @@ async function searchSeoBackfillCandidatesForChannel({ channelId, keywords, limi
     usedKeywords.push(query);
     let results = [];
     try {
-      results = await searchChannelRecipes(query, [channelId]);
+      results = await searchChannelRecipes(query, [channelId], { seoBackfill: true });
     } catch {
       results = [];
     }
@@ -12540,7 +12546,7 @@ async function searchSeoBackfillCandidatesForCustomChannel({
     let results = [];
     try {
       const usedUrl = buildSeedSearchUrlFromTemplate(eff.searchUrlTemplate, query);
-      const merged = await scrapeOrRestPublic(eff.baseUrl, channelName, channelId, usedUrl, parseWPStandard, 8, query);
+      const merged = await scrapeOrRestPublic(eff.baseUrl, channelName, channelId, usedUrl, parseWPStandard, 14, query);
       results = (Array.isArray(merged) ? merged : []).filter((r) =>
         channelSearchResultTitleMatchesQuery(channelId, r.title, query)
       );
@@ -12733,7 +12739,7 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
     .filter((id) => SEED_CHANNEL_DEFAULTS[id] && isChannelEnabled("seed", id, channelEnabled))
     .slice(0, 10);
   const channelSelection = requestedChannels.length ? "explicit" : followedSeedChannels.length ? "followed" : "fallback";
-  const limitPerChannel = Math.min(20, Math.max(1, Number.parseInt(options.limitPerChannel, 10) || 10));
+  const limitPerChannel = Math.min(40, Math.max(1, Number.parseInt(options.limitPerChannel, 10) || 10));
   const allPoolKeywords = Boolean(options.allPoolKeywords || options.useAllPoolKeywords);
   const customKeywordList = Array.isArray(options.keywords)
     ? options.keywords.map((keyword) => sanitizeText(keyword || "")).filter((keyword) => keyword.length >= 2)
@@ -12828,7 +12834,7 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
       })
     );
 
-    const searchLimit = limitPerChannel * 2;
+    const searchLimit = Math.max(64, limitPerChannel * 4);
     const onKw = (kw) =>
       onProgress?.(
         mergeImportStats({
