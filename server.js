@@ -12392,14 +12392,14 @@ const server = http.createServer(async (request, response) => {
 
   try {
     // ── Public SEO recipe pages ─────────────────────────────────────────────
-    if (requestUrl.pathname === "/robots.txt" && request.method === "GET") {
+    if (requestUrl.pathname === "/robots.txt" && (request.method === "GET" || request.method === "HEAD")) {
       const origin = getPublicOrigin(request);
       response.writeHead(200, { ...HTTP_HEADERS, "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache" });
       response.end(`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
       return;
     }
 
-    if (requestUrl.pathname === "/sitemap.xml" && request.method === "GET") {
+    if (requestUrl.pathname === "/sitemap.xml" && (request.method === "GET" || request.method === "HEAD")) {
       const origin = getPublicOrigin(request);
       const entries = await listPublicSeoRecipes(origin);
       const urls = [
@@ -12422,7 +12422,7 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
-    if (requestUrl.pathname === "/recepten" && request.method === "GET") {
+    if (requestUrl.pathname === "/recepten" && (request.method === "GET" || request.method === "HEAD")) {
       const origin = getPublicOrigin(request);
       const entries = await listPublicSeoRecipes(origin);
       response.writeHead(200, { ...HTTP_HEADERS, "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
@@ -12430,7 +12430,7 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
-    if (requestUrl.pathname.startsWith("/recept/") && request.method === "GET") {
+    if (requestUrl.pathname.startsWith("/recept/") && (request.method === "GET" || request.method === "HEAD")) {
       const origin = getPublicOrigin(request);
       const raw = decodeURIComponent(requestUrl.pathname.slice("/recept/".length) || "");
       const token = raw.match(/-([A-Za-z0-9_-]{10})$/)?.[1] || "";
