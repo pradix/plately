@@ -1102,6 +1102,21 @@
               </select>
             </label>
           </div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:0 0 12px;background:rgba(255,255,255,0.72)">
+            <div class="section-header" style="margin-bottom:8px">
+              <h3 style="margin:0;font-size:14px">1 recept zoeken voor SEO-backlink</h3>
+              <div class="muted" style="font-size:12px">Zoek, kies en importeer één publieke SEO-pagina</div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+              <select id="seoSingleRecipeChannelSelect" style="min-width:220px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
+                <option value="">Kanaal kiezen…</option>
+              </select>
+              <input id="seoSingleRecipeQuery" type="text" maxlength="80" placeholder="bv. pasta pesto" style="flex:1;min-width:180px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+              <button type="button" class="btn btn-sm" id="seoSingleRecipeSearchBtn" onclick="runSeoSingleRecipeSearch()">Zoeken</button>
+            </div>
+            <div id="seoSingleRecipeStatus" class="muted" style="font-size:12px;margin-bottom:8px">Kies een kanaal en zoekterm.</div>
+            <div id="seoSingleRecipeResults"></div>
+          </div>
           <div id="seoBackfillKeywordHint" class="muted" style="font-size:12px;margin-bottom:8px">⏳ Zoekwoorden laden…</div>
           <div id="seoBackfillSelectedWrap" class="seo-kw-selected" style="display:none">
             <strong>Volgorde</strong> <span class="muted">(eerste = eerst gezocht)</span>
@@ -1413,6 +1428,7 @@
     const SEO_BACKFILL_KW_HISTORY_KEY = "plately-seo-backfill-used-keywords-v1";
     let seoBackfillKeywordSuggestions = [];
     let seoBackfillSelectedKeywords = [];
+    let seoSingleRecipeLastResults = [];
 
     const PLATELY_AUTH_TOKEN_KEY = "plately-auth-token";
 
@@ -2606,6 +2622,143 @@
       }
     }
 
+    function renderSeoSingleRecipeChannelSelect(seedChannels, customChannels) {
+      const sel = document.getElementById("seoSingleRecipeChannelSelect");
+      if (!sel) return;
+      const current = sel.value || "";
+      const seed = (Array.isArray(seedChannels) ? seedChannels : []).filter((ch) => ch && ch.id && ch.enabled !== false);
+      const approved = Array.isArray(customChannels?.approved) ? customChannels.approved : [];
+      const opt = (label, valueObj) => `<option value="${escapeHtml(JSON.stringify(valueObj))}">${escapeHtml(label)}</option>`;
+      const groups = [];
+      if (seed.length) {
+        groups.push(`<optgroup label="Seed-kanalen">${seed.map((ch) => opt(ch.name || ch.id, { kind: "seed", channelId: ch.id, label: ch.name || ch.id })).join("")}</optgroup>`);
+      }
+      if (approved.length) {
+        groups.push(`<optgroup label="Custom (approved)">${approved.map((ch) => opt(`${ch.name}${ch.url ? ` — ${ch.url}` : ""}`, { kind: "custom", customChannel: { id: ch.id, name: ch.name, url: ch.url }, label: ch.name })).join("")}</optgroup>`);
+      }
+      sel.innerHTML = `<option value="">Kanaal kiezen…</option>` + groups.join("");
+      if (current && Array.from(sel.options).some((option) => option.value === current)) {
+        sel.value = current;
+      }
+    }
+
+    function getSelectedChannelFromSelect(selectId) {
+      const sel = document.getElementById(selectId);
+      const raw = (sel?.value || "").trim();
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function renderSeoSingleRecipeResults(results, note = "") {
+      const wrap = document.getElementById("seoSingleRecipeResults");
+      if (!wrap) return;
+      const list = Array.isArray(results) ? results : [];
+      seoSingleRecipeLastResults = list;
+      if (!list.length) {
+        wrap.innerHTML = note
+          ? `<p style="margin:0 0 8px;line-height:1.45">${escapeHtml(note)}</p><p class="muted">Geen resultaten.</p>`
+          : `<p class="muted">Geen resultaten.</p>`;
+        return;
+      }
+      wrap.innerHTML = list.map((r, idx) => {
+        const title = r?.title || "";
+        const url = r?.url || "";
+        const src = r?.channelName || r?.channelId || "";
+        const thumb = r?.imageUrl || r?.thumbnail || r?.image || "";
+        const rating = r?.ratingCount ? ` · ${escapeHtml(r.ratingValue || "")}★ (${escapeHtml(r.ratingCount)})` : "";
+        const thumbHtml = thumb ? `<img class="admin-test__thumb" src="${escapeHtml(thumb)}" alt="" loading="lazy" />` : `<div class="admin-test__thumb" aria-hidden="true"></div>`;
+        return `
+          <div class="admin-test__result">
+            ${thumbHtml}
+            <div style="min-width:0">
+              <div class="admin-test__title">${escapeHtml(title || "—")}</div>
+              <div class="admin-test__meta">${escapeHtml(src)}${rating} · <a class="admin-inventory__link" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></div>
+            </div>
+            <div style="margin-left:auto;flex:0 0 auto">
+              <button class="btn btn-sm btn-primary" type="button" onclick="importSeoSingleRecipe(${idx})">Importeer als SEO-recept</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function runSeoSingleRecipeSearch() {
+      const channel = getSelectedChannelFromSelect("seoSingleRecipeChannelSelect");
+      const query = (document.getElementById("seoSingleRecipeQuery")?.value || "").trim();
+      const statusEl = document.getElementById("seoSingleRecipeStatus");
+      const btn = document.getElementById("seoSingleRecipeSearchBtn");
+      renderSeoSingleRecipeResults([]);
+      if (!channel) {
+        if (statusEl) statusEl.textContent = "Kies eerst een kanaal.";
+        return;
+      }
+      if (!query || query.length < 2) {
+        if (statusEl) statusEl.textContent = "Vul een zoekterm in van minimaal 2 tekens.";
+        return;
+      }
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> Zoeken…`;
+      if (btn) btn.disabled = true;
+      try {
+        const payload = channel.kind === "custom"
+          ? { channelKind: "custom", customChannel: channel.customChannel, query, limit: 10 }
+          : { channelKind: "seed", channelId: channel.channelId, query, limit: 10 };
+        const response = await fetch("/api/admin/channel-test/search", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Zoeken mislukt");
+        const results = Array.isArray(data.results) ? data.results : [];
+        const ms = Number(data.responseTimeMs);
+        if (statusEl) statusEl.textContent = `${results.length ? `Top ${results.length} resultaten` : "Geen resultaten"}${Number.isFinite(ms) ? ` · ${ms} ms` : ""}`;
+        renderSeoSingleRecipeResults(results, String(data.searchBackendNote || ""));
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "Fout: " + (error.message || String(error));
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function importSeoSingleRecipe(index) {
+      const result = seoSingleRecipeLastResults[index] || null;
+      const channel = getSelectedChannelFromSelect("seoSingleRecipeChannelSelect");
+      const statusEl = document.getElementById("seoSingleRecipeStatus");
+      const url = String(result?.url || "").trim();
+      if (!url) {
+        if (statusEl) statusEl.textContent = "Geen URL gevonden voor dit resultaat.";
+        return;
+      }
+      const forceReimport = Boolean(document.getElementById("seoBackfillForceReimport")?.checked);
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> Importeren naar SEO recepten…`;
+      try {
+        const response = await fetch("/api/admin/seo-recipe-import-one", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url,
+            title: result.title || "",
+            thumbnail: result.imageUrl || result.thumbnail || result.image || "",
+            channelId: result.channelId || channel?.channelId || channel?.customChannel?.id || "",
+            channel: result.channelName || channel?.label || channel?.customChannel?.name || "",
+            forceReimport,
+          }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Import mislukt");
+        const action = data.saved?.updated ? "bijgewerkt" : data.saved?.added ? "geïmporteerd" : "al aanwezig";
+        const link = data.publicPath ? ` · <a class="admin-inventory__link" href="${escapeHtml(data.publicPath)}" target="_blank" rel="noopener">open SEO-pagina</a>` : "";
+        if (statusEl) statusEl.innerHTML = `✅ ${escapeHtml(data.recipe?.title || result.title || "Recept")} ${action}${link}`;
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "Fout: " + (error.message || String(error));
+      }
+    }
+
     function selectAllSeoBackfillKeywords() {
       const pool = Array.isArray(seoBackfillKeywordSuggestions) ? seoBackfillKeywordSuggestions : [];
       if (!pool.length) {
@@ -3643,15 +3796,7 @@
     }
 
     function getSelectedChannelFromUi() {
-      const sel = document.getElementById("channelTestSelect");
-      const raw = (sel?.value || "").trim();
-      if (!raw) return null;
-      try {
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === "object" ? parsed : null;
-      } catch {
-        return null;
-      }
+      return getSelectedChannelFromSelect("channelTestSelect");
     }
 
     function renderCustomChannelsCatalog(seedChannels, custom) {
@@ -3949,6 +4094,7 @@
         const custom = data.customChannels || { approved: [], pending: [], rejected: [] };
         channelCatalogState = { seedChannels: seed, customChannels: custom };
         renderSeoBackfillChannelSelect(seed);
+        renderSeoSingleRecipeChannelSelect(seed, custom);
         const approved = Array.isArray(custom.approved) ? custom.approved : [];
         const pending = Array.isArray(custom.pending) ? custom.pending : [];
         const rejected = Array.isArray(custom.rejected) ? custom.rejected : [];

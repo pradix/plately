@@ -15766,6 +15766,67 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/seo-recipe-import-one" && request.method === "POST") {
+      console.log("🍽️ /api/admin/seo-recipe-import-one called");
+      try {
+        const adminUser = await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const rawInput = sanitizeText(body?.url || "");
+        const urlMatch = rawInput.match(/https?:\/\/[^\s]+/);
+        const cleanUrl = urlMatch ? urlMatch[0] : rawInput;
+        if (!cleanUrl || !/^https?:\/\//i.test(cleanUrl)) {
+          throw new HttpError(400, "Geldige recept-URL ontbreekt.");
+        }
+
+        const channelId = sanitizeText(body?.channelId || inferSeedChannelIdFromSourceUrl(cleanUrl) || "");
+        const candidate = {
+          title: sanitizeText(body?.title || ""),
+          url: cleanUrl,
+          thumbnail: sanitizeText(body?.thumbnail || body?.image || ""),
+          channelId,
+          channel: sanitizeText(body?.channel || (channelId ? getSeedChannelName(channelId) : "") || ""),
+        };
+        const recipe = await importSeoBackfillCandidate(candidate);
+        const saved = await saveSeoBackfillRecipesForUser(adminUser.id, [recipe], {
+          forceReimport: Boolean(body?.forceReimport),
+        });
+
+        const sourceKey = normalizeRecipeSourceKey(recipe.sourceUrl || cleanUrl);
+        const entries = await listPublicSeoRecipes(getPublicOrigin(request)).catch(() => []);
+        const publicEntry = entries.find((entry) => {
+          if (sanitizeText(entry?.userId || "") !== sanitizeText(adminUser.id || "")) return false;
+          const entrySourceKey = normalizeRecipeSourceKey(entry?.recipe?.sourceUrl || "");
+          return sourceKey && entrySourceKey === sourceKey;
+        }) || null;
+
+        return sendJson(response, 200, {
+          ok: true,
+          recipe: {
+            id: sanitizeText(recipe.id || ""),
+            title: sanitizeText(recipe.title || ""),
+            sourceUrl: sanitizeText(recipe.sourceUrl || cleanUrl),
+            image: sanitizeText(recipe.image || ""),
+            ratingValue: recipe.ratingValue || null,
+            ratingCount: recipe.ratingCount || null,
+          },
+          saved: {
+            added: saved.added || 0,
+            updated: saved.updated || 0,
+            skipped: saved.skipped || 0,
+            totalPublicRecipes: Array.isArray(saved.importedRecipes) ? saved.importedRecipes.length : 0,
+          },
+          publicPath: publicEntry?.urlPath || "",
+        });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/seo-recipe-import-one:", error.message);
+        return sendJson(response, statusCode, {
+          ok: false,
+          error: error.message || "SEO-recept importeren mislukt.",
+        });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/seo-recipe-backfill/status" && request.method === "GET") {
       try {
         await requireAdmin(request);
