@@ -2738,7 +2738,7 @@ function sanitizeRecipeForStorage(recipe) {
 
   const instructions = sanitizeStringArray(recipe.instructions);
 
-  return {
+  const out = {
     id,
     title: sanitizeText(recipe.title || "Geïmporteerd recept"),
     description: sanitizeText(recipe.description || ""),
@@ -2756,6 +2756,16 @@ function sanitizeRecipeForStorage(recipe) {
     instructions,
     isSeed: false,
   };
+
+  const rv = Number(recipe.ratingValue);
+  const rc = Number(recipe.ratingCount);
+  if (Number.isFinite(rv) && rv >= 1 && rv <= 5 && Number.isFinite(rc) && rc >= 1) {
+    out.ratingValue = Math.round(rv);
+    out.ratingCount = Math.max(1, Math.round(rc));
+    if (recipe.ratingNormalizedFromWideScale) out.ratingNormalizedFromWideScale = true;
+  }
+
+  return out;
 }
 
 function sanitizeCookbookForStorage(cookbook, fallbackId) {
@@ -11040,6 +11050,50 @@ function urlEligibleForChannelSearchRatingFetch(url) {
   return true;
 }
 
+/** Eén bron-URL: aggregateRating uit Recipe JSON-LD (zelfde aanpak als channel-search enrichment). */
+async function fetchAggregateRatingForRecipePageUrl(url, timeoutMs = 6500) {
+  const uKey = normalizeRecipeRatingCacheUrl(String(url || "").trim());
+  if (!uKey || !urlEligibleForChannelSearchRatingFetch(uKey)) return null;
+  const cached = getCachedRecipeLdRating(uKey);
+  if (cached !== undefined) {
+    return cached && typeof cached === "object" ? cached : null;
+  }
+  try {
+    const resp = await fetch(uKey, {
+      headers: {
+        ...FETCH_HEADERS,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
+      },
+      signal: AbortSignal.timeout(Math.max(1500, Math.min(Number(timeoutMs) || 6500, 20000))),
+      redirect: "follow",
+    });
+    if (!resp.ok) {
+      return null;
+    }
+    const html = await resp.text();
+    const rt = extractAggregateRatingFromRecipeHtml(html);
+    if (rt) {
+      setCachedRecipeLdRating(uKey, rt);
+      return rt;
+    }
+    setCachedRecipeLdRating(uKey, null);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function pickChannelSearchCandidateRating(candidate) {
+  if (!candidate || typeof candidate !== "object") return null;
+  const rv = Number(candidate.ratingValue);
+  const rc = Number(candidate.ratingCount);
+  if (!Number.isFinite(rv) || rv < 1 || rv > 5 || !Number.isFinite(rc) || rc < 1) return null;
+  const out = { ratingValue: Math.round(rv), ratingCount: Math.max(1, Math.round(rc)) };
+  if (candidate.ratingNormalizedFromWideScale) out.ratingNormalizedFromWideScale = true;
+  return out;
+}
+
 /**
  * Voor alle kanalen: ontbrekende beoordeling aanvullen via schema.org op de receptpagina.
  * Limiet + parallel om zoektijd te cappen.
@@ -12406,14 +12460,36 @@ async function importSeoBackfillCandidate(candidate) {
   if (!isValidImportedSeoRecipe(recipe)) {
     throw new HttpError(400, "Geen geldig recept gevonden.");
   }
-  return sanitizeRecipeForStorage({
+  const sourceUrl = sanitizeText(recipe.sourceUrl || candidate.url || "");
+  const merged = {
     ...recipe,
     id: recipe.id || `seo-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`,
-    sourceUrl: recipe.sourceUrl || candidate.url,
+    sourceUrl: sourceUrl || candidate.url,
     image: recipe.image || candidate.thumbnail || "assets/hero-burger.svg",
     platform: recipe.platform || "website",
     author: recipe.author || candidate.channel,
-  });
+  };
+
+  const rv0 = Number(recipe.ratingValue);
+  const rc0 = Number(recipe.ratingCount);
+  const fromImport =
+    Number.isFinite(rv0) && rv0 >= 1 && rv0 <= 5 && Number.isFinite(rc0) && rc0 >= 1
+      ? {
+          ratingValue: Math.round(rv0),
+          ratingCount: Math.max(1, Math.round(rc0)),
+          ...(recipe.ratingNormalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}),
+        }
+      : null;
+  const fromCandidate = pickChannelSearchCandidateRating(candidate);
+  let ratingPatch = fromImport || fromCandidate;
+  if (!ratingPatch) {
+    ratingPatch = await fetchAggregateRatingForRecipePageUrl(sourceUrl || candidate.url);
+  }
+  if (ratingPatch) {
+    Object.assign(merged, ratingPatch);
+  }
+
+  return sanitizeRecipeForStorage(merged);
 }
 
 async function saveSeoBackfillRecipesForUser(userId, recipes) {
