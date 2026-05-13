@@ -4844,6 +4844,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
       const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
       const thumbHtml = getChannelThumbnailMarkup(r, channel, channelColor);
       const isPlatelyIndexed = r && (r._source === "plately" || String(r.url || "").startsWith("/recept/"));
+      const viewUrl = isPlatelyIndexed ? (r.sourceUrl || r.url) : r.url;
       return `
       <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}" data-ch-card-thumb="${escapeHtml(thumbUrl || "")}">
         <div class="ch-card__visual">
@@ -4857,7 +4858,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
           ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
         </div>
         <div class="ch-card__actions">
-          <a class="ch-card__view" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer" aria-label="Bekijk ${escapeHtml(r.title)} op ${escapeHtml(r.channel)}">
+          <a class="ch-card__view" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Bekijk ${escapeHtml(r.title)} op ${escapeHtml(r.channel)}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z" fill="currentColor"/></svg>
             Bekijk
           </a>
