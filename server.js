@@ -3302,7 +3302,7 @@ function buildSeoRecipeEntry({ userId, email, recipe, updatedAt, origin }) {
   return {
     token,
     slug,
-    urlPath: `/recept/${slug}-${token}`,
+    urlPath: `/recept/${slug}`,
     userId: sanitizeText(userId),
     email: sanitizeText(email || ""),
     updatedAt: sanitizeText(updatedAt || ""),
@@ -3362,7 +3362,15 @@ async function listPublicSeoRecipes(origin) {
   for (const entry of entries) {
     if (!byToken.has(entry.token)) byToken.set(entry.token, entry);
   }
-  return Array.from(byToken.values());
+  const uniqueEntries = Array.from(byToken.values());
+  const slugCounts = new Map();
+  for (const entry of uniqueEntries) {
+    const baseSlug = entry.slug || "recept";
+    const count = (slugCounts.get(baseSlug) || 0) + 1;
+    slugCounts.set(baseSlug, count);
+    entry.urlPath = `/recept/${count === 1 ? baseSlug : `${baseSlug}-${count}`}`;
+  }
+  return uniqueEntries;
 }
 
 async function findPublicSeoRecipeByToken(token, origin) {
@@ -3370,6 +3378,13 @@ async function findPublicSeoRecipeByToken(token, origin) {
   if (!safeToken) return null;
   const entries = await listPublicSeoRecipes(origin);
   return entries.find((entry) => entry.token === safeToken) || null;
+}
+
+async function findPublicSeoRecipeByPath(pathSlug, origin) {
+  const safeSlug = slugify(pathSlug || "");
+  if (!safeSlug) return null;
+  const entries = await listPublicSeoRecipes(origin);
+  return entries.find((entry) => entry.urlPath === `/recept/${safeSlug}`) || null;
 }
 
 function buildStoreChoiceUrl(store, choice) {
@@ -12433,8 +12448,10 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname.startsWith("/recept/") && (request.method === "GET" || request.method === "HEAD")) {
       const origin = getPublicOrigin(request);
       const raw = decodeURIComponent(requestUrl.pathname.slice("/recept/".length) || "");
-      const token = raw.match(/-([A-Za-z0-9_-]{10})$/)?.[1] || "";
-      const entry = await findPublicSeoRecipeByToken(token, origin);
+      const oldToken = raw.match(/-([A-Za-z0-9_-]{10})$/)?.[1] || "";
+      const entry = oldToken
+        ? await findPublicSeoRecipeByToken(oldToken, origin)
+        : await findPublicSeoRecipeByPath(raw, origin);
       if (!entry) {
         sendJson(response, 404, { error: "Recept niet gevonden." });
         return;
@@ -12673,7 +12690,9 @@ const server = http.createServer(async (request, response) => {
             ? appState.importedRecipes.some((recipe) => sanitizeText(recipe?.id || "") === safePayload.id)
             : false;
           if (isSavedRecipe) {
-            const seoPath = `/recept/${slugify(safePayload.title) || "recept"}-${getSeoRecipeToken(authUser.id, safePayload.id)}`;
+            const token = getSeoRecipeToken(authUser.id, safePayload.id);
+            const entries = await listPublicSeoRecipes(getPublicOrigin(request));
+            const seoPath = entries.find((entry) => entry.token === token)?.urlPath || `/recept/${slugify(safePayload.title) || "recept"}`;
             sendJson(response, 200, { ok: true, url: seoPath, seo: true });
             return;
           }
