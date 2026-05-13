@@ -10828,6 +10828,23 @@ function channelSearchResultTitleMatchesQuery(channelId, title, query, options =
   return titleMatchesQuery(String(title || ""), q);
 }
 
+function ahSeoBackfillResultMatchesQuery(title, slug, query) {
+  const rawWords = String(query || "")
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length > 2);
+  if (!rawWords.length) return true;
+
+  const aliasMap = {
+    kip: ["kip", "chicken"],
+    rijst: ["rijst", "rice"],
+  };
+  const haystack = `${String(title || "")} ${String(slug || "")}`.toLowerCase();
+  const words = rawWords.flatMap((word) => aliasMap[word] || [word]);
+  return words.some((word) => haystack.includes(word));
+}
+
 async function wpRestSearch(baseUrl, channelName, channelId, query, count, meta = null, options = {}) {
   const params = `search=${encodeURIComponent(query)}&per_page=${count}&_embed=wp:featuredmedia`;
   const headers = { ...FETCH_HEADERS, accept: "application/json" };
@@ -11849,8 +11866,15 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
             return false;
           }
 
-          // 5. Search query relevance — strict in app search; SEO backfill skips (pool keywords often miss titel/slug).
-          if (!seoBackfill) {
+          // 5. Search query relevance.
+          // SEO backfill still needs this for AH: the search page can include high-rated
+          // promotional recipes unrelated to the query, and popularity sorting would
+          // otherwise import those first.
+          if (seoBackfill) {
+            const pass = ahSeoBackfillResultMatchesQuery(title, slug, query);
+            console.log(`    🔍 Relevance: ${pass ? "passed" : "failed"} (seoBackfill AH)`);
+            if (!pass) return false;
+          } else {
             const searchWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
             const titleLower = title.toLowerCase();
             const slugLower = slug;
@@ -11867,8 +11891,6 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
               console.log(`    ❌ Relevance filter failed`);
               return false;
             }
-          } else {
-            console.log(`    🔍 Relevance: skipped (seoBackfill)`);
           }
 
           console.log(`    ✅ PASSED all filters`);
@@ -17665,6 +17687,7 @@ module.exports = {
     parseWebsiteRecipe,
     findRecipeJsonLd,
     isAhAllerhandeRecipeUrl,
+    ahSeoBackfillResultMatchesQuery,
     urlLooksLikeRecipe,
   },
 };
