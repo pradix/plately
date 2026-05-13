@@ -13100,7 +13100,15 @@ function renderPublicSeoRecipePage(entry, origin) {
 }
 
 function renderPublicRecipeIndexPage(entries, origin) {
-  const items = entries
+  const list = Array.isArray(entries) ? entries : [];
+  const totalCount = list.length;
+  const countLine =
+    totalCount === 0
+      ? "Nog geen publieke recepten."
+      : totalCount === 1
+        ? "1 recept"
+        : `${totalCount.toLocaleString("nl-NL")} recepten`;
+  const items = list
     .slice(0, 200)
     .map((entry) => {
       const recipe = entry.recipe || {};
@@ -13128,8 +13136,11 @@ function renderPublicRecipeIndexPage(entries, origin) {
   <body>
     <main class="page">
       <section class="app-shell" style="padding:24px 18px 90px">
-        <header class="section-heading">
-          <h1>Recepten</h1>
+        <header class="section-heading" style="align-items:flex-start">
+          <div>
+            <h1>Recepten</h1>
+            <p class="muted" style="margin:6px 0 0;font-size:0.95rem;line-height:1.4">${escapeHtml(countLine)}</p>
+          </div>
           <a class="ghost-link" href="/">Open Plately</a>
         </header>
         <section class="recipe-grid recipe-grid--cookbook">${items || `<p class="recipe-slider__empty">Nog geen publieke recepten.</p>`}</section>
