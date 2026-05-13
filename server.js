@@ -5251,27 +5251,41 @@ async function fetchReaderFallback(url) {
   // IMPORTANT: When the target contains `?` or `#`, it MUST be URL-encoded.
   // Otherwise the query/fragment is interpreted as *r.jina.ai's* query/fragment,
   // and the target URL loses its `?q=...` — breaking search pages.
-  const readerUrl = `https://r.jina.ai/${encodeURIComponent(target)}`;
-  const response = await fetch(readerUrl, {
-    headers: {
-      ...FETCH_HEADERS,
-      ...jinaReaderAuthHeaders(),
-      accept: "text/plain, text/markdown;q=0.9, */*;q=0.8",
-      "x-with-links-summary": "true",
-    },
-    signal: AbortSignal.timeout(20000),
-    redirect: "follow",
-  });
-
-  if (!response.ok) {
-    throw new HttpError(502, `Kon bronpagina niet ophalen (${response.status}).`);
+  const readerUrls = [
+    `https://r.jina.ai/${encodeURIComponent(target)}`,
+  ];
+  if (!/[?#]/.test(target)) {
+    readerUrls.push(`https://r.jina.ai/${target}`);
+    if (/^https:\/\//i.test(target)) readerUrls.push(`https://r.jina.ai/http://${target}`);
   }
 
-  return {
-    kind: "text",
-    body: await response.text(),
-    finalUrl: url,
-  };
+  let lastStatus = 0;
+  let lastError = null;
+  for (const readerUrl of [...new Set(readerUrls)]) {
+    try {
+      const response = await fetch(readerUrl, {
+        headers: {
+          ...FETCH_HEADERS,
+          ...jinaReaderAuthHeaders(),
+          accept: "text/plain, text/markdown;q=0.9, */*;q=0.8",
+          "x-with-links-summary": "true",
+        },
+        signal: AbortSignal.timeout(20000),
+        redirect: "follow",
+      });
+      lastStatus = response.status;
+      if (!response.ok) continue;
+      return {
+        kind: "text",
+        body: await response.text(),
+        finalUrl: url,
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw new HttpError(502, `Kon bronpagina niet ophalen (${lastStatus || 403})${lastError ? `: ${lastError.message}` : ""}.`);
 }
 
 /** ZenRows API — optionele fallback voor sites die datacenter-IPs blokkeren (bv. Cloudflare). Zet ZENROWS_API_KEY als env var. */
