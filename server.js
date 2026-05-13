@@ -10714,9 +10714,29 @@ function searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit })
  * - Otherwise → keep (safer than dropping valid recipes)
  */
 function urlLooksLikeRecipe(url) {
+  if (isAhAllerhandeUrl(url)) return isAhAllerhandeRecipeUrl(url);
   if (RECIPE_URL_RE.test(url)) return true; // explicit recipe path → keep
   if (BLOG_POST_URL_RE.test(url)) return false; // explicit blog path → drop
   return true; // keep by default
+}
+
+function isAhAllerhandeUrl(url) {
+  try {
+    const u = new URL(String(url || ""));
+    return /(^|\.)ah\.nl$/i.test(u.hostname) && /^\/allerhande\//i.test(u.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function isAhAllerhandeRecipeUrl(url) {
+  try {
+    const u = new URL(String(url || ""));
+    if (!/(^|\.)ah\.nl$/i.test(u.hostname)) return false;
+    return /^\/allerhande\/recept\/r-r\d+\/[^/?#]+\/?$/i.test(u.pathname);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -11976,9 +11996,10 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
 
     const ahRatingByRecipeId = extractAhSearchRatingsFromAllerhandeHtml(html);
 
-    // Look for recipe links in the HTML (both /recept/ and /recepten/)
+    // Look for concrete recipe links only. `/recepten/...` pages are hubs and can
+    // import an unrelated first recipe when treated as a source URL.
     const recipeUrls = new Set();
-    const matches = [...html.matchAll(/href=["']([^"']*\/allerhande\/recept(?:en)?\/[^"']+)["']/gi)];
+    const matches = [...html.matchAll(/href=["']([^"']*\/allerhande\/recept\/r-r\d+\/[^"']+)["']/gi)];
 
     for (const match of matches) {
       let url = match[1];
@@ -11986,8 +12007,9 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
         url = `https://www.ah.nl${url}`;
       }
 
-      // Filter out categories: only keep recipe pages
-      const slug = url.split('/recepten/')[1] || "";
+      if (!isAhAllerhandeRecipeUrl(url)) continue;
+
+      const slug = url.split('/recept/')[1] || "";
 
       // Skip if ends with common category indicators
       if (slug.endsWith('recepten') || slug.endsWith('gerechten')) {
@@ -12646,6 +12668,9 @@ async function searchSeoBackfillCandidatesForCustomChannel({
 }
 
 async function importSeoBackfillCandidate(candidate) {
+  if (candidate?.channelId === "ch-ah" && !isAhAllerhandeRecipeUrl(candidate.url)) {
+    throw new HttpError(400, "Geen echte Allerhande recept-URL.");
+  }
   const recipe = await importRecipe(candidate.url, "", candidate.thumbnail || "");
   if (!isValidImportedSeoRecipe(recipe)) {
     throw new HttpError(400, "Geen geldig recept gevonden.");
@@ -17639,5 +17664,7 @@ module.exports = {
     importRecipe,
     parseWebsiteRecipe,
     findRecipeJsonLd,
+    isAhAllerhandeRecipeUrl,
+    urlLooksLikeRecipe,
   },
 };
