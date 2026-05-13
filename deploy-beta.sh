@@ -47,8 +47,8 @@ if [[ -n "${PLATELY_POST_DEPLOY_CMD:-}" ]]; then
   echo "==> Herstart (PLATELY_POST_DEPLOY_CMD)"
   bash -lc "$PLATELY_POST_DEPLOY_CMD"
 else
-  echo "==> Geen herstart geconfigureerd. Zet op de server bijv.:"
-  echo "    export PLATELY_POST_DEPLOY_CMD='sudo systemctl restart plately'"
+  echo "==> Herstart systemd service: plately"
+  sudo systemctl restart plately
 fi
 
 echo "==> Klaar."
