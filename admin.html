@@ -1123,6 +1123,37 @@
           <div id="seoBackfillStatus" class="muted" style="font-size:12px;margin-bottom:8px">Kies dry-run of import.</div>
           <pre id="seoBackfillOutput" class="mono" style="display:block;margin:0;padding:12px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto">—</pre>
         </div>
+
+        <div class="section" id="seoRatingsBackfillSection" style="margin-top:14px">
+          <div class="section-header">
+            <h2>SEO-recepten ratings backfill</h2>
+            <div class="muted">Beoordelingen ophalen van bronsites</div>
+          </div>
+          <p class="muted" style="font-size:12px;margin-bottom:12px;line-height:1.45">
+            Roept <code class="mono">POST /api/admin/seo-recipe-ratings-backfill</code> aan: loopt door geïmporteerde recepten en vult
+            <strong>ratingValue</strong> + <strong>ratingCount</strong> aan via schema.org (aggregateRating) op de bronpagina.
+            Tip: begin met dry-run.
+          </p>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px">
+            <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Max users
+              <input id="seoRatingsMaxUsers" type="number" min="1" max="2000" value="250" style="width:76px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+            </label>
+            <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Max recepten
+              <input id="seoRatingsMaxRecipes" type="number" min="1" max="8000" value="1200" style="width:86px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+            </label>
+            <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Concurrency
+              <input id="seoRatingsConcurrency" type="number" min="1" max="10" value="6" style="width:56px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+            </label>
+            <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Timeout (ms)
+              <input id="seoRatingsTimeoutMs" type="number" min="1500" max="20000" value="6500" style="width:86px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+            </label>
+            <button type="button" class="btn" id="seoRatingsBtnDry" onclick="runSeoRecipeRatingsBackfill(true)">Dry-run</button>
+            <button type="button" class="btn btn-primary" id="seoRatingsBtnGo" onclick="runSeoRecipeRatingsBackfill(false)">Uitvoeren</button>
+            <button type="button" class="btn btn-danger" id="seoRatingsBtnCancel" onclick="cancelSeoRecipeRatingsBackfill()" disabled>Annuleren</button>
+          </div>
+          <div id="seoRatingsStatus" class="muted" style="font-size:12px;margin-bottom:8px">Kies dry-run of uitvoeren.</div>
+          <pre id="seoRatingsOutput" class="mono" style="display:block;margin:0;padding:12px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto">—</pre>
+        </div>
       </div>
 
       <div class="admin-tab-section" id="adminTabActivity" data-tab="activity">
@@ -2744,6 +2775,103 @@
         if (seoBackfillElapsedTimer) clearInterval(seoBackfillElapsedTimer);
         seoBackfillElapsedTimer = null;
         seoBackfillAbortController = null;
+        setBusy(false);
+      }
+    }
+
+    let seoRatingsAbortController = null;
+    let seoRatingsElapsedTimer = null;
+
+    function cancelSeoRecipeRatingsBackfill() {
+      try {
+        seoRatingsAbortController?.abort?.();
+      } catch (_) {}
+      seoRatingsAbortController = null;
+    }
+
+    async function runSeoRecipeRatingsBackfill(dryRun) {
+      const statusEl = document.getElementById("seoRatingsStatus");
+      const outEl = document.getElementById("seoRatingsOutput");
+      const btnDry = document.getElementById("seoRatingsBtnDry");
+      const btnGo = document.getElementById("seoRatingsBtnGo");
+      const setBusy = (busy) => {
+        if (btnDry) btnDry.disabled = busy;
+        if (btnGo) btnGo.disabled = busy;
+        const cancelBtn = document.getElementById("seoRatingsBtnCancel");
+        if (cancelBtn) cancelBtn.disabled = !busy;
+      };
+
+      const maxUsersRaw = document.getElementById("seoRatingsMaxUsers")?.value ?? "250";
+      const maxRecipesRaw = document.getElementById("seoRatingsMaxRecipes")?.value ?? "1200";
+      const concurrencyRaw = document.getElementById("seoRatingsConcurrency")?.value ?? "6";
+      const timeoutRaw = document.getElementById("seoRatingsTimeoutMs")?.value ?? "6500";
+
+      const maxUsers = Math.min(2000, Math.max(1, parseInt(String(maxUsersRaw), 10) || 250));
+      const maxRecipes = Math.min(8000, Math.max(1, parseInt(String(maxRecipesRaw), 10) || 1200));
+      const concurrency = Math.min(10, Math.max(1, parseInt(String(concurrencyRaw), 10) || 6));
+      const timeoutMs = Math.min(20000, Math.max(1500, parseInt(String(timeoutRaw), 10) || 6500));
+
+      if (!dryRun) {
+        const ok = confirm(
+          "Ratings echt ophalen en opslaan voor bestaande recepten? Dit kan even duren en doet veel requests naar bronsites."
+        );
+        if (!ok) return;
+      }
+
+      setBusy(true);
+      cancelSeoRecipeRatingsBackfill();
+      seoRatingsAbortController = new AbortController();
+      if (outEl) outEl.textContent = dryRun ? "⏳ Dry-run gestart…" : "⏳ Uitvoeren gestart…";
+      const startedAt = Date.now();
+      if (seoRatingsElapsedTimer) clearInterval(seoRatingsElapsedTimer);
+      seoRatingsElapsedTimer = setInterval(() => {
+        const sec = Math.floor((Date.now() - startedAt) / 1000);
+        if (statusEl) statusEl.textContent = `${dryRun ? "⏳ Dry-run bezig" : "⏳ Bezig"} • ${sec}s`;
+      }, 250);
+
+      try {
+        const response = await fetch("/api/admin/seo-recipe-ratings-backfill", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: seoRatingsAbortController.signal,
+          body: JSON.stringify({
+            dryRun: Boolean(dryRun),
+            maxUsers,
+            maxRecipes,
+            concurrency,
+            timeoutMs,
+          }),
+        }));
+        const text = await response.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { _parseError: true, status: response.status, bodyPreview: text.slice(0, 800) };
+        }
+        if (!response.ok || !data.ok) {
+          const msg = data?.error || data?.message || `HTTP ${response.status}`;
+          throw new Error(msg);
+        }
+        if (statusEl) {
+          const sec = Math.floor((Date.now() - startedAt) / 1000);
+          statusEl.textContent = `${dryRun ? "✅ Dry-run klaar" : "✅ Klaar"} • ${sec}s`;
+        }
+        if (outEl) {
+          try {
+            outEl.textContent = JSON.stringify(data, null, 2);
+          } catch {
+            outEl.textContent = String(data);
+          }
+        }
+      } catch (e) {
+        const aborted = e && (e.name === "AbortError" || String(e).includes("AbortError"));
+        if (statusEl) statusEl.textContent = aborted ? "⛔️ Geannuleerd" : "❌ " + (e.message || String(e));
+        if (outEl && !aborted) outEl.textContent = "";
+      } finally {
+        if (seoRatingsElapsedTimer) clearInterval(seoRatingsElapsedTimer);
+        seoRatingsElapsedTimer = null;
+        seoRatingsAbortController = null;
         setBusy(false);
       }
     }
