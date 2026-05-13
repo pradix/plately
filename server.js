@@ -12601,16 +12601,62 @@ async function searchSeoBackfillCandidatesForChannel({ channelId, keywords, limi
 
 async function listSeoBackfillCustomChannelEntries(authUser, enabledSeedChannelIds, channelEnabledState) {
   const globalCustom = await getGlobalCustomChannels().catch(() => []);
+  const adminCustom = [];
+  const seenAdminCustomIds = new Set();
+  const pushAdminCustom = (ch) => {
+    const id = sanitizeText(ch?.id || "");
+    const name = sanitizeText(ch?.name || "").slice(0, 80);
+    const url = sanitizeText(ch?.url || "").slice(0, 500);
+    if (!id || !name || !url || seenAdminCustomIds.has(id)) return;
+    const clean = {
+      ...ch,
+      id,
+      name,
+      url,
+      status: sanitizeText(ch?.status || "approved") || "approved",
+      managedByAdmin: Boolean(ch?.managedByAdmin),
+    };
+    seenAdminCustomIds.add(clean.id);
+    adminCustom.push(clean);
+  };
+  for (const ch of Array.isArray(globalCustom) ? globalCustom : []) pushAdminCustom(ch);
+  try {
+    if (isPostgresEnabled()) {
+      await ensurePostgresSchema();
+      const pool = await getPostgresPool();
+      const result = await pool.query("SELECT app_state FROM plately_users");
+      for (const row of result.rows || []) {
+        const appState = typeof row.app_state === "object" ? row.app_state : JSON.parse(row.app_state || "{}");
+        for (const ch of Array.isArray(appState.customChannels) ? appState.customChannels : []) pushAdminCustom(ch);
+      }
+    } else {
+      const rawFile = await fsp.readFile(DATA_FILE, "utf8");
+      const parsed = JSON.parse(rawFile);
+      for (const u of Object.values(parsed.users || {})) {
+        for (const ch of Array.isArray(u.customChannels) ? u.customChannels : []) pushAdminCustom(ch);
+      }
+    }
+  } catch {
+    /* global custom channels are still enough as fallback */
+  }
   const appState = withGlobalCustomChannels(buildAppStateFromUser(authUser), globalCustom);
   const followed = Array.isArray(appState.followedChannelIds)
     ? appState.followedChannelIds.map((id) => sanitizeText(id)).filter(Boolean)
     : [];
   const globalCustomIds = new Set(
-    (Array.isArray(globalCustom) ? globalCustom : [])
+    adminCustom
       .map((ch) => sanitizeText(ch?.id || ""))
       .filter(Boolean)
   );
-  const customList = (Array.isArray(appState.customChannels) ? appState.customChannels : []).filter((ch) => {
+  const combinedCustom = [];
+  const seenCombinedCustomIds = new Set();
+  for (const ch of [...adminCustom, ...(Array.isArray(appState.customChannels) ? appState.customChannels : [])]) {
+    const id = sanitizeText(ch?.id || "");
+    if (!id || seenCombinedCustomIds.has(id)) continue;
+    seenCombinedCustomIds.add(id);
+    combinedCustom.push(ch);
+  }
+  const customList = combinedCustom.filter((ch) => {
     const id = sanitizeText(ch?.id || "");
     if (!id) return false;
     const isGlobalAdminChannel = Boolean(ch?.managedByAdmin) || globalCustomIds.has(id);
