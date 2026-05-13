@@ -1094,6 +1094,14 @@
             Roept <code class="mono">POST /api/admin/seo-recipe-backfill</code> aan: zoekt per <strong>seed-kanaal</strong> (je gevolgde kanalen, of anders de standaard ingeschakelde seed-kanalen) én per <strong>ingeschakeld custom-kanaal</strong> dat je volgt (zelfde regels als in de app-zoekbalk), importeert tot N recepten per doel naar het kookboek <strong>SEO recepten</strong> van je <strong>admin-account</strong>.
             Kies handmatig zoekwoorden (tot 200 per import), of vink <strong>alle pool-zoekwoorden</strong> aan om in één keer de volledige lijst uit <code class="mono">assets/seo-recipe-keywords.nl.json</code> te doorlopen (kan lang duren). Optioneel: <strong>top 100 populairste eerst</strong> (sorteer kandidaten op ratings vóór import).
           </p>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px">
+            <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              Seed-kanaal
+              <select id="seoBackfillChannelSelect" style="min-width:220px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
+                <option value="">Automatisch (gevolgd/fallback)</option>
+              </select>
+            </label>
+          </div>
           <div id="seoBackfillKeywordHint" class="muted" style="font-size:12px;margin-bottom:8px">⏳ Zoekwoorden laden…</div>
           <div id="seoBackfillSelectedWrap" class="seo-kw-selected" style="display:none">
             <strong>Volgorde</strong> <span class="muted">(eerste = eerst gezocht)</span>
@@ -2582,6 +2590,22 @@
       return seen.size;
     }
 
+    function renderSeoBackfillChannelSelect(seedChannels) {
+      const sel = document.getElementById("seoBackfillChannelSelect");
+      if (!sel) return;
+      const current = sel.value || "";
+      const seed = (Array.isArray(seedChannels) ? seedChannels : [])
+        .filter((ch) => ch && ch.id && ch.enabled !== false);
+      sel.innerHTML =
+        `<option value="">Automatisch (gevolgd/fallback)</option>` +
+        seed
+          .map((ch) => `<option value="${escapeHtml(ch.id)}">${escapeHtml(ch.name || ch.id)}</option>`)
+          .join("");
+      if (current && seed.some((ch) => ch.id === current)) {
+        sel.value = current;
+      }
+    }
+
     function selectAllSeoBackfillKeywords() {
       const pool = Array.isArray(seoBackfillKeywordSuggestions) ? seoBackfillKeywordSuggestions : [];
       if (!pool.length) {
@@ -2810,16 +2834,19 @@
       const useProgress = Boolean(document.getElementById("seoBackfillLiveProgress")?.checked);
       const forceReimport = Boolean(document.getElementById("seoBackfillForceReimport")?.checked);
       const popularTop100 = document.getElementById("seoBackfillPopularTop100")?.checked ?? true;
+      const selectedChannelId = String(document.getElementById("seoBackfillChannelSelect")?.value || "").trim();
       let bodyPayload = { limitPerChannel, dryRun: Boolean(dryRun) };
       if (useProgress) bodyPayload.progress = true;
       if (!dryRun && forceReimport) bodyPayload.forceReimport = true;
       if (popularTop100) bodyPayload.popularTopN = 100;
+      if (selectedChannelId) bodyPayload.channels = [selectedChannelId];
       if (allPool) {
         const approx = Array.isArray(seoBackfillKeywordSuggestions) ? seoBackfillKeywordSuggestions.length : 0;
         const poolHint = approx > 0 ? `${approx} woorden` : "de volledige server-pool";
         if (!dryRun) {
+          const channelHint = selectedChannelId ? ` Alleen kanaal ${selectedChannelId}.` : "";
           const ok = confirm(
-            `ALLE pool-zoekwoorden gebruiken (${poolHint}). Dit kan zeer lang duren en doet voor elk kanaal heel veel zoek-requests. Recepten worden geïmporteerd naar «SEO recepten» en worden publiek.${forceReimport ? " Bestaande recepten met dezelfde bron-URL worden overschreven." : ""} Doorgaan?`
+            `ALLE pool-zoekwoorden gebruiken (${poolHint}). Dit kan zeer lang duren en doet voor elk kanaal heel veel zoek-requests.${channelHint} Recepten worden geïmporteerd naar «SEO recepten» en worden publiek.${forceReimport ? " Bestaande recepten met dezelfde bron-URL worden overschreven." : ""} Doorgaan?`
           );
           if (!ok) return;
         }
@@ -2841,8 +2868,9 @@
         bodyPayload.keywords = keywords;
         bodyPayload.keywordLimit = keywords.length;
         if (!dryRun) {
+          const channelHint = selectedChannelId ? ` Alleen kanaal ${selectedChannelId}.` : "";
           const ok = confirm(
-            `Recepten echt importeren naar het admin-account (kookboek «SEO recepten») en als publieke SEO-pagina's beschikbaar maken?${forceReimport ? " Bestaande recepten met dezelfde bron-URL worden overschreven." : ""}`
+            `Recepten echt importeren naar het admin-account (kookboek «SEO recepten») en als publieke SEO-pagina's beschikbaar maken?${channelHint}${forceReimport ? " Bestaande recepten met dezelfde bron-URL worden overschreven." : ""}`
           );
           if (!ok) return;
         }
@@ -3909,6 +3937,7 @@
         const seed = Array.isArray(data.seedChannels) ? data.seedChannels : [];
         const custom = data.customChannels || { approved: [], pending: [], rejected: [] };
         channelCatalogState = { seedChannels: seed, customChannels: custom };
+        renderSeoBackfillChannelSelect(seed);
         const approved = Array.isArray(custom.approved) ? custom.approved : [];
         const pending = Array.isArray(custom.pending) ? custom.pending : [];
         const rejected = Array.isArray(custom.rejected) ? custom.rejected : [];
