@@ -9854,7 +9854,7 @@ function parseWpSearchAnchorFallback(html, baseUrl, channelName, channelId, coun
 
   const lim = Math.min(Math.max(Number(count) || 12, 1), 48);
   const anchorRe =
-    /<a\b[^>]*\bhref\s*=\s*["'](https?:\/\/[^"'>\s]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    /<a\b[^>]*\bhref\s*=\s*["']([^"'>\s]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   let m;
   while ((m = anchorRe.exec(html)) !== null && results.length < lim * 4) {
     const rawHref = String(m[1] || "")
@@ -9862,7 +9862,7 @@ function parseWpSearchAnchorFallback(html, baseUrl, channelName, channelId, coun
       .replace(/&amp;/gi, "&");
     let u;
     try {
-      u = new URL(rawHref.split("#")[0]);
+      u = new URL(rawHref.split("#")[0], baseUrl);
     } catch {
       continue;
     }
