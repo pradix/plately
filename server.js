@@ -11816,19 +11816,14 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
         seenAhReceptUrls.add(canon);
         urlMatches.push([canon, slugPart]);
       }
-      for (const m of markdown.matchAll(/https:\/\/www\.ah\.nl\/allerhande\/recept\/([^\s\)]+)/g)) {
-        pushAhJinaReceptMatch(m[0], m[1]);
+      for (const m of markdown.matchAll(/https?:\/\/(?:www\.)?ah\.nl\/allerhande\/recept\/(R-R\d+\/[a-z0-9][a-z0-9\-]*)/gi)) {
+        const slug = m[1];
+        pushAhJinaReceptMatch(`https://www.ah.nl/allerhande/recept/${slug}`, slug);
       }
-      if (seoBackfill) {
-        for (const m of markdown.matchAll(/https?:\/\/(?:www\.)?ah\.nl\/allerhande\/recept\/([^\s\)\]]+)/gi)) {
-          const slug = m[1];
-          pushAhJinaReceptMatch(`https://www.ah.nl/allerhande/recept/${slug}`, slug);
-        }
-        for (const m of markdown.matchAll(/(?:^|[^\w/])(\/allerhande\/recept\/[^\s\)\]]+)/g)) {
-          const path = m[1];
-          const slug = path.replace(/^\/allerhande\/recept\//, "");
-          if (slug) pushAhJinaReceptMatch(`https://www.ah.nl/allerhande/recept/${slug}`, slug);
-        }
+      for (const m of markdown.matchAll(/(?:^|[^\w/])(\/allerhande\/recept\/(R-R\d+\/[a-z0-9][a-z0-9\-]*))/gi)) {
+        const path = m[1];
+        const slug = m[2];
+        if (slug) pushAhJinaReceptMatch(`https://www.ah.nl${path}`, slug);
       }
 
       // Strategy 2: Extract URLs and derive titles from slug (most reliable).
