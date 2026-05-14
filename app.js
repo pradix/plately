@@ -6011,6 +6011,27 @@ function renderDetailRecipe(resetServings = false) {
   }
   const factor = state.currentServings / baseServings;
 
+  const detailHeroPlayBtn = document.getElementById("detailHeroPlayBtn");
+  const detailHeroEmbed = document.getElementById("detailHeroEmbed");
+  const igEmbedUrl = String(recipe.embedUrl || "").trim();
+  if (detailHeroPlayBtn) {
+    if (igEmbedUrl && recipe.platform === "instagram") {
+      detailHeroPlayBtn.classList.remove("hidden");
+      detailHeroPlayBtn.onclick = () => {
+        if (!detailHeroEmbed) return;
+        detailHeroEmbed.innerHTML = `<iframe src="${igEmbedUrl}captioned/" width="100%" height="480" frameborder="0" scrolling="no" allowtransparency="true" allowfullscreen="true" style="border:none;width:100%;min-height:420px;display:block;background:#fafafa"></iframe>`;
+        detailHeroEmbed.classList.remove("hidden");
+        detailHeroEmbed.removeAttribute("aria-hidden");
+        detailHeroPlayBtn.classList.add("hidden");
+      };
+    } else {
+      detailHeroPlayBtn.classList.add("hidden");
+      if (detailHeroEmbed) {
+        detailHeroEmbed.classList.add("hidden");
+        detailHeroEmbed.innerHTML = "";
+      }
+    }
+  }
   detailHeroImage.src = recipe.image;
   detailHeroImage.alt = recipe.alt;
   const heroSrc = String(recipe.image || "").trim();

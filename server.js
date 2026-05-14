@@ -6043,6 +6043,36 @@ function extractInstagramHtmlSignals(html) {
     }
   }
 
+  // Extract full caption from __NEXT_DATA__ or window._sharedData (Instagram SPA data)
+  try {
+    const nextDataMatch = html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+    const sharedDataMatch = html.match(/window\._sharedData\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
+    const jsonStr = nextDataMatch?.[1] || sharedDataMatch?.[1] || "";
+    if (jsonStr) {
+      const parsed = JSON.parse(jsonStr);
+      // __NEXT_DATA__: props.pageProps.graphql.shortcode_media.edge_media_to_caption.edges[0].node.text
+      const media = parsed?.props?.pageProps?.graphql?.shortcode_media ||
+                    parsed?.entry_data?.PostPage?.[0]?.graphql?.shortcode_media;
+      const captionText = media?.edge_media_to_caption?.edges?.[0]?.node?.text;
+      if (captionText && isUsefulCaptionCandidate(captionText)) {
+        captionCandidates.unshift(captionText); // prefer over og:description
+      }
+      const ownerName = media?.owner?.full_name || media?.owner?.username;
+      if (ownerName) authorCandidates.push(ownerName);
+    }
+  } catch {
+    // ignore malformed JSON
+  }
+
+  // Also scan for longer "text" values in raw JSON that look like full captions
+  const captionTextMatches = [...html.matchAll(/"text"\s*:\s*"((?:\\.|[^"\\]){40,2000})"/g)];
+  for (const m of captionTextMatches) {
+    const val = safelyParseJson(`"${m[1]}"`);
+    if (val && isUsefulCaptionCandidate(val) && val.length > 60) {
+      captionCandidates.push(val);
+    }
+  }
+
   return {
     titles: [...new Set(titleCandidates.map((item) => sanitizeText(item)).filter((item) => isUsefulTitleCandidate(item)))],
     captions: [...new Set(captionCandidates.map((item) => sanitizeText(item)).filter((item) => isUsefulCaptionCandidate(item)))],
@@ -7282,6 +7312,10 @@ async function importInstagram(sourceUrl, note) {
   let oembed = null;
   let oembedErrorMessage = "";
 
+  // Extracteer de Instagram shortcode voor embed-URL
+  const igShortcode = String(sourceUrl || "").match(/\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/)?.[1] || "";
+  const igEmbedUrl = igShortcode ? `https://www.instagram.com/p/${igShortcode}/embed/` : "";
+
   if (META_APP_ID && META_APP_SECRET) {
     const token = `${META_APP_ID}|${META_APP_SECRET}`;
     const endpoint =
@@ -7344,10 +7378,11 @@ async function importInstagram(sourceUrl, note) {
         platform: "instagram",
         sourceUrl,
         title: normalizeSocialRecipeTitle(claudeResult.title) || normalizeSocialRecipeTitle(titleHint) || "Geïmporteerd recept",
-        description: [compactSocialDescription(claudeResult.description || "", claudeResult.title || "") || extractDescription(captionForClaude, claudeResult.title || titleHint), sourceUrl].filter(Boolean).join("\n\n"),
+        description: [compactSocialDescription(claudeResult.description || "", claudeResult.title || "") || extractDescription(captionForClaude, claudeResult.title || titleHint), sourceUrl ? `Bron: ${sourceUrl}` : ""].filter(Boolean).join("\n\n"),
         caption: stripSocialNoise(captionForClaude),
         image,
         author,
+        embedUrl: igEmbedUrl,
         ingredients: parsedIngredients,
         instructions: finalizeInstructionSteps(mergedPost.instructions || post.instructions),
         time: sanitizeText(claudeResult.time || "30 min"),
@@ -7392,7 +7427,7 @@ async function importInstagram(sourceUrl, note) {
     );
   }
 
-  return buildSocialRecipe({
+  return { ...buildSocialRecipe({
     platform: "instagram",
     sourceUrl,
     rawTitle: ogTitle || oembed?.title || textDerivedTitle,
@@ -7401,7 +7436,7 @@ async function importInstagram(sourceUrl, note) {
     author,
     titleCandidates: [ogTitle, oembed?.title, textDerivedTitle, ...htmlSignals.titles],
     captionCandidates,
-  });
+  }), embedUrl: igEmbedUrl };
 }
 
 async function importFacebook(sourceUrl, note) {

@@ -38,6 +38,14 @@
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
     <link rel="stylesheet" href="styles.css?v=1.0.19.37" />
+    <style id="plately-video-styles">
+.detail-hero { position: relative; }
+.detail-hero__embed { width: 100%; background: #111; border-radius: 0; overflow: hidden; }
+.detail-hero__embed.hidden { display: none; }
+.detail-hero__play-btn { position: absolute; bottom: 12px; right: 12px; display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,.6); color: #fff; border: none; border-radius: 20px; padding: 6px 14px 6px 8px; font-size: .875rem; font-weight: 600; cursor: pointer; backdrop-filter: blur(4px); transition: background .15s; }
+.detail-hero__play-btn:hover { background: rgba(0,0,0,.8); }
+.detail-hero__play-btn.hidden { display: none; }
+    </style>
   </head>
   <body class="app-booting">
     <div class="app-boot-screen" id="appBootScreen" role="status" aria-live="polite">
@@ -195,8 +203,13 @@
               </button>
             </div>
           </header>
-          <div class="detail-hero">
+          <div class="detail-hero" id="detailHero">
             <img id="detailHeroImage" src="assets/hero-burger.svg" alt="Receptafbeelding" loading="eager" decoding="async" fetchpriority="high" draggable="false" />
+            <div id="detailHeroEmbed" class="detail-hero__embed hidden" aria-hidden="true"></div>
+            <button id="detailHeroPlayBtn" class="detail-hero__play-btn hidden" type="button" aria-label="Bekijk originele video">
+              <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="rgba(0,0,0,.55)"/><path d="M9.5 7.5l7 4.5-7 4.5V7.5Z" fill="white"/></svg>
+              <span>Bekijk video</span>
+            </button>
             <div class="detail-hero__actions">
               <button class="detail-icon-action" id="favoriteRecipeButton" type="button" aria-label="Toevoegen aan favorieten" title="Voeg dit recept toe aan je favorieten (hartje) voor gemakkelijke terugkeer">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
