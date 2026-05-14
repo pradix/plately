@@ -8892,6 +8892,50 @@ function getAHPromotionLabel(product) {
   return "BONUS";
 }
 
+// Haalt AH producten op via Firecrawl als api.ah.nl geblokkeerd is (HTTP 4xx).
+// Firecrawl gebruikt zijn eigen IPs en is niet geblokkeerd door AH.
+// Geeft null terug als Firecrawl niet beschikbaar is, [] als geen producten gevonden.
+async function _fetchAHSearchViaFirecrawl(searchUrl, token, searchTerm) {
+  const apiKey = firecrawlApiKey();
+  if (!apiKey) return null;
+  try {
+    const resp = await fetch("https://api.firecrawl.dev/v2/scrape", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: searchUrl,
+        formats: ["rawHtml"],
+        onlyMainContent: false,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "x-application": "AHWEBSHOP",
+          accept: "application/json",
+          "accept-language": "nl-NL,nl;q=0.9",
+        },
+        timeout: 20000,
+        waitFor: 0,
+      }),
+      signal: AbortSignal.timeout(25000),
+    });
+    if (!resp.ok) {
+      console.warn(`[AH/Firecrawl] Scrape mislukt: HTTP ${resp.status}`);
+      return null;
+    }
+    const json = await resp.json();
+    const raw = String(json?.data?.rawHtml || json?.data?.html || "");
+    const ahData = safelyParseJson(raw) || safelyParseJson(raw.replace(/^[^{[]*/, "").replace(/[^}\]]*$/, ""));
+    if (!ahData?.products) {
+      console.warn(`[AH/Firecrawl] Geen products-veld in respons voor "${searchTerm}"`);
+      return null;
+    }
+    console.log(`[AH/Firecrawl] ${ahData.products.length} producten via Firecrawl voor "${searchTerm}"`);
+    return ahData.products.map(parseAHProduct);
+  } catch (err) {
+    console.warn(`[AH/Firecrawl] Fout voor "${searchTerm}": ${err?.message || err}`);
+    return null;
+  }
+}
+
 // Returns the best single match (for backward compat with buildMatchedChoiceFromProduct)
 async function findAHProduct(ingredient) {
   const results = await findAHProducts(ingredient, 1);
@@ -8925,7 +8969,12 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
     });
 
     if (!response.ok) {
-      console.warn(`[AH] Product search HTTP ${response.status} voor "${searchTerm}"`);
+      console.warn(`[AH] Product search HTTP ${response.status} voor "${searchTerm}" — probeer Firecrawl fallback`);
+      const fallback = await _fetchAHSearchViaFirecrawl(searchUrl, token, searchTerm);
+      if (fallback !== null) {
+        if (fallback.length > 0) _setAHSearchCache(cacheKey, fallback);
+        return fallback.slice(0, count);
+      }
       return [];
     }
 
