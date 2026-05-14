@@ -5255,6 +5255,9 @@ async function fetchReaderFallback(url) {
   if (!/[?#]/.test(target)) {
     readerUrls.push(`https://r.jina.ai/${target}`);
     if (/^https:\/\//i.test(target)) readerUrls.push(`https://r.jina.ai/http://${target}`);
+    if (/^https?:\/\//i.test(target)) {
+      readerUrls.push(`https://r.jina.ai/http://r.jina.ai/http://${target}`);
+    }
   }
 
   let lastStatus = 0;
@@ -11015,16 +11018,59 @@ async function serperGoogleSiteSearchRecipes({ baseUrl, channelName, channelId, 
         time: "",
       });
     }
-    return rows
+    const filtered = rows
       .filter((r) => urlLooksLikeRecipe(r.url))
       .filter((r) => titleLooksLikeRecipe(r.title))
       .filter((r) => !isLikelyBlogPage(r.title, r.url, r.description))
       .filter((r) => channelSearchResultTitleMatchesQuery(channelId, r.title, query, { relaxedQueryMatch }))
       .sort((a, b) => titleQueryScore(b.title, query) - titleQueryScore(a.title, query))
       .slice(0, cap);
+    return await hydrateMissingSearchThumbnails(filtered, channelId);
   } catch {
     return [];
   }
+}
+
+async function fetchSearchResultThumbnail(url, channelId = "") {
+  const u = sanitizeText(url || "");
+  if (!u) return "";
+  if (channelId === "ch-ah" || isAhAllerhandeRecipeUrl(u)) {
+    return fetchAhRecipeThumbnail(u);
+  }
+  try {
+    const doc = await fetchWebsiteDocument(u, 0);
+    if (doc.kind === "html") {
+      const html = String(doc.body || "");
+      return cleanImageUrl(
+        parseMetaTag(html, "og:image") ||
+        parseMetaTag(html, "twitter:image", "name") ||
+        ""
+      );
+    }
+    if (doc.kind === "text") {
+      return cleanImageUrl(extractFirstImageUrlFromMarkdown(doc.body));
+    }
+  } catch {
+    /* ignore */
+  }
+  return "";
+}
+
+async function hydrateMissingSearchThumbnails(results, channelId = "") {
+  const rows = Array.isArray(results) ? results : [];
+  const missing = rows.filter((r) => r && r.url && !r.thumbnail).slice(0, 4);
+  if (!missing.length) return rows;
+  const settled = await Promise.allSettled(missing.map((r) => fetchSearchResultThumbnail(r.url, channelId)));
+  const byUrl = new Map();
+  settled.forEach((s, idx) => {
+    if (s.status === "fulfilled" && s.value) byUrl.set(missing[idx].url, s.value);
+  });
+  if (!byUrl.size) return rows;
+  return rows.map((r) => {
+    if (!r || r.thumbnail) return r;
+    const thumb = byUrl.get(r.url) || "";
+    return thumb ? { ...r, thumbnail: thumb } : r;
+  });
 }
 
 function channelSearchBackendNote(channelId, resultCount) {
