@@ -4704,11 +4704,28 @@ function searchSavedRecipesForChannelQuery(query, limit = 12) {
     if (!recipe || SEED_RECIPE_IDS.has(recipe.id) || recipe.isSeed) continue;
     const channel = inferFollowedChannelForRecipeSource(recipe.sourceUrl || "");
     if (!channel) continue;
-    const hay = `${recipe.title || ""} ${recipe.mealTag || ""} ${recipe.description || ""}`.toLowerCase();
-    const exact = hay.includes(q);
-    const wordHits = words.filter((w) => hay.includes(w)).length;
-    if (!exact && wordHits < Math.max(1, Math.ceil(words.length * 0.5))) continue;
-    scored.push({ score: (exact ? 10 : 0) + wordHits, recipe, channel });
+    const titleHay = String(recipe.title || "").toLowerCase();
+    const ingredientHay = (Array.isArray(recipe.ingredients) ? recipe.ingredients : [])
+      .map((item) => item?.name || item || "")
+      .join(" ")
+      .toLowerCase();
+    const descriptionHay = `${recipe.mealTag || ""} ${recipe.description || ""}`.toLowerCase();
+    const titleExact = titleHay.includes(q);
+    const ingredientExact = ingredientHay.includes(q);
+    const descriptionExact = descriptionHay.includes(q);
+    const titleHits = words.filter((w) => titleHay.includes(w)).length;
+    const ingredientHits = words.filter((w) => ingredientHay.includes(w)).length;
+    const descriptionHits = words.filter((w) => descriptionHay.includes(w)).length;
+    const totalHits = titleHits + ingredientHits + descriptionHits;
+    if (!titleExact && !ingredientExact && !descriptionExact && totalHits < Math.max(1, Math.ceil(words.length * 0.5))) continue;
+    const score =
+      (titleExact ? 80 : 0) +
+      (ingredientExact ? 34 : 0) +
+      (descriptionExact ? 18 : 0) +
+      (titleHits * 12) +
+      (ingredientHits * 6) +
+      (descriptionHits * 3);
+    scored.push({ score, recipe, channel });
   }
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, Math.max(1, Number(limit) || 12)).map(({ recipe, channel }) => ({
@@ -4778,7 +4795,8 @@ function findMatchingSeedChannelForUrl(customUrl) {
 }
 
 function normalizeChannelThumbnailUrl(url) {
-  const raw = String(url || "").trim().replace(/[\\'"]+$/g, "");
+  let raw = String(url || "").trim().replace(/&amp;/g, "&").replace(/[\\'"]+$/g, "");
+  if (raw.startsWith("//")) raw = `https:${raw}`;
   if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) {
     try {
@@ -4806,6 +4824,24 @@ function normalizeChannelThumbnailUrl(url) {
     return raw;
   }
   return raw; // assets/..., relative paths, etc.
+}
+
+function getChannelResultDedupeKeys(result) {
+  const keys = [];
+  for (const raw of [result?.sourceUrl, result?.url]) {
+    const value = String(raw || "").trim();
+    if (!value || value.startsWith("local:")) continue;
+    try {
+      const u = new URL(value);
+      u.hash = "";
+      u.search = "";
+      keys.push(`${u.hostname.replace(/^www\./, "").toLowerCase()}${u.pathname.replace(/\/+$/, "")}`);
+    } catch {
+      keys.push(value.toLowerCase());
+    }
+  }
+  if (!keys.length && result?.url) keys.push(String(result.url));
+  return [...new Set(keys)];
 }
 
 function getChannelFallbackVisual(channel, channelColor) {
@@ -5121,21 +5157,21 @@ async function searchChannels(query) {
     const merged = [];
     const seen = new Set();
     for (const r of savedResults) {
-      const key = String(r?.url || "");
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
+      const keys = getChannelResultDedupeKeys(r);
+      if (!keys.length || keys.some((key) => seen.has(key))) continue;
+      keys.forEach((key) => seen.add(key));
       merged.push(r);
     }
     for (const r of (Array.isArray(seoResults) ? seoResults : [])) {
-      const key = String(r?.url || "");
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
+      const keys = getChannelResultDedupeKeys(r);
+      if (!keys.length || keys.some((key) => seen.has(key))) continue;
+      keys.forEach((key) => seen.add(key));
       merged.push(r);
     }
     for (const r of (data.results || [])) {
-      const key = String(r?.url || "");
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
+      const keys = getChannelResultDedupeKeys(r);
+      if (!keys.length || keys.some((key) => seen.has(key))) continue;
+      keys.forEach((key) => seen.add(key));
       merged.push(r);
     }
     if (Array.isArray(merged) && merged.length) {

@@ -321,7 +321,11 @@ function isDecorativeImageUrl(url) {
 }
 
 function cleanImageUrl(url) {
-  return String(url || "").trim().replace(/[\\'"]+$/g, "");
+  const cleaned = decodeHtmlEntities(String(url || "").trim())
+    .replace(/[\\'"]+$/g, "")
+    .replace(/\s+/g, "");
+  if (cleaned.startsWith("//")) return `https:${cleaned}`;
+  return cleaned;
 }
 
 function getHtmlAttr(tag, attrName) {
@@ -3471,20 +3475,38 @@ function buildStoreChoiceUrl(store, choice) {
 }
 
 function computeSeoRecipeScore(recipe) {
+  return getSeoRecipeScoreDetails(recipe).score;
+}
+
+function getSeoRecipeScoreDetails(recipe) {
   const issues = getImportedRecipeIssues(recipe);
   const ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients.filter((i) => sanitizeText(i?.name || i || "")) : [];
   const instructions = Array.isArray(recipe?.instructions) ? recipe.instructions.filter((s) => sanitizeText(s || "")) : [];
+  const checks = [];
   let score = 100;
-  if (issues.includes("missing_title")) score -= 30;
-  if (issues.includes("missing_source_url")) score -= 24;
-  if (issues.includes("missing_image")) score -= 14;
-  if (issues.includes("too_few_ingredients")) score -= 22;
-  if (issues.includes("missing_steps")) score -= 24;
-  if (!sanitizeText(recipe?.description || "")) score -= 8;
-  if (ingredients.length >= 5) score += 4;
-  if (instructions.length >= 3) score += 4;
-  if (Number(recipe?.ratingCount) > 0 && Number(recipe?.ratingValue) > 0) score += 4;
-  return Math.max(0, Math.min(100, Math.round(score)));
+  function addCheck(key, label, ok, points, kind = "penalty") {
+    const delta = kind === "bonus" ? (ok ? points : 0) : (ok ? 0 : -points);
+    score += delta;
+    checks.push({ key, label, ok: Boolean(ok), points: Math.abs(points), delta });
+  }
+  addCheck("title", "Titel aanwezig", !issues.includes("missing_title"), 30);
+  addCheck("source_url", "Bron-URL aanwezig", !issues.includes("missing_source_url"), 24);
+  addCheck("image", "Afbeelding aanwezig", !issues.includes("missing_image"), 14);
+  addCheck("ingredients", "Minimaal 2 ingrediënten", !issues.includes("too_few_ingredients"), 22);
+  addCheck("steps", "Bereidingsstappen aanwezig", !issues.includes("missing_steps"), 24);
+  addCheck("description", "Beschrijving aanwezig", Boolean(sanitizeText(recipe?.description || "")), 8);
+  addCheck("ingredient_depth", "Minimaal 5 ingrediënten", ingredients.length >= 5, 4, "bonus");
+  addCheck("step_depth", "Minimaal 3 stappen", instructions.length >= 3, 4, "bonus");
+  addCheck("rating", "Beoordeling aanwezig", Number(recipe?.ratingCount) > 0 && Number(recipe?.ratingValue) > 0, 4, "bonus");
+  const finalScore = Math.max(0, Math.min(100, Math.round(score)));
+  return {
+    score: finalScore,
+    grade: finalScore >= 85 ? "good" : finalScore >= 65 ? "warn" : "bad",
+    issues,
+    checks,
+    reasons: checks.filter((check) => check.delta < 0).map((check) => check.label),
+    bonuses: checks.filter((check) => check.delta > 0).map((check) => check.label),
+  };
 }
 
 function buildGenericChoices(store, ingredientTitle, amount) {
@@ -13979,6 +14001,8 @@ function cleanSeoRecipesForUser(user) {
 async function repairSeoRecipesForUser(user, options = {}) {
   const maxRecipes = Math.max(1, Math.min(Number(options.maxRecipes) || 20, 100));
   const mode = ["image", "rating", "reimport"].includes(options.mode) ? options.mode : "reimport";
+  const lowestFirst = Boolean(options.lowestFirst);
+  const maxScore = Number.isFinite(Number(options.maxScore)) ? Math.max(0, Math.min(Number(options.maxScore), 100)) : null;
   const appState = buildAppStateFromUser(user);
   const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes.map((r) => ({ ...r })) : [];
   const cookbooks = Array.isArray(appState.cookbooks) ? appState.cookbooks : [];
@@ -13989,11 +14013,19 @@ async function repairSeoRecipesForUser(user, options = {}) {
   const repaired = [];
   const failed = [];
   const seenSources = new Set();
+  const repairOrder = recipes
+    .map((recipe, index) => ({ index, recipe, score: computeSeoRecipeScore(recipe) }))
+    .filter((item) => seoIds.has(sanitizeText(item.recipe?.id || "")))
+    .filter((item) => maxScore === null || item.score <= maxScore);
+  if (lowestFirst) {
+    repairOrder.sort((a, b) => (a.score - b.score) || a.index - b.index);
+  }
 
-  for (let i = 0; i < recipes.length && repaired.length + failed.length < maxRecipes; i++) {
+  for (const item of repairOrder) {
+    if (repaired.length + failed.length >= maxRecipes) break;
+    const i = item.index;
     const recipe = recipes[i];
     const id = sanitizeText(recipe?.id || "");
-    if (!seoIds.has(id)) continue;
     const issues = getImportedRecipeIssues(recipe);
     const sourceUrl = sanitizeText(recipe?.sourceUrl || recipe?.source || "");
     const sourceKey = normalizeRecipeSourceKey(sourceUrl);
@@ -14033,7 +14065,7 @@ async function repairSeoRecipesForUser(user, options = {}) {
         continue;
       }
       recipes[i] = merged;
-      repaired.push({ id, title: sanitizeText(merged.title || "Recept"), sourceUrl, mode, fixed: issues });
+      repaired.push({ id, title: sanitizeText(merged.title || "Recept"), sourceUrl, mode, scoreBefore: item.score, scoreAfter: computeSeoRecipeScore(merged), fixed: issues });
     } catch (error) {
       failed.push({
         id,
@@ -17343,6 +17375,8 @@ const server = http.createServer(async (request, response) => {
         const dryRun = body?.dryRun !== false;
         const maxRecipes = Math.max(1, Math.min(Number(body?.maxRecipes) || 20, 100));
         const mode = ["image", "rating", "reimport"].includes(sanitizeText(body?.mode || "")) ? sanitizeText(body.mode) : "reimport";
+        const lowestFirst = Boolean(body?.lowestFirst);
+        const maxScore = Number.isFinite(Number(body?.maxScore)) ? Math.max(0, Math.min(Number(body.maxScore), 100)) : null;
         let usersScanned = 0;
         let usersChanged = 0;
         let repairedRecipes = 0;
@@ -17355,7 +17389,7 @@ const server = http.createServer(async (request, response) => {
           const res = await pool.query(`SELECT * FROM plately_users`);
           for (const row of res.rows || []) {
             usersScanned += 1;
-            const result = await repairSeoRecipesForUser(row, { maxRecipes, mode });
+            const result = await repairSeoRecipesForUser(row, { maxRecipes, mode, lowestFirst, maxScore });
             sampleFailed.push(...result.failed.slice(0, Math.max(0, 30 - sampleFailed.length)));
             if (!result.changed) continue;
             usersChanged += 1;
@@ -17367,7 +17401,7 @@ const server = http.createServer(async (request, response) => {
           const db = await loadDatabase();
           for (const user of Object.values(db.users || {})) {
             usersScanned += 1;
-            const result = await repairSeoRecipesForUser(user, { maxRecipes, mode });
+            const result = await repairSeoRecipesForUser(user, { maxRecipes, mode, lowestFirst, maxScore });
             sampleFailed.push(...result.failed.slice(0, Math.max(0, 30 - sampleFailed.length)));
             if (!result.changed) continue;
             usersChanged += 1;
@@ -17382,6 +17416,8 @@ const server = http.createServer(async (request, response) => {
           ok: true,
           dryRun,
           mode,
+          lowestFirst,
+          maxScore,
           usersScanned,
           usersChanged,
           repairedRecipes,
@@ -17457,15 +17493,43 @@ const server = http.createServer(async (request, response) => {
       try {
         await requireAdmin(request);
         const body = await readRequestBody(request);
+        const preset = sanitizeText(body?.preset || "");
+        const presets = {
+          basis: [
+            { title: "tomaten", amount: "4 stuks" },
+            { title: "pasta", amount: "500 g" },
+            { title: "melk", amount: "2 l" },
+          ],
+          pasta: [
+            { title: "spaghetti", amount: "500 g" },
+            { title: "tomatenblokjes", amount: "800 g" },
+            { title: "parmezaanse kaas", amount: "75 g" },
+            { title: "kipfilet", amount: "400 g" },
+          ],
+          nasi: [
+            { title: "rijst", amount: "400 g" },
+            { title: "nasi groente", amount: "400 g" },
+            { title: "ketjap manis", amount: "100 ml" },
+            { title: "eieren", amount: "4 stuks" },
+          ],
+          stamppot: [
+            { title: "aardappelen", amount: "1.2 kg" },
+            { title: "boerenkool", amount: "500 g" },
+            { title: "rookworst", amount: "1 stuk" },
+            { title: "melk", amount: "250 ml" },
+          ],
+          bakken: [
+            { title: "bloem", amount: "500 g" },
+            { title: "suiker", amount: "250 g" },
+            { title: "boter", amount: "250 g" },
+            { title: "eieren", amount: "4 stuks" },
+          ],
+        };
         const items = Array.isArray(body?.items) && body.items.length
           ? body.items.slice(0, 12)
-          : [
-              { title: "tomaten", amount: "4 stuks" },
-              { title: "pasta", amount: "500 g" },
-              { title: "melk", amount: "2 l" },
-            ];
+          : (presets[preset] || presets.basis);
         const basket = await buildStoreBasket({ store: "albert-heijn", items });
-        return sendJson(response, 200, { ok: true, items, basket, handoffUrl: basket.directUrl || "" });
+        return sendJson(response, 200, { ok: true, preset: presets[preset] ? preset : "basis", items, basket, handoffUrl: basket.directUrl || "" });
       } catch (error) {
         const statusCode = error.statusCode || 400;
         console.error("❌ Error in /api/admin/ah-basket-check:", error.message);
@@ -17784,6 +17848,7 @@ const server = http.createServer(async (request, response) => {
 
           const items = res.rows.map((row) => {
             const recipe = row.recipe || {};
+            const seoDetails = getSeoRecipeScoreDetails(recipe);
             return {
               id: sanitizeText(recipe.id || ""),
               title: sanitizeText(recipe.title || ""),
@@ -17792,6 +17857,11 @@ const server = http.createServer(async (request, response) => {
               user_name: sanitizeText(row.user_email || ""),
               source: sanitizeText(recipe.sourceUrl || recipe.source || ""),
               channel: sanitizeText(recipe.channelId || recipe.platform || ""),
+              seo_score: seoDetails.score,
+              seo_grade: seoDetails.grade,
+              seo_reasons: seoDetails.reasons,
+              seo_bonuses: seoDetails.bonuses,
+              seo_issues: seoDetails.issues,
               created_at: row.user_created_at || "",
               updated_at: row.user_updated_at || "",
             };
@@ -17844,6 +17914,7 @@ const server = http.createServer(async (request, response) => {
           for (const r of imported) {
             const title = sanitizeText(r?.title || "");
             if (q && !title.toLowerCase().includes(q.toLowerCase())) continue;
+            const seoDetails = getSeoRecipeScoreDetails(r);
             allRecipes.push({
               id: sanitizeText(r?.id || ""),
               title,
@@ -17852,6 +17923,11 @@ const server = http.createServer(async (request, response) => {
               user_name: sanitizeText(u.email || ""),
               source: sanitizeText(r?.sourceUrl || r?.source || ""),
               channel: sanitizeText(r?.channelId || r?.platform || ""),
+              seo_score: seoDetails.score,
+              seo_grade: seoDetails.grade,
+              seo_reasons: seoDetails.reasons,
+              seo_bonuses: seoDetails.bonuses,
+              seo_issues: seoDetails.issues,
               created_at: u.createdAt || "",
               updated_at: u.updatedAt || "",
             });

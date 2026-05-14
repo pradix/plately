@@ -763,7 +763,16 @@
           <h2>AH mandje check</h2>
           <div class="muted">Controleert matches, aantallen en add-multiple URL</div>
         </div>
-        <button class="btn btn-primary" type="button" onclick="runAhBasketCheck()">Run AH check</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="ahBasketPreset" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
+            <option value="basis">Basis</option>
+            <option value="pasta">Pasta</option>
+            <option value="nasi">Nasi</option>
+            <option value="stamppot">Stamppot</option>
+            <option value="bakken">Bakken</option>
+          </select>
+          <button class="btn btn-primary" type="button" onclick="runAhBasketCheck()">Run AH check</button>
+        </div>
         <div id="ahBasketCheckStatus" class="muted" style="margin-top:8px"></div>
         <pre id="ahBasketCheckOutput" class="mono" style="display:block;margin-top:8px;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:8px;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto">—</pre>
       </div>
@@ -1240,8 +1249,13 @@
                     <option value="rating">Alleen rating</option>
                   </select>
                 </label>
+                <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Max score
+                  <input id="seoRepairMaxScore" type="number" min="0" max="100" value="70" style="width:72px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+                </label>
                 <button type="button" class="btn btn-sm" onclick="repairSeoRecipes(true)">Dry-run repareren</button>
                 <button type="button" class="btn btn-sm btn-primary" onclick="repairSeoRecipes(false)">Repareren</button>
+                <button type="button" class="btn btn-sm" onclick="repairLowestSeoScores(true)">Dry-run laagste scores</button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="repairLowestSeoScores(false)">Repareer laagste scores eerst</button>
               </div>
               <div id="seoRepairStatus" class="muted" style="font-size:12px;margin-bottom:8px">Probeert SEO-recepten met ontbrekende afbeelding/stappen opnieuw vanaf de bron te importeren.</div>
               <pre id="seoRepairOutput" class="mono" style="display:block;margin:0;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto">—</pre>
@@ -1960,13 +1974,14 @@
     async function runAhBasketCheck() {
       const statusEl = document.getElementById("ahBasketCheckStatus");
       const outEl = document.getElementById("ahBasketCheckOutput");
+      const preset = String(document.getElementById("ahBasketPreset")?.value || "basis");
       if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> AH mandje check…`;
       if (outEl) outEl.textContent = "Bezig…";
       try {
         const response = await fetch("/api/admin/ah-basket-check", adminFetchInit({
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ preset }),
         }));
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || "AH check mislukt");
@@ -2163,6 +2178,18 @@
         const owner = r.user_name || r.user_email || r.user_id || "";
         const channel = r.channel ? `<span class="badge" title="kanaal/platform">${escapeHtml(r.channel)}</span>` : "";
         const source = r.source ? `<a href="${escapeHtml(r.source)}" target="_blank" rel="noopener" class="admin-inventory__link">Bron</a>` : "";
+        const seoScore = Number.isFinite(Number(r.seo_score)) ? Math.round(Number(r.seo_score)) : null;
+        const seoGrade = r.seo_grade === "good" ? "good" : r.seo_grade === "warn" ? "warn" : "bad";
+        const seoReasons = Array.isArray(r.seo_reasons) ? r.seo_reasons.filter(Boolean) : [];
+        const seoBonuses = Array.isArray(r.seo_bonuses) ? r.seo_bonuses.filter(Boolean) : [];
+        const seoBadge = seoScore !== null
+          ? `<span class="seo-score seo-score--${escapeHtml(seoGrade)}" title="${escapeHtml(seoReasons.length ? seoReasons.join(" · ") : "SEO compleet")}">SEO ${seoScore}/100</span>`
+          : "";
+        const seoDetails = `
+          <div><span class="muted">SEO score</span><br/>${seoScore !== null ? `${seoScore}/100` : "-"}</div>
+          <div><span class="muted">SEO aandacht</span><br/>${seoReasons.length ? escapeHtml(seoReasons.join(" · ")) : "Geen"}</div>
+          <div><span class="muted">SEO pluspunten</span><br/>${seoBonuses.length ? escapeHtml(seoBonuses.join(" · ")) : "Geen"}</div>
+        `;
         const detail = `
           <details class="admin-inventory__details">
             <summary>Details</summary>
@@ -2171,6 +2198,7 @@
               <div><span class="muted">User ID</span><br/><code>${escapeHtml(r.user_id || "")}</code></div>
               <div><span class="muted">Created</span><br/>${escapeHtml(r.created_at || "-")}</div>
               <div><span class="muted">Updated</span><br/>${escapeHtml(r.updated_at || "-")}</div>
+              ${seoDetails}
             </div>
           </details>
         `;
@@ -2181,7 +2209,7 @@
             <div class="admin-inventory__body">
               <div class="admin-inventory__title">${escapeHtml(r.title || "Naamloos recept")}</div>
               <div class="admin-inventory__subtitle">${owner ? `👤 ${escapeHtml(owner)}` : ""}</div>
-              <div class="admin-inventory__meta">${channel} ${source}</div>
+              <div class="admin-inventory__meta">${channel} ${seoBadge} ${source}</div>
               ${detail}
             </div>
           </article>
@@ -3167,23 +3195,32 @@
       }
     }
 
-    async function repairSeoRecipes(dryRun) {
+    async function repairSeoRecipes(dryRun, extra = {}) {
       const statusEl = document.getElementById("seoRepairStatus");
       const outEl = document.getElementById("seoRepairOutput");
       const maxRaw = document.getElementById("seoRepairMaxRecipes")?.value || "20";
       const mode = String(document.getElementById("seoRepairMode")?.value || "reimport");
+      const maxScoreRaw = document.getElementById("seoRepairMaxScore")?.value || "70";
       const maxRecipes = Math.max(1, Math.min(Number(maxRaw) || 20, 100));
+      const maxScore = Math.max(0, Math.min(Number(maxScoreRaw) || 70, 100));
       if (!dryRun) {
-        const ok = confirm(`Maximaal ${maxRecipes} SEO-recepten opnieuw vanaf de bron importeren en repareren?`);
+        const lowestText = extra.lowestFirst ? ` met SEO-score t/m ${maxScore}, laagste eerst` : "";
+        const ok = confirm(`Maximaal ${maxRecipes} SEO-recepten${lowestText} opnieuw vanaf de bron importeren en repareren?`);
         if (!ok) return;
       }
-      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> ${dryRun ? "Dry-run repareren" : "Repareren"}…`;
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> ${dryRun ? "Dry-run repareren" : "Repareren"}${extra.lowestFirst ? " laagste scores" : ""}…`;
       if (outEl) outEl.textContent = "Bezig…";
       try {
         const response = await fetch("/api/admin/seo-recipes-repair", adminFetchInit({
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dryRun: Boolean(dryRun), maxRecipes, mode }),
+          body: JSON.stringify({
+            dryRun: Boolean(dryRun),
+            maxRecipes,
+            mode,
+            lowestFirst: Boolean(extra.lowestFirst),
+            ...(extra.lowestFirst ? { maxScore } : {}),
+          }),
         }));
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || "Repareren mislukt");
@@ -3194,6 +3231,8 @@
           outEl.textContent = JSON.stringify({
             dryRun: data.dryRun,
             mode: data.mode,
+            lowestFirst: data.lowestFirst,
+            maxScore: data.maxScore,
             usersScanned: data.usersScanned,
             usersChanged: data.usersChanged,
             repairedRecipes: data.repairedRecipes,
@@ -3205,6 +3244,10 @@
         if (statusEl) statusEl.textContent = "Fout: " + (error.message || String(error));
         if (outEl) outEl.textContent = "—";
       }
+    }
+
+    function repairLowestSeoScores(dryRun) {
+      return repairSeoRecipes(dryRun, { lowestFirst: true });
     }
 
     function selectAllSeoBackfillKeywords() {
