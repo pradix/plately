@@ -245,7 +245,7 @@ const HTTP_HEADERS = {
 
 const FETCH_HEADERS = {
   "user-agent":
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
   accept: "*/*",
   "accept-language": "nl-NL,nl;q=0.9,en-GB;q=0.8,en;q=0.7",
 };
@@ -8626,6 +8626,26 @@ function normalizeSearchQuery(raw) {
 
 let ahTokenCache = { token: "", expiresAt: 0 };
 
+// In-memory cache voor AH productzoekopdrachten — vermindert API-calls drastisch
+// en maakt de app bestand tegen tijdelijke rate-limits.
+const _ahSearchCache = new Map();
+const AH_SEARCH_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 uur
+const AH_SEARCH_CACHE_MAX = 600;
+
+function _getAHSearchCache(key) {
+  const entry = _ahSearchCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { _ahSearchCache.delete(key); return null; }
+  return entry.products;
+}
+
+function _setAHSearchCache(key, products) {
+  if (_ahSearchCache.size >= AH_SEARCH_CACHE_MAX) {
+    _ahSearchCache.delete(_ahSearchCache.keys().next().value);
+  }
+  _ahSearchCache.set(key, { products, expiresAt: Date.now() + AH_SEARCH_CACHE_TTL });
+}
+
 async function fetchAHAnonymousToken() {
   if (ahTokenCache.token && Date.now() < ahTokenCache.expiresAt - 60_000) {
     return ahTokenCache.token;
@@ -8637,6 +8657,7 @@ async function fetchAHAnonymousToken() {
     signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) {
+    console.warn(`[AH] Auth token mislukt: HTTP ${response.status}`);
     throw new Error(`AH auth mislukt (${response.status})`);
   }
   const data = await response.json();
@@ -8865,9 +8886,14 @@ async function findAHProduct(ingredient) {
 async function findAHProducts(ingredient, count = 12, queryOverride = null) {
   const baseTerm = normalizeIngredientForSearch(ingredient) || ingredient;
   const searchTerm = queryOverride || baseTerm;
+  const searchSize = Math.min(72, Math.max(count * 3, 24));
+  const cacheKey = `${searchTerm}:${searchSize}`;
+
+  const cached = _getAHSearchCache(cacheKey);
+  if (cached) return cached.slice(0, count);
+
   try {
     const token = await fetchAHAnonymousToken();
-    const searchSize = Math.min(72, Math.max(count * 3, 24));
     const searchUrl =
       `https://api.ah.nl/mobile-services/product/search/v2` +
       `?query=${encodeURIComponent(searchTerm)}&size=${searchSize}&sortOn=RELEVANCE`;
@@ -8878,10 +8904,13 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         "x-application": "AHWEBSHOP",
         ...FETCH_HEADERS,
       },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(10000),
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      console.warn(`[AH] Product search HTTP ${response.status} voor "${searchTerm}"`);
+      return [];
+    }
 
     const data = await response.json();
     const baseLower = sanitizeText(baseTerm).toLowerCase();
@@ -9457,8 +9486,11 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       }
     }
 
-    return products.map(parseAHProduct);
-  } catch {
+    const parsed = products.map(parseAHProduct);
+    if (parsed.length > 0) _setAHSearchCache(cacheKey, parsed);
+    return parsed;
+  } catch (err) {
+    console.warn(`[AH] findAHProducts fout voor "${searchTerm}": ${err?.message || err}`);
     return [];
   }
 }
@@ -16368,6 +16400,32 @@ const server = http.createServer(async (request, response) => {
       const entries = await listPublicSeoRecipesCached(origin);
       const results = searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit });
       sendJson(response, 200, { ok: true, results, responseTimeMs: responseTimeMs() });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/ah-debug" && request.method === "GET") {
+      const diag = { cacheSize: _ahSearchCache.size };
+      try {
+        const token = await fetchAHAnonymousToken();
+        diag.tokenOk = true;
+        diag.tokenPrefix = String(token || "").slice(0, 12) + "…";
+      } catch (err) {
+        diag.tokenOk = false;
+        diag.tokenError = String(err?.message || err);
+      }
+      if (diag.tokenOk) {
+        try {
+          const products = await findAHProducts("kipfilet", 2);
+          diag.searchOk = products.length > 0;
+          diag.searchCount = products.length;
+          diag.firstProduct = products[0]?.name || null;
+          diag.firstImageUrl = products[0]?.imageUrl || null;
+        } catch (err) {
+          diag.searchOk = false;
+          diag.searchError = String(err?.message || err);
+        }
+      }
+      sendJson(response, 200, { ok: true, ...diag });
       return;
     }
 
