@@ -11295,21 +11295,30 @@ function formatAhGraphqlMinutes(recipe) {
   return minutes > 0 ? `${minutes} min` : "";
 }
 
+function ahGraphqlHeaders(referer = "https://www.ah.nl/allerhande") {
+  return {
+    ...FETCH_HEADERS,
+    accept: "*/*",
+    "accept-language": "nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7",
+    "content-type": "application/json",
+    origin: "https://www.ah.nl",
+    referer,
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "x-client-name": "ah-allerhande",
+    "x-client-platform-type": "Web",
+    "x-client-version": "1.1025.2",
+  };
+}
+
 async function importAhRecipeViaGraphql(sourceUrl) {
   const recipeId = extractAhRecipeIdFromUrl(sourceUrl);
   if (!recipeId) return null;
   try {
     const resp = await fetch("https://www.ah.nl/gql", {
       method: "POST",
-      headers: {
-        ...FETCH_HEADERS,
-        accept: "*/*",
-        "content-type": "application/json",
-        "x-client-name": "ah-allerhande",
-        "x-client-platform-type": "Web",
-        "x-client-version": "1.1025.2",
-        referer: sourceUrl,
-      },
+      headers: ahGraphqlHeaders(sourceUrl),
       body: JSON.stringify({
         operationName: "recipe",
         variables: { id: recipeId },
@@ -11317,7 +11326,10 @@ async function importAhRecipeViaGraphql(sourceUrl) {
       }),
       signal: AbortSignal.timeout(9000),
     });
-    if (!resp?.ok) return null;
+    if (!resp?.ok) {
+      console.log(`AH GraphQL import response: ${resp?.status || "failed"}`);
+      return null;
+    }
     const json = await resp.json().catch(() => null);
     const data = json?.data?.recipe;
     if (!data?.id || !data?.title) return null;
@@ -11366,15 +11378,7 @@ async function searchAhRecipesViaGraphql(query, count = 4) {
   try {
     const resp = await fetch("https://www.ah.nl/gql", {
       method: "POST",
-      headers: {
-        ...FETCH_HEADERS,
-        accept: "*/*",
-        "content-type": "application/json",
-        "x-client-name": "ah-allerhande",
-        "x-client-platform-type": "Web",
-        "x-client-version": "1.1025.2",
-        referer: `https://www.ah.nl/allerhande/recepten-zoeken?query=${encodeURIComponent(searchText)}`,
-      },
+      headers: ahGraphqlHeaders(`https://www.ah.nl/allerhande/recepten-zoeken?query=${encodeURIComponent(searchText)}`),
       body: JSON.stringify({
         operationName: "recipeSearchV2",
         variables: {
