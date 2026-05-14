@@ -4501,6 +4501,42 @@ function compactSocialDescription(description, title) {
   return firstSentence.slice(0, 140);
 }
 
+function isMiljuschkaHost(url) {
+  try {
+    const h = new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
+    return h === "miljuschka.nl";
+  } catch {
+    return false;
+  }
+}
+
+function cleanMiljuschkaDescription(description, title = "") {
+  let clean = sanitizeText(String(description || ""));
+  if (!clean) return "";
+  clean = clean
+    .replace(/^.*?\bHome\s*\/\s*/i, "")
+    .replace(/\b(Recepten|Italiaanse recepten|Makkelijke recepten|Noten recepten|Pasta recepten|Snelle recepten)\b/gi, " ")
+    .replace(/!\[[^\]]+\]\([^)]+\)/g, " ")
+    .replace(/\[[^\]]+\]\([^)]+\)/g, " ")
+    .replace(/\b(?:miljuschka\s+)?(?:pastabord|snijplank|pastamachine|servies|shop|winkelmand)\b[^.?!]*/gi, " ")
+    .replace(/\b(?:€\s*)?\d{1,4}(?:[,.]\d{2}|,-)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const titleClean = sanitizeText(title || "");
+  if (titleClean) {
+    clean = clean.replace(new RegExp(`^${escapeRegex(titleClean)}[\\s:.,-]*`, "i"), "").trim();
+  }
+  if (!clean || clean.length < 30) return "";
+  if (/^(recepten|italiaanse recepten|makkelijke recepten|noten recepten|pasta recepten|snelle recepten)\b/i.test(clean)) return "";
+  if (/pastabord|snijplank|pastamachine|winkelmand|^\d{1,4}(?:[,.]\d{2}|,-)?$/i.test(clean)) return "";
+  const sentences = clean
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => sanitizeText(s))
+    .filter(Boolean)
+    .filter((s) => !isLikelyRecipeMarkdownNoiseLine(s));
+  return sanitizeText((sentences.length ? sentences.slice(0, 2).join(" ") : clean).slice(0, 220));
+}
+
 function normalizeIngredientObject(ingredient) {
   if (!ingredient?.name) {
     return ingredient;
@@ -6867,8 +6903,12 @@ function parseWebsiteRecipe(html, url) {
       platform: "website",
       sourceUrl: url,
       title: normalizeRecipeTitle(recipeName || metaTitle) || "Website recept",
-      description: recipeDescription,
-      caption: recipeDescription,
+      description: isMiljuschkaHost(url)
+        ? cleanMiljuschkaDescription(recipeDescription, recipeName || metaTitle) || recipeDescription
+        : recipeDescription,
+      caption: isMiljuschkaHost(url)
+        ? cleanMiljuschkaDescription(recipeDescription, recipeName || metaTitle) || recipeDescription
+        : recipeDescription,
       image: recipeImage || metaImage,
       author:
         sanitizeText(
@@ -6914,8 +6954,8 @@ function parseWebsiteRecipe(html, url) {
     platform: "website",
     sourceUrl: url,
     title: fallbackTitle,
-    description: fallbackDescription,
-    caption: fallbackDescription,
+    description: isMiljuschkaHost(url) ? cleanMiljuschkaDescription(fallbackDescription, fallbackTitle) || fallbackDescription : fallbackDescription,
+    caption: isMiljuschkaHost(url) ? cleanMiljuschkaDescription(fallbackDescription, fallbackTitle) || fallbackDescription : fallbackDescription,
     image: metaImage,
     author: new URL(url).hostname.replace(/^www\./, ""),
     ingredients: ingPick,
@@ -8028,6 +8068,12 @@ async function importWebsite(sourceUrl) {
       ingredients: mdIngredients.length ? mdIngredients : textRecipe.ingredients,
       instructions: mdInstructions.length ? mdInstructions : textRecipe.instructions,
       servings: mdServings || textRecipe.servings,
+      description: isMiljuschkaHost(document.finalUrl || sourceUrl)
+        ? cleanMiljuschkaDescription(textRecipe.description, textRecipe.title) || textRecipe.description
+        : textRecipe.description,
+      caption: isMiljuschkaHost(document.finalUrl || sourceUrl)
+        ? cleanMiljuschkaDescription(textRecipe.caption || textRecipe.description, textRecipe.title) || textRecipe.caption || textRecipe.description
+        : textRecipe.caption,
       needsReview:
         (mdIngredients.length ? mdIngredients.length : textRecipe.ingredients.length) < 2 ||
         (mdInstructions.length ? mdInstructions.length : textRecipe.instructions.length) < 1,
@@ -8047,12 +8093,16 @@ async function importWebsite(sourceUrl) {
           )
         );
         const parsedInstructions = finalizeInstructionSteps(claudeResult.instructions || []);
-        return {
-          ...mergedTextRecipe,
-          title: claudeResult.title || mergedTextRecipe.title,
-          description: claudeResult.description || mergedTextRecipe.description,
-          ingredients: parsedIngredients.length ? parsedIngredients : mergedTextRecipe.ingredients,
-          instructions: parsedInstructions.length ? parsedInstructions : mergedTextRecipe.instructions,
+      return {
+        ...mergedTextRecipe,
+        title: claudeResult.title || mergedTextRecipe.title,
+        description: isMiljuschkaHost(document.finalUrl || sourceUrl)
+          ? cleanMiljuschkaDescription(claudeResult.description || mergedTextRecipe.description, claudeResult.title || mergedTextRecipe.title) ||
+            claudeResult.description ||
+            mergedTextRecipe.description
+          : claudeResult.description || mergedTextRecipe.description,
+        ingredients: parsedIngredients.length ? parsedIngredients : mergedTextRecipe.ingredients,
+        instructions: parsedInstructions.length ? parsedInstructions : mergedTextRecipe.instructions,
           time: claudeResult.time || mergedTextRecipe.time,
           servings: claudeResult.servings || mergedTextRecipe.servings,
           needsReview: parsedIngredients.length < 2 || parsedInstructions.length < 1,
