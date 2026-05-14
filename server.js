@@ -9733,7 +9733,8 @@ function buildAHDirectAddUrl(results) {
   const params = found
     .map((r) => {
       const qty = Math.max(1, Math.min(24, Math.ceil(Number(r.quantity || 1) || 1)));
-      return `p=${encodeURIComponent(`${r.product.id}:${qty}`)}`;
+      // Colon must NOT be percent-encoded — AH's add-multiple parser expects literal `p=ID:QTY`
+      return `p=${encodeURIComponent(r.product.id)}:${qty}`;
     })
     .join("&");
   return `https://www.ah.nl/mijnlijst/add-multiple?${params}`;
