@@ -8657,6 +8657,12 @@ function _setAHSearchCache(key, products) {
 }
 
 async function fetchAHAnonymousToken() {
+  // Static token override — handig als api.ah.nl/mobile-auth geblokkeerd is vanuit het server-IP.
+  // Zet AH_ANONYMOUS_TOKEN als env var (geldig ~7 dagen).
+  // Vernieuwen: voer lokaal uit: node scripts/refresh-ah-token.js
+  const staticToken = String(process.env.AH_ANONYMOUS_TOKEN || "").trim();
+  if (staticToken) return staticToken;
+
   if (ahTokenCache.token && Date.now() < ahTokenCache.expiresAt - 60_000) {
     return ahTokenCache.token;
   }
