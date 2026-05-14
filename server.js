@@ -4,8 +4,10 @@ const fsp = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
 const crypto = require("node:crypto");
+const zlib = require("node:zlib");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
+const gzipAsync = promisify(zlib.gzip);
 
 const ROOT_DIR = __dirname;
 const execFileAsync = promisify(execFile);
@@ -14831,7 +14833,9 @@ async function readRequestBody(request) {
   }
 }
 
-async function serveStaticFile(requestPath, response) {
+const GZIP_EXTENSIONS = new Set([".html", ".css", ".js", ".svg", ".json", ".xml", ".txt", ".webmanifest"]);
+
+async function serveStaticFile(requestPath, response, request) {
   const cleanPath = requestPath === "/" ? "/index.html" : requestPath;
   const relativePath = path.normalize(cleanPath).replace(/^(\.\.[/\\])+/, "").replace(/^[/\\]+/, "");
   const resolvedPath = path.join(ROOT_DIR, relativePath);
@@ -14844,21 +14848,34 @@ async function serveStaticFile(requestPath, response) {
   try {
     const fileContents = await fsp.readFile(resolvedPath);
     const extension = path.extname(resolvedPath).toLowerCase();
+    const basename = path.basename(resolvedPath);
+
+    // Cache policy: HTML stays fresh (no-cache), versioned CSS/JS gets long immutable cache,
+    // images get a week, everything else gets a day.
     const cacheControl =
-      path.basename(resolvedPath) === "service-worker.js"
+      basename === "service-worker.js"
         ? "no-cache, no-store, must-revalidate"
-        : extension === ".html" || extension === ".css" || extension === ".js"
+        : extension === ".html"
           ? "no-cache"
-          : extension === ".png" || extension === ".jpg" || extension === ".jpeg" || extension === ".svg"
-            ? "public, max-age=604800, immutable"
-            : "public, max-age=86400";
+          : extension === ".css" || extension === ".js"
+            ? "public, max-age=31536000, immutable"
+            : extension === ".png" || extension === ".jpg" || extension === ".jpeg" || extension === ".svg" || extension === ".ico" || extension === ".webp"
+              ? "public, max-age=604800, immutable"
+              : "public, max-age=86400";
+
+    // Gzip compress text-based files when the client supports it.
+    const acceptEncoding = request?.headers?.["accept-encoding"] || "";
+    const canGzip = GZIP_EXTENSIONS.has(extension) && /gzip/i.test(acceptEncoding);
+    const body = canGzip ? await gzipAsync(fileContents) : fileContents;
 
     response.writeHead(200, {
       ...HTTP_HEADERS,
       "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
       "Cache-Control": cacheControl,
+      "Vary": "Accept-Encoding",
+      ...(canGzip ? { "Content-Encoding": "gzip" } : {}),
     });
-    response.end(fileContents);
+    response.end(body);
   } catch {
     sendJson(response, 404, { error: "Bestand niet gevonden." });
   }
@@ -15436,7 +15453,7 @@ const server = http.createServer(async (request, response) => {
         response.end();
         return;
       }
-      await serveStaticFile("/deploy-status.html", response);
+      await serveStaticFile("/deploy-status.html", response, request);
       return;
     }
 
@@ -16865,7 +16882,7 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/admin" && request.method === "GET") {
       // Serve admin.html - authentication check happens in admin.html with fetch calls
       // The API endpoints (/api/admin/*) will enforce authentication
-      await serveStaticFile("/admin.html", response);
+      await serveStaticFile("/admin.html", response, request);
       return;
     }
 
@@ -19815,7 +19832,7 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
-    await serveStaticFile(requestUrl.pathname, response);
+    await serveStaticFile(requestUrl.pathname, response, request);
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
     sendJson(response, statusCode, {

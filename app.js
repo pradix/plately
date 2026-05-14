@@ -3859,15 +3859,24 @@ function switchView(view, opts = {}) {
     debouncedFetchGroceryPhotos();
   }
 
-  // When opening import screen: auto-fill from clipboard if it contains a URL
-  if (view === "import" && recipeUrlInput && !recipeUrlInput.value.trim()) {
-    navigator.clipboard.readText().then((text) => {
-      const trimmed = (text || "").trim();
-      if (trimmed && /^https?:\/\//i.test(trimmed) && recipeUrlInput && !recipeUrlInput.value.trim()) {
-        recipeUrlInput.value = trimmed;
-        showToast("📋 Link uit klembord geplakt");
-      }
-    }).catch(() => {});
+  // When opening import screen: offer to paste clipboard URL via a chip (not auto-paste).
+  if (view === "import") {
+    const chip = document.getElementById("importClipboardChip");
+    // Hide chip whenever we enter the screen — it will be shown below if clipboard has a URL.
+    if (chip) chip.classList.add("hidden");
+    if (recipeUrlInput && !recipeUrlInput.value.trim()) {
+      navigator.clipboard.readText().then((text) => {
+        const trimmed = (text || "").trim();
+        if (!trimmed || !/^https?:\/\//i.test(trimmed)) return;
+        if (recipeUrlInput.value.trim()) return; // user already typed something
+        const urlEl = document.getElementById("importClipboardUrl");
+        if (chip && urlEl) {
+          urlEl.textContent = trimmed.length > 52 ? trimmed.slice(0, 49) + "…" : trimmed;
+          chip.dataset.clipboardUrl = trimmed;
+          chip.classList.remove("hidden");
+        }
+      }).catch(() => {});
+    }
   }
 
   // When entering cookbooks screen, re-render the list
@@ -13661,6 +13670,18 @@ bindEvent(homeImportForm, "submit", async (event) => {
       showToast(`${importedRecipe.title} klaar om na te lopen.`);
     }
   );
+});
+
+bindEvent(document.getElementById("importClipboardYes"), "click", () => {
+  const chip = document.getElementById("importClipboardChip");
+  const url = chip?.dataset.clipboardUrl || "";
+  if (url && importScreenUrl) importScreenUrl.value = url;
+  chip?.classList.add("hidden");
+  importScreenUrl?.focus();
+});
+
+bindEvent(document.getElementById("importClipboardNo"), "click", () => {
+  document.getElementById("importClipboardChip")?.classList.add("hidden");
 });
 
 bindEvent(importScreenForm, "submit", async (event) => {

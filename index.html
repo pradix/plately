@@ -2,7 +2,8 @@
 <html lang="nl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="canonical" href="https://app.plately.nl/" />
     <title>Plately</title>
     <meta
       name="description"
@@ -37,7 +38,21 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
+    <link rel="preload" href="styles.css?v=1.0.19.37" as="style" />
     <link rel="stylesheet" href="styles.css?v=1.0.19.37" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Plately",
+      "url": "https://app.plately.nl/",
+      "description": "Bewaar, importeer en kook recepten van Instagram en websites. Maak met één klik een boodschappenlijst.",
+      "applicationCategory": "FoodApplication",
+      "operatingSystem": "Web",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+      "inLanguage": "nl"
+    }
+    </script>
     <style id="plately-video-styles">
 .detail-hero { position: relative; }
 .detail-hero__embed { width: 100%; background: #111; border-radius: 0; overflow: hidden; }
@@ -1223,7 +1238,7 @@
               </svg>
             </div>
             <h1 class="import-hero__title">Importeer recept</h1>
-            <p class="import-hero__subtitle">Plak een link van Instagram of een website — wij halen titel, ingrediënten en stappen automatisch op.</p>
+            <p class="import-hero__subtitle">Plak een link van Instagram of een website en wij halen titel, ingrediënten en stappen automatisch op.</p>
           </div>
 
           <!-- Supported platforms -->
@@ -1243,9 +1258,20 @@
             </div>
           </div>
 
+          <!-- Clipboard paste suggestion chip -->
+          <div class="import-clipboard-chip hidden" id="importClipboardChip" role="status">
+            <svg class="import-clipboard-chip__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1M8 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M8 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
+            <span class="import-clipboard-chip__label">Link geplakt — importeren?</span>
+            <span class="import-clipboard-chip__url" id="importClipboardUrl"></span>
+            <div class="import-clipboard-chip__btns">
+              <button class="import-clipboard-chip__yes" type="button" id="importClipboardYes">Ja</button>
+              <button class="import-clipboard-chip__no" type="button" id="importClipboardNo">Nee</button>
+            </div>
+          </div>
+
           <!-- Universele import via link -->
           <form id="importScreenForm" class="import-url-form">
-            <label for="importScreenUrl" class="import-url-label">PLAK JE LINK</label>
+            <label for="importScreenUrl" class="import-url-label">LINK</label>
             <div class="import-url-row">
               <span class="import-url-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1268,7 +1294,7 @@
               </button>
             </div>
             <button class="import-caption-toggle" type="button" id="importScreenCaptionToggle">+ Voeg beschrijving toe (optioneel)</button>
-            <textarea class="import-caption-field hidden" id="importScreenCaption" rows="3" placeholder="Plak hier de caption van Instagram — dit verbetert de import sterk."></textarea>
+            <textarea class="import-caption-field hidden" id="importScreenCaption" rows="3" placeholder="Voeg een caption of omschrijving toe — dit verbetert de import."></textarea>
             <p class="import-hint" id="importScreenFeedback"></p>
           </form>
 
@@ -2181,6 +2207,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=1.0.19.37"></script>
+    <script src="app.js?v=1.0.19.37" defer></script>
   </body>
 </html>
