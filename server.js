@@ -13745,6 +13745,154 @@ function dedupeImportedRecipesBySourceUrlForUser(user) {
   };
 }
 
+function getImportedRecipeSourceHost(recipe) {
+  const sourceUrl = sanitizeText(recipe?.sourceUrl || recipe?.source || "");
+  if (!sourceUrl) return "";
+  try {
+    return new URL(sourceUrl).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function getImportedRecipeChannelInfo(recipe) {
+  const sourceUrl = sanitizeText(recipe?.sourceUrl || recipe?.source || "");
+  const channelId = inferSeedChannelIdFromSourceUrl(sourceUrl) || sanitizeText(recipe?.channelId || "");
+  const host = getImportedRecipeSourceHost(recipe);
+  return {
+    id: channelId || host || "unknown",
+    label: channelId ? getSeedChannelName(channelId) : (host || "Onbekend"),
+    host,
+    channelId,
+  };
+}
+
+function getImportedRecipeIssues(recipe) {
+  const issues = [];
+  const title = sanitizeText(recipe?.title || "");
+  const sourceUrl = sanitizeText(recipe?.sourceUrl || recipe?.source || "");
+  const image = sanitizeText(recipe?.image || "");
+  const ingredients = Array.isArray(recipe?.ingredients)
+    ? recipe.ingredients.filter((item) => sanitizeText(item?.name || item || ""))
+    : [];
+  const instructions = Array.isArray(recipe?.instructions)
+    ? recipe.instructions.filter((step) => sanitizeText(step || ""))
+    : [];
+  if (!title) issues.push("missing_title");
+  if (!sourceUrl) issues.push("missing_source_url");
+  if (!image || /hero-burger\.svg$/i.test(image)) issues.push("missing_image");
+  if (ingredients.length < 2) issues.push("too_few_ingredients");
+  if (instructions.length < 1) issues.push("missing_steps");
+  return issues;
+}
+
+function collectImportQualityForUsers(users) {
+  const rowsById = new Map();
+  const sourceSeen = new Map();
+  let totalRecipes = 0;
+  for (const user of users || []) {
+    const appState = buildAppStateFromUser(user);
+    const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+    for (const recipe of recipes) {
+      totalRecipes += 1;
+      const info = getImportedRecipeChannelInfo(recipe);
+      const row = rowsById.get(info.id) || {
+        id: info.id,
+        label: info.label,
+        host: info.host,
+        total: 0,
+        valid: 0,
+        missingImage: 0,
+        missingSourceUrl: 0,
+        invalidRecipe: 0,
+        duplicateSourceUrl: 0,
+        lastTitle: "",
+        lastSourceUrl: "",
+      };
+      const issues = getImportedRecipeIssues(recipe);
+      row.total += 1;
+      if (!issues.some((issue) => issue !== "missing_image")) row.valid += 1;
+      if (issues.includes("missing_image")) row.missingImage += 1;
+      if (issues.includes("missing_source_url")) row.missingSourceUrl += 1;
+      if (issues.some((issue) => issue !== "missing_image")) row.invalidRecipe += 1;
+      row.lastTitle = sanitizeText(recipe?.title || row.lastTitle || "");
+      row.lastSourceUrl = sanitizeText(recipe?.sourceUrl || recipe?.source || row.lastSourceUrl || "");
+      rowsById.set(info.id, row);
+
+      const sourceKey = normalizeRecipeSourceKey(recipe?.sourceUrl || recipe?.source || "");
+      if (sourceKey) {
+        const previous = sourceSeen.get(sourceKey);
+        if (previous) {
+          row.duplicateSourceUrl += 1;
+          previous.duplicateSourceUrl += 1;
+        } else {
+          sourceSeen.set(sourceKey, row);
+        }
+      }
+    }
+  }
+  const rows = Array.from(rowsById.values()).map((row) => ({
+    ...row,
+    successRate: row.total ? Math.round((row.valid / row.total) * 100) : 0,
+    issueCount: row.missingSourceUrl + row.invalidRecipe + row.duplicateSourceUrl,
+  })).sort((a, b) => (b.issueCount - a.issueCount) || (b.total - a.total));
+  return { totalRecipes, rows };
+}
+
+function cleanSeoRecipesForUser(user) {
+  const appState = buildAppStateFromUser(user);
+  const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+  const cookbooks = Array.isArray(appState.cookbooks) ? appState.cookbooks : [];
+  const seoCookbook = cookbooks.find((c) => sanitizeText(c?.name || "") === "SEO recepten");
+  const seoIds = new Set(Array.isArray(seoCookbook?.recipeIds) ? seoCookbook.recipeIds.map((id) => sanitizeText(id)).filter(Boolean) : []);
+  if (!seoIds.size) return { changed: false, nextState: appState, removed: [], keptIssueCount: 0 };
+
+  const recipeById = new Map(recipes.map((recipe) => [sanitizeText(recipe?.id || ""), recipe]));
+  const seenSources = new Set();
+  const removeIds = new Set();
+  const removed = [];
+  let keptIssueCount = 0;
+
+  for (const id of seoIds) {
+    const recipe = recipeById.get(id);
+    if (!recipe) {
+      removeIds.add(id);
+      removed.push({ id, title: "(ontbreekt)", reason: "recipe_missing" });
+      continue;
+    }
+    const issues = getImportedRecipeIssues(recipe);
+    const sourceKey = normalizeRecipeSourceKey(recipe?.sourceUrl || recipe?.source || "");
+    let reason = "";
+    if (issues.includes("missing_source_url")) reason = "missing_source_url";
+    else if (issues.includes("missing_title") || issues.includes("too_few_ingredients") || issues.includes("missing_steps")) reason = "invalid_recipe";
+    else if (sourceKey && seenSources.has(sourceKey)) reason = "duplicate_source_url";
+
+    if (sourceKey) seenSources.add(sourceKey);
+    if (reason) {
+      removeIds.add(id);
+      removed.push({ id, title: sanitizeText(recipe?.title || "Recept"), reason, sourceUrl: sanitizeText(recipe?.sourceUrl || "") });
+    } else if (issues.length) {
+      keptIssueCount += 1;
+    }
+  }
+
+  if (!removeIds.size) return { changed: false, nextState: appState, removed, keptIssueCount };
+  const nextRecipes = recipes.filter((recipe) => !removeIds.has(sanitizeText(recipe?.id || "")));
+  const nextCookbooks = cookbooks.map((cookbook) => ({
+    ...cookbook,
+    recipeIds: (Array.isArray(cookbook.recipeIds) ? cookbook.recipeIds : []).filter((id) => !removeIds.has(sanitizeText(id || ""))),
+  }));
+  const fallbackId = nextRecipes[0]?.id || "";
+  const nextState = {
+    ...appState,
+    importedRecipes: nextRecipes,
+    cookbooks: nextCookbooks,
+    selectedRecipeId: removeIds.has(sanitizeText(appState.selectedRecipeId || "")) ? fallbackId : appState.selectedRecipeId,
+    featuredRecipeId: removeIds.has(sanitizeText(appState.featuredRecipeId || "")) ? fallbackId : appState.featuredRecipeId,
+  };
+  return { changed: true, nextState, removed, keptIssueCount };
+}
+
 async function runSeoRecipeBackfillForUser(authUser, options = {}) {
   const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
   const forceReimport = Boolean(options.forceReimport);
@@ -15995,8 +16143,11 @@ const server = http.createServer(async (request, response) => {
       const items = Array.isArray(body.items) ? body.items.slice(0, 20) : [];
       const photoResults = await Promise.allSettled(
         items.map(async (item) => {
-          const parsed = await findAHProducts(sanitizeText(item.title || ""), 12);
-          const best = pickAhBasketDefaultProduct(parsed, {});
+          const rawTitle = sanitizeText(item.title || "");
+          const searchTitle = canonicalizeIngredientForStoreSearch(rawTitle) || rawTitle;
+          let parsed = await findAHAlternativesGrouped(searchTitle, {}, 16);
+          if (!parsed.length) parsed = await findAHProducts(searchTitle, 12);
+          const best = selectAhProductForGroceryHandoff(parsed, {});
           return { id: item.id, imageUrl: best?.imageUrl || parsed[0]?.imageUrl || "" };
         })
       );
@@ -16892,6 +17043,85 @@ const server = http.createServer(async (request, response) => {
         const statusCode = error.statusCode || 400;
         console.error("❌ Error in /api/admin/dedupe-imported-recipes:", error.message);
         return sendJson(response, statusCode, { ok: false, error: error.message || "Ontdubbelen mislukt." });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/import-quality" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        let users = [];
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const res = await pool.query(`SELECT * FROM plately_users`);
+          users = res.rows || [];
+        } else {
+          const db = await loadDatabase();
+          users = Object.values(db.users || {});
+        }
+        const report = collectImportQualityForUsers(users);
+        return sendJson(response, 200, { ok: true, usersScanned: users.length, ...report });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/import-quality:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Importkwaliteit laden mislukt." });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/seo-recipes-cleanup" && request.method === "POST") {
+      console.log("🧽 /api/admin/seo-recipes-cleanup called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const dryRun = body?.dryRun !== false;
+        let usersScanned = 0;
+        let usersChanged = 0;
+        let removedRecipes = 0;
+        let keptIssueCount = 0;
+        const sampleRemoved = [];
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const res = await pool.query(`SELECT * FROM plately_users`);
+          for (const row of res.rows || []) {
+            usersScanned += 1;
+            const result = cleanSeoRecipesForUser(row);
+            keptIssueCount += result.keptIssueCount || 0;
+            if (!result.changed) continue;
+            usersChanged += 1;
+            removedRecipes += result.removed.length;
+            sampleRemoved.push(...result.removed.slice(0, Math.max(0, 30 - sampleRemoved.length)));
+            if (!dryRun) await updateAuthenticatedUserState(row.id, result.nextState);
+          }
+        } else {
+          const db = await loadDatabase();
+          for (const user of Object.values(db.users || {})) {
+            usersScanned += 1;
+            const result = cleanSeoRecipesForUser(user);
+            keptIssueCount += result.keptIssueCount || 0;
+            if (!result.changed) continue;
+            usersChanged += 1;
+            removedRecipes += result.removed.length;
+            sampleRemoved.push(...result.removed.slice(0, Math.max(0, 30 - sampleRemoved.length)));
+            if (!dryRun) db.users[user.id] = sanitizeUserStatePayload(result.nextState, user);
+          }
+          if (!dryRun && usersChanged) await persistDatabase();
+        }
+
+        return sendJson(response, 200, {
+          ok: true,
+          dryRun,
+          usersScanned,
+          usersChanged,
+          removedRecipes,
+          keptIssueCount,
+          sampleRemoved,
+        });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/seo-recipes-cleanup:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "SEO recepten opschonen mislukt." });
       }
     }
 

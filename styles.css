@@ -13555,6 +13555,19 @@ body {
   line-height: 1.2;
 }
 
+.basket-product__confidence {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(125, 151, 116, 0.12);
+  color: #596f53;
+  padding: 2px 7px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
 .price-new {
   font-weight: 800;
   color: #2a2825;

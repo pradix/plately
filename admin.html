@@ -942,6 +942,15 @@
             <div id="importsByChannelStatus" class="muted">⏳ Laden…</div>
             <div id="importsByChannelTable"></div>
           </div>
+
+          <div style="margin-top:16px">
+            <div class="section-header" style="margin-bottom:8px">
+              <h3 class="subhead" style="margin:0">Importkwaliteit per kanaal</h3>
+              <button class="btn btn-sm" type="button" onclick="loadImportQuality()">Refresh</button>
+            </div>
+            <div id="importQualityStatus" class="muted">⏳ Laden…</div>
+            <div id="importQualityTable"></div>
+          </div>
         </div>
       </div>
       </div>
@@ -1187,6 +1196,18 @@
             </div>
             <div id="seoDedupeStatus" class="muted" style="font-size:12px;margin-bottom:8px">Verwijdert dubbele imports met dezelfde bronlink uit alle accounts en werkt kookboeken bij.</div>
             <pre id="seoDedupeOutput" class="mono" style="display:block;margin:0;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto">—</pre>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
+            <div class="section-header" style="margin-bottom:8px">
+              <h3 style="margin:0;font-size:14px">SEO recepten opschonen</h3>
+              <div class="muted" style="font-size:12px">Verwijdert slechte SEO-recepten: geen bron-URL, ongeldig recept of dubbele bron-URL</div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+              <button type="button" class="btn btn-sm" onclick="cleanupSeoRecipes(true)">Dry-run</button>
+              <button type="button" class="btn btn-sm btn-danger" onclick="cleanupSeoRecipes(false)">Opschonen</button>
+            </div>
+            <div id="seoCleanupStatus" class="muted" style="font-size:12px;margin-bottom:8px">Recepten met alleen ontbrekende afbeelding blijven staan, maar komen in de output terug als aandachtspunt.</div>
+            <pre id="seoCleanupOutput" class="mono" style="display:block;margin:0;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto">—</pre>
           </div>
         </div>
 
@@ -1653,6 +1674,7 @@
 
         renderTopChannelsTable("topChannelsByImports30d", top.channelsByImports30d || []);
         loadImportsByChannel().catch(() => {});
+        loadImportQuality().catch(() => {});
 
         const hasChannels = Array.isArray(top.channelsByImports30d) && top.channelsByImports30d.length > 0;
         const noteEl = document.getElementById("topChannelsNote");
@@ -1763,6 +1785,62 @@
         await loadImportsByChannel();
       } catch (e) {
         if (statusEl) statusEl.textContent = "❌ " + (e.message || String(e));
+      }
+    }
+
+    async function loadImportQuality() {
+      const statusEl = document.getElementById("importQualityStatus");
+      const tableEl = document.getElementById("importQualityTable");
+      if (statusEl) statusEl.textContent = "⏳ Laden…";
+      if (tableEl) tableEl.innerHTML = "";
+      try {
+        const resp = await fetch("/api/admin/import-quality", adminFetchInit());
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) throw new Error(data.error || "Importkwaliteit laden mislukt");
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        if (statusEl) {
+          statusEl.textContent = `${formatNumber(data.totalRecipes || 0)} recepten · ${formatNumber(data.usersScanned || 0)} users · slechtste kanalen bovenaan`;
+        }
+        if (!tableEl) return;
+        if (!rows.length) {
+          tableEl.innerHTML = `<p class="muted">Nog geen importdata.</p>`;
+          return;
+        }
+        tableEl.innerHTML = `
+          <table class="users-table" style="margin-top:0">
+            <thead>
+              <tr>
+                <th>Kanaal/source</th>
+                <th style="text-align:right">Totaal</th>
+                <th style="text-align:right">Goed</th>
+                <th style="text-align:right">Succes</th>
+                <th style="text-align:right">Geen img</th>
+                <th style="text-align:right">Geen bron</th>
+                <th style="text-align:right">Ongeldig</th>
+                <th style="text-align:right">Dubbel</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.slice(0, 40).map((r) => `
+                <tr>
+                  <td>
+                    <strong>${escapeHtml(r.label || r.id || "Onbekend")}</strong>
+                    ${r.lastSourceUrl ? `<div class="mono" style="font-size:11px;color:#777;word-break:break-all">${escapeHtml(r.lastSourceUrl)}</div>` : ""}
+                  </td>
+                  <td style="text-align:right">${formatNumber(r.total || 0)}</td>
+                  <td style="text-align:right">${formatNumber(r.valid || 0)}</td>
+                  <td style="text-align:right">${formatNumber(r.successRate || 0)}%</td>
+                  <td style="text-align:right">${formatNumber(r.missingImage || 0)}</td>
+                  <td style="text-align:right">${formatNumber(r.missingSourceUrl || 0)}</td>
+                  <td style="text-align:right">${formatNumber(r.invalidRecipe || 0)}</td>
+                  <td style="text-align:right">${formatNumber(r.duplicateSourceUrl || 0)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `;
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "❌ " + (error.message || String(error));
       }
     }
 
@@ -2908,6 +2986,42 @@
             usersChanged: data.usersChanged,
             removedRecipes: data.removedRecipes,
             sampleGroups: data.sampleGroups || [],
+          }, null, 2);
+        }
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "Fout: " + (error.message || String(error));
+        if (outEl) outEl.textContent = "—";
+      }
+    }
+
+    async function cleanupSeoRecipes(dryRun) {
+      const statusEl = document.getElementById("seoCleanupStatus");
+      const outEl = document.getElementById("seoCleanupOutput");
+      if (!dryRun) {
+        const ok = confirm("Slechte SEO-recepten verwijderen uit alle accounts? Dit verwijdert recepten zonder bron-URL, ongeldige recepten en dubbele bron-URL's uit SEO recepten.");
+        if (!ok) return;
+      }
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> ${dryRun ? "Dry-run" : "Opschonen"}…`;
+      if (outEl) outEl.textContent = "Bezig…";
+      try {
+        const response = await fetch("/api/admin/seo-recipes-cleanup", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dryRun: Boolean(dryRun) }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Opschonen mislukt");
+        if (statusEl) {
+          statusEl.textContent = `${dryRun ? "Dry-run" : "Klaar"}: ${data.removedRecipes || 0} SEO recepten verwijderd bij ${data.usersChanged || 0}/${data.usersScanned || 0} users · ${data.keptIssueCount || 0} met alleen aandachtspunten behouden.`;
+        }
+        if (outEl) {
+          outEl.textContent = JSON.stringify({
+            dryRun: data.dryRun,
+            usersScanned: data.usersScanned,
+            usersChanged: data.usersChanged,
+            removedRecipes: data.removedRecipes,
+            keptIssueCount: data.keptIssueCount,
+            sampleRemoved: data.sampleRemoved || [],
           }, null, 2);
         }
       } catch (error) {

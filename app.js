@@ -2399,6 +2399,19 @@ function getBasketMatchQuality(choice) {
   return score > 42 ? "low" : "good";
 }
 
+function getBasketMatchConfidence(choice) {
+  const score = Number(choice?.matchMeta?.score);
+  if (!Number.isFinite(score)) return null;
+  return Math.max(1, Math.min(99, Math.round(100 - score)));
+}
+
+function renderBasketMatchConfidenceHtml(choice) {
+  const confidence = getBasketMatchConfidence(choice);
+  if (confidence === null) return "";
+  const label = confidence < 58 ? "Check" : confidence < 76 ? "Redelijk" : "Zeker";
+  return `<span class="basket-product__confidence" title="Matchzekerheid op basis van ingrediënt en AH-product">${label} ${confidence}%</span>`;
+}
+
 function renderBasketPreview() {
   const preview = state.basketPreview;
   const nameEl = document.getElementById("basketRecipeName");
@@ -2529,6 +2542,7 @@ function renderBasketPreview() {
     const matchBadge = matchQuality === "low"
       ? `<span class="basket-product__attention">Check match</span>`
       : "";
+    const confidenceBadge = renderBasketMatchConfidenceHtml(choice);
 
     const html = `
       <div class="basket-product ${matchQuality === "low" ? "basket-product--attention" : ""}" data-basket-item="${itemIndex}">
@@ -2541,6 +2555,7 @@ function renderBasketPreview() {
             ${renderChoicePriceHtml(choice)}
             ${promotionBadge}
             ${matchBadge}
+            ${confidenceBadge}
             ${choice.subtitle ? `<span>${escapeHtml(choice.subtitle)}</span>` : ""}
           </p>
           <p class="basket-product__for">voor ${escapeHtml(item.ingredientAmount || "")} ${escapeHtml(ingredientTitle)}</p>
