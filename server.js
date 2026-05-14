@@ -2869,9 +2869,7 @@ function sanitizeUserStatePayload(body, currentUser) {
     ? body.customChannels
     : currentUser.customChannels || [];
 
-  const language = typeof body?.language === "string" && body.language
-    ? body.language
-    : currentUser.language || "nl";
+  const language = "nl";
 
   const onboardingSeenAt = typeof body?.onboardingSeenAt === "string"
     ? sanitizeText(body.onboardingSeenAt).slice(0, 80)

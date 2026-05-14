@@ -7594,7 +7594,7 @@ function toggleCookMode() {
   schedulePersistAppState();
 }
 
-const LANG_LABELS = { nl: "Nederlands", en: "English" };
+const LANG_LABELS = { nl: "Nederlands" };
 
 // ── Changelog (user-facing release notes) ───────────────────────────────────
 const PLATELY_CHANGELOG = [
@@ -7656,7 +7656,8 @@ function renderChangelog() {
 }
 
 function updateLanguagePanel() {
-  const active = state.language || "nl";
+  state.language = "nl";
+  const active = "nl";
   document.querySelectorAll(".language-option").forEach((btn) => {
     const lang = btn.dataset.lang;
     const check = btn.querySelector(".lang-check");
@@ -7674,8 +7675,7 @@ function renderProfileSummary() {
   const profileHero = document.getElementById("profileHero");
   const logoutCard = document.getElementById("logoutCard");
   if (loginBanner) loginBanner.style.display = isAuth ? "none" : "";
-  // Hide profile hero for now (WIP layout)
-  if (profileHero) profileHero.style.display = "none";
+  if (profileHero) profileHero.style.display = isAuth ? "" : "none";
   if (logoutCard) logoutCard.style.display = isAuth ? "" : "none";
 
   if (profileName) {
@@ -8993,7 +8993,7 @@ function buildPersistedAppState() {
     customChannels: state.customChannels
       .filter((ch) => !ch.managedByAdmin)
       .map((ch) => ({ ...ch })),
-    language: state.language || "nl",
+    language: "nl",
     currentView: state.view || "home",
   };
 }
@@ -9052,9 +9052,7 @@ function applyPersistedAppState(user) {
     // Defensive: never keep a previous user's photo around.
     state.profile.photo = "";
   }
-  if (typeof user.language === "string" && user.language) {
-    state.language = user.language;
-  }
+  state.language = "nl";
 
   if (user.channelEnabled && typeof user.channelEnabled === "object") {
     const seed = user.channelEnabled.seed && typeof user.channelEnabled.seed === "object" ? user.channelEnabled.seed : {};
