@@ -15671,9 +15671,6 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/session" && request.method === "GET") {
       try {
         const cookies = parseCookies(request.headers.cookie);
-        console.log(`🔐 /api/session - Raw Cookie header: ${request.headers.cookie || "EMPTY"}`);
-        console.log(`🔐 /api/session - Parsed cookies: ${Object.keys(cookies).join(", ") || "NONE"}`);
-        console.log(`🔐 /api/session - Auth cookie: ${cookies.plately_auth ? cookies.plately_auth.substring(0, 8) + "..." : "NONE"}`);
 
         // Prevent any cached /api/session responses (browser or proxy)
         response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
@@ -15687,8 +15684,6 @@ const server = http.createServer(async (request, response) => {
         authUser = await getDevAuthenticatedUser(request);
       }
 
-      console.log(`🔐 /api/session - authUser resolved: ${authUser ? authUser.email : "NULL"}`);
-
       const channelEnabled = await getChannelEnabledState().catch(() => ({ seed: {}, custom: {} }));
       const globalCustomChannels = await getGlobalCustomChannels().catch(() => []);
 
@@ -15697,7 +15692,6 @@ const server = http.createServer(async (request, response) => {
           isPostgresEnabled() ? buildAppStateFromUser(authUser) : (await ensureUserSession(request, response)),
           globalCustomChannels
         );
-        console.log(`🔐 /api/session - RESPONSE: authenticated=true, email=${authUser.email}`);
         sendJson(response, 200, {
           ok: true,
           user: {
@@ -15716,7 +15710,6 @@ const server = http.createServer(async (request, response) => {
       }
 
         const user = withGlobalCustomChannels(await ensureUserSession(request, response), globalCustomChannels);
-        console.log(`🔐 /api/session - RESPONSE: authenticated=false (guest user_id=${user?.user_id || "?"})`);
         sendJson(response, 200, {
           ok: true,
           user: {

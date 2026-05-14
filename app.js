@@ -1196,6 +1196,9 @@ const importDraftsButton = document.getElementById("importDraftsButton");
 const skipReviewButton = document.getElementById("skipReviewButton");
 const servingsDown = document.getElementById("servingsDown");
 const servingsUp = document.getElementById("servingsUp");
+const servingsInput = document.getElementById("servingsInput");
+const servingsPresets = document.getElementById("servingsPresets");
+const detailSendToAhButton = document.getElementById("detailSendToAhButton");
 const authModal = document.getElementById("authModal");
 const authKicker = document.getElementById("authKicker");
 const authTitle = document.getElementById("authTitle");
@@ -6124,6 +6127,11 @@ function renderDetailRecipe(resetServings = false) {
     `;
   }
   servingsDisplay.textContent = `${state.currentServings} pers.`;
+  if (servingsPresets) {
+    servingsPresets.querySelectorAll(".servings-preset-btn").forEach((btn) => {
+      btn.classList.toggle("is-active", Number(btn.dataset.servings) === state.currentServings);
+    });
+  }
   detailStepCount.textContent = `${recipe.instructions.length} stappen`;
   if (addSelectedToGroceriesButton) {
     addSelectedToGroceriesButton.textContent = `Zet ${recipe.ingredients.length} ingrediënten op boodschappenlijst`;
@@ -11851,54 +11859,79 @@ document.getElementById("channelRow")?.addEventListener("click", (event) => {
   }
 });
 
-function tryAdjustDetailServings(delta) {
+function applyServingsChange(next) {
   const recipe = getSelectedRecipe();
   if (!recipe || state.view !== "detail") return;
-  const next = state.currentServings + delta;
-  if (next < 1 || next > 20) return;
-
-  const base = parseBaseServings(recipe.servings);
+  const clamped = Math.max(1, Math.min(99, Math.round(next)));
   const oldN = state.currentServings;
-  if (next === oldN) return;
+  if (clamped === oldN) return;
 
   const hasGroceryForRecipe = state.groceryItems.some(
     (item) => item && item.recipeId === recipe.id && !item.checked
   );
-
   if (hasGroceryForRecipe) {
-    const ratio = next / oldN;
-    const pct = Math.round((ratio - 1) * 100);
-    const factorLabel =
-      Math.abs(ratio - 1) < 0.001
-        ? "gelijk"
-        : ratio > 1
-          ? `ongeveer ${pct > 0 ? "+" : ""}${pct}% meer ingrediënt op je lijst`
-          : `ongeveer ${Math.abs(pct)}% minder ingrediënt op je lijst`;
-    const doubling =
-      Math.abs(ratio - 2) < 0.05 ? " (ongeveer dubbele hoeveelheden)" : Math.abs(ratio - 0.5) < 0.05 ? " (ongeveer halve hoeveelheden)" : "";
-
-    const ok = window.confirm(
-      `Personen: ${oldN} → ${next} (recept is oorspronkelijk voor ${base} pers.).\n\n` +
-        `Hoeveelheden op je boodschappenlijst voor dit recept worden meegeschaald${
-          doubling || ` (${factorLabel})`
-        }.\n\nDoorgaan?`
-    );
-    if (!ok) return;
+    const ratio = clamped / oldN;
     rescaleGroceryAmountsForRecipe(recipe.id, ratio);
     schedulePersistAppState();
     renderGroceryGroups();
-    if (state.basketPreview) {
-      scheduleRefetchBasketWithPreferences();
-    }
+    if (state.basketPreview) scheduleRefetchBasketWithPreferences();
+    showToast(`Hoeveelheden meegeschaald naar ${clamped} pers.`, { variant: "success" });
   }
 
-  state.currentServings = next;
+  state.currentServings = clamped;
   renderDetailRecipe(false);
+}
+
+function tryAdjustDetailServings(delta) {
+  const recipe = getSelectedRecipe();
+  if (!recipe || state.view !== "detail") return;
+  applyServingsChange(state.currentServings + delta);
 }
 
 bindEvent(servingsDown, "click", () => tryAdjustDetailServings(-1));
 
 bindEvent(servingsUp, "click", () => tryAdjustDetailServings(1));
+
+// Tap servings display → switch to inline input for custom value
+bindEvent(servingsDisplay, "click", () => {
+  if (!servingsInput) return;
+  servingsInput.value = state.currentServings;
+  servingsDisplay.classList.add("hidden");
+  servingsInput.classList.remove("hidden");
+  servingsInput.focus();
+  servingsInput.select();
+});
+
+function commitServingsInput() {
+  const val = parseInt(servingsInput.value, 10);
+  servingsInput.classList.add("hidden");
+  servingsDisplay.classList.remove("hidden");
+  if (Number.isFinite(val) && val >= 1) applyServingsChange(val);
+  else renderDetailRecipe(false);
+}
+if (servingsInput) {
+  servingsInput.addEventListener("blur", commitServingsInput);
+  servingsInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); servingsInput.blur(); }
+    if (e.key === "Escape") { servingsInput.value = state.currentServings; servingsInput.blur(); }
+  });
+}
+
+// Preset chips
+bindEvent(servingsPresets, "click", (e) => {
+  const btn = e.target.closest(".servings-preset-btn");
+  if (!btn) return;
+  applyServingsChange(Number(btn.dataset.servings));
+});
+
+// Direct AH vanuit recept-detail
+bindEvent(detailSendToAhButton, "click", async () => {
+  const recipe = getSelectedRecipe();
+  if (!recipe) return;
+  addRecipeToGrocery(recipe);
+  renderGroceryGroups();
+  await openStoreBasket("albert-heijn");
+});
 
 bindEvent(searchInput, "input", (event) => {
   // Debounced channel search — short pause after typing to batch requests
@@ -12726,7 +12759,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.0";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.1";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;

@@ -2071,9 +2071,16 @@ img {
 
 .detail-servings-row {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  gap: 0;
+}
+.detail-servings-row__top {
+  display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  width: 100%;
   gap: 12px;
 }
 
@@ -2802,6 +2809,23 @@ button.ingredient-item {
   letter-spacing: -0.01em;
 }
 
+.detail-cta--ah {
+  background: #00A0E2;
+  border-color: #0090cc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 10px;
+}
+.detail-cta--ah:hover { background: #0090cc; }
+.detail-cta__ah-logo {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
 @media (max-width: 767px) {
   /* Genoeg ruimte onderaan zodat de laatste content (o.a. boodschappenknop) niet achter de tabbar verdwijnt */
   .detail-screen.screen--active {
@@ -3236,12 +3260,60 @@ button.ingredient-item {
 
 .servings-btn:active { background: #d5e7d7; }
 
-#servingsDisplay {
+.servings-display-btn {
   font-size: 0.88rem;
   font-weight: 800;
   color: #4a6b4c;
   min-width: 44px;
   text-align: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.servings-display-btn:hover { background: rgba(74,107,76,0.08); }
+
+.servings-input {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #4a6b4c;
+  width: 44px;
+  text-align: center;
+  border: 1.5px solid #4a6b4c;
+  border-radius: 8px;
+  padding: 2px 4px;
+  background: #fff;
+  outline: none;
+  -moz-appearance: textfield;
+}
+.servings-input::-webkit-inner-spin-button,
+.servings-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+.servings-presets {
+  display: flex;
+  gap: 5px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.servings-preset-btn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(74,107,76,0.25);
+  background: #fff;
+  color: #4a6b4c;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.servings-preset-btn:hover,
+.servings-preset-btn.is-active {
+  background: #4a6b4c;
+  color: #fff;
+  border-color: #4a6b4c;
 }
 
 /* ── Import screen ── */

@@ -9,7 +9,7 @@
       name="description"
       content="Plately is een webapp om recepten van Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.20.0" />
+    <meta name="plately-build" content="1.0.20.1" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -38,8 +38,8 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="preload" href="styles.css?v=1.0.20.0" as="style" />
-    <link rel="stylesheet" href="styles.css?v=1.0.20.0" />
+    <link rel="preload" href="styles.css?v=1.0.20.1" as="style" />
+    <link rel="stylesheet" href="styles.css?v=1.0.20.1" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -367,14 +367,24 @@
                     <p id="detailIngredientCount">6 items</p>
                   </div>
                   <div class="detail-servings-row">
-                    <div class="servings-control">
-                      <button class="servings-btn" id="servingsDown" type="button" aria-label="Minder personen">−</button>
-                      <span id="servingsDisplay">2 pers.</span>
-                      <button class="servings-btn" id="servingsUp" type="button" aria-label="Meer personen">+</button>
+                    <div class="detail-servings-row__top">
+                      <div class="servings-control">
+                        <button class="servings-btn" id="servingsDown" type="button" aria-label="Minder personen">−</button>
+                        <button class="servings-display-btn" id="servingsDisplay" type="button" aria-label="Aantal personen aanpassen">2 pers.</button>
+                        <input class="servings-input hidden" id="servingsInput" type="number" min="1" max="99" aria-label="Aantal personen" />
+                        <button class="servings-btn" id="servingsUp" type="button" aria-label="Meer personen">+</button>
+                      </div>
+                      <div class="ingredient-quick-actions">
+                        <button class="ingredient-quick-btn" id="checkAllIngredientsButton" type="button" aria-label="Alle ingrediënten checken">Alles checken</button>
+                        <button class="ingredient-quick-btn ingredient-quick-btn--secondary" id="uncheckAllIngredientsButton" type="button" aria-label="Alle ingrediënten uitvinken">Alles afhaken</button>
+                      </div>
                     </div>
-                    <div class="ingredient-quick-actions">
-                      <button class="ingredient-quick-btn" id="checkAllIngredientsButton" type="button" aria-label="Alle ingrediënten checken">Alles checken</button>
-                      <button class="ingredient-quick-btn ingredient-quick-btn--secondary" id="uncheckAllIngredientsButton" type="button" aria-label="Alle ingrediënten uitvinken">Alles afhaken</button>
+                    <div class="servings-presets" id="servingsPresets">
+                      <button class="servings-preset-btn" type="button" data-servings="1">1</button>
+                      <button class="servings-preset-btn" type="button" data-servings="2">2</button>
+                      <button class="servings-preset-btn" type="button" data-servings="4">4</button>
+                      <button class="servings-preset-btn" type="button" data-servings="6">6</button>
+                      <button class="servings-preset-btn" type="button" data-servings="8">8</button>
                     </div>
                   </div>
                   <ul class="ingredient-list" id="detailIngredientList"></ul>
@@ -389,6 +399,10 @@
 
                   <button class="detail-cta" id="addSelectedToGroceriesButton" type="button">
                     Zet op boodschappenlijst
+                  </button>
+                  <button class="detail-cta detail-cta--ah" id="detailSendToAhButton" type="button">
+                    <svg class="detail-cta__ah-logo" viewBox="0 0 40 40" fill="none" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#00A0E2"/><text x="20" y="27" text-anchor="middle" font-size="17" font-weight="900" fill="#fff" font-family="Arial,sans-serif">ah</text></svg>
+                    Zet direct in AH mandje
                   </button>
                 </section>
               </div>
@@ -2207,6 +2221,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=1.0.20.0" defer></script>
+    <script src="app.js?v=1.0.20.1" defer></script>
   </body>
 </html>
