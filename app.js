@@ -2582,7 +2582,7 @@ function renderBasketPreview() {
     totalCents += Math.round(priceNum * qty * 100);
 
     const img = choice.imageUrl
-      ? `<img class="basket-product__img" src="${escapeHtml(choice.imageUrl)}" alt="" loading="lazy" />`
+      ? `<img class="basket-product__img" src="${escapeHtml(normalizeChannelThumbnailUrl(choice.imageUrl))}" alt="" loading="lazy" />`
       : `<span class="basket-product__img basket-product__img--placeholder">${escapeHtml(choice.emoji || "🛒")}</span>`;
 
     const altCount = (item.choices || []).length;
@@ -3241,7 +3241,7 @@ function renderAlternativesSheet(item) {
       .map((e) => {
         const c = e.choice;
         const img = c.imageUrl
-          ? `<img class="alt-card__img" src="${escapeHtml(c.imageUrl)}" alt="" loading="lazy" />`
+          ? `<img class="alt-card__img" src="${escapeHtml(normalizeChannelThumbnailUrl(c.imageUrl))}" alt="" loading="lazy" />`
           : `<span class="alt-card__img alt-card__img--placeholder">${escapeHtml(c.emoji || "🛒")}</span>`;
         const meta = [c.price, c.subtitle].filter(Boolean).map(escapeHtml).join(" · ");
         // Force at least the active chip label as a badge when in single-filter mode,
@@ -3310,7 +3310,7 @@ function renderAlternativesSheet(item) {
   const cardHtml = (entry, isSelected) => {
     const c = entry.choice;
     const img = c.imageUrl
-      ? `<img class="alt-card__img" src="${escapeHtml(c.imageUrl)}" alt="" loading="lazy" />`
+      ? `<img class="alt-card__img" src="${escapeHtml(normalizeChannelThumbnailUrl(c.imageUrl))}" alt="" loading="lazy" />`
       : `<span class="alt-card__img alt-card__img--placeholder">${escapeHtml(c.emoji || "🛒")}</span>`;
     const meta = [c.price, c.subtitle].filter(Boolean).map(escapeHtml).join(" · ");
     const isCheapest = entry.idx === cheapestKey;
@@ -6778,7 +6778,7 @@ function renderGroceryGroups() {
           <span class="grocery-entry__amount">${item.amount}</span>
           <span class="grocery-entry__img" aria-hidden="true">
             ${item.imageUrl
-              ? `<img class="grocery-entry__ah-img" src="${escapeHtml(item.imageUrl)}" alt="" loading="lazy" />`
+              ? `<img class="grocery-entry__ah-img" src="${escapeHtml(normalizeChannelThumbnailUrl(item.imageUrl))}" alt="" loading="lazy" />`
               : getIngredientVisualMarkup(splitCompoundIngredientWords(item.title || ""))}
           </span>
         </button>
@@ -12759,7 +12759,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.1";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.2";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
