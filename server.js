@@ -4761,7 +4761,7 @@ async function extractWithClaude(caption, note) {
     "Geef precies dit JSON-object terug:",
     '{',
     '  "title": "Naam van het gerecht in het Nederlands. Gebruik ALLEEN wat in de tekst staat. Als er geen duidelijke gerechtnaam is, noem dan de 3-5 hoofdingrediënten (bijv. \'Kip, courgette & tomatensaus\'). NOOIT een gerecht verzinnen.",',
-    '  "description": "1-2 zinnen smakelijke omschrijving in het Nederlands",',
+    '  "description": "1-2 zinnen smakelijke omschrijving in het Nederlands. Beschrijf het gerecht en de smaak — GEEN kookinstructies, GEEN vermelding van Instagram of social media.",',
     '  "ingredients": [',
     '    {"quantity": "2", "unit": "x", "name": "avocado"},',
     '    {"quantity": "200", "unit": "g", "name": "kipfilet"},',
@@ -4782,6 +4782,7 @@ async function extractWithClaude(caption, note) {
     "- instructions: 4-8 stappen. Elke stap = één kookhandeling. Nederlands. Concreet (tijden, temperaturen).",
     "- time: totale bereidingstijd in minuten. Als je '4 PERS. – 60 MIN.' ziet, gebruik 60 min.",
     "- servings: aantal porties als getal-string ('4', '6', etc). Als je '4 PERS.' ziet, is servings '4'.",
+    "- description: beschrijf smaak, textuur en aanleiding. NOOIT 'Instagram', 'reel', 'post', '@naam', 'recipe', 'recept' als woord erin. Niet beginnen met 'Dit recept' of 'In dit recept'.",
     "- Als informatie ontbreekt: genereer zelf een authentiek, realistisch recept.",
   ].join("\n");
 
@@ -7333,7 +7334,7 @@ async function importInstagram(sourceUrl, note) {
   let captionCandidates = [ogDescription, textDerivedCaption, ...htmlSignals.captions, oembed?.title];
   let bestCaption = pickBestCaptionCandidate(captionCandidates) || sanitizeText(ogDescription || oembed?.title || "");
 
-  // If the main fetch returned a login wall, try the embed URL which sometimes bypasses auth.
+  // Fallback 1: embed URL — bypasses login wall voor publieke posts.
   if (!bestCaption && igShortcode) {
     try {
       const embedHtmlRes = await fetch(`https://www.instagram.com/p/${igShortcode}/embed/captioned/`, {
@@ -7345,12 +7346,34 @@ async function importInstagram(sourceUrl, note) {
         const embedHtml = await embedHtmlRes.text();
         const embedSignals = extractInstagramHtmlSignals(embedHtml);
         const embedOgDesc = parseMetaTag(embedHtml, "og:description");
-        captionCandidates = [...captionCandidates, embedOgDesc, ...embedSignals.captions];
+        // Ook plain-text caption uit de embed: zoek in <span class="Caption"> of vergelijkbaar.
+        const spanCaption = (() => {
+          const m = embedHtml.match(/<(?:span|div)[^>]*class="[^"]*(?:Caption|caption-text|post-caption)[^"]*"[^>]*>([\s\S]{20,3000}?)<\/(?:span|div)>/i);
+          if (!m) return "";
+          return m[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        })();
+        captionCandidates = [...captionCandidates, embedOgDesc, spanCaption, ...embedSignals.captions];
         bestCaption = pickBestCaptionCandidate(captionCandidates) || sanitizeText(embedOgDesc || "");
         if (!image) image = parseMetaTag(embedHtml, "og:image") || "";
       }
     } catch {
       // embed fetch failed — continue without
+    }
+  }
+
+  // Fallback 2: Firecrawl — kan Instagram's login wall soms omzeilen met headless browser.
+  if (!bestCaption && igShortcode) {
+    const fcDoc = await fetchWebsiteDocumentViaFirecrawl(sourceUrl).catch(() => null);
+    if (fcDoc) {
+      const fcHtml = fcDoc.kind === "html" ? fcDoc.body : "";
+      const fcText = fcDoc.kind === "text" ? fcDoc.body : "";
+      const fcSignals = fcHtml ? extractInstagramHtmlSignals(fcHtml) : { titles: [], captions: [], authors: [] };
+      const fcCaption = pickBestCaptionCandidate([...fcSignals.captions, isUsefulCaptionCandidate(fcText) ? fcText : ""]) || sanitizeText(fcText || "").slice(0, 3000);
+      if (fcCaption && fcCaption.length > 30) {
+        captionCandidates = [...captionCandidates, fcCaption];
+        bestCaption = pickBestCaptionCandidate(captionCandidates) || fcCaption;
+      }
+      if (!image && fcHtml) image = parseMetaTag(fcHtml, "og:image") || "";
     }
   }
 
