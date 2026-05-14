@@ -8393,6 +8393,21 @@ function openShareCard(recipe) {
     ingEl.innerHTML = top.map((i) => `<li>${escapeHtml(i.name)}</li>`).join("");
   }
 
+  // Pre-populate link row with a placeholder, then resolve the real URL async.
+  const linkRow = document.getElementById("shareCardLinkRow");
+  const linkInput = document.getElementById("shareCardLinkInput");
+  const copyBtn = document.getElementById("shareCardCopyLink");
+  if (linkRow && linkInput) {
+    linkInput.value = "Link wordt gemaakt…";
+    linkRow.removeAttribute("aria-hidden");
+    buildShortShareUrl(recipe).then((url) => {
+      linkInput.value = url;
+      if (copyBtn) copyBtn.dataset.shareUrl = url;
+    }).catch(() => {
+      linkRow.setAttribute("aria-hidden", "true");
+    });
+  }
+
   overlay.classList.remove("hidden");
   overlay.setAttribute("aria-hidden", "false");
   document.body.style.overflow = "hidden";
@@ -8480,9 +8495,26 @@ async function shareSelectedRecipe() {
 
 bindEvent(document.getElementById("shareCardClose"), "click", closeShareCard);
 
+bindEvent(document.getElementById("shareCardCopyLink"), "click", async () => {
+  const btn = document.getElementById("shareCardCopyLink");
+  const input = document.getElementById("shareCardLinkInput");
+  const url = btn?.dataset.shareUrl || input?.value || "";
+  if (!url || url === "Link wordt gemaakt…") return;
+  try {
+    await navigator.clipboard.writeText(url);
+    const prev = btn.textContent;
+    btn.textContent = "Gekopieerd ✓";
+    setTimeout(() => { btn.textContent = prev; }, 2000);
+  } catch {
+    showToast("Kopiëren mislukte — selecteer de link handmatig.");
+  }
+});
+
 bindEvent(document.getElementById("shareCardNativeShare"), "click", async () => {
   const recipe = getSelectedRecipe();
-  const url = await buildShortShareUrl(recipe);
+  const linkInput = document.getElementById("shareCardLinkInput");
+  const copyBtn = document.getElementById("shareCardCopyLink");
+  const url = copyBtn?.dataset.shareUrl || linkInput?.value || await buildShortShareUrl(recipe);
   if (navigator.share) {
     try {
       await navigator.share({ title: recipe?.title || "Recept", url });
@@ -9348,7 +9380,7 @@ function normalizeUiErrorMessage(message, code = "") {
     /jsdom is not defined/i.test(text) ||
     /JSDOM is not defined/i.test(text)
   ) {
-    return "Je probeert een blog te importeren, geen recept.";
+    return "Geen recept gevonden op deze pagina. Probeer de directe recept-URL (niet een blog of overzichtspagina).";
   }
 
   if (/Meta oEmbed Read|oEmbed Read/i.test(text)) {
@@ -9357,6 +9389,26 @@ function normalizeUiErrorMessage(message, code = "") {
 
   if (/Provide valid app ID|OAuthException/i.test(text)) {
     return "Instagram-import is nog niet goed gekoppeld aan Meta. Controleer App ID, Secret en app review.";
+  }
+
+  if (/AbortError|The operation was aborted|timed out|timeout/i.test(text)) {
+    return "Import duurde te lang. Probeer het opnieuw, of gebruik een andere link.";
+  }
+
+  if (/HTTP 403|status 403|403 Forbidden|blocked/i.test(text)) {
+    return "De website blokkeert de import. Probeer de link direct in je browser te openen en kopieer de URL opnieuw.";
+  }
+
+  if (/HTTP 404|status 404|404 Not Found|not found/i.test(text)) {
+    return "Pagina niet gevonden. Controleer of de link correct en publiek toegankelijk is.";
+  }
+
+  if (/HTTP 429|rate.?limit|too many/i.test(text)) {
+    return "Te veel aanvragen. Wacht even en probeer opnieuw.";
+  }
+
+  if (/ECONNRESET|ENOTFOUND|ETIMEDOUT|network|fetch failed/i.test(text)) {
+    return "Verbindingsfout. Controleer je internet en probeer opnieuw.";
   }
 
   return text;
@@ -13798,11 +13850,31 @@ function collectEditedRecipe() {
 
 function saveRecipeEdits() {
   if (!recipeEditId) return;
-  const idx = state.recipes.findIndex(r => r.id === recipeEditId);
-  if (idx === -1) return;
   const edits = collectEditedRecipe();
   if (!edits.title) { showToast("Vul een naam in."); return; }
-  state.recipes[idx] = { ...state.recipes[idx], ...edits };
+
+  // Clear needsReview once the recipe has been actively edited and has content.
+  const reviewResolved = edits.ingredients.length >= 2 && edits.instructions.length >= 1;
+
+  const idx = state.recipes.findIndex(r => r.id === recipeEditId);
+  if (idx !== -1) {
+    state.recipes[idx] = {
+      ...state.recipes[idx],
+      ...edits,
+      ...(reviewResolved ? { needsReview: false } : {}),
+    };
+  } else if (state.importPreviews && state.importPreviews[recipeEditId]) {
+    // Recipe is still a preview (not yet saved to a cookbook) — update it in place.
+    state.importPreviews[recipeEditId] = {
+      ...state.importPreviews[recipeEditId],
+      ...edits,
+      ...(reviewResolved ? { needsReview: false } : {}),
+    };
+  } else {
+    showToast("Recept niet gevonden.");
+    return;
+  }
+
   schedulePersistAppState();
   const savedId = recipeEditId;
   closeRecipeEditPanel();

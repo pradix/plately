@@ -8736,9 +8736,9 @@ let ahTokenCache = { token: "", expiresAt: 0 };
 // Met CF Worker (AH_API_PROXY) haalt de worker zelf tokens op; dit is dan alleen een fallback.
 {
   const AUTO_REFRESH_INTERVAL = 6 * 24 * 60 * 60 * 1000; // 6 dagen
+  // Auto-refresh when no static token is set — works both directly and via the CF Worker proxy.
   const shouldAutoRefresh = () =>
-    !String(process.env.AH_ANONYMOUS_TOKEN || "").trim() &&
-    !String(process.env.AH_API_PROXY || "").trim();
+    !String(process.env.AH_ANONYMOUS_TOKEN || "").trim();
   if (shouldAutoRefresh()) {
     setInterval(() => {
       fetchAHAnonymousToken().catch((err) =>

@@ -12508,6 +12508,42 @@ body {
   text-align: center;
   max-width: 300px;
 }
+.share-card__link-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 6px 8px 6px 12px;
+}
+.share-card__link-row[aria-hidden="true"] { display: none; }
+.share-card__link-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: rgba(255,255,255,0.85);
+  font-size: 0.78rem;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.share-card__copy-btn {
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.15);
+  border: none;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.share-card__copy-btn:hover { background: rgba(255,255,255,0.25); }
+
 .share-card__buttons {
   display: flex;
   gap: 10px;
