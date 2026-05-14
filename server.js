@@ -7338,10 +7338,31 @@ async function importInstagram(sourceUrl, note) {
   const textDerivedTitle = textFallback ? extractDishPhrase(textFallback) || extractRecipeTitleFromCaption(textFallback) : "";
   const textDerivedCaption = textFallback && isUsefulCaptionCandidate(textFallback) ? textFallback : "";
 
-  const image = ogImage || oembed?.thumbnail_url || "";
+  let image = ogImage || oembed?.thumbnail_url || "";
   const author = oembed?.author_name || htmlSignals.authors[0] || "";
-  const captionCandidates = [ogDescription, textDerivedCaption, ...htmlSignals.captions, oembed?.title];
-  const bestCaption = pickBestCaptionCandidate(captionCandidates) || sanitizeText(ogDescription || oembed?.title || "");
+  let captionCandidates = [ogDescription, textDerivedCaption, ...htmlSignals.captions, oembed?.title];
+  let bestCaption = pickBestCaptionCandidate(captionCandidates) || sanitizeText(ogDescription || oembed?.title || "");
+
+  // If the main fetch returned a login wall, try the embed URL which sometimes bypasses auth.
+  if (!bestCaption && igShortcode) {
+    try {
+      const embedHtmlRes = await fetch(`https://www.instagram.com/p/${igShortcode}/embed/captioned/`, {
+        headers: { ...FETCH_HEADERS, Accept: "text/html" },
+        signal: AbortSignal.timeout(8000),
+        redirect: "follow",
+      });
+      if (embedHtmlRes.ok) {
+        const embedHtml = await embedHtmlRes.text();
+        const embedSignals = extractInstagramHtmlSignals(embedHtml);
+        const embedOgDesc = parseMetaTag(embedHtml, "og:description");
+        captionCandidates = [...captionCandidates, embedOgDesc, ...embedSignals.captions];
+        bestCaption = pickBestCaptionCandidate(captionCandidates) || sanitizeText(embedOgDesc || "");
+        if (!image) image = parseMetaTag(embedHtml, "og:image") || "";
+      }
+    } catch {
+      // embed fetch failed — continue without
+    }
+  }
 
   // Try Claude extraction even if caption is short/doesn't score high enough
   // (Instagram captions might not have explicit "ingredients" keyword but still contain recipe data)
@@ -16669,7 +16690,11 @@ const server = http.createServer(async (request, response) => {
           return false;
         };
 
-        if (isInvalidRecipe(recipe)) {
+        // Social imports (instagram/facebook/pinterest) that have a title are kept even without
+        // ingredients/instructions — the user can fill those in after import.
+        const isSocialImport = ["instagram", "facebook", "pinterest"].includes(recipe?.platform || "");
+        const socialHasTitle = isSocialImport && Boolean(sanitizeText(recipe?.title || ""));
+        if (isInvalidRecipe(recipe) && !socialHasTitle) {
           const ig = Array.isArray(recipe?.ingredients) ? recipe.ingredients.filter(Boolean).length : 0;
           const st = Array.isArray(recipe?.instructions) ? recipe.instructions.filter(Boolean).length : 0;
           logImportRequest("reject_not_recipe", traceId, {
