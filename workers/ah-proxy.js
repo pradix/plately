@@ -27,9 +27,15 @@ export default {
     }
 
     const url = new URL(request.url);
-    // Strip leading /ah prefix (if used) and forward to api.ah.nl
-    const ahPath = url.pathname.replace(/^\/ah/, "") || "/";
-    const ahUrl = "https://api.ah.nl" + ahPath + url.search;
+    const pathname = url.pathname;
+
+    // Route naar het juiste AH-domein op basis van het pad:
+    //   /gql, /allerhande/* → www.ah.nl  (GraphQL + receptenzoeker)
+    //   al het overige       → api.ah.nl  (mobile auth + product search)
+    const isWwwPath = pathname === "/gql" || pathname.startsWith("/allerhande/");
+    const baseTarget = isWwwPath ? "https://www.ah.nl" : "https://api.ah.nl";
+    const ahPath = pathname.replace(/^\/ah/, "") || "/";
+    const ahUrl = baseTarget + ahPath + url.search;
 
     const headers = new Headers(request.headers);
     headers.delete("x-plately-secret");

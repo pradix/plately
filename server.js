@@ -8653,9 +8653,12 @@ function normalizeSearchQuery(raw) {
 const AH_API_BASE = (process.env.AH_API_PROXY || "https://api.ah.nl").replace(/\/$/, "");
 const AH_PROXY_SECRET = process.env.AH_API_PROXY_SECRET || "";
 const AH_PROXY_HEADERS = AH_PROXY_SECRET ? { "x-plately-secret": AH_PROXY_SECRET } : {};
+// Als de proxy geconfigureerd is, routeer ook www.ah.nl-calls (GraphQL + allerhande-search)
+// via dezelfde proxy. De worker detecteert /gql en /allerhande/* en stuurt die naar www.ah.nl.
+const AH_WWW_BASE = AH_API_BASE !== "https://api.ah.nl" ? AH_API_BASE : "https://www.ah.nl";
 
 if (AH_API_BASE !== "https://api.ah.nl") {
-  console.log(`[AH] Proxy actief: ${AH_API_BASE}`);
+  console.log(`[AH] Proxy actief: ${AH_API_BASE} (api + www)`);
 }
 
 let ahTokenCache = { token: "", expiresAt: 0 };
@@ -11887,6 +11890,7 @@ function formatAhGraphqlMinutes(recipe) {
 function ahGraphqlHeaders(referer = "https://www.ah.nl/allerhande") {
   return {
     ...FETCH_HEADERS,
+    ...AH_PROXY_HEADERS,
     accept: "*/*",
     "accept-language": "nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7",
     "content-type": "application/json",
@@ -11950,7 +11954,7 @@ async function importAhRecipeViaGraphql(sourceUrl) {
     };
   };
   try {
-    const resp = await fetch("https://www.ah.nl/gql", {
+    const resp = await fetch(`${AH_WWW_BASE}/gql`, {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
@@ -11959,7 +11963,7 @@ async function importAhRecipeViaGraphql(sourceUrl) {
     if (!resp?.ok) {
       console.log(`AH GraphQL import response: ${resp?.status || "failed"}`);
       try {
-        const curlResult = await postJsonViaCurl("https://www.ah.nl/gql", headers, payload);
+        const curlResult = await postJsonViaCurl(`${AH_WWW_BASE}/gql`, headers, payload);
         if (!curlResult.ok) {
           console.log(`AH GraphQL curl import response: ${curlResult.status || "failed"}`);
           return null;
@@ -11975,7 +11979,7 @@ async function importAhRecipeViaGraphql(sourceUrl) {
   } catch (err) {
     console.log(`AH GraphQL import error: ${err.message}`);
     try {
-      const curlResult = await postJsonViaCurl("https://www.ah.nl/gql", headers, payload);
+      const curlResult = await postJsonViaCurl(`${AH_WWW_BASE}/gql`, headers, payload);
       if (!curlResult.ok) {
         console.log(`AH GraphQL curl import response: ${curlResult.status || "failed"}`);
         return null;
@@ -11993,7 +11997,7 @@ async function searchAhRecipesViaGraphql(query, count = 4) {
   if (!searchText) return [];
   const cap = Math.min(Math.max(Number(count) || 4, 1), 40);
   try {
-    const resp = await fetch("https://www.ah.nl/gql", {
+    const resp = await fetch(`${AH_WWW_BASE}/gql`, {
       method: "POST",
       headers: ahGraphqlHeaders(`https://www.ah.nl/allerhande/recepten-zoeken?query=${encodeURIComponent(searchText)}`),
       body: JSON.stringify({
@@ -12550,7 +12554,12 @@ async function backfillImportedRecipeRatingsForAllUsers({
 
 /** AH zoek-HTML voor datacenters die 403/lege body geven op de eerste fetch. */
 async function fetchAllerhandeSearchHtmlWithRetry(searchUrl) {
+  // Als de proxy geconfigureerd is, stuur de URL door de proxy.
+  const effectiveUrl = AH_WWW_BASE !== "https://www.ah.nl"
+    ? searchUrl.replace("https://www.ah.nl", AH_WWW_BASE)
+    : searchUrl;
   const baseHeaders = {
+    ...AH_PROXY_HEADERS,
     Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.5",
     Referer: "https://www.ah.nl/allerhande/",
@@ -12573,7 +12582,7 @@ async function fetchAllerhandeSearchHtmlWithRetry(searchUrl) {
   ];
   for (const att of attempts) {
     try {
-      const r = await fetch(searchUrl, {
+      const r = await fetch(effectiveUrl, {
         headers: { ...baseHeaders, "User-Agent": att.ua },
         signal: AbortSignal.timeout(att.timeout),
         redirect: "follow",
@@ -12620,8 +12629,12 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
         console.log(`Jina fetch error: ${err.message}`);
         return null;
       });
-    const htmlResp = await fetch(searchUrl, {
+    const effectiveSearchUrl = AH_WWW_BASE !== "https://www.ah.nl"
+      ? searchUrl.replace("https://www.ah.nl", AH_WWW_BASE)
+      : searchUrl;
+    const htmlResp = await fetch(effectiveSearchUrl, {
         headers: {
+          ...AH_PROXY_HEADERS,
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           "Accept-Language": "nl-NL,nl;q=0.9",
@@ -13033,14 +13046,15 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
     return serperResults;
   }
 
-  // Final fallback: Direct HTML scraping with browser-like headers
+  // Final fallback: Direct HTML scraping met proxy indien geconfigureerd
   try {
-    const searchUrl = `https://www.ah.nl/allerhande/recepten-zoeken?query=${encodeURIComponent(query)}`;
+    const scrapeBase = `${AH_WWW_BASE}/allerhande/recepten-zoeken?query=${encodeURIComponent(query)}`;
+    const searchUrl = scrapeBase;
     console.log(`🔗 Trying direct HTML scrape: ${searchUrl}`);
 
-    // Fetch with browser-like headers to avoid 403
     const html = await fetch(searchUrl, {
       headers: {
+        ...AH_PROXY_HEADERS,
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "nl-NL,nl;q=0.9",
