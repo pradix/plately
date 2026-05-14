@@ -5276,6 +5276,38 @@ async function fetchReaderFallbackViaCurl(readerUrl) {
   return { status, body };
 }
 
+async function postJsonViaCurl(url, headers = {}, payload = {}) {
+  const body = JSON.stringify(payload);
+  const args = [
+    "-L",
+    "-sS",
+    "--max-time",
+    "25",
+    "-X",
+    "POST",
+  ];
+  for (const [name, value] of Object.entries(headers || {})) {
+    if (name && value) args.push("-H", `${name}: ${value}`);
+  }
+  args.push("--data-binary", body, "-w", "\n%{http_code}", url);
+
+  const { stdout } = await execFileAsync("curl", args, {
+    encoding: "utf8",
+    maxBuffer: 3 * 1024 * 1024,
+    timeout: 30000,
+  });
+  const raw = String(stdout || "");
+  const match = raw.match(/\n(\d{3})\s*$/);
+  const status = match ? Number(match[1]) : 0;
+  const responseBody = match ? raw.slice(0, match.index) : raw;
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    json: status >= 200 && status < 300 ? safelyParseJson(responseBody) : null,
+    body: responseBody,
+  };
+}
+
 async function fetchReaderFallback(url) {
   // Jina Reader expects `https://r.jina.ai/https://example.com/...` (or http://...)
   const target = String(url || "").trim();
@@ -11409,22 +11441,13 @@ async function importAhRecipeViaGraphql(sourceUrl) {
   if (/^(1|true|yes)$/i.test(String(process.env.PLATELY_DISABLE_AH_GRAPHQL || "").trim())) {
     return null;
   }
-  try {
-    const resp = await fetch("https://www.ah.nl/gql", {
-      method: "POST",
-      headers: ahGraphqlHeaders(sourceUrl),
-      body: JSON.stringify({
-        operationName: "recipe",
-        variables: { id: recipeId },
-        query: AH_RECIPE_DETAIL_QUERY,
-      }),
-      signal: AbortSignal.timeout(9000),
-    });
-    if (!resp?.ok) {
-      console.log(`AH GraphQL import response: ${resp?.status || "failed"}`);
-      return null;
-    }
-    const json = await resp.json().catch(() => null);
+  const headers = ahGraphqlHeaders(sourceUrl);
+  const payload = {
+    operationName: "recipe",
+    variables: { id: recipeId },
+    query: AH_RECIPE_DETAIL_QUERY,
+  };
+  const parseAhGraphqlRecipe = (json) => {
     const data = json?.data?.recipe;
     if (!data?.id || !data?.title) return null;
     const ingredients = normalizeIngredientList(
@@ -11459,9 +11482,43 @@ async function importAhRecipeViaGraphql(sourceUrl) {
       ...(Number.isFinite(ratingValue) && ratingValue > 0 ? { ratingValue } : {}),
       ...(Number.isFinite(ratingCount) && ratingCount > 0 ? { ratingCount } : {}),
     };
+  };
+  try {
+    const resp = await fetch("https://www.ah.nl/gql", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(9000),
+    });
+    if (!resp?.ok) {
+      console.log(`AH GraphQL import response: ${resp?.status || "failed"}`);
+      try {
+        const curlResult = await postJsonViaCurl("https://www.ah.nl/gql", headers, payload);
+        if (!curlResult.ok) {
+          console.log(`AH GraphQL curl import response: ${curlResult.status || "failed"}`);
+          return null;
+        }
+        return parseAhGraphqlRecipe(curlResult.json);
+      } catch (curlErr) {
+        console.log(`AH GraphQL curl import error: ${curlErr.message}`);
+        return null;
+      }
+    }
+    const json = await resp.json().catch(() => null);
+    return parseAhGraphqlRecipe(json);
   } catch (err) {
     console.log(`AH GraphQL import error: ${err.message}`);
-    return null;
+    try {
+      const curlResult = await postJsonViaCurl("https://www.ah.nl/gql", headers, payload);
+      if (!curlResult.ok) {
+        console.log(`AH GraphQL curl import response: ${curlResult.status || "failed"}`);
+        return null;
+      }
+      return parseAhGraphqlRecipe(curlResult.json);
+    } catch (curlErr) {
+      console.log(`AH GraphQL curl import error: ${curlErr.message}`);
+      return null;
+    }
   }
 }
 
