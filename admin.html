@@ -1176,6 +1176,18 @@
             </div>
             <div id="seoDeleteChannelStatus" class="muted" style="font-size:12px">Tip: kies Rutger Bakt om alle Rutgerbakt-imports eruit te halen.</div>
           </div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
+            <div class="section-header" style="margin-bottom:8px">
+              <h3 style="margin:0;font-size:14px">Geïmporteerde recepten ontdubbelen</h3>
+              <div class="muted" style="font-size:12px">Op basis van bron-URL, niet op omschrijving</div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+              <button type="button" class="btn btn-sm" onclick="dedupeImportedRecipesBySource(true)">Dry-run</button>
+              <button type="button" class="btn btn-sm btn-danger" onclick="dedupeImportedRecipesBySource(false)">Ontdubbelen</button>
+            </div>
+            <div id="seoDedupeStatus" class="muted" style="font-size:12px;margin-bottom:8px">Verwijdert dubbele imports met dezelfde bronlink uit alle accounts en werkt kookboeken bij.</div>
+            <pre id="seoDedupeOutput" class="mono" style="display:block;margin:0;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto">—</pre>
+          </div>
         </div>
 
         <div class="section" id="seoRatingsBackfillSection" style="margin-top:14px">
@@ -2866,6 +2878,41 @@
         }
       } catch (error) {
         if (statusEl) statusEl.textContent = "Fout: " + (error.message || String(error));
+      }
+    }
+
+    async function dedupeImportedRecipesBySource(dryRun) {
+      const statusEl = document.getElementById("seoDedupeStatus");
+      const outEl = document.getElementById("seoDedupeOutput");
+      if (!dryRun) {
+        const ok = confirm("Dubbele geïmporteerde recepten met dezelfde bron-URL verwijderen uit alle accounts? Kookboek-verwijzingen worden naar het bewaarde recept omgezet.");
+        if (!ok) return;
+      }
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> ${dryRun ? "Dry-run" : "Ontdubbelen"}…`;
+      if (outEl) outEl.textContent = "Bezig…";
+      try {
+        const response = await fetch("/api/admin/dedupe-imported-recipes", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dryRun: Boolean(dryRun) }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Ontdubbelen mislukt");
+        if (statusEl) {
+          statusEl.textContent = `${dryRun ? "Dry-run" : "Klaar"}: ${data.removedRecipes || 0} dubbele recepten bij ${data.usersChanged || 0}/${data.usersScanned || 0} users.`;
+        }
+        if (outEl) {
+          outEl.textContent = JSON.stringify({
+            dryRun: data.dryRun,
+            usersScanned: data.usersScanned,
+            usersChanged: data.usersChanged,
+            removedRecipes: data.removedRecipes,
+            sampleGroups: data.sampleGroups || [],
+          }, null, 2);
+        }
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "Fout: " + (error.message || String(error));
+        if (outEl) outEl.textContent = "—";
       }
     }
 

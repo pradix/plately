@@ -12264,6 +12264,7 @@ body {
   white-space: nowrap;
 }
 .ch-card__view:hover { background: #e6e6e3; color: #333; }
+.ch-card__view.is-disabled { opacity: 0.5; pointer-events: none; }
 .ch-card__view svg { width: 14px; height: 14px; flex-shrink: 0; }
 
 .ch-card__import {

@@ -571,7 +571,7 @@ const __resolvedApiBase = resolvePlatelyApiBase();
 const state = {
   apiBase: __resolvedApiBase,
   shareLinkOrigin: resolvePlatelyShareLinkOrigin(__resolvedApiBase),
-  selectedPlatform: "tiktok",
+  selectedPlatform: "instagram",
   view: "home",
   recipes: [],
   // Imported-but-not-yet-saved recipes live here as previews/drafts.
@@ -2081,9 +2081,6 @@ function toDutchMealTag(value) {
 }
 
 function getPlatformPlaceholder(platform) {
-  if (platform === "tiktok") {
-    return "https://www.tiktok.com/@creator/video/123...";
-  }
   if (platform === "instagram") {
     return "https://www.instagram.com/reel/abc123/";
   }
@@ -2117,7 +2114,7 @@ function syncPlatformUI() {
   const feedbackInstagram = document.getElementById("feedbackInstagram");
   const feedbackWebsite = document.getElementById("feedbackWebsite");
 
-  if (feedbackTikTok) feedbackTikTok.classList.toggle("hidden", state.selectedPlatform !== "tiktok");
+  if (feedbackTikTok) feedbackTikTok.classList.add("hidden");
   if (feedbackInstagram) feedbackInstagram.classList.toggle("hidden", state.selectedPlatform !== "instagram");
   if (feedbackWebsite) feedbackWebsite.classList.toggle("hidden", state.selectedPlatform !== "website");
 }
@@ -2134,7 +2131,7 @@ function closeModal() {
   modal.classList.add("hidden");
   modal.setAttribute("aria-hidden", "true");
   importFeedback.textContent =
-    "De app roept nu een backend importer aan. TikTok werkt direct voor publieke posts, websites ook; Instagram vraagt om een Meta app-token.";
+    "De app roept nu een backend importer aan. TikTok importeren werkt tijdelijk nog niet; gebruik Instagram of een website-link.";
 }
 
 function getStoreConfig(storeSlug = "albert-heijn") {
@@ -2197,17 +2194,7 @@ function getBasketHandoffUrl(preview) {
     return "";
   }
   if (preview.store === "albert-heijn") {
-    const selectedIds = (preview.items || [])
-      .map((item) => {
-        const choice = item.choices?.[item.selectedChoiceIndex || 0];
-        return choice?.productId || choice?.id || "";
-      })
-      .filter(Boolean);
-    if (selectedIds.length) {
-      return `https://www.ah.nl/mijnlijst/add-multiple?${selectedIds
-        .map((id) => `p=${encodeURIComponent(id)}:1`)
-        .join("&")}`;
-    }
+    return "https://www.ah.nl/mijnlijst/";
   }
   const storeConfig = getStoreConfig(preview.store);
   return (
@@ -4914,7 +4901,9 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
       const thumbHtml = getChannelThumbnailMarkup(r, channel, channelColor);
       const isLocalSaved = r && r._source === "local";
       const isPlatelyIndexed = r && (r._source === "plately" || String(r.url || "").startsWith("/recept/"));
-      const viewUrl = isLocalSaved ? "#" : isPlatelyIndexed ? (r.sourceUrl || r.url) : r.url;
+      const localSourceUrl = String(r.sourceUrl || "").trim();
+      const viewUrl = isLocalSaved ? (localSourceUrl || "#") : isPlatelyIndexed ? (r.sourceUrl || r.url) : r.url;
+      const hasExternalView = !isLocalSaved || Boolean(localSourceUrl);
       const actionLabel = isLocalSaved ? "Open" : "Importeer";
       return `
       <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}" data-ch-card-thumb="${escapeHtml(thumbUrl || "")}">
@@ -4929,7 +4918,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
           ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
         </div>
         <div class="ch-card__actions">
-          <a class="ch-card__view" href="${escapeHtml(viewUrl)}" ${isLocalSaved ? "" : 'target="_blank" rel="noopener noreferrer"'} aria-label="Bekijk ${escapeHtml(r.title)} op ${escapeHtml(r.channel)}">
+          <a class="ch-card__view${hasExternalView ? "" : " is-disabled"}" href="${escapeHtml(viewUrl)}" ${hasExternalView ? 'target="_blank" rel="noopener noreferrer"' : 'aria-disabled="true"'} aria-label="Bekijk ${escapeHtml(r.title)} op ${escapeHtml(r.channel)}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z" fill="currentColor"/></svg>
             Bekijk
           </a>
@@ -6529,7 +6518,7 @@ function renderGroceryGroups() {
     groceryOrder.classList.toggle("hidden", !state.groceryItems.length);
   }
   if (orderAHItemCount) {
-    orderAHItemCount.textContent = `Zet ${uncheckedCount} items in je mandje`;
+    orderAHItemCount.textContent = `${uncheckedCount} items · kopieer lijst en open AH`;
   }
   renderNavBadge();
   renderGrocerySummary();
@@ -6781,8 +6770,8 @@ function renderGroceryGroups() {
     });
   });
 
-  // Trigger background photo fetch for items without photos (debounced, safe to call always)
-  debouncedFetchGroceryPhotos();
+  // Trigger AH photo fetch for items without photos; render placeholders first, then swap in real product images.
+  fetchGroceryPhotos();
 }
 
 let _groceryPhotoFetchTimer = null;
@@ -6819,6 +6808,9 @@ async function fetchGroceryPhotos() {
         item.imageUrl = url;
         changed = true;
       }
+    }
+    if (changed) {
+      schedulePersistAppState();
     }
     if (changed && state.view === "grocery") {
       renderGroceryGroups();
@@ -10608,7 +10600,7 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
     return;
   }
   if (!validateUrl(url)) {
-    setFeedback("Gebruik een geldige TikTok-, Instagram- of website-link.");
+    setFeedback("Gebruik een geldige Instagram- of website-link.");
     return;
   }
 
@@ -10616,6 +10608,12 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
   if (inferredPlatform) {
     state.selectedPlatform = inferredPlatform;
     syncPlatformUI();
+  }
+
+  if (inferredPlatform === "tiktok") {
+    setFeedback("TikTok importeren werkt tijdelijk nog niet. Gebruik Instagram of een website-link.");
+    showToast("TikTok importeren werkt tijdelijk nog niet.", { variant: "error" });
+    return;
   }
 
   setLoading(true);
@@ -13424,7 +13422,7 @@ bindEvent(importForm, "submit", async (event) => {
     },
     (importedRecipe) => {
       importForm.reset();
-      state.selectedPlatform = "tiktok";
+      state.selectedPlatform = "instagram";
       syncPlatformUI();
       closeModal();
       openImportReview(importedRecipe.id);
@@ -13901,7 +13899,7 @@ const ONBOARDING_STEPS = [
   },
   {
     selector: ".import-banner__input--full",
-    text: "Plak hier een link van TikTok, Instagram of een receptwebsite — we importeren het recept automatisch voor je. 🍳",
+    text: "Plak hier een link van Instagram of een receptwebsite — we importeren het recept automatisch voor je.",
     dir: "below",
   },
   {
@@ -14274,7 +14272,7 @@ function handleUrlSchemeImport() {
           (importedRecipe) => {
             // On success: show review screen
             importForm.reset();
-            state.selectedPlatform = "tiktok";
+            state.selectedPlatform = "instagram";
             syncPlatformUI();
             closeModal();
             openImportReview(importedRecipe.id);

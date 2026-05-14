@@ -6,7 +6,7 @@
     <title>Plately</title>
     <meta
       name="description"
-      content="Plately is een webapp om recepten van TikTok, Instagram en websites te bewaren, koken en organiseren."
+      content="Plately is een webapp om recepten van Instagram en websites te bewaren, koken en organiseren."
     />
     <meta name="plately-build" content="1.0.19.37" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
@@ -21,11 +21,11 @@
     <meta property="og:site_name" content="Plately" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Plately" />
-    <meta property="og:description" content="Bewaar, importeer en kook recepten van TikTok, Instagram en websites." />
+    <meta property="og:description" content="Bewaar, importeer en kook recepten van Instagram en websites." />
     <meta property="og:image" content="assets/icon-512.png?v=7" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Plately" />
-    <meta name="twitter:description" content="Bewaar, importeer en kook recepten van TikTok, Instagram en websites." />
+    <meta name="twitter:description" content="Bewaar, importeer en kook recepten van Instagram en websites." />
     <meta name="twitter:image" content="assets/icon-512.png?v=7" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -110,13 +110,13 @@
                   <span>Sla een recept op</span>
                   <span class="beta-badge" aria-label="Beta">Beta</span>
                 </h1>
-                <p class="section-copy">Plak een link vanuit TikTok, Instagram of een website.</p>
+                <p class="section-copy">Plak een link vanuit Instagram of een website.</p>
               </div>
             </div>
             <form class="import-banner__form" id="homeImportForm">
               <input id="homeImportUrl" type="text" inputmode="url" class="import-banner__input--full" placeholder="Plak een link..." autocomplete="off" />
               <button class="import-caption-toggle" type="button" id="homeImportCaptionToggle">+ Voeg beschrijving toe</button>
-              <textarea class="import-caption-field hidden" id="homeImportCaption" rows="3" placeholder="Plak hier de beschrijving of caption van het recept (optioneel) — dit verbetert de import sterk bij TikTok en Instagram"></textarea>
+              <textarea class="import-caption-field hidden" id="homeImportCaption" rows="3" placeholder="Plak hier de beschrijving of caption van het recept (optioneel) — dit verbetert de import sterk bij Instagram"></textarea>
               <button class="import-banner__button--full" id="homeImportSubmit" type="submit">Importeer</button>
               <p class="import-banner__feedback" id="homeImportFeedback" aria-live="polite"></p>
             </form>
@@ -487,8 +487,8 @@
                 </svg>
               </span>
               <span class="store-cta__text">
-                <span class="store-cta__name">Bestel bij Albert Heijn</span>
-                <span class="store-cta__dest" id="orderAHItemCount">Zet 0 items in je mandje</span>
+                <span class="store-cta__name">Open Albert Heijn</span>
+                <span class="store-cta__dest" id="orderAHItemCount">Kopieer lijst en open AH</span>
               </span>
               <span class="store-cta__arrow" aria-hidden="true">›</span>
             </button>
@@ -896,14 +896,14 @@
                 </div>
                 <p class="about-app__description">
                   Plately helpt je recepten te bewaren, kookboeken te organiseren
-                  en boodschappenlijstjes te maken — uit TikTok, Instagram en je
+                  en boodschappenlijstjes te maken — uit Instagram en je
                   favoriete websites.
                 </p>
 
                 <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--color-border-subtle);">
                   <h3 style="margin-bottom: 12px; font-size: 14px; font-weight: 600; color: var(--color-text-primary);">iOS delen</h3>
                   <p style="margin-bottom: 12px; font-size: 13px; color: var(--color-text-secondary); line-height: 1.5;">
-                    Voeg Plately toe aan je iOS Share Sheet om recepten direct vanuit Safari, TikTok en Instagram te importeren — <strong>volledig automatisch!</strong>
+                    Voeg Plately toe aan je iOS Share Sheet om recepten direct vanuit Safari en Instagram te importeren — <strong>volledig automatisch!</strong>
                   </p>
                   <button type="button" id="iosShareSetupBtn" style="display: inline-block; padding: 8px 16px; background-color: var(--color-accent); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer;">
                     iOS-instelling bekijken
@@ -1197,17 +1197,11 @@
               </svg>
             </div>
             <h1 class="import-hero__title">Importeer recept</h1>
-            <p class="import-hero__subtitle">Plak een link van TikTok, Instagram of een website — wij halen titel, ingrediënten en stappen automatisch op.</p>
+            <p class="import-hero__subtitle">Plak een link van Instagram of een website — wij halen titel, ingrediënten en stappen automatisch op.</p>
           </div>
 
           <!-- Supported platforms -->
           <div class="import-platforms-row">
-            <div class="import-platform-pill" title="TikTok">
-              <svg viewBox="0 0 48 48" aria-hidden="true">
-                <path fill="currentColor" d="M33.5 14.5a9.4 9.4 0 0 1-5.7-1.9v13.6a8.7 8.7 0 1 1-8.7-8.7c.4 0 .8 0 1.2.1v4.4a4.4 4.4 0 1 0 3.1 4.2V6h4.4a5.5 5.5 0 0 0 5.5 5.5c.1 0 .1 0 .2 0V14.5z"/>
-              </svg>
-              <span>TikTok</span>
-            </div>
             <div class="import-platform-pill" title="Instagram">
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
                 <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
@@ -1248,7 +1242,7 @@
               </button>
             </div>
             <button class="import-caption-toggle" type="button" id="importScreenCaptionToggle">+ Voeg beschrijving toe (optioneel)</button>
-            <textarea class="import-caption-field hidden" id="importScreenCaption" rows="3" placeholder="Plak hier de caption van TikTok of Instagram — dit verbetert de import sterk."></textarea>
+            <textarea class="import-caption-field hidden" id="importScreenCaption" rows="3" placeholder="Plak hier de caption van Instagram — dit verbetert de import sterk."></textarea>
             <p class="import-hint" id="importScreenFeedback"></p>
           </form>
 
@@ -1259,7 +1253,7 @@
                 <span class="import-step__num">1</span>
                 <div class="import-step__body">
                   <strong>Kopieer een link</strong>
-                  <span>Open een recept op TikTok, Instagram of een website en kopieer de link.</span>
+                  <span>Open een recept op Instagram of een website en kopieer de link.</span>
                 </div>
               </li>
               <li class="import-step">
@@ -1485,7 +1479,7 @@
               <path d="M55,130 Q35,130 35,108 L35,88 Q35,66 55,66 Q70,66 76,78 L76,68 L90,68 L90,130 L76,130 L76,120 Q70,132 55,130 Z M57,118 Q72,118 76,104 L76,92 Q72,78 57,78 Q47,78 47,88 L47,108 Q47,118 57,118 Z" fill="#ffffff"/>
               <path d="M100,50 L114,50 L114,80 Q120,66 136,66 Q155,66 155,86 L155,130 L141,130 L141,90 Q141,78 132,78 Q121,78 114,90 L114,130 L100,130 Z" fill="#ffffff"/>
             </svg>
-            Zet op je lijst
+            Kopieer lijst en open AH
           </button>
         </div>
       </div>
@@ -1561,10 +1555,7 @@
           <label>
             Platform
             <div class="platform-switcher">
-              <button class="platform-button is-selected" type="button" data-platform-choice="tiktok">
-                TikTok
-              </button>
-              <button class="platform-button" type="button" data-platform-choice="instagram">
+              <button class="platform-button is-selected" type="button" data-platform-choice="instagram">
                 Instagram
               </button>
               <button class="platform-button" type="button" data-platform-choice="website">
@@ -1581,8 +1572,8 @@
                 name="recipeUrl"
                 type="text"
                 inputmode="url"
-                placeholder="https://www.tiktok.com/@creator/video/123..."
-                title="Plak de link van je TikTok, Instagram post of receptwebsite"
+                placeholder="https://www.instagram.com/reel/abc123/"
+                title="Plak de link van je Instagram post of receptwebsite"
               />
               <button
                 class="helper-button hidden"
@@ -1601,15 +1592,15 @@
               id="recipeNote"
               name="recipeNote"
               rows="3"
-              placeholder="Plak hier de caption of beschrijving van het recept. Dit maakt de import sterk beter bij TikTok en Instagram."
+              placeholder="Plak hier de caption of beschrijving van het recept. Dit maakt de import sterk beter bij Instagram."
             ></textarea>
           </label>
 
           <button class="primary-button" id="submitImport" type="submit">Recept importeren</button>
           <button class="secondary-button" id="closeImportSecondaryButton" type="button">Sluiten</button>
           <p class="helper-text" id="importFeedback">
-            <span id="feedbackTikTok">De app roept nu een backend importer aan. TikTok werkt direct voor publieke posts.</span>
-            <span id="feedbackInstagram" class="hidden">De app probeert de Instagram post te laden. Zet je post op public als het niet werkt.</span>
+            <span id="feedbackTikTok" class="hidden">TikTok importeren werkt tijdelijk nog niet. Gebruik Instagram of een website-link.</span>
+            <span id="feedbackInstagram">De app probeert de Instagram post te laden. Zet je post op public als het niet werkt.</span>
             <span id="feedbackWebsite" class="hidden">De app zoekt receptinformatie op de website.</span>
           </p>
         </form>
@@ -1768,7 +1759,7 @@
       <div style="text-align: left;">
         <h2 style="margin-bottom: 12px; font-size: 16px; font-weight: 600; color: var(--color-text-primary);">Plately toevoegen aan delen</h2>
         <p style="margin-bottom: 16px; font-size: 14px; color: var(--color-text-secondary); line-height: 1.6;">
-          Maak een Siri Shortcut die Plately opent in het deel-menu van Safari, TikTok en Instagram. Recepten worden <strong>automatisch</strong> geïmporteerd!
+          Maak een Siri Shortcut die Plately opent in het deel-menu van Safari en Instagram. Recepten worden <strong>automatisch</strong> geïmporteerd!
         </p>
 
         <ol style="margin-bottom: 16px; padding-left: 20px; font-size: 13px; color: var(--color-text-secondary); line-height: 1.8;">

@@ -8346,7 +8346,7 @@ async function importRecipe(url, note, imageHint = "") {
 
   let recipe;
   if (platform === "tiktok") {
-    recipe = await importTikTok(parsedUrl.toString(), note);
+    throw new HttpError(400, "TikTok importeren werkt tijdelijk nog niet. Gebruik Instagram of een website-link.");
   } else if (platform === "instagram") {
     recipe = await importInstagram(parsedUrl.toString(), note);
   } else if (platform === "facebook") {
@@ -9528,12 +9528,7 @@ async function searchProductsForStore(store, ingredientNames) {
 }
 
 function buildAHDirectAddUrl(results) {
-  const found = results.filter((r) => r.product?.id);
-  if (!found.length) {
-    return "https://www.ah.nl/mijnlijst/";
-  }
-  const params = found.map((r) => `p=${encodeURIComponent(r.product.id)}:1`).join("&");
-  return `https://www.ah.nl/mijnlijst/add-multiple?${params}`;
+  return "https://www.ah.nl/mijnlijst/";
 }
 
 function buildJumboDirectAddUrl(results) {
@@ -9620,7 +9615,7 @@ function pickAhBasketDefaultProduct(products, prefs) {
 }
 
 /**
- * Voor mandje + add-multiple: liever een product binnen de kwaliteitsdrempel als de pool dat toelaat,
+ * Voor de AH-preview: liever een product binnen de kwaliteitsdrempel als de pool dat toelaat,
  * anders best effort (zelfde gedrag als eerder voor moeilijke ingrediënten).
  */
 function selectAhProductForGroceryHandoff(products, prefs) {
@@ -13673,6 +13668,77 @@ async function saveSeoBackfillRecipesForUser(userId, recipes, options = {}) {
   };
 }
 
+function dedupeImportedRecipesBySourceUrlForUser(user) {
+  const appState = buildAppStateFromUser(user);
+  const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+  const kept = [];
+  const firstBySource = new Map();
+  const duplicateIdToKeptId = new Map();
+  const duplicateGroups = new Map();
+
+  for (const recipe of recipes) {
+    const id = sanitizeText(recipe?.id || "");
+    const sourceKey = normalizeRecipeSourceKey(recipe?.sourceUrl || recipe?.source || "");
+    if (!sourceKey) {
+      kept.push(recipe);
+      continue;
+    }
+    const existing = firstBySource.get(sourceKey);
+    if (!existing) {
+      firstBySource.set(sourceKey, { id, title: sanitizeText(recipe?.title || "Recept"), sourceUrl: sanitizeText(recipe?.sourceUrl || recipe?.source || "") });
+      kept.push(recipe);
+      continue;
+    }
+    if (id) duplicateIdToKeptId.set(id, existing.id);
+    const group = duplicateGroups.get(sourceKey) || {
+      sourceKey,
+      sourceUrl: existing.sourceUrl,
+      keptId: existing.id,
+      keptTitle: existing.title,
+      removed: [],
+    };
+    group.removed.push({ id, title: sanitizeText(recipe?.title || "Recept") });
+    duplicateGroups.set(sourceKey, group);
+  }
+
+  if (!duplicateIdToKeptId.size) {
+    return { changed: false, removed: 0, nextState: appState, duplicateGroups: [] };
+  }
+
+  const rewriteRecipeIds = (ids) => {
+    const out = [];
+    const seen = new Set();
+    for (const rawId of Array.isArray(ids) ? ids : []) {
+      const id = sanitizeText(rawId || "");
+      const nextId = duplicateIdToKeptId.get(id) || id;
+      if (!nextId || seen.has(nextId)) continue;
+      seen.add(nextId);
+      out.push(nextId);
+    }
+    return out;
+  };
+
+  const nextCookbooks = (Array.isArray(appState.cookbooks) ? appState.cookbooks : []).map((cookbook) => ({
+    ...cookbook,
+    recipeIds: rewriteRecipeIds(cookbook.recipeIds),
+  }));
+  const selectedRecipeId = duplicateIdToKeptId.get(sanitizeText(appState.selectedRecipeId || "")) || appState.selectedRecipeId;
+  const featuredRecipeId = duplicateIdToKeptId.get(sanitizeText(appState.featuredRecipeId || "")) || appState.featuredRecipeId;
+
+  return {
+    changed: true,
+    removed: duplicateIdToKeptId.size,
+    nextState: {
+      ...appState,
+      importedRecipes: kept,
+      cookbooks: nextCookbooks,
+      selectedRecipeId,
+      featuredRecipeId,
+    },
+    duplicateGroups: Array.from(duplicateGroups.values()),
+  };
+}
+
 async function runSeoRecipeBackfillForUser(authUser, options = {}) {
   const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
   const forceReimport = Boolean(options.forceReimport);
@@ -13987,7 +14053,7 @@ async function buildStoreBasket(body) {
       const html = await fetchHtml(sourceUrl);
       const directUrl = extractFoodInfluencersDirectUrl(html, store);
 
-      if (directUrl) {
+      if (directUrl && store !== "albert-heijn") {
         return {
           kind: "direct",
           store,
@@ -13996,7 +14062,7 @@ async function buildStoreBasket(body) {
           sourceUrl,
           directUrl,
           note: `Ik heb op de bronpagina een bestaande mandje-koppeling gevonden voor ${getStoreLabel(store)}.`,
-          items: matchedItems,
+          items: [],
           provider: "foodinfluencersunited",
         };
       }
@@ -14706,7 +14772,7 @@ const server = http.createServer(async (request, response) => {
         postgresEnabled: isPostgresEnabled(),
       },
       platforms: {
-        tiktok: { configured: true },
+        tiktok: { configured: false, message: "TikTok importeren werkt tijdelijk nog niet." },
         instagram: { configured: Boolean(META_APP_ID && META_APP_SECRET) },
           website: { configured: true },
         },
@@ -16101,7 +16167,7 @@ const server = http.createServer(async (request, response) => {
           : buildJumboDirectAddUrl(results);
 
       const found = results.filter((r) => r.product).length;
-      // AH supports direct add-multiple; Jumbo falls back to combined search when no SKUs found
+      // AH only opens Mijn lijst; Jumbo can still use a direct cart handoff when SKUs are available.
       const isDirectAdd = store === "albert-heijn" || found > 0;
 
       sendJson(response, 200, {
@@ -16767,6 +16833,59 @@ const server = http.createServer(async (request, response) => {
           ok: false,
           error: error.message || "SEO ratings aanvullen mislukt.",
         });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/dedupe-imported-recipes" && request.method === "POST") {
+      console.log("🧹 /api/admin/dedupe-imported-recipes called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const dryRun = body?.dryRun !== false;
+        let usersScanned = 0;
+        let usersChanged = 0;
+        let removedRecipes = 0;
+        const sampleGroups = [];
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const res = await pool.query(`SELECT * FROM plately_users`);
+          for (const row of res.rows || []) {
+            usersScanned += 1;
+            const result = dedupeImportedRecipesBySourceUrlForUser(row);
+            if (!result.changed) continue;
+            usersChanged += 1;
+            removedRecipes += result.removed;
+            sampleGroups.push(...result.duplicateGroups.slice(0, Math.max(0, 20 - sampleGroups.length)));
+            if (!dryRun) await updateAuthenticatedUserState(row.id, result.nextState);
+          }
+        } else {
+          const db = await loadDatabase();
+          for (const user of Object.values(db.users || {})) {
+            usersScanned += 1;
+            const result = dedupeImportedRecipesBySourceUrlForUser(user);
+            if (!result.changed) continue;
+            usersChanged += 1;
+            removedRecipes += result.removed;
+            sampleGroups.push(...result.duplicateGroups.slice(0, Math.max(0, 20 - sampleGroups.length)));
+            if (!dryRun) db.users[user.id] = sanitizeUserStatePayload(result.nextState, user);
+          }
+          if (!dryRun && usersChanged) await persistDatabase();
+        }
+
+        return sendJson(response, 200, {
+          ok: true,
+          dryRun,
+          usersScanned,
+          usersChanged,
+          removedRecipes,
+          sampleGroups,
+        });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/dedupe-imported-recipes:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Ontdubbelen mislukt." });
       }
     }
 
