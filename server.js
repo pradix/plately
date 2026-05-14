@@ -4080,6 +4080,9 @@ function isLikelyIngredientLine(line) {
   if (!clean || clean.length > 90 || INSTRUCTION_HEADING_PATTERN.test(clean)) {
     return false;
   }
+  if (isLikelyRecipeMarkdownNoiseLine(clean)) {
+    return false;
+  }
   if (/^voor\s+\d+\s+personen?\s*:?\s*$/i.test(clean)) {
     return true;
   }
@@ -4101,6 +4104,19 @@ function isLikelyIngredientLine(line) {
     return true;
   }
   return clean.split(" ").length <= 8 && INGREDIENT_WORD_PATTERN.test(clean);
+}
+
+function isLikelyRecipeMarkdownNoiseLine(line) {
+  const clean = sanitizeText(line || "");
+  if (!clean) return true;
+  if (/^!?\[[^\]]+\]\(/.test(clean)) return true;
+  if (/^https?:\/\//i.test(clean)) return true;
+  if (/^(recepten|italiaanse recepten|makkelijke recepten|noten recepten|pasta recepten|snelle recepten)$/i.test(clean)) return true;
+  if (/^(bekijk|koop|shop|winkelmand|in winkelmand|toevoegen|bestel|aanbieding|sale)\b/i.test(clean)) return true;
+  if (/\b(miljuschka\s+)?(pastabord|snijplank|pastamachine|servies|bord|borden|pan|pannen|mes|messen|keukenmachine)\b/i.test(clean)) return true;
+  if (/^(?:€\s*)?\d{1,4}(?:[,.]\d{2}|,-)?$/.test(clean)) return true;
+  if (/^\d{1,4}(?:[,.]\d{2}|,-)$/.test(clean)) return true;
+  return false;
 }
 
 function isLikelyInstructionLine(line) {
@@ -4713,6 +4729,9 @@ function parseIngredientLine(line) {
 
   // Filter common non-ingredient noise that can leak into ingredient lists
   if (/^(eet\s+smakelijk|enjoy|bon\s+app(e|é)tit|buon\s+app(e|é)tit|serveer\s+maar|succes)\b/i.test(clean)) {
+    return { quantity: "", unit: "", name: "" };
+  }
+  if (isLikelyRecipeMarkdownNoiseLine(clean)) {
     return { quantity: "", unit: "", name: "" };
   }
 
