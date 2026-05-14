@@ -5418,6 +5418,8 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
   if (hostMatchesReaderAllowlist(parsedUrl.hostname) && isSafeForReaderFallback(parsedUrl)) {
     const zenFirst = await fetchWithZenRows(url);
     if (zenFirst) return zenFirst;
+    const firecrawlFirst = await fetchWebsiteDocumentViaFirecrawl(url);
+    if (firecrawlFirst) return firecrawlFirst;
     // ZenRows niet beschikbaar (geen key) of mislukt: probeer Jina als laatste redmiddel.
     try {
       const prefetch = await fetchReaderFallback(url);
@@ -5514,6 +5516,8 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
 
   // Miljuschka / Eef: direct fetches fail with 5xx or empty; probeer Reader vóór harde fout.
   if (hostMatchesReaderAllowlist(parsedUrl.hostname) && isSafeForReaderFallback(parsedUrl)) {
+    const firecrawlResult = await fetchWebsiteDocumentViaFirecrawl(url);
+    if (firecrawlResult) return firecrawlResult;
     try {
       return await fetchReaderFallback(url);
     } catch {
