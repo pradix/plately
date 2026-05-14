@@ -5528,6 +5528,68 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
   throw new HttpError(502, `Kon bronpagina niet ophalen (${lastStatus || 403})${lastError ? `: ${lastError.message}` : ""}.`);
 }
 
+function isBrowserFallbackEnabled() {
+  return !/^(0|false|no)$/i.test(String(process.env.PLATELY_BROWSER_FALLBACK || "1").trim());
+}
+
+async function fetchWebsiteDocumentViaBrowser(url) {
+  if (!isBrowserFallbackEnabled()) return null;
+  let chromium;
+  try {
+    ({ chromium } = require("playwright"));
+  } catch (error) {
+    console.log(`Browser fallback unavailable: ${error.message}`);
+    return null;
+  }
+
+  let browser = null;
+  try {
+    const executablePath = String(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || process.env.CHROMIUM_PATH || "").trim();
+    browser = await chromium.launch({
+      headless: true,
+      ...(executablePath ? { executablePath } : {}),
+      args: [
+        "--disable-blink-features=AutomationControlled",
+        "--disable-dev-shm-usage",
+        "--no-sandbox",
+      ],
+      timeout: 20000,
+    });
+    const context = await browser.newContext({
+      locale: "nl-NL",
+      timezoneId: "Europe/Amsterdam",
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36",
+      extraHTTPHeaders: {
+        "accept-language": "nl-NL,nl;q=0.9,en;q=0.7",
+      },
+      viewport: { width: 1365, height: 900 },
+    });
+    const page = await context.newPage();
+    const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25000 }).catch((error) => {
+      console.log(`Browser fallback goto error: ${error.message}`);
+      return null;
+    });
+    await page.waitForTimeout(1800).catch(() => {});
+    const status = response?.status?.() || 0;
+    const html = await page.content().catch(() => "");
+    const lower = String(html || "").toLowerCase();
+    const blocked =
+      status === 403 ||
+      lower.includes("access denied") ||
+      lower.includes("checking your browser") ||
+      lower.includes("verify you are human");
+    console.log(`Browser fallback response: ${status || "unknown"}${blocked ? " (blocked)" : ""}`);
+    if (!html || html.length < 600 || blocked) return null;
+    return { kind: "html", body: html, finalUrl: page.url() || url };
+  } catch (error) {
+    console.log(`Browser fallback error: ${error.message}`);
+    return null;
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
 async function fetchHtml(url) {
   const document = await fetchWebsiteDocument(url);
   if (document.kind !== "html") {
@@ -7641,12 +7703,15 @@ async function importWebsite(sourceUrl) {
       return graphqlRecipe;
     }
 
-    const [documentSettled, readerSettled] = await Promise.allSettled([
+    const [documentSettled, readerSettled, browserSettled] = await Promise.allSettled([
       fetchWebsiteDocument(sourceUrl),
       fetchReaderFallback(sourceUrl),
+      fetchWebsiteDocumentViaBrowser(sourceUrl),
     ]);
     const document =
-      documentSettled.status === "fulfilled"
+      browserSettled.status === "fulfilled" && browserSettled.value
+        ? browserSettled.value
+        : documentSettled.status === "fulfilled"
         ? documentSettled.value
         : readerSettled.status === "fulfilled"
           ? readerSettled.value

@@ -41,6 +41,10 @@ echo "==> deploy-revision.json → $COMMIT ($REF_BRANCH) @ $NOW"
 if [[ -f package.json ]]; then
   echo "==> Dependencies (production)"
   npm ci --omit=dev || npm install --omit=dev
+  if [[ "${PLATELY_BROWSER_FALLBACK:-1}" != "0" ]]; then
+    echo "==> Browser fallback (Playwright Chromium)"
+    npx playwright install chromium || echo "⚠️ Playwright Chromium install mislukt; AH browser fallback wordt overgeslagen tot Chromium beschikbaar is."
+  fi
 fi
 
 if [[ -n "${PLATELY_POST_DEPLOY_CMD:-}" ]]; then
