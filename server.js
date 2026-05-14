@@ -3649,6 +3649,45 @@ function buildMatchedChoiceFromProduct(store, item, product, badge = "Gevonden")
   return createStoreChoice(store, choice);
 }
 
+function parseAmountNumberForStore(text) {
+  const raw = sanitizeText(text || "").toLowerCase().replace(",", ".");
+  const fraction = raw.match(/\b(\d+)\s*\/\s*(\d+)\b/);
+  if (fraction) {
+    const a = Number(fraction[1]);
+    const b = Number(fraction[2]);
+    if (Number.isFinite(a) && Number.isFinite(b) && b > 0) return a / b;
+  }
+  const m = raw.match(/\b(\d+(?:\.\d+)?)\b/);
+  const n = m ? Number(m[1]) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+function parsePackageAmountForStore(text, unitPattern) {
+  const raw = sanitizeText(text || "").toLowerCase().replace(",", ".");
+  const m = raw.match(new RegExp(`\\b(\\d+(?:\\.\\d+)?)\\s*${unitPattern}\\b`, "i"));
+  const n = m ? Number(m[1]) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function estimateAhHandoffQuantity(item, product) {
+  const amount = sanitizeText(item?.amount || item?.ingredientAmount || "");
+  const packText = `${sanitizeText(product?.name || product?.title || "")} ${sanitizeText(product?.subtitle || "")}`;
+  const grams = parsePackageAmountForStore(amount, "g|gram");
+  if (grams) {
+    const packGrams = parsePackageAmountForStore(packText, "g|gram");
+    if (packGrams) return Math.max(1, Math.min(24, Math.ceil(grams / packGrams)));
+  }
+  const ml = parsePackageAmountForStore(amount, "ml|milliliter");
+  if (ml) {
+    const packMl = parsePackageAmountForStore(packText, "ml|milliliter");
+    if (packMl) return Math.max(1, Math.min(24, Math.ceil(ml / packMl)));
+  }
+  if (/\b(x|stuks?|stuk|pakken?|blik(?:ken)?|zak(?:ken)?|fles(?:sen)?|pot(?:ten)?)\b/i.test(amount)) {
+    return Math.max(1, Math.min(24, Math.ceil(parseAmountNumberForStore(amount))));
+  }
+  return 1;
+}
+
 function getMatchConfidenceLabel(ingredientTitle) {
   const value = String(ingredientTitle || "").toLowerCase();
   if (
@@ -9532,7 +9571,12 @@ function buildAHDirectAddUrl(results) {
   if (!found.length) {
     return "https://www.ah.nl/mijnlijst/";
   }
-  const params = found.map((r) => `p=${encodeURIComponent(r.product.id)}:1`).join("&");
+  const params = found
+    .map((r) => {
+      const qty = Math.max(1, Math.min(24, Math.ceil(Number(r.quantity || 1) || 1)));
+      return `p=${encodeURIComponent(`${r.product.id}:${qty}`)}`;
+    })
+    .join("&");
   return `https://www.ah.nl/mijnlijst/add-multiple?${params}`;
 }
 
@@ -13893,6 +13937,71 @@ function cleanSeoRecipesForUser(user) {
   return { changed: true, nextState, removed, keptIssueCount };
 }
 
+async function repairSeoRecipesForUser(user, options = {}) {
+  const maxRecipes = Math.max(1, Math.min(Number(options.maxRecipes) || 20, 100));
+  const appState = buildAppStateFromUser(user);
+  const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes.map((r) => ({ ...r })) : [];
+  const cookbooks = Array.isArray(appState.cookbooks) ? appState.cookbooks : [];
+  const seoCookbook = cookbooks.find((c) => sanitizeText(c?.name || "") === "SEO recepten");
+  const seoIds = new Set(Array.isArray(seoCookbook?.recipeIds) ? seoCookbook.recipeIds.map((id) => sanitizeText(id)).filter(Boolean) : []);
+  if (!seoIds.size) return { changed: false, nextState: appState, repaired: [], failed: [] };
+
+  const repaired = [];
+  const failed = [];
+  const seenSources = new Set();
+
+  for (let i = 0; i < recipes.length && repaired.length + failed.length < maxRecipes; i++) {
+    const recipe = recipes[i];
+    const id = sanitizeText(recipe?.id || "");
+    if (!seoIds.has(id)) continue;
+    const issues = getImportedRecipeIssues(recipe);
+    const sourceUrl = sanitizeText(recipe?.sourceUrl || recipe?.source || "");
+    const sourceKey = normalizeRecipeSourceKey(sourceUrl);
+    const duplicate = sourceKey && seenSources.has(sourceKey);
+    if (sourceKey) seenSources.add(sourceKey);
+    const repairable =
+      sourceUrl &&
+      (issues.includes("missing_image") ||
+        issues.includes("too_few_ingredients") ||
+        issues.includes("missing_steps") ||
+        issues.includes("missing_title"));
+    if (!repairable || duplicate) continue;
+
+    try {
+      const fresh = await importRecipe(sourceUrl, "", sanitizeText(recipe?.image || ""));
+      const merged = sanitizeRecipeForStorage({
+        ...recipe,
+        ...fresh,
+        id,
+        sourceUrl: sanitizeText(fresh?.sourceUrl || sourceUrl),
+        image: sanitizeText(fresh?.image || recipe?.image || ""),
+        platform: sanitizeText(fresh?.platform || recipe?.platform || "website"),
+      });
+      if (!merged || !isValidImportedSeoRecipe(merged)) {
+        failed.push({ id, title: sanitizeText(recipe?.title || "Recept"), sourceUrl, error: "nog_ongeldig" });
+        continue;
+      }
+      recipes[i] = merged;
+      repaired.push({ id, title: sanitizeText(merged.title || "Recept"), sourceUrl, fixed: issues });
+    } catch (error) {
+      failed.push({
+        id,
+        title: sanitizeText(recipe?.title || "Recept"),
+        sourceUrl,
+        error: sanitizeText(error?.message || "reparatie mislukt").slice(0, 180),
+      });
+    }
+  }
+
+  if (!repaired.length) return { changed: false, nextState: appState, repaired, failed };
+  return {
+    changed: true,
+    nextState: { ...appState, importedRecipes: recipes },
+    repaired,
+    failed,
+  };
+}
+
 async function runSeoRecipeBackfillForUser(authUser, options = {}) {
   const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
   const forceReimport = Boolean(options.forceReimport);
@@ -14272,7 +14381,7 @@ async function buildStoreBasket(body) {
             ? [picked, ...products.filter((p) => (p?.id || p?.name) !== (picked?.id || picked?.name))]
             : products;
 
-        return { ingredient: ingredientName, product: picked, products: ordered };
+        return { ingredient: ingredientName, product: picked, products: ordered, quantity: estimateAhHandoffQuantity(item, picked) };
       })
     ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
   } else {
@@ -16163,13 +16272,14 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === "/api/import" && request.method === "POST") {
       const traceId = newImportTraceId();
+      let cleanUrl = "";
+      let sourceHost = "";
       try {
         const body = await readRequestBody(request);
         // Strip surrounding text — extract the first http(s) URL from whatever was pasted
         const rawInput = String(body.url || "").trim();
         const urlMatch = rawInput.match(/https?:\/\/[^\s]+/);
-        const cleanUrl = urlMatch ? urlMatch[0] : rawInput;
-        let sourceHost = "";
+        cleanUrl = urlMatch ? urlMatch[0] : rawInput;
         try {
           sourceHost = new URL(cleanUrl).hostname.replace(/^www\./, "");
         } catch {
@@ -16275,6 +16385,14 @@ const server = http.createServer(async (request, response) => {
           error: sanitizeText(rawMessage).slice(0, 280) || "import_failed",
         });
         try {
+          const authUser = await getAuthenticatedUser(request).catch(() => null);
+          await recordEvent("import_failed", authUser?.id || null, {
+            traceId,
+            sourceUrl: cleanUrl,
+            sourceHost,
+            httpStatus: statusCode,
+            error: sanitizeText(rawMessage).slice(0, 500),
+          });
           console.log(
             JSON.stringify({
               evt: "plately_import_failed",
@@ -17122,6 +17240,116 @@ const server = http.createServer(async (request, response) => {
         const statusCode = error.statusCode || 400;
         console.error("❌ Error in /api/admin/seo-recipes-cleanup:", error.message);
         return sendJson(response, statusCode, { ok: false, error: error.message || "SEO recepten opschonen mislukt." });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/seo-recipes-repair" && request.method === "POST") {
+      console.log("🛠️ /api/admin/seo-recipes-repair called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const dryRun = body?.dryRun !== false;
+        const maxRecipes = Math.max(1, Math.min(Number(body?.maxRecipes) || 20, 100));
+        let usersScanned = 0;
+        let usersChanged = 0;
+        let repairedRecipes = 0;
+        const sampleRepaired = [];
+        const sampleFailed = [];
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const res = await pool.query(`SELECT * FROM plately_users`);
+          for (const row of res.rows || []) {
+            usersScanned += 1;
+            const result = await repairSeoRecipesForUser(row, { maxRecipes });
+            sampleFailed.push(...result.failed.slice(0, Math.max(0, 30 - sampleFailed.length)));
+            if (!result.changed) continue;
+            usersChanged += 1;
+            repairedRecipes += result.repaired.length;
+            sampleRepaired.push(...result.repaired.slice(0, Math.max(0, 30 - sampleRepaired.length)));
+            if (!dryRun) await updateAuthenticatedUserState(row.id, result.nextState);
+          }
+        } else {
+          const db = await loadDatabase();
+          for (const user of Object.values(db.users || {})) {
+            usersScanned += 1;
+            const result = await repairSeoRecipesForUser(user, { maxRecipes });
+            sampleFailed.push(...result.failed.slice(0, Math.max(0, 30 - sampleFailed.length)));
+            if (!result.changed) continue;
+            usersChanged += 1;
+            repairedRecipes += result.repaired.length;
+            sampleRepaired.push(...result.repaired.slice(0, Math.max(0, 30 - sampleRepaired.length)));
+            if (!dryRun) db.users[user.id] = sanitizeUserStatePayload(result.nextState, user);
+          }
+          if (!dryRun && usersChanged) await persistDatabase();
+        }
+
+        return sendJson(response, 200, {
+          ok: true,
+          dryRun,
+          usersScanned,
+          usersChanged,
+          repairedRecipes,
+          sampleRepaired,
+          sampleFailed,
+        });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/seo-recipes-repair:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "SEO recepten repareren mislukt." });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/import-errors" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        if (!isPostgresEnabled()) {
+          return sendJson(response, 200, { ok: true, rows: [], recent: [], postgresEnabled: false });
+        }
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        const days = Math.max(1, Math.min(Number(requestUrl.searchParams.get("days") || 14), 90));
+        const rowsRes = await pool.query(
+          `
+            SELECT
+              COALESCE(NULLIF(meta->>'sourceHost',''), 'unknown') AS source_host,
+              COUNT(*)::int AS failures,
+              MAX(created_at) AS last_at,
+              (ARRAY_AGG(meta->>'error' ORDER BY created_at DESC))[1] AS last_error,
+              (ARRAY_AGG(meta->>'traceId' ORDER BY created_at DESC))[1] AS last_trace_id,
+              (ARRAY_AGG(meta->>'httpStatus' ORDER BY created_at DESC))[1] AS last_http_status
+            FROM plately_events
+            WHERE type = 'import_failed'
+              AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
+            GROUP BY 1
+            ORDER BY failures DESC, last_at DESC
+            LIMIT 40
+          `,
+          [days]
+        );
+        const recentRes = await pool.query(
+          `
+            SELECT created_at, user_id, meta
+            FROM plately_events
+            WHERE type = 'import_failed'
+              AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
+            ORDER BY created_at DESC
+            LIMIT 20
+          `,
+          [days]
+        );
+        return sendJson(response, 200, {
+          ok: true,
+          days,
+          rows: rowsRes.rows || [],
+          recent: (recentRes.rows || []).map((r) => ({ createdAt: r.created_at, userId: r.user_id || "", meta: r.meta || {} })),
+          postgresEnabled: true,
+        });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/import-errors:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Importfouten laden mislukt." });
       }
     }
 

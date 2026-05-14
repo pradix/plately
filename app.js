@@ -2197,12 +2197,15 @@ function getBasketHandoffUrl(preview) {
     const selectedIds = (preview.items || [])
       .map((item) => {
         const choice = item.choices?.[item.selectedChoiceIndex || 0];
-        return choice?.productId || choice?.id || "";
+        const id = choice?.productId || choice?.id || "";
+        if (!id) return "";
+        const qty = estimateAhHandoffQuantityClient(item, choice);
+        return `${id}:${qty}`;
       })
       .filter(Boolean);
     if (selectedIds.length) {
       return `https://www.ah.nl/mijnlijst/add-multiple?${selectedIds
-        .map((id) => `p=${encodeURIComponent(id)}:1`)
+        .map((entry) => `p=${encodeURIComponent(entry)}`)
         .join("&")}`;
     }
     return "https://www.ah.nl/mijnlijst/";
@@ -2213,6 +2216,46 @@ function getBasketHandoffUrl(preview) {
     preview.fallbackUrl ||
     storeConfig.defaultUrl
   );
+}
+
+function parseAmountNumberClient(text) {
+  const raw = String(text || "").toLowerCase().replace(",", ".");
+  const fraction = raw.match(/\b(\d+)\s*\/\s*(\d+)\b/);
+  if (fraction) {
+    const a = Number(fraction[1]);
+    const b = Number(fraction[2]);
+    if (Number.isFinite(a) && Number.isFinite(b) && b > 0) return a / b;
+  }
+  const m = raw.match(/\b(\d+(?:\.\d+)?)\b/);
+  const n = m ? Number(m[1]) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+function parsePackageAmountClient(text, unitPattern) {
+  const raw = String(text || "").toLowerCase().replace(",", ".");
+  const m = raw.match(new RegExp(`\\b(\\d+(?:\\.\\d+)?)\\s*${unitPattern}\\b`, "i"));
+  const n = m ? Number(m[1]) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function estimateAhHandoffQuantityClient(item, choice) {
+  const amount = String(item?.ingredientAmount || "");
+  const packText = `${choice?.title || ""} ${choice?.subtitle || ""}`;
+  const unitCount = parseAmountNumberClient(amount);
+  const grams = parsePackageAmountClient(amount, "g|gram");
+  if (grams) {
+    const packGrams = parsePackageAmountClient(packText, "g|gram");
+    if (packGrams) return Math.max(1, Math.min(24, Math.ceil(grams / packGrams)));
+  }
+  const ml = parsePackageAmountClient(amount, "ml|milliliter");
+  if (ml) {
+    const packMl = parsePackageAmountClient(packText, "ml|milliliter");
+    if (packMl) return Math.max(1, Math.min(24, Math.ceil(ml / packMl)));
+  }
+  if (/\b(x|stuks?|stuk|pakken?|blik(?:ken)?|zak(?:ken)?|fles(?:sen)?|pot(?:ten)?)\b/i.test(amount)) {
+    return Math.max(1, Math.min(24, Math.ceil(unitCount)));
+  }
+  return Math.max(1, Math.min(24, Math.ceil(Number(item?.qty || 1) || 1)));
 }
 
 function splitCompoundIngredientWords(text) {

@@ -951,6 +951,15 @@
             <div id="importQualityStatus" class="muted">⏳ Laden…</div>
             <div id="importQualityTable"></div>
           </div>
+
+          <div style="margin-top:16px">
+            <div class="section-header" style="margin-bottom:8px">
+              <h3 class="subhead" style="margin:0">Importfouten per kanaal</h3>
+              <button class="btn btn-sm" type="button" onclick="loadImportErrors()">Refresh</button>
+            </div>
+            <div id="importErrorsStatus" class="muted">⏳ Laden…</div>
+            <div id="importErrorsTable"></div>
+          </div>
         </div>
       </div>
       </div>
@@ -1208,6 +1217,17 @@
             </div>
             <div id="seoCleanupStatus" class="muted" style="font-size:12px;margin-bottom:8px">Recepten met alleen ontbrekende afbeelding blijven staan, maar komen in de output terug als aandachtspunt.</div>
             <pre id="seoCleanupOutput" class="mono" style="display:block;margin:0;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto">—</pre>
+            <div style="border-top:1px solid var(--border);margin:10px 0 0;padding-top:10px">
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+                <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Max reparaties
+                  <input id="seoRepairMaxRecipes" type="number" min="1" max="100" value="20" style="width:72px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+                </label>
+                <button type="button" class="btn btn-sm" onclick="repairSeoRecipes(true)">Dry-run repareren</button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="repairSeoRecipes(false)">Repareren</button>
+              </div>
+              <div id="seoRepairStatus" class="muted" style="font-size:12px;margin-bottom:8px">Probeert SEO-recepten met ontbrekende afbeelding/stappen opnieuw vanaf de bron te importeren.</div>
+              <pre id="seoRepairOutput" class="mono" style="display:block;margin:0;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto">—</pre>
+            </div>
           </div>
         </div>
 
@@ -1675,6 +1695,7 @@
         renderTopChannelsTable("topChannelsByImports30d", top.channelsByImports30d || []);
         loadImportsByChannel().catch(() => {});
         loadImportQuality().catch(() => {});
+        loadImportErrors().catch(() => {});
 
         const hasChannels = Array.isArray(top.channelsByImports30d) && top.channelsByImports30d.length > 0;
         const noteEl = document.getElementById("topChannelsNote");
@@ -1839,6 +1860,50 @@
             </tbody>
           </table>
         `;
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "❌ " + (error.message || String(error));
+      }
+    }
+
+    async function loadImportErrors() {
+      const statusEl = document.getElementById("importErrorsStatus");
+      const tableEl = document.getElementById("importErrorsTable");
+      if (statusEl) statusEl.textContent = "⏳ Laden…";
+      if (tableEl) tableEl.innerHTML = "";
+      try {
+        const resp = await fetch("/api/admin/import-errors?days=14", adminFetchInit());
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) throw new Error(data.error || "Importfouten laden mislukt");
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        const recent = Array.isArray(data.recent) ? data.recent : [];
+        if (statusEl) statusEl.textContent = data.postgresEnabled === false
+          ? "PostgreSQL events staan niet aan."
+          : `${formatNumber(rows.reduce((s, r) => s + Number(r.failures || 0), 0))} fouten in ${data.days || 14} dagen`;
+        if (!tableEl) return;
+        const rowsHtml = rows.length ? `
+          <table class="users-table" style="margin-top:0">
+            <thead>
+              <tr><th>Source</th><th style="text-align:right">Fouten</th><th>Laatste fout</th><th>Trace</th></tr>
+            </thead>
+            <tbody>
+              ${rows.map((r) => `
+                <tr>
+                  <td>${escapeHtml(r.source_host || "unknown")}</td>
+                  <td style="text-align:right">${formatNumber(r.failures || 0)}</td>
+                  <td>${escapeHtml(String(r.last_error || "").slice(0, 160))}</td>
+                  <td class="mono" style="font-size:11px">${escapeHtml(r.last_trace_id || "")}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        ` : `<p class="muted">Geen importfouten gevonden.</p>`;
+        const recentHtml = recent.length ? `
+          <details style="margin-top:8px">
+            <summary class="muted" style="cursor:pointer">Laatste 20 fouten</summary>
+            <pre class="mono" style="white-space:pre-wrap;word-break:break-word;font-size:11px;background:rgba(0,0,0,0.03);padding:10px;border-radius:8px">${escapeHtml(JSON.stringify(recent, null, 2))}</pre>
+          </details>
+        ` : "";
+        tableEl.innerHTML = rowsHtml + recentHtml;
       } catch (error) {
         if (statusEl) statusEl.textContent = "❌ " + (error.message || String(error));
       }
@@ -3030,6 +3095,44 @@
       }
     }
 
+    async function repairSeoRecipes(dryRun) {
+      const statusEl = document.getElementById("seoRepairStatus");
+      const outEl = document.getElementById("seoRepairOutput");
+      const maxRaw = document.getElementById("seoRepairMaxRecipes")?.value || "20";
+      const maxRecipes = Math.max(1, Math.min(Number(maxRaw) || 20, 100));
+      if (!dryRun) {
+        const ok = confirm(`Maximaal ${maxRecipes} SEO-recepten opnieuw vanaf de bron importeren en repareren?`);
+        if (!ok) return;
+      }
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> ${dryRun ? "Dry-run repareren" : "Repareren"}…`;
+      if (outEl) outEl.textContent = "Bezig…";
+      try {
+        const response = await fetch("/api/admin/seo-recipes-repair", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dryRun: Boolean(dryRun), maxRecipes }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Repareren mislukt");
+        if (statusEl) {
+          statusEl.textContent = `${dryRun ? "Dry-run" : "Klaar"}: ${data.repairedRecipes || 0} SEO recepten gerepareerd bij ${data.usersChanged || 0}/${data.usersScanned || 0} users · ${Array.isArray(data.sampleFailed) ? data.sampleFailed.length : 0} fout(en).`;
+        }
+        if (outEl) {
+          outEl.textContent = JSON.stringify({
+            dryRun: data.dryRun,
+            usersScanned: data.usersScanned,
+            usersChanged: data.usersChanged,
+            repairedRecipes: data.repairedRecipes,
+            sampleRepaired: data.sampleRepaired || [],
+            sampleFailed: data.sampleFailed || [],
+          }, null, 2);
+        }
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "Fout: " + (error.message || String(error));
+        if (outEl) outEl.textContent = "—";
+      }
+    }
+
     function selectAllSeoBackfillKeywords() {
       const pool = Array.isArray(seoBackfillKeywordSuggestions) ? seoBackfillKeywordSuggestions : [];
       if (!pool.length) {
@@ -4050,7 +4153,7 @@
             </tbody>
           </table>
           <p class="muted" style="margin-top:12px;font-size:12px;max-width:720px">
-            Tip voor VPS: <code class="mono">deploy-beta.sh</code> schrijft <code class="mono">deploy-revision.json</code>. Staat <code class="mono">.git</code> niet naast <code class="mono">server.js</code>? Zet <code class="mono">PLATELY_GIT_DIR=/pad/naar/clone</code> voor de Node-service.
+            Tip voor VPS: <code class="mono">deploy-main.sh</code> schrijft <code class="mono">deploy-revision.json</code>. Staat <code class="mono">.git</code> niet naast <code class="mono">server.js</code>? Zet <code class="mono">PLATELY_GIT_DIR=/pad/naar/clone</code> voor de Node-service.
           </p>`;
         loading.style.display = "none";
         inner.style.display = "block";
