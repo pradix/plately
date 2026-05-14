@@ -1876,13 +1876,13 @@ function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
 
   const cookbooks = [...(state.cookbooks || [])];
   const preferredId = String(state.selectedCookbookId || "").trim();
-  if (preferredId) {
-    cookbooks.sort((a, b) => {
-      if (a?.id === preferredId) return -1;
-      if (b?.id === preferredId) return 1;
-      return 0;
-    });
-  }
+  cookbooks.sort((a, b) => {
+    if (a?.id === preferredId) return -1;
+    if (b?.id === preferredId) return 1;
+    const countDiff = (b?.recipeIds?.length || 0) - (a?.recipeIds?.length || 0);
+    if (countDiff !== 0) return countDiff;
+    return (a?.name || "").localeCompare(b?.name || "", "nl");
+  });
 
   cookbookSaveList.innerHTML = cookbooks
     .map((cookbook) => {
@@ -5011,10 +5011,13 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
 
     // Skip expensive full rerender when the visible set is effectively identical.
     const sig = `${rows.length}::${rows.slice(0, 22).map((r) => r?.url || "").join("|")}`;
-    const nextRenderKey = `${state.channelSearchQuery}||${state.channelSearchFilter || ""}||${sig}`;
+    const nextRenderKey = `${state.channelSearchQuery}||${state.channelSearchFilter || ""}||${sig}||${state.channelSearchIsSearching ? "1" : "0"}`;
     if (renderChannelSearchResults._lastKey === nextRenderKey) return;
     renderChannelSearchResults._lastKey = nextRenderKey;
 
+    const loadingBanner = state.channelSearchIsSearching
+      ? `<p class="ch-search-loading-more" style="grid-column:1/-1;text-align:center;padding:.75rem 1rem .5rem;font-size:.9rem;opacity:.7;color:var(--text,#2a2a28)">Bezig met extern zoeken…</p>`
+      : "";
     channelSearchResults.innerHTML = `<div class="ch-result-grid">${rows.map((r) => {
       const channel = channelById.get(r.channelId);
       const channelColor = channel?.color || "#8da485";
@@ -5054,7 +5057,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
           </button>
         </div>
       </div>`;
-    }).join("")}</div>`;
+    }).join("")}${loadingBanner}</div>`;
   });
 }
 

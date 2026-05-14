@@ -4436,7 +4436,7 @@ function extractStructuredSections(text) {
 
     if (mode === "ingredients") {
       const inlineInstructionMatch = line.match(
-        /^(.*?)(?:\b(?:instructions?|method|steps?|bereiding|bereidingswijze|werkwijze)\s*:?)(.*)$/i
+        /^(.*?)(?:\b(?:instructions?|method|steps?|bereidingswijze|bereiding|werkwijze)\b\s*:?)(.*)$/i
       );
       if (inlineInstructionMatch && inlineInstructionMatch[1]) {
         sections.ingredients.push(cleanListLine(inlineInstructionMatch[1]));
@@ -4770,7 +4770,7 @@ async function extractWithClaude(caption, note) {
     "",
     "Geef precies dit JSON-object terug:",
     '{',
-    '  "title": "Naam van het gerecht in het Nederlands (3-7 woorden, geen hashtags, geen @users)",',
+    '  "title": "Naam van het gerecht in het Nederlands. Gebruik ALLEEN wat in de tekst staat. Als er geen duidelijke gerechtnaam is, noem dan de 3-5 hoofdingrediënten (bijv. \'Kip, courgette & tomatensaus\'). NOOIT een gerecht verzinnen.",',
     '  "description": "1-2 zinnen smakelijke omschrijving in het Nederlands",',
     '  "ingredients": [',
     '    {"quantity": "2", "unit": "x", "name": "avocado"},',
@@ -4787,7 +4787,7 @@ async function extractWithClaude(caption, note) {
     '}',
     "",
     "Strikte regels:",
-    "- title: NOOIT 'TikTok', 'Instagram', liedjestitels, hashtags of @-namen.",
+    "- title: NOOIT 'TikTok', 'Instagram', liedjestitels, hashtags of @-namen. NOOIT een gerecht bedenken dat niet in de tekst staat. Als er geen naam is: gebruik de hoofdingrediënten gescheiden door komma's en &.",
     "- ingredients: minimaal 4, maximaal 16. Gebruik units: g, kg, ml, l, el, tl, x, stuks, krop, bosje, zakje, teen, snuf, handje.",
     "- instructions: 4-8 stappen. Elke stap = één kookhandeling. Nederlands. Concreet (tijden, temperaturen).",
     "- time: totale bereidingstijd in minuten. Als je '4 PERS. – 60 MIN.' ziet, gebruik 60 min.",
@@ -7344,7 +7344,7 @@ async function importInstagram(sourceUrl, note) {
         platform: "instagram",
         sourceUrl,
         title: normalizeSocialRecipeTitle(claudeResult.title) || normalizeSocialRecipeTitle(titleHint) || "Geïmporteerd recept",
-        description: compactSocialDescription(claudeResult.description || "", claudeResult.title || "") || extractDescription(captionForClaude, claudeResult.title || titleHint),
+        description: [compactSocialDescription(claudeResult.description || "", claudeResult.title || "") || extractDescription(captionForClaude, claudeResult.title || titleHint), sourceUrl].filter(Boolean).join("\n\n"),
         caption: stripSocialNoise(captionForClaude),
         image,
         author,
