@@ -4,8 +4,11 @@ const fsp = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
 const crypto = require("node:crypto");
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
 
 const ROOT_DIR = __dirname;
+const execFileAsync = promisify(execFile);
 
 const {
   ingredientTermMatchesProductTitle,
@@ -5243,6 +5246,36 @@ function jinaReaderAuthHeaders() {
   return key ? { Authorization: `Bearer ${key}` } : {};
 }
 
+async function fetchReaderFallbackViaCurl(readerUrl) {
+  const args = [
+    "-L",
+    "-sS",
+    "--max-time",
+    "25",
+    "-H",
+    `User-Agent: ${FETCH_HEADERS["user-agent"] || "Mozilla/5.0"}`,
+    "-H",
+    "Accept: text/plain, text/markdown;q=0.9, */*;q=0.8",
+    "-H",
+    "X-With-Links-Summary: true",
+  ];
+  for (const [name, value] of Object.entries(jinaReaderAuthHeaders())) {
+    if (name && value) args.push("-H", `${name}: ${value}`);
+  }
+  args.push("-w", "\n%{http_code}", readerUrl);
+
+  const { stdout } = await execFileAsync("curl", args, {
+    encoding: "utf8",
+    maxBuffer: 3 * 1024 * 1024,
+    timeout: 30000,
+  });
+  const raw = String(stdout || "");
+  const match = raw.match(/\n(\d{3})\s*$/);
+  const status = match ? Number(match[1]) : 0;
+  const body = match ? raw.slice(0, match.index) : raw;
+  return { status, body };
+}
+
 async function fetchReaderFallback(url) {
   // Jina Reader expects `https://r.jina.ai/https://example.com/...` (or http://...)
   const target = String(url || "").trim();
@@ -5281,6 +5314,20 @@ async function fetchReaderFallback(url) {
         body: await response.text(),
         finalUrl: url,
       };
+    } catch (error) {
+      lastError = error;
+    }
+
+    try {
+      const curlResult = await fetchReaderFallbackViaCurl(readerUrl);
+      lastStatus = curlResult.status || lastStatus;
+      if (curlResult.status >= 200 && curlResult.status < 300 && curlResult.body) {
+        return {
+          kind: "text",
+          body: curlResult.body,
+          finalUrl: url,
+        };
+      }
     } catch (error) {
       lastError = error;
     }
@@ -11359,6 +11406,9 @@ function ahGraphqlHeaders(referer = "https://www.ah.nl/allerhande") {
 async function importAhRecipeViaGraphql(sourceUrl) {
   const recipeId = extractAhRecipeIdFromUrl(sourceUrl);
   if (!recipeId) return null;
+  if (/^(1|true|yes)$/i.test(String(process.env.PLATELY_DISABLE_AH_GRAPHQL || "").trim())) {
+    return null;
+  }
   try {
     const resp = await fetch("https://www.ah.nl/gql", {
       method: "POST",
