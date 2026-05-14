@@ -745,6 +745,7 @@
         <div id="channelTestSearchMeta" class="muted mono" style="margin-top:8px;display:none;gap:8px;align-items:center;flex-wrap:wrap"></div>
         <div id="channelTestSearchStatus" class="muted" style="margin-top:8px"></div>
         <div id="channelTestSearchResults" class="admin-test__results"></div>
+        <div id="channelTestImportErrors" style="margin-top:10px"></div>
         <div id="channelTestAllStatus" class="muted" style="margin-top:10px"></div>
         <div id="channelTestAllResults" class="admin-test__all-results"></div>
 
@@ -755,6 +756,16 @@
           <button class="btn" type="button" onclick="runChannelTestImport()">Test import (auto-detect)</button>
         </div>
         <div id="channelTestImportStatus" class="muted" style="margin-top:8px"></div>
+      </div>
+
+      <div class="section" id="ahBasketCheckSection">
+        <div class="section-header">
+          <h2>AH mandje check</h2>
+          <div class="muted">Controleert matches, aantallen en add-multiple URL</div>
+        </div>
+        <button class="btn btn-primary" type="button" onclick="runAhBasketCheck()">Run AH check</button>
+        <div id="ahBasketCheckStatus" class="muted" style="margin-top:8px"></div>
+        <pre id="ahBasketCheckOutput" class="mono" style="display:block;margin-top:8px;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:8px;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto">—</pre>
       </div>
       </div>
 
@@ -1221,6 +1232,13 @@
               <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
                 <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Max reparaties
                   <input id="seoRepairMaxRecipes" type="number" min="1" max="100" value="20" style="width:72px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+                </label>
+                <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Modus
+                  <select id="seoRepairMode" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
+                    <option value="reimport">Opnieuw importeren</option>
+                    <option value="image">Alleen afbeelding</option>
+                    <option value="rating">Alleen rating</option>
+                  </select>
                 </label>
                 <button type="button" class="btn btn-sm" onclick="repairSeoRecipes(true)">Dry-run repareren</button>
                 <button type="button" class="btn btn-sm btn-primary" onclick="repairSeoRecipes(false)">Repareren</button>
@@ -1906,6 +1924,60 @@
         tableEl.innerHTML = rowsHtml + recentHtml;
       } catch (error) {
         if (statusEl) statusEl.textContent = "❌ " + (error.message || String(error));
+      }
+    }
+
+    async function loadChannelTestImportErrors(channel) {
+      const wrap = document.getElementById("channelTestImportErrors");
+      if (!wrap) return;
+      wrap.innerHTML = "";
+      let host = "";
+      try {
+        const url = channel?.kind === "custom" ? channel?.customChannel?.url : (SEED_CHANNELS.find((ch) => ch.id === channel?.channelId)?.url || "");
+        host = url ? new URL(url).hostname.replace(/^www\./i, "").toLowerCase() : "";
+      } catch {
+        host = "";
+      }
+      if (!host) return;
+      try {
+        const resp = await fetch(`/api/admin/import-errors?days=14&host=${encodeURIComponent(host)}`, adminFetchInit());
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) throw new Error(data.error || "Importfouten laden mislukt");
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        const recent = Array.isArray(data.recent) ? data.recent : [];
+        const total = rows.reduce((sum, r) => sum + Number(r.failures || 0), 0);
+        wrap.innerHTML = `
+          <details ${total ? "open" : ""} style="border:1px solid var(--border);border-radius:8px;padding:8px;background:rgba(255,255,255,0.7)">
+            <summary class="muted" style="cursor:pointer">Importfouten voor ${escapeHtml(host)} (${formatNumber(total)} in 14d)</summary>
+            ${recent.length ? `<pre class="mono" style="white-space:pre-wrap;word-break:break-word;font-size:11px;margin:8px 0 0">${escapeHtml(JSON.stringify(recent.slice(0, 8), null, 2))}</pre>` : `<p class="muted" style="margin:8px 0 0">Geen recente fouten.</p>`}
+          </details>
+        `;
+      } catch (error) {
+        wrap.innerHTML = `<p class="muted">Importfouten niet geladen: ${escapeHtml(error.message || String(error))}</p>`;
+      }
+    }
+
+    async function runAhBasketCheck() {
+      const statusEl = document.getElementById("ahBasketCheckStatus");
+      const outEl = document.getElementById("ahBasketCheckOutput");
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> AH mandje check…`;
+      if (outEl) outEl.textContent = "Bezig…";
+      try {
+        const response = await fetch("/api/admin/ah-basket-check", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "AH check mislukt");
+        if (statusEl) {
+          const url = data.handoffUrl ? ` · <a class="admin-inventory__link" href="${escapeHtml(data.handoffUrl)}" target="_blank" rel="noopener">open AH URL</a>` : "";
+          statusEl.innerHTML = `Klaar${url}`;
+        }
+        if (outEl) outEl.textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "Fout: " + (error.message || String(error));
+        if (outEl) outEl.textContent = "—";
       }
     }
 
@@ -3099,6 +3171,7 @@
       const statusEl = document.getElementById("seoRepairStatus");
       const outEl = document.getElementById("seoRepairOutput");
       const maxRaw = document.getElementById("seoRepairMaxRecipes")?.value || "20";
+      const mode = String(document.getElementById("seoRepairMode")?.value || "reimport");
       const maxRecipes = Math.max(1, Math.min(Number(maxRaw) || 20, 100));
       if (!dryRun) {
         const ok = confirm(`Maximaal ${maxRecipes} SEO-recepten opnieuw vanaf de bron importeren en repareren?`);
@@ -3110,7 +3183,7 @@
         const response = await fetch("/api/admin/seo-recipes-repair", adminFetchInit({
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dryRun: Boolean(dryRun), maxRecipes }),
+          body: JSON.stringify({ dryRun: Boolean(dryRun), maxRecipes, mode }),
         }));
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || "Repareren mislukt");
@@ -3120,6 +3193,7 @@
         if (outEl) {
           outEl.textContent = JSON.stringify({
             dryRun: data.dryRun,
+            mode: data.mode,
             usersScanned: data.usersScanned,
             usersChanged: data.usersChanged,
             repairedRecipes: data.repairedRecipes,
@@ -4638,6 +4712,7 @@
         const timing = Number.isFinite(fallbackMs) ? ` · fallback ${fallbackMs} ms` : Number.isFinite(ms) ? ` · ${ms} ms` : "";
         if (statusEl) statusEl.textContent = `${results.length ? `Top ${results.length} resultaten` : "Geen resultaten"}${timing}`;
         renderChannelTestSearchResults(results, note);
+        loadChannelTestImportErrors(channel).catch(() => {});
       } catch (error) {
         if (statusEl) statusEl.textContent = "";
         showChannelTestError(error.message);
@@ -4708,6 +4783,8 @@
             (ingredientsHtml ? `<div style="margin-top:10px"><strong>Ingrediënten (${ing})</strong><ol style="margin:4px 0 0 18px;padding:0;font-size:13px">${ingredientsHtml}</ol></div>` : "") +
             (instructionsHtml ? `<div style="margin-top:10px"><strong>Stappen (${steps})</strong><ol style="margin:4px 0 0 18px;padding:0;font-size:13px">${instructionsHtml}</ol></div>` : "");
         }
+        const channel = getSelectedChannelFromUi();
+        if (channel) loadChannelTestImportErrors(channel).catch(() => {});
       } catch (error) {
         if (statusEl) statusEl.textContent = "";
         showChannelTestError(error.message);

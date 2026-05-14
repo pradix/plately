@@ -2233,6 +2233,12 @@ function parseAmountNumberClient(text) {
 
 function parsePackageAmountClient(text, unitPattern) {
   const raw = String(text || "").toLowerCase().replace(",", ".");
+  const multi = raw.match(new RegExp(`\\b(\\d+(?:\\.\\d+)?)\\s*x\\s*(\\d+(?:\\.\\d+)?)\\s*${unitPattern}\\b`, "i"));
+  if (multi) {
+    const count = Number(multi[1]);
+    const size = Number(multi[2]);
+    if (Number.isFinite(count) && Number.isFinite(size) && count > 0 && size > 0) return count * size;
+  }
   const m = raw.match(new RegExp(`\\b(\\d+(?:\\.\\d+)?)\\s*${unitPattern}\\b`, "i"));
   const n = m ? Number(m[1]) : NaN;
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -2244,13 +2250,23 @@ function estimateAhHandoffQuantityClient(item, choice) {
   const unitCount = parseAmountNumberClient(amount);
   const grams = parsePackageAmountClient(amount, "g|gram");
   if (grams) {
-    const packGrams = parsePackageAmountClient(packText, "g|gram");
+    const packGrams = (parsePackageAmountClient(packText, "kg|kilo|kilogram") || 0) * 1000 || parsePackageAmountClient(packText, "g|gram");
     if (packGrams) return Math.max(1, Math.min(24, Math.ceil(grams / packGrams)));
+  }
+  const kg = parsePackageAmountClient(amount, "kg|kilo|kilogram");
+  if (kg) {
+    const packGrams = (parsePackageAmountClient(packText, "kg|kilo|kilogram") || 0) * 1000 || parsePackageAmountClient(packText, "g|gram");
+    if (packGrams) return Math.max(1, Math.min(24, Math.ceil((kg * 1000) / packGrams)));
   }
   const ml = parsePackageAmountClient(amount, "ml|milliliter");
   if (ml) {
-    const packMl = parsePackageAmountClient(packText, "ml|milliliter");
+    const packMl = (parsePackageAmountClient(packText, "l|liter") || 0) * 1000 || parsePackageAmountClient(packText, "ml|milliliter");
     if (packMl) return Math.max(1, Math.min(24, Math.ceil(ml / packMl)));
+  }
+  const liters = parsePackageAmountClient(amount, "l|liter");
+  if (liters) {
+    const packMl = (parsePackageAmountClient(packText, "l|liter") || 0) * 1000 || parsePackageAmountClient(packText, "ml|milliliter");
+    if (packMl) return Math.max(1, Math.min(24, Math.ceil((liters * 1000) / packMl)));
   }
   if (/\b(x|stuks?|stuk|pakken?|blik(?:ken)?|zak(?:ken)?|fles(?:sen)?|pot(?:ten)?)\b/i.test(amount)) {
     return Math.max(1, Math.min(24, Math.ceil(unitCount)));

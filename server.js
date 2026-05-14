@@ -3402,7 +3402,10 @@ async function listPublicSeoRecipes(origin) {
           updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : "",
           origin,
         });
-        if (entry) entries.push(entry);
+        if (entry) {
+          entry.seoScore = computeSeoRecipeScore(entry.recipe || recipe);
+          entries.push(entry);
+        }
       }
     }
   } else {
@@ -3417,7 +3420,10 @@ async function listPublicSeoRecipes(origin) {
           updatedAt: user.updatedAt || user.createdAt || "",
           origin,
         });
-        if (entry) entries.push(entry);
+        if (entry) {
+          entry.seoScore = computeSeoRecipeScore(entry.recipe || recipe);
+          entries.push(entry);
+        }
       }
     }
   }
@@ -3462,6 +3468,23 @@ function buildStoreChoiceUrl(store, choice) {
     return `https://www.jumbo.com/producten/${slugify(choice.title)}-${choice.productId}`;
   }
   return `https://www.jumbo.com/zoeken/?searchTerms=${encodeURIComponent(choice.searchTerm)}`;
+}
+
+function computeSeoRecipeScore(recipe) {
+  const issues = getImportedRecipeIssues(recipe);
+  const ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients.filter((i) => sanitizeText(i?.name || i || "")) : [];
+  const instructions = Array.isArray(recipe?.instructions) ? recipe.instructions.filter((s) => sanitizeText(s || "")) : [];
+  let score = 100;
+  if (issues.includes("missing_title")) score -= 30;
+  if (issues.includes("missing_source_url")) score -= 24;
+  if (issues.includes("missing_image")) score -= 14;
+  if (issues.includes("too_few_ingredients")) score -= 22;
+  if (issues.includes("missing_steps")) score -= 24;
+  if (!sanitizeText(recipe?.description || "")) score -= 8;
+  if (ingredients.length >= 5) score += 4;
+  if (instructions.length >= 3) score += 4;
+  if (Number(recipe?.ratingCount) > 0 && Number(recipe?.ratingValue) > 0) score += 4;
+  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 function buildGenericChoices(store, ingredientTitle, amount) {
@@ -3664,6 +3687,12 @@ function parseAmountNumberForStore(text) {
 
 function parsePackageAmountForStore(text, unitPattern) {
   const raw = sanitizeText(text || "").toLowerCase().replace(",", ".");
+  const multi = raw.match(new RegExp(`\\b(\\d+(?:\\.\\d+)?)\\s*x\\s*(\\d+(?:\\.\\d+)?)\\s*${unitPattern}\\b`, "i"));
+  if (multi) {
+    const count = Number(multi[1]);
+    const size = Number(multi[2]);
+    if (Number.isFinite(count) && Number.isFinite(size) && count > 0 && size > 0) return count * size;
+  }
   const m = raw.match(new RegExp(`\\b(\\d+(?:\\.\\d+)?)\\s*${unitPattern}\\b`, "i"));
   const n = m ? Number(m[1]) : NaN;
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -3674,13 +3703,23 @@ function estimateAhHandoffQuantity(item, product) {
   const packText = `${sanitizeText(product?.name || product?.title || "")} ${sanitizeText(product?.subtitle || "")}`;
   const grams = parsePackageAmountForStore(amount, "g|gram");
   if (grams) {
-    const packGrams = parsePackageAmountForStore(packText, "g|gram");
+    const packGrams = parsePackageAmountForStore(packText, "kg|kilo|kilogram") * 1000 || parsePackageAmountForStore(packText, "g|gram");
     if (packGrams) return Math.max(1, Math.min(24, Math.ceil(grams / packGrams)));
+  }
+  const kg = parsePackageAmountForStore(amount, "kg|kilo|kilogram");
+  if (kg) {
+    const packGrams = parsePackageAmountForStore(packText, "kg|kilo|kilogram") * 1000 || parsePackageAmountForStore(packText, "g|gram");
+    if (packGrams) return Math.max(1, Math.min(24, Math.ceil((kg * 1000) / packGrams)));
   }
   const ml = parsePackageAmountForStore(amount, "ml|milliliter");
   if (ml) {
-    const packMl = parsePackageAmountForStore(packText, "ml|milliliter");
+    const packMl = parsePackageAmountForStore(packText, "l|liter") * 1000 || parsePackageAmountForStore(packText, "ml|milliliter");
     if (packMl) return Math.max(1, Math.min(24, Math.ceil(ml / packMl)));
+  }
+  const liters = parsePackageAmountForStore(amount, "l|liter");
+  if (liters) {
+    const packMl = parsePackageAmountForStore(packText, "l|liter") * 1000 || parsePackageAmountForStore(packText, "ml|milliliter");
+    if (packMl) return Math.max(1, Math.min(24, Math.ceil((liters * 1000) / packMl)));
   }
   if (/\b(x|stuks?|stuk|pakken?|blik(?:ken)?|zak(?:ken)?|fles(?:sen)?|pot(?:ten)?)\b/i.test(amount)) {
     return Math.max(1, Math.min(24, Math.ceil(parseAmountNumberForStore(amount))));
@@ -13939,6 +13978,7 @@ function cleanSeoRecipesForUser(user) {
 
 async function repairSeoRecipesForUser(user, options = {}) {
   const maxRecipes = Math.max(1, Math.min(Number(options.maxRecipes) || 20, 100));
+  const mode = ["image", "rating", "reimport"].includes(options.mode) ? options.mode : "reimport";
   const appState = buildAppStateFromUser(user);
   const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes.map((r) => ({ ...r })) : [];
   const cookbooks = Array.isArray(appState.cookbooks) ? appState.cookbooks : [];
@@ -13961,28 +14001,39 @@ async function repairSeoRecipesForUser(user, options = {}) {
     if (sourceKey) seenSources.add(sourceKey);
     const repairable =
       sourceUrl &&
-      (issues.includes("missing_image") ||
+      (mode === "rating" ||
+        issues.includes("missing_image") ||
         issues.includes("too_few_ingredients") ||
         issues.includes("missing_steps") ||
         issues.includes("missing_title"));
     if (!repairable || duplicate) continue;
 
     try {
-      const fresh = await importRecipe(sourceUrl, "", sanitizeText(recipe?.image || ""));
-      const merged = sanitizeRecipeForStorage({
-        ...recipe,
-        ...fresh,
-        id,
-        sourceUrl: sanitizeText(fresh?.sourceUrl || sourceUrl),
-        image: sanitizeText(fresh?.image || recipe?.image || ""),
-        platform: sanitizeText(fresh?.platform || recipe?.platform || "website"),
-      });
+      let merged = null;
+      if (mode === "rating") {
+        const ratingPatch = await fetchAggregateRatingForRecipePageUrl(sourceUrl);
+        if (!ratingPatch) {
+          failed.push({ id, title: sanitizeText(recipe?.title || "Recept"), sourceUrl, error: "geen_rating_gevonden" });
+          continue;
+        }
+        merged = sanitizeRecipeForStorage({ ...recipe, ...ratingPatch, id });
+      } else {
+        const fresh = await importRecipe(sourceUrl, "", sanitizeText(recipe?.image || ""));
+        merged = sanitizeRecipeForStorage({
+          ...recipe,
+          ...(mode === "image" ? { image: fresh?.image || recipe?.image || "" } : fresh),
+          id,
+          sourceUrl: sanitizeText(fresh?.sourceUrl || sourceUrl),
+          image: sanitizeText(fresh?.image || recipe?.image || ""),
+          platform: sanitizeText(fresh?.platform || recipe?.platform || "website"),
+        });
+      }
       if (!merged || !isValidImportedSeoRecipe(merged)) {
         failed.push({ id, title: sanitizeText(recipe?.title || "Recept"), sourceUrl, error: "nog_ongeldig" });
         continue;
       }
       recipes[i] = merged;
-      repaired.push({ id, title: sanitizeText(merged.title || "Recept"), sourceUrl, fixed: issues });
+      repaired.push({ id, title: sanitizeText(merged.title || "Recept"), sourceUrl, mode, fixed: issues });
     } catch (error) {
       failed.push({
         id,
@@ -14595,6 +14646,24 @@ function renderPublicSeoRecipePage(entry, origin) {
     mainEntityOfPage: canonicalUrl,
     isBasedOn: sourceUrl || undefined,
   };
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Plately", item: `${origin}/` },
+      { "@type": "ListItem", position: 2, name: "Recepten", item: `${origin}/recepten` },
+      { "@type": "ListItem", position: 3, name: title, item: canonicalUrl },
+    ],
+  };
+  const webPageLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: `${title} recept`,
+    description,
+    url: canonicalUrl,
+    breadcrumb: { "@id": `${canonicalUrl}#breadcrumb` },
+    primaryImageOfPage: imageUrl ? { "@type": "ImageObject", url: imageUrl } : undefined,
+  };
 
   return `<!DOCTYPE html>
 <html lang="nl">
@@ -14615,6 +14684,7 @@ function renderPublicSeoRecipePage(entry, origin) {
     <meta property="og:image:secure_url" content="${escapeHtml(imageUrl)}" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    ${sourceUrl ? `<meta property="article:author" content="${escapeHtml(sourceUrl)}" />` : ""}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(title)} recept" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
@@ -14622,6 +14692,8 @@ function renderPublicSeoRecipePage(entry, origin) {
     <link rel="icon" href="/assets/favicon.ico?v=7" sizes="any" />
     <link rel="stylesheet" href="/styles.css?v=${escapeHtml(CACHED_PLATELY_BUILD_META || "1.0.19.36")}" />
     <script type="application/ld+json">${safeJsonForHtml(jsonLd)}</script>
+    <script type="application/ld+json">${safeJsonForHtml(breadcrumbLd)}</script>
+    <script type="application/ld+json">${safeJsonForHtml(webPageLd)}</script>
   </head>
   <body class="public-recipe-page">
     <main class="public-recipe" id="publicRecipeRoot">
@@ -14745,11 +14817,14 @@ function renderPublicRecipeIndexPage(entries, origin) {
     .slice(0, 200)
     .map((entry) => {
       const recipe = entry.recipe || {};
+      const score = Number.isFinite(Number(entry.seoScore)) ? Number(entry.seoScore) : computeSeoRecipeScore(recipe);
+      const scoreClass = score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
       return `<a class="recent-card" href="${escapeHtml(entry.urlPath)}">
         <img class="recent-card__img" src="${escapeHtml(recipe.image || "/assets/hero-burger.svg")}" alt="" loading="lazy" decoding="async" />
         <span class="recent-card__body">
           <strong class="recent-card__title">${escapeHtml(recipe.title || "Recept")}</strong>
           <span class="recent-card__meta">${escapeHtml([recipe.mealTag, recipe.time].filter(Boolean).join(" · "))}</span>
+          <span class="seo-score seo-score--${scoreClass}">SEO ${score}/100</span>
         </span>
       </a>`;
     })
@@ -14765,6 +14840,23 @@ function renderPublicRecipeIndexPage(entries, origin) {
     <meta name="robots" content="index,follow" />
     <link rel="canonical" href="${escapeHtml(origin)}/recepten" />
     <link rel="stylesheet" href="/styles.css?v=${escapeHtml(CACHED_PLATELY_BUILD_META || "1.0.19.36")}" />
+    <script type="application/ld+json">${safeJsonForHtml({
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      name: "Recepten",
+      description: "Publieke recepten opgeslagen met Plately.",
+      url: `${origin}/recepten`,
+      mainEntity: {
+        "@type": "ItemList",
+        numberOfItems: totalCount,
+        itemListElement: list.slice(0, 100).map((entry, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          url: `${origin}${entry.urlPath}`,
+          name: sanitizeText(entry.recipe?.title || "Recept"),
+        })),
+      },
+    })}</script>
   </head>
   <body>
     <main class="page">
@@ -17250,6 +17342,7 @@ const server = http.createServer(async (request, response) => {
         const body = await readRequestBody(request);
         const dryRun = body?.dryRun !== false;
         const maxRecipes = Math.max(1, Math.min(Number(body?.maxRecipes) || 20, 100));
+        const mode = ["image", "rating", "reimport"].includes(sanitizeText(body?.mode || "")) ? sanitizeText(body.mode) : "reimport";
         let usersScanned = 0;
         let usersChanged = 0;
         let repairedRecipes = 0;
@@ -17262,7 +17355,7 @@ const server = http.createServer(async (request, response) => {
           const res = await pool.query(`SELECT * FROM plately_users`);
           for (const row of res.rows || []) {
             usersScanned += 1;
-            const result = await repairSeoRecipesForUser(row, { maxRecipes });
+            const result = await repairSeoRecipesForUser(row, { maxRecipes, mode });
             sampleFailed.push(...result.failed.slice(0, Math.max(0, 30 - sampleFailed.length)));
             if (!result.changed) continue;
             usersChanged += 1;
@@ -17274,7 +17367,7 @@ const server = http.createServer(async (request, response) => {
           const db = await loadDatabase();
           for (const user of Object.values(db.users || {})) {
             usersScanned += 1;
-            const result = await repairSeoRecipesForUser(user, { maxRecipes });
+            const result = await repairSeoRecipesForUser(user, { maxRecipes, mode });
             sampleFailed.push(...result.failed.slice(0, Math.max(0, 30 - sampleFailed.length)));
             if (!result.changed) continue;
             usersChanged += 1;
@@ -17288,6 +17381,7 @@ const server = http.createServer(async (request, response) => {
         return sendJson(response, 200, {
           ok: true,
           dryRun,
+          mode,
           usersScanned,
           usersChanged,
           repairedRecipes,
@@ -17310,6 +17404,9 @@ const server = http.createServer(async (request, response) => {
         await ensurePostgresSchema();
         const pool = await getPostgresPool();
         const days = Math.max(1, Math.min(Number(requestUrl.searchParams.get("days") || 14), 90));
+        const host = sanitizeText(requestUrl.searchParams.get("host") || "").replace(/^www\./i, "").toLowerCase();
+        const hostClause = host ? ` AND COALESCE(NULLIF(meta->>'sourceHost',''), 'unknown') = $2` : "";
+        const params = host ? [days, host] : [days];
         const rowsRes = await pool.query(
           `
             SELECT
@@ -17322,11 +17419,12 @@ const server = http.createServer(async (request, response) => {
             FROM plately_events
             WHERE type = 'import_failed'
               AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
+              ${hostClause}
             GROUP BY 1
             ORDER BY failures DESC, last_at DESC
             LIMIT 40
           `,
-          [days]
+          params
         );
         const recentRes = await pool.query(
           `
@@ -17334,14 +17432,16 @@ const server = http.createServer(async (request, response) => {
             FROM plately_events
             WHERE type = 'import_failed'
               AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
+              ${hostClause}
             ORDER BY created_at DESC
             LIMIT 20
           `,
-          [days]
+          params
         );
         return sendJson(response, 200, {
           ok: true,
           days,
+          host,
           rows: rowsRes.rows || [],
           recent: (recentRes.rows || []).map((r) => ({ createdAt: r.created_at, userId: r.user_id || "", meta: r.meta || {} })),
           postgresEnabled: true,
@@ -17350,6 +17450,26 @@ const server = http.createServer(async (request, response) => {
         const statusCode = error.statusCode || 400;
         console.error("❌ Error in /api/admin/import-errors:", error.message);
         return sendJson(response, statusCode, { ok: false, error: error.message || "Importfouten laden mislukt." });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/ah-basket-check" && request.method === "POST") {
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const items = Array.isArray(body?.items) && body.items.length
+          ? body.items.slice(0, 12)
+          : [
+              { title: "tomaten", amount: "4 stuks" },
+              { title: "pasta", amount: "500 g" },
+              { title: "melk", amount: "2 l" },
+            ];
+        const basket = await buildStoreBasket({ store: "albert-heijn", items });
+        return sendJson(response, 200, { ok: true, items, basket, handoffUrl: basket.directUrl || "" });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/ah-basket-check:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "AH mandje check mislukt." });
       }
     }
 

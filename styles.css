@@ -13580,6 +13580,22 @@ body {
   margin-left: 6px;
 }
 
+.seo-score {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 3px 8px;
+  margin-top: 6px;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.seo-score--good { background: rgba(102, 132, 92, 0.13); color: #55704d; }
+.seo-score--warn { background: rgba(255, 184, 77, 0.18); color: #8a5a12; }
+.seo-score--bad { background: rgba(221, 91, 78, 0.14); color: #9a3d34; }
+
 .meta-sep {
   opacity: 0.75;
 }
