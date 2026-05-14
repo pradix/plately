@@ -8624,6 +8624,16 @@ function normalizeSearchQuery(raw) {
 
 /* ── Store product search (AH + Jumbo) ── */
 
+// Proxy support: als AH_API_PROXY is ingesteld, worden alle api.ah.nl calls
+// via die URL gerouteerd (bijv. een Cloudflare Worker). Zie workers/ah-proxy.js.
+const AH_API_BASE = (process.env.AH_API_PROXY || "https://api.ah.nl").replace(/\/$/, "");
+const AH_PROXY_SECRET = process.env.AH_API_PROXY_SECRET || "";
+const AH_PROXY_HEADERS = AH_PROXY_SECRET ? { "x-plately-secret": AH_PROXY_SECRET } : {};
+
+if (AH_API_BASE !== "https://api.ah.nl") {
+  console.log(`[AH] Proxy actief: ${AH_API_BASE}`);
+}
+
 let ahTokenCache = { token: "", expiresAt: 0 };
 
 // In-memory cache voor AH productzoekopdrachten — vermindert API-calls drastisch
@@ -8650,9 +8660,9 @@ async function fetchAHAnonymousToken() {
   if (ahTokenCache.token && Date.now() < ahTokenCache.expiresAt - 60_000) {
     return ahTokenCache.token;
   }
-  const response = await fetch("https://api.ah.nl/mobile-auth/v1/auth/token/anonymous", {
+  const response = await fetch(`${AH_API_BASE}/mobile-auth/v1/auth/token/anonymous`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...AH_PROXY_HEADERS },
     body: JSON.stringify({ clientId: "appie" }),
     signal: AbortSignal.timeout(8000),
   });
@@ -8895,7 +8905,7 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
   try {
     const token = await fetchAHAnonymousToken();
     const searchUrl =
-      `https://api.ah.nl/mobile-services/product/search/v2` +
+      `${AH_API_BASE}/mobile-services/product/search/v2` +
       `?query=${encodeURIComponent(searchTerm)}&size=${searchSize}&sortOn=RELEVANCE`;
 
     const response = await fetch(searchUrl, {
@@ -8903,6 +8913,7 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         Authorization: `Bearer ${token}`,
         "x-application": "AHWEBSHOP",
         ...FETCH_HEADERS,
+        ...AH_PROXY_HEADERS,
       },
       signal: AbortSignal.timeout(10000),
     });
