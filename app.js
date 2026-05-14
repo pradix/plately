@@ -3279,32 +3279,24 @@ function renderAlternativesSheet(item) {
   const cheapest = [...annotated].sort((a, b) => a.priceNum - b.priceNum)[0];
   const cheapestKey = cheapest ? cheapest.idx : -1;
 
-  // Group while preserving "show only once": once an idx is placed, skip it.
-  const placed = new Set();
   const sections = new Map();
   for (const sec of ALT_SECTIONS) sections.set(sec.id, []);
 
   if (cheapestKey >= 0) {
     sections.get("cheapest").push(annotated[cheapestKey]);
-    placed.add(cheapestKey);
   }
 
   for (const sec of ALT_SECTIONS) {
     if (sec.id === "cheapest" || sec.id === "more") continue;
     for (const entry of annotated) {
-      if (placed.has(entry.idx)) continue;
       if (entry.section === sec.id) {
         sections.get(sec.id).push(entry);
-        placed.add(entry.idx);
       }
     }
   }
-  // Anything left over → "Meer alternatieven", sorted by price ascending.
-  for (const entry of annotated) {
-    if (!placed.has(entry.idx)) {
-      sections.get("more").push(entry);
-      placed.add(entry.idx);
-    }
+  // "Meer alternatieven" = alle producten gesorteerd op prijs (altijd zichtbaar als master-overzicht).
+  for (const entry of [...annotated].sort((a, b) => a.priceNum - b.priceNum)) {
+    sections.get("more").push(entry);
   }
 
   const cardHtml = (entry, isSelected) => {
@@ -12759,7 +12751,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.2";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.3";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
