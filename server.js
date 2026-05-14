@@ -5665,7 +5665,9 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
     try {
       return await fetchReaderFallback(url);
     } catch (error) {
-      // Jina also failed, continue to error handling below
+      // Jina also failed — try Firecrawl as universal 403 fallback before giving up.
+      const fcResult = await fetchWebsiteDocumentViaFirecrawl(url);
+      if (fcResult) return fcResult;
     }
   }
 
@@ -8273,11 +8275,24 @@ async function importWebsite(sourceUrl) {
       try {
         const readerDocument = await fetchReaderFallback(finalUrl);
         if (readerDocument?.kind === "text") {
-          if (hostNeedsReaderAssist && looksLikeJinaReaderCfWall(readerDocument.body)) {
+          if (looksLikeJinaReaderCfWall(readerDocument.body)) {
+            // Jina geeft CF-wall terug — probeer Firecrawl als alternatief.
+            const fcDoc = await fetchWebsiteDocumentViaFirecrawl(finalUrl);
+            if (fcDoc) {
+              const fcRecipe = fcDoc.kind === "text"
+                ? parseTextRecipeDocument(fcDoc.body, fcDoc.finalUrl || finalUrl)
+                : parseWebsiteRecipe(fcDoc.body, fcDoc.finalUrl || finalUrl);
+              if ((fcRecipe.ingredients?.length >= 2) || (fcRecipe.instructions?.length >= 1)) {
+                return { ...fcRecipe, image: fcRecipe.image || htmlRecipe.image };
+              }
+            }
             // Als de HTML-parser (bv. via ZenRows) al voldoende inhoud heeft, niet alsnog 422
             // gooien — val terug op htmlRecipe ipv de gebruiker een fout te tonen.
             if (!htmlRecipeHasSufficientContent) {
-              throw new HttpError(422, importBlockedReaderAllowlistMessage(finalParsedUrl?.hostname));
+              if (hostNeedsReaderAssist) {
+                throw new HttpError(422, importBlockedReaderAllowlistMessage(finalParsedUrl?.hostname));
+              }
+              // Niet-gewhitelistede site: stille fallback naar htmlRecipe ipv harde fout.
             }
             // Jina CF-wall maar HTML heeft voldoende inhoud: skip Jina-pad volledig.
           } else {
@@ -8325,7 +8340,16 @@ async function importWebsite(sourceUrl) {
         }
       } catch (err) {
         if (err instanceof HttpError) throw err;
-        // ignore and continue with HTML/Claude fallbacks
+        // Jina crashte — probeer Firecrawl als laatste redmiddel vóór Claude/htmlRecipe.
+        const fcDocCatch = await fetchWebsiteDocumentViaFirecrawl(finalUrl).catch(() => null);
+        if (fcDocCatch) {
+          const fcRecipeCatch = fcDocCatch.kind === "text"
+            ? parseTextRecipeDocument(fcDocCatch.body, fcDocCatch.finalUrl || finalUrl)
+            : parseWebsiteRecipe(fcDocCatch.body, fcDocCatch.finalUrl || finalUrl);
+          if ((fcRecipeCatch.ingredients?.length >= 2) || (fcRecipeCatch.instructions?.length >= 1)) {
+            return { ...fcRecipeCatch, image: fcRecipeCatch.image || htmlRecipe.image };
+          }
+        }
       }
     }
   }
