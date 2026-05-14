@@ -5590,6 +5590,63 @@ async function fetchWebsiteDocumentViaBrowser(url) {
   }
 }
 
+function firecrawlApiKey() {
+  return String(process.env.FIRECRAWL_API_KEY || process.env.FIRECRAWL_KEY || "").trim();
+}
+
+async function fetchWebsiteDocumentViaFirecrawl(url) {
+  const apiKey = firecrawlApiKey();
+  if (!apiKey) return null;
+  const proxyMode = String(process.env.FIRECRAWL_PROXY || "auto").trim() || "auto";
+  try {
+    const response = await fetch("https://api.firecrawl.dev/v2/scrape", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        url,
+        formats: ["markdown", "html"],
+        onlyMainContent: true,
+        waitFor: 1500,
+        timeout: 60000,
+        blockAds: true,
+        removeBase64Images: true,
+        proxy: proxyMode,
+        location: {
+          country: "NL",
+          languages: ["nl-NL", "nl"],
+        },
+      }),
+      signal: AbortSignal.timeout(70000),
+    });
+    const text = await response.text();
+    const json = safelyParseJson(text);
+    if (!response.ok || json?.success === false) {
+      console.log(`Firecrawl response: ${response.status}${json?.error ? ` (${json.error})` : ""}`);
+      return null;
+    }
+    const data = json?.data || {};
+    const markdown = sanitizeText(data.markdown || "");
+    const html = String(data.html || data.rawHtml || "");
+    const finalUrl = sanitizeText(data.metadata?.sourceURL || data.metadata?.url || url) || url;
+    if (markdown.length >= 300) {
+      console.log("Firecrawl response: 200 markdown");
+      return { kind: "text", body: data.markdown, finalUrl };
+    }
+    if (html.length >= 600) {
+      console.log("Firecrawl response: 200 html");
+      return { kind: "html", body: html, finalUrl };
+    }
+    console.log("Firecrawl response: 200 empty");
+    return null;
+  } catch (error) {
+    console.log(`Firecrawl error: ${error.message}`);
+    return null;
+  }
+}
+
 async function fetchHtml(url) {
   const document = await fetchWebsiteDocument(url);
   if (document.kind !== "html") {
@@ -7703,22 +7760,30 @@ async function importWebsite(sourceUrl) {
       return graphqlRecipe;
     }
 
-    const [documentSettled, readerSettled, browserSettled] = await Promise.allSettled([
+    const [documentSettled, readerSettled, firecrawlSettled, browserSettled] = await Promise.allSettled([
       fetchWebsiteDocument(sourceUrl),
       fetchReaderFallback(sourceUrl),
+      fetchWebsiteDocumentViaFirecrawl(sourceUrl),
       fetchWebsiteDocumentViaBrowser(sourceUrl),
     ]);
     const document =
-      browserSettled.status === "fulfilled" && browserSettled.value
-        ? browserSettled.value
-        : documentSettled.status === "fulfilled"
-        ? documentSettled.value
-        : readerSettled.status === "fulfilled"
-          ? readerSettled.value
+      firecrawlSettled.status === "fulfilled" && firecrawlSettled.value
+        ? firecrawlSettled.value
+        : browserSettled.status === "fulfilled" && browserSettled.value
+          ? browserSettled.value
+          : documentSettled.status === "fulfilled"
+            ? documentSettled.value
+            : readerSettled.status === "fulfilled"
+              ? readerSettled.value
+              : null;
+    const readerDocument =
+      readerSettled.status === "fulfilled"
+        ? readerSettled.value
+        : firecrawlSettled.status === "fulfilled" && firecrawlSettled.value?.kind === "text"
+          ? firecrawlSettled.value
           : null;
-    const readerDocument = readerSettled.status === "fulfilled" ? readerSettled.value : null;
     if (!document) {
-      throw readerSettled.reason || documentSettled.reason || new HttpError(502, "Kon bronpagina niet ophalen.");
+      throw firecrawlSettled.reason || readerSettled.reason || documentSettled.reason || new HttpError(502, "Kon bronpagina niet ophalen.");
     }
 
     const primaryRecipe =
