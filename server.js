@@ -5340,7 +5340,10 @@ async function fetchReaderFallback(url) {
         redirect: "follow",
       });
       lastStatus = response.status;
-      if (!response.ok) continue;
+      if (!response.ok) {
+        console.log(`Jina reader response: ${response.status}`);
+        continue;
+      }
       return {
         kind: "text",
         body: await response.text(),
@@ -5360,11 +5363,18 @@ async function fetchReaderFallback(url) {
           finalUrl: url,
         };
       }
+      if (curlResult.status) console.log(`Jina reader curl response: ${curlResult.status}`);
     } catch (error) {
       lastError = error;
     }
   }
 
+  if (lastStatus === 402) {
+    throw new HttpError(
+      502,
+      "Jina Reader limiet bereikt (402). Zet JINA_API_KEY of JINA_READER_API_KEY op de server, of gebruik ZENROWS_API_KEY voor geblokkeerde bronpagina's."
+    );
+  }
   throw new HttpError(502, `Kon bronpagina niet ophalen (${lastStatus || 403})${lastError ? `: ${lastError.message}` : ""}.`);
 }
 
@@ -7643,7 +7653,7 @@ async function importWebsite(sourceUrl) {
           : null;
     const readerDocument = readerSettled.status === "fulfilled" ? readerSettled.value : null;
     if (!document) {
-      throw documentSettled.reason || readerSettled.reason || new HttpError(502, "Kon bronpagina niet ophalen.");
+      throw readerSettled.reason || documentSettled.reason || new HttpError(502, "Kon bronpagina niet ophalen.");
     }
 
     const primaryRecipe =
