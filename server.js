@@ -15411,6 +15411,9 @@ const server = http.createServer(async (request, response) => {
           instagram: { configured: Boolean(META_APP_ID && META_APP_SECRET) },
           website: { configured: true },
         },
+        firecrawl: {
+          configured: Boolean(firecrawlApiKey()),
+        },
       });
       return;
     }
