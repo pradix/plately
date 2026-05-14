@@ -2154,8 +2154,8 @@ function getStoreConfig(storeSlug = "albert-heijn") {
     kicker: "ALBERT HEIJN LIJSTJE",
     loadingLabel: "Voorbereiden…",
     continueLabel: "Open Albert Heijn",
-    directLabel: "Open Albert Heijn-lijst",
-    helperCopy: "We tonen je beste productmatches. Waar mogelijk openen we direct je Albert Heijn-lijst.",
+    directLabel: "Zet in AH mandje",
+    helperCopy: "We tonen je beste productmatches. Wissel waar nodig; daarna zetten we de gekozen producten klaar bij Albert Heijn.",
     defaultUrl: "https://www.ah.nl/mijnlijst/",
   };
 }
@@ -2194,6 +2194,17 @@ function getBasketHandoffUrl(preview) {
     return "";
   }
   if (preview.store === "albert-heijn") {
+    const selectedIds = (preview.items || [])
+      .map((item) => {
+        const choice = item.choices?.[item.selectedChoiceIndex || 0];
+        return choice?.productId || choice?.id || "";
+      })
+      .filter(Boolean);
+    if (selectedIds.length) {
+      return `https://www.ah.nl/mijnlijst/add-multiple?${selectedIds
+        .map((id) => `p=${encodeURIComponent(id)}:1`)
+        .join("&")}`;
+    }
     return "https://www.ah.nl/mijnlijst/";
   }
   const storeConfig = getStoreConfig(preview.store);
@@ -6518,7 +6529,7 @@ function renderGroceryGroups() {
     groceryOrder.classList.toggle("hidden", !state.groceryItems.length);
   }
   if (orderAHItemCount) {
-    orderAHItemCount.textContent = `${uncheckedCount} items · kopieer lijst en open AH`;
+    orderAHItemCount.textContent = `Zet ${uncheckedCount} producten klaar`;
   }
   renderNavBadge();
   renderGrocerySummary();
@@ -13440,12 +13451,9 @@ bindEvent(homeImportForm, "submit", async (event) => {
   }
 
   const url = extractUrl(homeImportUrl.value.trim());
-  const captionToggle = document.getElementById("homeImportCaptionToggle");
-  const captionField = document.getElementById("homeImportCaption");
-
   await submitImport(
     url,
-    (captionField?.value || "").trim(),
+    "",
     (message) => {
       homeImportFeedback.textContent = message;
     },
@@ -13453,8 +13461,6 @@ bindEvent(homeImportForm, "submit", async (event) => {
       homeImportSubmit.disabled = isLoading;
       homeImportSubmit.textContent = isLoading ? "Importeren..." : "Importeer";
       if (homeImportUrl) homeImportUrl.disabled = isLoading;
-      if (captionToggle) captionToggle.disabled = isLoading;
-      if (captionField) captionField.disabled = isLoading;
       if (homeImportForm) homeImportForm.setAttribute("aria-busy", String(isLoading));
       if (isLoading) {
         homeImportFeedback.textContent =
@@ -13463,15 +13469,6 @@ bindEvent(homeImportForm, "submit", async (event) => {
     },
     (importedRecipe) => {
       homeImportForm.reset();
-      if (captionField) {
-        captionField.value = "";
-        captionField.classList.add("hidden");
-        captionField.disabled = false;
-      }
-      if (captionToggle) {
-        captionToggle.textContent = "+ Voeg beschrijving toe";
-        captionToggle.disabled = false;
-      }
       if (homeImportUrl) homeImportUrl.disabled = false;
       if (homeImportForm) homeImportForm.setAttribute("aria-busy", "false");
       homeImportFeedback.textContent = "Voeg direct een recept toe vanuit social media of een receptenwebsite.";
@@ -13541,20 +13538,12 @@ bindEvent(importScreenForm, "submit", async (event) => {
 });
 
 // ── Caption toggle handlers ───────────────────────────────────────────────────
-bindEvent(document.getElementById("homeImportCaptionToggle"), "click", () => {
-  const field = document.getElementById("homeImportCaption");
-  if (!field) return;
-  field.classList.toggle("hidden");
-  const isOpen = !field.classList.contains("hidden");
-  document.getElementById("homeImportCaptionToggle").textContent = isOpen ? "− Beschrijving verbergen" : "+ Voeg beschrijving toe";
-  if (isOpen) field.focus();
-});
 bindEvent(document.getElementById("importScreenCaptionToggle"), "click", () => {
   const field = document.getElementById("importScreenCaption");
   if (!field) return;
   field.classList.toggle("hidden");
   const isOpen = !field.classList.contains("hidden");
-  document.getElementById("importScreenCaptionToggle").textContent = isOpen ? "− Beschrijving verbergen" : "+ Voeg beschrijving toe";
+  document.getElementById("importScreenCaptionToggle").textContent = isOpen ? "Beschrijving verbergen" : "+ Voeg beschrijving toe";
   if (isOpen) field.focus();
 });
 

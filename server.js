@@ -9528,7 +9528,12 @@ async function searchProductsForStore(store, ingredientNames) {
 }
 
 function buildAHDirectAddUrl(results) {
-  return "https://www.ah.nl/mijnlijst/";
+  const found = results.filter((r) => r.product?.id);
+  if (!found.length) {
+    return "https://www.ah.nl/mijnlijst/";
+  }
+  const params = found.map((r) => `p=${encodeURIComponent(r.product.id)}:1`).join("&");
+  return `https://www.ah.nl/mijnlijst/add-multiple?${params}`;
 }
 
 function buildJumboDirectAddUrl(results) {
@@ -9603,9 +9608,10 @@ function pickAhBasketDefaultProduct(products, prefs) {
   }
 
   const goodSorted = [...pool].sort((a, b) => {
-    if (a.price !== b.price) return a.price - b.price;
     const sa = Number.isFinite(a.score) ? a.score : Infinity;
     const sb = Number.isFinite(b.score) ? b.score : Infinity;
+    if (Math.abs(sa - sb) > 10) return sa - sb;
+    if (a.price !== b.price) return a.price - b.price;
     if (sa !== sb) return sa - sb;
     if (Boolean(a.bonus) !== Boolean(b.bonus)) return (b.bonus ? 1 : 0) - (a.bonus ? 1 : 0);
     return a.idx - b.idx;

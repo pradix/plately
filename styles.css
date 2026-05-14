@@ -913,6 +913,34 @@ img {
   line-height: 1.4;
 }
 
+.import-banner__platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.import-banner__platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(125, 151, 116, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #64785e;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.import-banner__platform svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
 .import-caption-toggle {
   background: none;
   border: none;
