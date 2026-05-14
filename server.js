@@ -8636,6 +8636,28 @@ if (AH_API_BASE !== "https://api.ah.nl") {
 
 let ahTokenCache = { token: "", expiresAt: 0 };
 
+// Vernieuw het AH-token automatisch elke 6 dagen als er geen statisch token of proxy is ingesteld.
+// Met CF Worker (AH_API_PROXY) haalt de worker zelf tokens op; dit is dan alleen een fallback.
+{
+  const AUTO_REFRESH_INTERVAL = 6 * 24 * 60 * 60 * 1000; // 6 dagen
+  const shouldAutoRefresh = () =>
+    !String(process.env.AH_ANONYMOUS_TOKEN || "").trim() &&
+    !String(process.env.AH_API_PROXY || "").trim();
+  if (shouldAutoRefresh()) {
+    setInterval(() => {
+      fetchAHAnonymousToken().catch((err) =>
+        console.warn(`[AH] Auto token-refresh mislukt: ${err?.message || err}`)
+      );
+    }, AUTO_REFRESH_INTERVAL);
+    // Warm-up: haal direct een token op zodat de eerste request niet hoeft te wachten.
+    setImmediate(() =>
+      fetchAHAnonymousToken().catch((err) =>
+        console.warn(`[AH] Initieel token ophalen mislukt: ${err?.message || err}`)
+      )
+    );
+  }
+}
+
 // In-memory cache voor AH productzoekopdrachten — vermindert API-calls drastisch
 // en maakt de app bestand tegen tijdelijke rate-limits.
 const _ahSearchCache = new Map();
@@ -9573,8 +9595,8 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) 
   // We want a richer pool than the on-screen cap so the frontend can:
   // - show more products overall
   // - filter/sort by dietary chips without returning an empty list
-  const BASE_COUNT = 12; // broad results
-  const LABEL_COUNT = 8; // per-label variants (deduped afterwards)
+  const BASE_COUNT = 20; // broad results
+  const LABEL_COUNT = 12; // per-label variants (deduped afterwards)
 
   const variants = [];
   // Always pull a plain-base search so we never end up with an empty result.
@@ -9591,7 +9613,9 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) 
     { tag: null, query: `beter leven ${base}`, count: Math.max(LABEL_COUNT, 10) },
     { tag: "vegetarisch", query: `vegetarisch ${base}`, count: LABEL_COUNT },
     { tag: "vegan", query: `vegan ${base}`, count: LABEL_COUNT },
-    { tag: "plantaardig", query: `plantaardig ${base}`, count: LABEL_COUNT }
+    { tag: "plantaardig", query: `plantaardig ${base}`, count: LABEL_COUNT },
+    // AH huismerk levert goedkope basisvarianten die door de gewone zoekopdracht soms gemist worden.
+    { tag: "huismerk", query: `AH ${base}`, count: LABEL_COUNT }
   );
 
   const matchSeed = sanitizeText(rawBase || base || ingredient || "");
@@ -12617,6 +12641,14 @@ async function searchAHRecipes(query, count = 4, opts = {}) {
     const summaryResults = extractAhRecipeSummariesFromAllerhandeHtml(html, query, count);
     if (summaryResults.length > 0) {
       console.log(`✅ AH RecipeSummary parser returned ${summaryResults.length} results`);
+      if (summaryResults.some((r) => !r.thumbnail)) {
+        const withThumbs = await Promise.all(summaryResults.map(async (r) => {
+          if (r.thumbnail) return r;
+          const thumbnail = await fetchAhRecipeThumbnail(r.url).catch(() => "");
+          return thumbnail ? { ...r, thumbnail } : r;
+        }));
+        return withThumbs;
+      }
       return summaryResults;
     }
     const cardResults = extractAhRecipeCardsFromAllerhandeHtml(html, query, count);
@@ -15243,23 +15275,33 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/api/health" && request.method === "GET") {
+      const ahProxyUrl = String(process.env.AH_API_PROXY || "").trim();
+      const ahStaticToken = String(process.env.AH_ANONYMOUS_TOKEN || "").trim();
       sendJson(response, 200, {
         ok: true,
         app: "Plately",
-      version: {
-        commit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.GIT_SHA || "",
-      },
-      env: process.env.NODE_ENV || "development",
-      persistence: {
-        mode: "json-file",
-        dataDir: DATA_DIR,
-      },
-      auth: {
-        postgresEnabled: isPostgresEnabled(),
-      },
-      platforms: {
-        tiktok: { configured: false, message: "TikTok importeren werkt tijdelijk nog niet." },
-        instagram: { configured: Boolean(META_APP_ID && META_APP_SECRET) },
+        version: {
+          commit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.GIT_SHA || "",
+        },
+        env: process.env.NODE_ENV || "development",
+        persistence: {
+          mode: "json-file",
+          dataDir: DATA_DIR,
+        },
+        auth: {
+          postgresEnabled: isPostgresEnabled(),
+        },
+        ah: {
+          proxy: ahProxyUrl ? { configured: true, url: ahProxyUrl } : { configured: false },
+          staticToken: ahStaticToken ? { configured: true, prefix: ahStaticToken.slice(0, 12) + "…" } : { configured: false },
+          cachedToken: ahTokenCache.token
+            ? { present: true, expiresAt: new Date(ahTokenCache.expiresAt).toISOString() }
+            : { present: false },
+          searchCacheSize: _ahSearchCache.size,
+        },
+        platforms: {
+          tiktok: { configured: false, message: "TikTok importeren werkt tijdelijk nog niet." },
+          instagram: { configured: Boolean(META_APP_ID && META_APP_SECRET) },
           website: { configured: true },
         },
       });
