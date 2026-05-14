@@ -2403,15 +2403,11 @@ async function getAuthenticatedUser(request) {
   }
 
   const authToken = extractAuthToken(request);
-  if (!authToken) {
-    console.log("🔍 No auth token found (header or cookie)");
-    return null;
-  }
+  if (!authToken) return null;
 
   try {
     await ensurePostgresSchema();
     const pool = await getPostgresPool();
-    console.log(`🔐 Looking up auth token: ${authToken.substring(0, 8)}...`);
 
     const result = await pool.query(
       `
@@ -2425,15 +2421,9 @@ async function getAuthenticatedUser(request) {
       [authToken]
     );
 
-    if (result.rows[0]) {
-      console.log(`✅ Auth session valid for user: ${result.rows[0].email}`);
-      return result.rows[0];
-    } else {
-      console.log(`⚠️  Auth token not found or expired: ${authToken.substring(0, 8)}...`);
-      return null;
-    }
+    return result.rows[0] || null;
   } catch (error) {
-    console.error(`❌ Error validating auth session: ${error.message}`);
+    console.error(`[auth] session lookup fout: ${error.message}`);
     return null;
   }
 }

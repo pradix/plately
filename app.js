@@ -1671,7 +1671,7 @@ function syncAuthSocialVisibility() {
 }
 
 function openAuthModal(mode = "login") {
-  console.log("🔐 Opening auth modal, mode:", mode, "authModal element:", authModal);
+  // debug removed
   state.auth.mode = mode;
   const isRegister = mode === "register";
 
@@ -1688,7 +1688,7 @@ function openAuthModal(mode = "login") {
   authModal.classList.remove("hidden");
   authModal.setAttribute("aria-hidden", "false");
   authModal.dataset.authMode = mode;
-  console.log("✅ Auth modal opened, hidden class:", authModal.classList.contains("hidden"));
+  // debug removed
 
   // Leave password-reset view when (re)opening the modal or switching mode
   const mainAuthForm = document.getElementById("authForm");
@@ -9582,8 +9582,12 @@ async function persistAppState() {
     }
     if (payload?.auth) {
       state.auth.enabled = coerceJsonBoolean(payload.auth.enabled);
-      state.auth.authenticated = coerceJsonBoolean(payload.auth.authenticated);
-      state.auth.email = payload.auth.email || "";
+      // Achtergrond-persist mag nooit de gebruiker uitloggen — alleen omhoog updaten
+      // (false → true is ok als de server bevestigt dat de sessie geldig is).
+      if (coerceJsonBoolean(payload.auth.authenticated)) {
+        state.auth.authenticated = true;
+        state.auth.email = payload.auth.email || state.auth.email;
+      }
     }
   } catch {
     // Keep the app usable when persistence fails temporarily.
@@ -9863,24 +9867,17 @@ async function bootstrapSession() {
   try {
     const payload = await fetchJson(`${state.apiBase}/api/session`);
     sessionCheckSucceeded = true;
-    console.log("📥 Session payload received:", {
-      auth: payload?.auth,
-      user_id: payload?.user?.id
-    });
 
     if (payload?.auth) {
       state.auth.enabled = coerceJsonBoolean(payload.auth.enabled);
       state.auth.authenticated = coerceJsonBoolean(payload.auth.authenticated);
       state.auth.email = payload.auth.email || "";
-      console.log("✅ Auth payload applied - authenticated:", state.auth.authenticated);
     }
     applyPersistedAppState(payload.user);
-    console.log("📦 After applyPersistedAppState - authenticated:", state.auth.authenticated);
 
     // If server didn't provide grocery items but we have them locally, restore from localStorage
     if ((!payload?.user?.groceryItems || !Array.isArray(payload.user.groceryItems)) && localGroceryItems) {
       state.groceryItems = localGroceryItems;
-      console.log("♻️ Restored grocery items from localStorage (server didn't provide any)");
     }
 
     // applyPersistedAppState may have reset state.auth.authenticated based on
@@ -9888,9 +9885,7 @@ async function bootstrapSession() {
     if (payload?.auth) {
       state.auth.authenticated = coerceJsonBoolean(payload.auth.authenticated);
       state.auth.email = payload.auth.email || "";
-      console.log("🔐 Auth re-applied after applyPersistedAppState - authenticated:", state.auth.authenticated);
     }
-    // Remember authenticated state across refreshes
     if (state.auth.authenticated) {
       markUserAsAuthed();
     }
@@ -9901,7 +9896,6 @@ async function bootstrapSession() {
       if (saved !== null) state.groceryItems = JSON.parse(saved);
     } catch {}
   } finally {
-    console.log("🔄 Bootstrap session finally block - authenticated:", state.auth.authenticated, "sessionCheckSucceeded:", sessionCheckSucceeded);
     state.session.ready = true;
 
     renderAll();
@@ -11369,7 +11363,12 @@ bindEvent(document.getElementById("deleteRecipeButton"), "click", () => {
       }
       schedulePersistAppState();
       renderAll();
-      switchView("home");
+      // Ga naar home (ingelogd) of detail met volgend recept (gast) om auth-guard te vermijden.
+      if (state.auth.authenticated) {
+        switchView("home");
+      } else if (state.selectedRecipeId) {
+        switchView("detail");
+      }
       showToast(`"${recipe.title}" is verwijderd.`, { variant: "success" });
     },
   });
