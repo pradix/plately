@@ -9,8 +9,21 @@ const CACHE_VERSION = self.__PLATELY_SW_VERSION__;
 const STATIC_CACHE = `plately-static-${CACHE_VERSION}`;
 const HTML_CACHE = `plately-html-${CACHE_VERSION}`;
 
+const APP_SHELL = [
+  "/",
+  `/app.js?v=${self.__PLATELY_SW_VERSION__}`,
+  `/styles.css?v=${self.__PLATELY_SW_VERSION__}`,
+  "/assets/plately.png",
+  "/assets/icon-192.png",
+];
+
 self.addEventListener("install", (event) => {
-  event.waitUntil(self.skipWaiting());
+  event.waitUntil(
+    Promise.all([
+      self.skipWaiting(),
+      caches.open(STATIC_CACHE).then((cache) => cache.addAll(APP_SHELL)).catch(() => {}),
+    ])
+  );
 });
 
 self.addEventListener("activate", (event) => {

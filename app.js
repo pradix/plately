@@ -1879,8 +1879,10 @@ function renderCookbookSaveList(recipeId = state.pendingCookbookSaveRecipeId) {
   cookbooks.sort((a, b) => {
     if (a?.id === preferredId) return -1;
     if (b?.id === preferredId) return 1;
-    const countDiff = (b?.recipeIds?.length || 0) - (a?.recipeIds?.length || 0);
-    if (countDiff !== 0) return countDiff;
+    // Most recently used first, then A-Z
+    const aTime = Number(a?.lastUsedAt || 0);
+    const bTime = Number(b?.lastUsedAt || 0);
+    if (aTime !== bTime) return bTime - aTime;
     return (a?.name || "").localeCompare(b?.name || "", "nl");
   });
 
@@ -4711,8 +4713,8 @@ function searchSavedRecipesForChannelQuery(query, limit = 12) {
   const scored = [];
   for (const recipe of state.recipes || []) {
     if (!recipe || SEED_RECIPE_IDS.has(recipe.id) || recipe.isSeed) continue;
-    const channel = inferFollowedChannelForRecipeSource(recipe.sourceUrl || "");
-    if (!channel) continue;
+    // Include all saved imported recipes — not just channel-linked ones.
+    const channel = inferFollowedChannelForRecipeSource(recipe.sourceUrl || "") || { id: "plately-local", name: "Jouw recepten" };
     const titleHay = String(recipe.title || "").toLowerCase();
     const ingredientHay = (Array.isArray(recipe.ingredients) ? recipe.ingredients : [])
       .map((item) => item?.name || item || "")
@@ -6110,12 +6112,14 @@ function renderDetailRecipe(resetServings = false) {
       : linkedCookbooks.length
         ? `Dit recept staat in ${linkedCookbooks.length} kookboek${linkedCookbooks.length === 1 ? "" : "en"} en is klaar om op je boodschappenlijst te zetten.`
         : "Sla dit recept op in een kookboek of zet de ingrediënten direct op je boodschappenlijst.";
+    const canEnhance = recipe.needsReview && recipe.sourceUrl;
     detailAssist.innerHTML = `
       <article class="detail-assist__card detail-assist__card--${assistTone}">
         <div class="detail-assist__head">
           <strong>${escapeHtml(assistTitle)}</strong>
         </div>
         <p>${escapeHtml(assistCopy)}</p>
+        ${canEnhance ? `<button class="detail-assist__enhance-btn" type="button" data-enhance-recipe="${escapeHtml(recipe.id)}">Verbeter automatisch</button>` : ""}
       </article>
     `;
   }
@@ -8219,6 +8223,7 @@ function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId, o
   if (id && !cookbook.recipeIds.includes(id)) {
     cookbook.recipeIds.unshift(id);
   }
+  cookbook.lastUsedAt = Date.now();
   if (wasNewToBook) {
     trackClientEvent("client_cookbook_save", { cookbookIdSuffix: String(cookbookId).slice(-12) });
   }
@@ -8245,6 +8250,40 @@ function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId, o
     showToast(`Opgeslagen in ${cookbook.name}.`);
   }
 }
+
+async function enhanceRecipeWithImport(recipeId) {
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+  if (!recipe.sourceUrl) {
+    showToast("Geen bronlink beschikbaar om het recept te verbeteren.");
+    return;
+  }
+  showToast("Recept wordt verbeterd via de bronpagina…");
+  try {
+    const data = await handleImport(recipe.sourceUrl, "");
+    const enhanced = normalizeImportedRecipe(data.recipe);
+    const resolved = enhanced.ingredients.length >= 2 && enhanced.instructions.length >= 1;
+    const target = state.recipes.find((r) => r.id === recipeId)
+      || (state.importPreviews && state.importPreviews[recipeId]);
+    if (target) {
+      Object.assign(target, {
+        ...enhanced,
+        id: recipeId,
+        needsReview: !resolved,
+      });
+      schedulePersistAppState();
+      renderDetailRecipe(true);
+      showToast(resolved ? "Recept verbeterd." : "Import verbeterd — loop het nog even na.", { variant: "success" });
+    }
+  } catch (err) {
+    showToast(normalizeUiErrorMessage(err?.message || ""), { variant: "error" });
+  }
+}
+
+bindEvent(document.getElementById("detailAssist"), "click", (e) => {
+  const btn = e.target.closest("[data-enhance-recipe]");
+  if (btn) enhanceRecipeWithImport(btn.dataset.enhanceRecipe);
+});
 
 const FAVORITES_COOKBOOK_NAME = "❤️ Favorieten";
 function ensureFavoritesCookbookExists({ persist = true } = {}) {
@@ -9936,6 +9975,11 @@ async function bootstrapSession() {
     }
     applyPersistedAppState(payload.user);
 
+    // Cache app state for offline fallback
+    if (payload.user && state.auth.authenticated) {
+      try { localStorage.setItem("plately-offline-state", JSON.stringify(payload.user)); } catch {}
+    }
+
     // If server didn't provide grocery items but we have them locally, restore from localStorage
     if ((!payload?.user?.groceryItems || !Array.isArray(payload.user.groceryItems)) && localGroceryItems) {
       state.groceryItems = localGroceryItems;
@@ -9951,11 +9995,16 @@ async function bootstrapSession() {
       markUserAsAuthed();
     }
   } catch {
-    // Server unreachable — restore groceryItems from localStorage
+    // Server unreachable — load offline-cached state so the app works without internet
+    try {
+      const offlineRaw = localStorage.getItem("plately-offline-state");
+      if (offlineRaw) applyPersistedAppState(JSON.parse(offlineRaw));
+    } catch {}
     try {
       const saved = localStorage.getItem("plately-grocery-items");
       if (saved !== null) state.groceryItems = JSON.parse(saved);
     } catch {}
+    state.offlineMode = true;
   } finally {
     state.session.ready = true;
 
@@ -10863,6 +10912,20 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
 
       const byUrl = saved.find((r) => normalizeImportUrlForDedup(r?.sourceUrl || "") === urlKey);
       if (byUrl) return { recipe: byUrl, reason: "url" };
+
+      // Title-based fallback: catch re-imports of the same recipe from a different URL
+      const importTitle = String(candidate?.title || "").toLowerCase().trim();
+      if (importTitle.length >= 5) {
+        const titleWords = importTitle.split(/\s+/).filter((w) => w.length >= 3);
+        const byTitle = saved.find((r) => {
+          const rTitle = String(r?.title || "").toLowerCase().trim();
+          const rWords = rTitle.split(/\s+/).filter((w) => w.length >= 3);
+          if (!rTitle || rWords.length === 0 || titleWords.length === 0) return false;
+          const shared = titleWords.filter((w) => rWords.includes(w)).length;
+          return shared >= Math.max(2, Math.ceil(Math.min(titleWords.length, rWords.length) * 0.75));
+        });
+        if (byTitle) return { recipe: byTitle, reason: "title" };
+      }
       return null;
     };
 
@@ -10874,10 +10937,12 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
 
     const dupe = findDuplicateImportedRecipe(importedRecipe);
     if (dupe?.recipe?.id) {
+      const dupeSubtitle = dupe.reason === "title"
+        ? `"${dupe.recipe.title}" staat al in je collectie met een vergelijkbare naam. Wil je het bestaande recept overschrijven of als nieuw bewaren?`
+        : "Dit recept lijkt al eerder geïmporteerd (zelfde bronlink). Wil je het bestaande recept overschrijven of als nieuw bewaren?";
       const choice = await confirmWithAlt({
         title: "Dubbel recept gevonden",
-        subtitle:
-          "Dit recept lijkt al eerder geïmporteerd (zelfde bronlink). Wil je het bestaande recept overschrijven of als nieuw bewaren?",
+        subtitle: dupeSubtitle,
         confirmLabel: "Overschrijven",
         altLabel: "Nieuw bewaren",
       });
