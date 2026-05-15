@@ -380,6 +380,10 @@ function imageContentTypeFromUrl(url) {
   return map[ext[1]] || "application/octet-stream";
 }
 
+function buildSimpleHtmlPage(title, bodyHtml) {
+  return `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>body{font-family:system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#1a1a1a;line-height:1.6}h1{font-size:1.6rem;margin-bottom:.25em}h2{font-size:1.1rem;margin-top:2em}a{color:#4a6b4c}ul,ol{padding-left:1.4em}li{margin:.3em 0}</style></head><body>${bodyHtml}</body></html>`;
+}
+
 async function proxyImage(requestUrl, response) {
   const raw = requestUrl.searchParams.get("url") || "";
   if (!raw || !isAllowedImageProxyUrl(raw)) {
@@ -15459,6 +15463,86 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === "/api/image-proxy" && request.method === "GET") {
       await proxyImage(requestUrl, response);
+      return;
+    }
+
+    if (
+      (requestUrl.pathname === "/privacy-policy" || requestUrl.pathname === "/privacy") &&
+      request.method === "GET"
+    ) {
+      const html = buildSimpleHtmlPage("Privacybeleid — Plately", `
+        <h1>Privacybeleid</h1>
+        <p><strong>Laatst bijgewerkt:</strong> mei 2025</p>
+
+        <h2>1. Wie zijn wij</h2>
+        <p>Plately is een webapp waarmee je recepten kunt opslaan, importeren en organiseren. De app is bereikbaar via <a href="https://app.plately.nl">app.plately.nl</a>.</p>
+
+        <h2>2. Welke gegevens verzamelen we</h2>
+        <ul>
+          <li><strong>E-mailadres</strong> — alleen als je een account aanmaakt.</li>
+          <li><strong>Recepten en kookboeken</strong> — door jou opgeslagen inhoud.</li>
+          <li><strong>Boodschappenlijst</strong> — lokaal opgeslagen in je browser en optioneel gesynchroniseerd met je account.</li>
+          <li><strong>Gebruiksgegevens</strong> — anonieme interacties (bijv. welke features je gebruikt) voor verbetering van de app.</li>
+        </ul>
+
+        <h2>3. Hoe gebruiken we je gegevens</h2>
+        <ul>
+          <li>Om de app-functionaliteit te leveren (recepten opslaan, synchroniseren).</li>
+          <li>Om je in te loggen en je account te beveiligen.</li>
+          <li>Om de app te verbeteren op basis van geanonimiseerd gebruik.</li>
+        </ul>
+
+        <h2>4. Delen met derden</h2>
+        <p>We verkopen geen persoonsgegevens. We gebruiken de volgende externe diensten:</p>
+        <ul>
+          <li><strong>Albert Heijn API</strong> — voor productzoekresultaten (geen persoonsgegevens doorgegeven).</li>
+          <li><strong>Instagram / Meta</strong> — receptlinks worden geïmporteerd via de publieke Instagram-pagina. We slaan geen Instagram-inloggegevens op.</li>
+          <li><strong>Jina / Firecrawl</strong> — voor websitescraping van receptpagina's (URL's worden doorgegeven, geen persoonsgegevens).</li>
+        </ul>
+
+        <h2>5. Bewaartermijn</h2>
+        <p>Je gegevens worden bewaard zolang je account actief is. Na verwijdering van je account worden alle gekoppelde gegevens binnen 30 dagen verwijderd.</p>
+
+        <h2>6. Jouw rechten</h2>
+        <p>Je hebt het recht om je gegevens in te zien, te corrigeren of te laten verwijderen. Stuur een verzoek naar <a href="mailto:support@plately.nl">support@plately.nl</a>.</p>
+
+        <h2>7. Contact</h2>
+        <p>Vragen over dit privacybeleid? Mail naar <a href="mailto:support@plately.nl">support@plately.nl</a>.</p>
+      `);
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", ...HTTP_HEADERS });
+      response.end(html);
+      return;
+    }
+
+    if (
+      (requestUrl.pathname === "/data-deletion" || requestUrl.pathname === "/data-deletion-instructions") &&
+      request.method === "GET"
+    ) {
+      const html = buildSimpleHtmlPage("Gegevens verwijderen — Plately", `
+        <h1>Je gegevens verwijderen</h1>
+        <p>Je kunt op elk moment je gegevens en account laten verwijderen uit Plately.</p>
+
+        <h2>Optie 1 — Via de app</h2>
+        <ol>
+          <li>Open <a href="https://app.plately.nl">app.plately.nl</a>.</li>
+          <li>Ga naar <strong>Profiel → Instellingen → Account verwijderen</strong>.</li>
+          <li>Bevestig de verwijdering. Je account en alle bijbehorende gegevens worden direct verwijderd.</li>
+        </ol>
+
+        <h2>Optie 2 — Via e-mail</h2>
+        <p>Stuur een e-mail naar <a href="mailto:support@plately.nl">support@plately.nl</a> met als onderwerp <em>"Account verwijderen"</em> en vermeld het e-mailadres van je account. We verwerken je verzoek binnen 5 werkdagen.</p>
+
+        <h2>Wat wordt verwijderd</h2>
+        <ul>
+          <li>Je e-mailadres en accountgegevens.</li>
+          <li>Al je opgeslagen recepten en kookboeken.</li>
+          <li>Je boodschappenlijst en voorkeuren.</li>
+        </ul>
+
+        <p style="margin-top:2rem;color:#888;font-size:.9rem;">Plately · <a href="/privacy-policy">Privacybeleid</a></p>
+      `);
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", ...HTTP_HEADERS });
+      response.end(html);
       return;
     }
 
