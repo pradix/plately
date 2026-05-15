@@ -5205,6 +5205,77 @@ async function searchChannels(query) {
   }
 }
 
+function renderImportScreenResults(container, localResults, externalResults, isLoadingExternal) {
+  if (!container) return;
+  const allCh = getAllChannels();
+  const channelById = new Map(allCh.map((ch) => [ch.id, ch]));
+
+  const renderCard = (r) => {
+    const channel = channelById.get(r.channelId);
+    const channelColor = channel?.color || "#8da485";
+    const isLocal = r._source === "local";
+    const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
+    const thumbHtml = getChannelThumbnailMarkup(r, channel, channelColor);
+    const badgeLabel = isLocal ? "Opgeslagen" : (r.channel || "");
+    const badgeBg = isLocal ? "#8da485" : channelColor;
+    const actionLabel = isLocal ? "Open" : "Importeer";
+    const actionIcon = isLocal
+      ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>`
+      : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+    return `
+      <div class="ch-card${isLocal ? " ch-card--local" : ""}" data-ch-card-url="${escapeHtml(r.url)}">
+        <div class="ch-card__visual">
+          ${thumbHtml}
+          <span class="ch-card__badge" style="background:${escapeHtml(badgeBg)}">${escapeHtml(badgeLabel)}</span>
+        </div>
+        <div class="ch-card__body">
+          <p class="ch-card__title">${escapeHtml(r.title)}</p>
+          ${formatChannelSearchRatingHtml(r, { showRatingSource: false })}
+          ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
+        </div>
+        <div class="ch-card__actions">
+          ${!isLocal ? `<a class="ch-card__view" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer" aria-label="Bekijk ${escapeHtml(r.title)}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z" fill="currentColor"/></svg>
+            Bekijk
+          </a>` : ""}
+          <button class="ch-card__import" type="button"
+            data-channel-import-url="${escapeHtml(r.url)}"
+            data-channel-import-thumb="${escapeHtml(thumbUrl || "")}"
+            data-channel-import-kind="${isLocal ? "local" : "external"}"
+            data-channel-import-recipe-id="${escapeHtml(r.recipeId || "")}"
+            aria-label="${escapeHtml(actionLabel)} ${escapeHtml(r.title)}">
+            ${actionIcon} ${actionLabel}
+          </button>
+        </div>
+      </div>`;
+  };
+
+  const skeletonCards = Array.from({ length: 3 }).map(() => `
+    <div class="ch-card ch-card--skeleton" aria-hidden="true">
+      <div class="ch-card__visual"><div class="skeleton" style="width:100%;height:100%"></div></div>
+      <div class="ch-card__body" style="padding:12px">
+        <div class="skeleton" style="height:13px;width:72%;margin-bottom:8px;border-radius:6px"></div>
+        <div class="skeleton" style="height:10px;width:44%;border-radius:6px"></div>
+      </div>
+    </div>`).join("");
+
+  let html = '<div class="ch-result-grid">';
+  if (localResults.length) {
+    html += `<div class="ch-search-section-label" style="grid-column:1/-1">Jouw recepten</div>`;
+    html += localResults.map(renderCard).join("");
+  }
+  if (externalResults.length || isLoadingExternal) {
+    html += `<div class="ch-search-section-label${isLoadingExternal ? " ch-search-section-label--loading" : ""}" style="grid-column:1/-1">Op kanalen${isLoadingExternal ? `<span class="ch-search-spinner"></span>` : ""}</div>`;
+    if (isLoadingExternal && !externalResults.length) html += skeletonCards;
+    html += externalResults.map(renderCard).join("");
+  }
+  if (!localResults.length && !externalResults.length && !isLoadingExternal) {
+    html += `<p style="grid-column:1/-1;text-align:center;padding:2rem 1rem;color:var(--muted-strong)">Geen resultaten gevonden.</p>`;
+  }
+  html += "</div>";
+  container.innerHTML = html;
+}
+
 async function searchChannelsOnImportScreen(query) {
   const section = document.getElementById("importChannelSearchSection");
   const results = document.getElementById("importChannelSearchResults");
@@ -5216,15 +5287,17 @@ async function searchChannelsOnImportScreen(query) {
     if (orRow) orRow.classList.remove("hidden");
     return;
   }
-  state.channelSearchQuery = query.trim();
-  // Skeleton loader: only show if the request isn't instant.
   const requestId = (searchChannelsOnImportScreen._reqId = (searchChannelsOnImportScreen._reqId || 0) + 1);
   importChannelSearchAbortController?.abort();
   const importAbortCtl = new AbortController();
   importChannelSearchAbortController = importAbortCtl;
   if (section) section.classList.remove("hidden");
-  if (results) results.innerHTML = CHANNEL_SEARCH_SKELETON_MARKUP;
   if (orRow) orRow.classList.add("hidden");
+
+  // Show local results immediately — no API call needed
+  const localResults = searchSavedRecipesForChannelQuery(query.trim(), 6);
+  renderImportScreenResults(results, localResults, [], true);
+
   try {
     const channels = getSeedChannelIdsForRecipeSearch().join(",");
     const followedCustomChannels = getFollowedCustomChannelsForChannelSearch();
@@ -5232,67 +5305,22 @@ async function searchChannelsOnImportScreen(query) {
       const seed = findMatchingSeedChannelForUrl(ch.url);
       return !(seed && getSeedChannelIdsForRecipeSearch().includes(seed.id));
     });
-    if (dedupedCustomChannels.length !== followedCustomChannels.length) {
-      console.log("🧹 Deduped custom channels for search (import):", {
-        before: followedCustomChannels.length,
-        after: dedupedCustomChannels.length,
-      });
-    }
     const customChannelsParam = dedupedCustomChannels.map((ch) => `${ch.id}|${ch.name}|${ch.url}`).join(",");
     let url = `/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`;
     if (customChannelsParam) url += `&customChannels=${encodeURIComponent(customChannelsParam)}`;
     const resp = await fetch(url, { signal: importAbortCtl.signal });
     const data = await resp.json();
     if (requestId !== searchChannelsOnImportScreen._reqId) return;
-    const all = data.results || [];
-    if (!all.length) {
-      if (results) results.innerHTML = `<p class="ch-result__loading">Geen resultaten gevonden.</p>`;
+    const externalResults = (data.results || []).filter((r) => !localResults.some((l) => l.recipeId && l.recipeId === r.recipeId));
+    renderImportScreenResults(results, localResults, externalResults, false);
+    if (!localResults.length && !externalResults.length) {
       if (orRow) orRow.classList.remove("hidden");
-      return;
     }
-    const importSearchMultiChannel =
-      new Set(all.map((r) => r.channelId).filter(Boolean)).size > 1;
-
-    if (results) {
-      results.innerHTML = `<div class="ch-result-grid">${all.map((r) => {
-        const allCh = getAllChannels();
-        const channel = allCh.find((ch) => ch.id === r.channelId);
-        const channelColor = channel?.color || "#8da485";
-        const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
-        const thumbHtml = getChannelThumbnailMarkup(r, channel, channelColor);
-        return `
-          <div class="ch-card" data-ch-card-url="${escapeHtml(r.url)}">
-            <div class="ch-card__visual">
-              ${thumbHtml}
-              <span class="ch-card__badge" style="background:${escapeHtml(channelColor)}">${escapeHtml(r.channel)}</span>
-            </div>
-            <div class="ch-card__body">
-              <p class="ch-card__title">${escapeHtml(r.title)}</p>
-              ${formatChannelSearchRatingHtml(r, { showRatingSource: importSearchMultiChannel })}
-              ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
-            </div>
-            <div class="ch-card__actions">
-              <a class="ch-card__view" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z" fill="currentColor"/></svg>
-                Bekijk
-              </a>
-              <button class="ch-card__import" type="button"
-                data-channel-import-url="${escapeHtml(r.url)}"
-                data-channel-import-thumb="${escapeHtml(thumbUrl || "")}"
-                aria-label="Importeer ${escapeHtml(r.title)}">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-                Importeer
-              </button>
-            </div>
-          </div>`;
-      }).join("")}</div>`;
-    }
-    if (orRow) orRow.classList.remove("hidden");
   } catch (err) {
     if (err?.name === "AbortError") return;
     if (requestId !== searchChannelsOnImportScreen._reqId) return;
-    if (section) section.classList.add("hidden");
-    if (orRow) orRow.classList.remove("hidden");
+    renderImportScreenResults(results, localResults, [], false);
+    if (!localResults.length && orRow) orRow.classList.remove("hidden");
   }
 }
 
@@ -14284,9 +14312,27 @@ bindEvent(document.getElementById("importChannelSearchResults"), "click", async 
   if (!url) return;
   const imageHint = btn.dataset.channelImportThumb || "";
   const kind = btn.dataset.channelImportKind || "external";
+  const localRecipeId = btn.dataset.channelImportRecipeId || "";
 
   btn.disabled = true;
   btn.innerHTML = getChannelImportLoadingMarkup();
+
+  // Local saved recipe: navigate directly without reimporting
+  if (kind === "local") {
+    if (!localRecipeId || !getRecipeById(localRecipeId)) {
+      showToast("Recept niet gevonden.", { variant: "error" });
+      btn.disabled = false;
+      btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg> Open`;
+      return;
+    }
+    state.selectedRecipeId = localRecipeId;
+    if (importSearchInput) importSearchInput.value = "";
+    const section = document.getElementById("importChannelSearchSection");
+    if (section) section.classList.add("hidden");
+    switchView("detail");
+    renderDetailRecipe(true);
+    return;
+  }
 
   showImportSplash(url);
   try {
@@ -14307,11 +14353,9 @@ bindEvent(document.getElementById("importChannelSearchResults"), "click", async 
       recipePayload = data.recipe;
     }
     const recipe = normalizeImportedRecipe({ ...recipePayload, needsReview: true });
-    // Keep as preview until user actually saves it to a cookbook
     recipe._previewCreatedAt = Date.now();
     state.importPreviews[recipe.id] = recipe;
     state.selectedRecipeId = recipe.id;
-    // Clear search and go to review
     if (importSearchInput) importSearchInput.value = "";
     const section = document.getElementById("importChannelSearchSection");
     if (section) section.classList.add("hidden");
