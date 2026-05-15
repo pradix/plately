@@ -4715,7 +4715,19 @@ function searchSavedRecipesForChannelQuery(query, limit = 12) {
   for (const recipe of state.recipes || []) {
     if (!recipe || SEED_RECIPE_IDS.has(recipe.id) || recipe.isSeed) continue;
     // Include all saved imported recipes — not just channel-linked ones.
-    const channel = inferFollowedChannelForRecipeSource(recipe.sourceUrl || "") || { id: "plately-local", name: "Jouw recepten" };
+    const knownChannel = inferFollowedChannelForRecipeSource(recipe.sourceUrl || "");
+    let channelName = knownChannel?.name || "";
+    let channelColor = knownChannel?.color || "";
+    if (!knownChannel && recipe.sourceUrl) {
+      try {
+        const h = new URL(recipe.sourceUrl).hostname.replace(/^www\./, "");
+        if (/instagram\.com/i.test(h)) channelName = "Instagram";
+        else if (/youtube\.com|youtu\.be/i.test(h)) channelName = "YouTube";
+        else channelName = h.replace(/\.(nl|com|org|be|net)$/, "").replace(/^([^.]+).*/, (_, s) => s.charAt(0).toUpperCase() + s.slice(1));
+      } catch { channelName = "Opgeslagen"; }
+    }
+    if (!channelName) channelName = "Opgeslagen";
+    const channel = knownChannel || { id: "plately-local", name: channelName, color: channelColor };
     const titleHay = String(recipe.title || "").toLowerCase();
     const ingredientHay = (Array.isArray(recipe.ingredients) ? recipe.ingredients : [])
       .map((item) => item?.name || item || "")
@@ -5220,8 +5232,8 @@ function renderImportScreenResults(container, localResults, externalResults, isL
     const isLocal = r._source === "local";
     const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
     const thumbHtml = getChannelThumbnailMarkup(r, channel, channelColor);
-    const badgeLabel = isLocal ? "Opgeslagen" : (r.channel || "");
-    const badgeBg = isLocal ? "#8da485" : channelColor;
+    const badgeLabel = r.channel || (isLocal ? "Opgeslagen" : "");
+    const badgeBg = channelColor || "#8da485";
     const actionLabel = isLocal ? "Open" : "Importeer";
     const actionIcon = isLocal
       ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>`

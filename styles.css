@@ -12369,9 +12369,6 @@ body {
   border-radius: 50%;
   animation: chSearchSpin 0.7s linear infinite;
 }
-.ch-card--local .ch-card__badge {
-  background: linear-gradient(135deg, #8da485, #6b8f62) !important;
-}
 .ch-card--skeleton {
   pointer-events: none;
   opacity: 0.6;
