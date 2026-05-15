@@ -1511,9 +1511,8 @@ img {
 }
 
 .detail-sheet h1 {
-  font-size: clamp(2.1rem, 8vw, 3rem);
-  line-height: 0.95;
-  max-width: 10ch;
+  font-size: clamp(1.75rem, 7vw, 2.6rem);
+  line-height: 1.0;
 }
 
 .meal-pill {
