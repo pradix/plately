@@ -9,7 +9,7 @@
       name="description"
       content="Plately is een webapp om recepten van Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.20.37" />
+    <meta name="plately-build" content="1.0.20.38" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -1759,10 +1759,12 @@
           <span class="nav-label" data-i18n="nav.home">Home</span>
         </button>
         <button type="button" class="nav-item" data-view="cookbooks">
-          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
-          </svg>
+          <span class="nav-icon-wrap">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+            </svg>
+          </span>
           <span class="nav-label" data-i18n="nav.cookbooks">Kookboeken</span>
         </button>
         <button type="button" class="nav-item" data-view="grocery">
@@ -1777,10 +1779,13 @@
           <span class="nav-label" data-i18n="nav.grocery">Boodschappen</span>
         </button>
         <button type="button" class="nav-item nav-item--profile" data-view="settings" aria-label="Profiel">
-          <div class="profile2-avatar profile2-avatar--nav" id="profileAvatarDisplay">
-            <img src="assets/profile-avatar.svg" alt="" class="profile2-avatar__img" aria-hidden="true" />
-            <span class="nav-badge nav-badge--dot nav-badge--avatar" id="profileAnnounceBadge" aria-label="nieuw"></span>
-          </div>
+          <span class="nav-icon-wrap nav-icon-wrap--avatar">
+            <div class="profile2-avatar profile2-avatar--nav" id="profileAvatarDisplay">
+              <img src="assets/profile-avatar.svg" alt="" class="profile2-avatar__img" aria-hidden="true" />
+              <span class="nav-badge nav-badge--dot nav-badge--avatar" id="profileAnnounceBadge" aria-label="nieuw"></span>
+            </div>
+          </span>
+          <span class="nav-label">Profiel</span>
         </button>
       </nav>
     </main>

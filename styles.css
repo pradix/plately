@@ -4262,13 +4262,13 @@ button.ingredient-item {
 }
 
 .nav-item--active {
-  color: #2f5238;
-  background: rgba(220, 232, 220, 0.72);
-  box-shadow: inset 0 0 0 1px rgba(120, 147, 111, 0.16);
+  color: #3a5c37;
+  background: transparent;
+  box-shadow: none;
 }
 
 .nav-item--active svg {
-  fill: rgba(141, 164, 133, 0.22);
+  fill: none;
   stroke: currentColor;
 }
 
@@ -11888,55 +11888,48 @@ body {
 }
 
 .nav-item {
-  min-height: 68px;
-  padding: 0 1px;
+  min-height: 60px;
+  padding: 4px 2px 5px;
   border: 0;
   border-radius: 0;
   background: transparent;
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 8px;
-  color: var(--muted-strong);
-  font-size: 0.82rem;
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  gap: 3px;
+  color: #8fa888;
 }
 
 .nav-item svg {
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   display: block;
   fill: none;
   stroke: currentColor;
 }
 
 .nav-icon-image {
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   display: block;
 }
 
-.nav-icon-image--settings {
-  width: 30px;
-  height: 30px;
-}
-
 .nav-item--active {
-  color: #91a48e;
+  color: #3a5c37;
   background: transparent;
 }
 
 .nav-item--profile {
-  min-height: auto;
-  padding: 8px 1px;
+  min-height: 60px;
+  padding: 4px 2px 5px;
 }
 
 .profile2-avatar--nav {
-  width: 56px;
-  height: 56px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .nav-label {
@@ -16553,63 +16546,87 @@ body {
   vertical-align: 1px;
 }
 
+/* ── Bottom nav — WhatsApp-style pill indicator ── */
 .bottom-nav {
-  padding: 8px 8px calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 6px 4px calc(10px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(36, 60, 43, 0.08);
-  background: rgba(255, 255, 255, 0.96);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 -14px 36px rgba(36, 60, 43, 0.08);
+  background: rgba(255, 255, 255, 0.97);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 -1px 0 rgba(36, 60, 43, 0.06), 0 -12px 32px rgba(36, 60, 43, 0.06);
 }
 
 .nav-item {
   position: relative;
-  min-height: 64px;
+  min-height: 60px;
+  padding: 4px 2px 5px;
   border-radius: 0;
-  color: #84977f;
-  transition: color 170ms ease, transform 170ms cubic-bezier(.22,1,.36,1);
+  background: transparent;
+  color: #8fa888;
+  gap: 3px;
+  transition: color 180ms ease;
 }
 
-/* Active-indicator (dakje) verwijderd — actieve staat blijft zichtbaar via
-   tekst-/icoon-kleur (#5f7f58) en zwaardere SVG-strokewidth hieronder. */
 .nav-item::before { content: none; }
 
+/* Pill indicator behind icon — grows in on active */
+.nav-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 28px;
+  border-radius: 999px;
+  transition: background 200ms ease, width 200ms cubic-bezier(.22,1,.36,1);
+}
+
+.nav-item--active .nav-icon-wrap {
+  background: rgba(95, 127, 88, 0.14);
+}
+
 .nav-item--active {
-  color: #5f7f58;
-  background: transparent;
+  color: #3a5c37;
 }
 
+/* Slightly bolder stroke on active icon */
 .nav-item--active svg {
-  fill: none;
-  stroke-width: 2.25;
+  stroke-width: 2.3;
 }
 
-.nav-item:active {
-  transform: scale(0.98);
-}
-
+/* Label: bolder on active */
 .nav-label {
   color: currentColor;
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.015em;
+  font-size: 0.615rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   white-space: nowrap;
+  transition: font-weight 180ms ease;
 }
 
+.nav-item--active .nav-label {
+  font-weight: 700;
+}
+
+/* No translateY — prevents jumping */
 .nav-icon-wrap,
 .nav-item svg,
 .nav-icon-image {
-  transition: transform 170ms cubic-bezier(.22,1,.36,1);
+  transition: none;
 }
 
-.nav-item--active .nav-icon-wrap,
-.nav-item--active svg,
-.nav-item--active .nav-icon-image {
-  transform: translateY(-2px);
+.nav-item:active {
+  opacity: 0.75;
 }
 
+/* Profile avatar ring on active */
 .nav-item--profile.nav-item--active .profile2-avatar--nav {
-  box-shadow: 0 0 0 3px rgba(120, 147, 111, 0.16);
+  box-shadow: 0 0 0 2.5px #fff, 0 0 0 4.5px rgba(95, 127, 88, 0.5);
+}
+
+/* Kookboeken has no icon-wrap: keep svg centered */
+.nav-item > svg {
+  display: block;
 }
 
 @keyframes platelySoftFloat {
@@ -17888,4 +17905,19 @@ body {
   background: #3a5c37;
   border-color: #3a5c37;
   color: #fff;
+}
+
+/* ── Nav avatar icon-wrap: no pill background, just ring ── */
+.nav-icon-wrap--avatar {
+  background: transparent !important;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 200ms ease;
+}
+.nav-item--profile.nav-item--active .nav-icon-wrap--avatar {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px rgba(58, 92, 55, 0.55);
 }

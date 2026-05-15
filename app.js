@@ -5087,8 +5087,20 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
     if (renderChannelSearchResults._lastKey === nextRenderKey) return;
     renderChannelSearchResults._lastKey = nextRenderKey;
 
-    const loadingBanner = (state.channelSearchIsSearching && rows.length === 0)
-      ? `<p class="ch-search-loading-more" style="grid-column:1/-1;text-align:center;padding:.75rem 1rem .5rem;font-size:.9rem;opacity:.7;color:var(--text,#2a2a28)">Zoeken…</p>`
+    // Skeleton cards shown:
+    // - when searching with zero results yet (full skeleton grid)
+    // - when local results are showing but external fetch is still in progress (trailing skeletons)
+    const searchingSkeletons = Array.from({ length: rows.length === 0 ? 6 : 2 }).map(() => `
+      <div class="ch-card ch-card--skeleton" aria-hidden="true">
+        <div class="ch-card__visual"><div class="skeleton" style="width:100%;height:100%;border-radius:0"></div></div>
+        <div class="ch-card__body" style="padding:10px 12px 12px">
+          <div class="skeleton" style="height:12px;width:78%;margin-bottom:7px;border-radius:5px"></div>
+          <div class="skeleton" style="height:10px;width:44%;border-radius:5px"></div>
+        </div>
+      </div>`).join("");
+
+    const loadingBanner = state.channelSearchIsSearching
+      ? searchingSkeletons
       : "";
     const moreHint = hiddenCount > 0 && !state.channelSearchIsSearching
       ? `<button type="button" class="ch-load-more-btn" data-action="load-more-channel-search">+ ${hiddenCount} meer laden</button>`
@@ -5113,9 +5125,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
         </div>
         <div class="ch-card__body">
           <p class="ch-card__title">${escapeHtml(r.title)}</p>
-          ${(() => { const fav = getSourceIconUrl(r.url || ""); return fav ? `<img class="ch-card__channel-favicon" src="${escapeHtml(fav)}" alt="${escapeHtml(r.channel || "")}" loading="lazy" onerror="this.style.display='none'" />` : (r.channel ? `<span class="ch-card__channel-label">${escapeHtml(r.channel)}</span>` : ""); })()}
           ${formatChannelSearchRatingHtml(r, { showRatingSource: showRatingSourceInPill })}
-          ${r.description ? `<p class="ch-card__desc">${escapeHtml(r.description)}</p>` : ""}
           ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
         </div>
         <div class="ch-card__actions">
@@ -5295,7 +5305,6 @@ function renderImportScreenResults(container, localResults, externalResults, isL
         </div>
         <div class="ch-card__body">
           <p class="ch-card__title">${escapeHtml(r.title)}</p>
-          ${(() => { const fav = getSourceIconUrl(r.url || ""); return fav ? `<img class="ch-card__channel-favicon" src="${escapeHtml(fav)}" alt="${escapeHtml(badgeLabel)}" loading="lazy" onerror="this.style.display='none'" />` : (badgeLabel ? `<span class="ch-card__channel-label">${escapeHtml(badgeLabel)}</span>` : ""); })()}
           ${formatChannelSearchRatingHtml(r, { showRatingSource: false })}
           ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
         </div>
