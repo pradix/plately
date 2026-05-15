@@ -5206,10 +5206,13 @@ async function searchChannels(query) {
   }
 }
 
+let importViewMode = "grid"; // "grid" | "list"
+
 function renderImportScreenResults(container, localResults, externalResults, isLoadingExternal) {
   if (!container) return;
   const allCh = getAllChannels();
   const channelById = new Map(allCh.map((ch) => [ch.id, ch]));
+  const isList = importViewMode === "list";
 
   const renderCard = (r) => {
     const channel = channelById.get(r.channelId);
@@ -5251,26 +5254,32 @@ function renderImportScreenResults(container, localResults, externalResults, isL
       </div>`;
   };
 
-  const skeletonCards = Array.from({ length: 3 }).map(() => `
+  const skeletonCards = Array.from({ length: 4 }).map(() => `
     <div class="ch-card ch-card--skeleton" aria-hidden="true">
-      <div class="ch-card__visual"><div class="skeleton" style="width:100%;height:100%"></div></div>
-      <div class="ch-card__body" style="padding:12px">
-        <div class="skeleton" style="height:13px;width:72%;margin-bottom:8px;border-radius:6px"></div>
-        <div class="skeleton" style="height:10px;width:44%;border-radius:6px"></div>
+      <div class="ch-card__visual"><div class="skeleton" style="width:100%;height:100%;border-radius:0"></div></div>
+      <div class="ch-card__body" style="padding:10px 12px">
+        <div class="skeleton" style="height:13px;width:75%;margin-bottom:8px;border-radius:6px"></div>
+        <div class="skeleton" style="height:10px;width:45%;border-radius:6px"></div>
       </div>
     </div>`).join("");
 
-  let html = '<div class="ch-result-grid">';
-  if (localResults.length) {
+  const MAX_LOCAL = 4;
+  const MAX_EXTERNAL = 8;
+  const shownLocal = localResults.slice(0, MAX_LOCAL);
+  const shownExternal = externalResults.slice(0, MAX_EXTERNAL);
+
+  const gridClass = isList ? "ch-result-grid ch-result-grid--list" : "ch-result-grid";
+  let html = `<div class="${gridClass}">`;
+  if (shownLocal.length) {
     html += `<div class="ch-search-section-label" style="grid-column:1/-1">Jouw recepten</div>`;
-    html += localResults.map(renderCard).join("");
+    html += shownLocal.map(renderCard).join("");
   }
-  if (externalResults.length || isLoadingExternal) {
+  if (shownExternal.length || isLoadingExternal) {
     html += `<div class="ch-search-section-label${isLoadingExternal ? " ch-search-section-label--loading" : ""}" style="grid-column:1/-1">Op kanalen${isLoadingExternal ? `<span class="ch-search-spinner"></span>` : ""}</div>`;
-    if (isLoadingExternal && !externalResults.length) html += skeletonCards;
-    html += externalResults.map(renderCard).join("");
+    if (isLoadingExternal && !shownExternal.length) html += skeletonCards;
+    html += shownExternal.map(renderCard).join("");
   }
-  if (!localResults.length && !externalResults.length && !isLoadingExternal) {
+  if (!shownLocal.length && !shownExternal.length && !isLoadingExternal) {
     html += `<p style="grid-column:1/-1;text-align:center;padding:2rem 1rem;color:var(--muted-strong)">Geen resultaten gevonden.</p>`;
   }
   html += "</div>";
@@ -14326,6 +14335,19 @@ if (importSearchInput) {
     searchChannelsOnImportScreen(q);
   });
 }
+
+bindEvent(document.getElementById("importViewToggle"), "click", () => {
+  importViewMode = importViewMode === "grid" ? "list" : "grid";
+  const toggle = document.getElementById("importViewToggle");
+  if (toggle) toggle.dataset.mode = importViewMode;
+  const results = document.getElementById("importChannelSearchResults");
+  if (results) {
+    const grid = results.querySelector(".ch-result-grid");
+    if (grid) {
+      grid.classList.toggle("ch-result-grid--list", importViewMode === "list");
+    }
+  }
+});
 
 bindEvent(document.getElementById("importChannelSearchClose"), "click", () => {
   const section = document.getElementById("importChannelSearchSection");
