@@ -752,6 +752,7 @@ const SEED_CHANNELS = [
   { id: "ch-lb", name: "Laura's Bakery" },
   { id: "ch-jumbo", name: "Jumbo" },
   { id: "ch-culy", name: "Culy" },
+  { id: "ch-fm", name: "Foodies Magazine" },
 ];
 
 function loadStaticJsonArray(relPath, fallback = []) {
@@ -824,6 +825,10 @@ const SEED_CHANNEL_DEFAULTS = {
   "ch-up": {
     baseUrl: "https://uitpaulineskeuken.nl",
     searchUrlTemplate: "https://uitpaulineskeuken.nl/zoeken?_search_keyword=<zoekwoord>&_search_posttypes=pauline_recepten",
+  },
+  "ch-fm": {
+    baseUrl: "https://www.foodiesmagazine.nl",
+    searchUrlTemplate: "https://www.foodiesmagazine.nl/zoeken/?_sf_s={q}&post_types=recept",
   },
 };
 
@@ -13701,6 +13706,9 @@ async function searchChannelRecipes(query, allowedChannels = null, options = {})
     // SLOW: Include but expect timeouts
     maybeSearch("ch-mj", () => scrapeOrRest(cfg("ch-mj").baseUrl || "https://miljuschka.nl", "Miljuschka", "ch-mj",
       buildSeedChannelSearchUrl("ch-mj", cfg("ch-mj"), query),
+      parseWPStandard, pc)),
+    maybeSearch("ch-fm", () => scrapeOrRest(cfg("ch-fm").baseUrl || "https://www.foodiesmagazine.nl", "Foodies Magazine", "ch-fm",
+      buildSeedChannelSearchUrl("ch-fm", cfg("ch-fm"), query),
       parseWPStandard, pc)),
   ];
 

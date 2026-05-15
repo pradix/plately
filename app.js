@@ -837,6 +837,7 @@ const SEED_CHANNELS = [
   { id: "ch-lb",  initials: "LB",  name: "Laura's Bakery",       color: "#e879a0", url: "https://www.laurasbakery.nl" },
   { id: "ch-jumbo", initials: "JU", name: "Jumbo",               color: "#fdc500", url: "https://www.jumbo.com/recepten/" },
   { id: "ch-culy", initials: "CU", name: "Culy",                 color: "#2f6f5d", url: "https://www.culy.nl" },
+  { id: "ch-fm",   initials: "FM", name: "Foodies Magazine",     color: "#e8612a", url: "https://www.foodiesmagazine.nl/recepten/" },
 ];
 
 const CUSTOM_CHANNEL_COLORS = [
