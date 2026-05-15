@@ -258,6 +258,14 @@ img {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+@media (prefers-reduced-motion: reduce) {
+  .recipe-card--skeleton .recipe-card__img-wrap,
+  .recipe-card--skeleton .skeleton-line {
+    animation: none;
+    background: #ede9e3;
+    background-image: none;
+  }
+}
 
 .page { min-height: 100vh; overflow-x: hidden; }
 
@@ -16642,6 +16650,32 @@ body {
   50% { transform: scale(1); box-shadow: 0 0 0 7px rgba(246, 182, 157, 0); }
 }
 
+/* ── 600px breakpoint: tablet-landscape / large-phone landscape ─────────── */
+@media (min-width: 600px) and (max-width: 759px) {
+  /* 3-column recipe grid — no need to wait for 760px */
+  .recent-imports-grid,
+  .recipe-grid,
+  .recipe-grid--cookbook {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    padding-inline: 20px;
+  }
+
+  /* Slightly more generous gutters on shared layout elements */
+  .topbar,
+  .section-heading,
+  .grocery-groups,
+  .grocery-order,
+  .kookboek-heading {
+    padding-inline: 20px;
+  }
+
+  /* Home search hero: wider padding */
+  .home-search-hero.search-card {
+    padding: 12px 20px 16px;
+  }
+}
+
 @media (min-width: 760px) {
   .recent-imports-grid,
   .recipe-grid,
@@ -17836,6 +17870,14 @@ body {
 .recent-card--skeleton .skeleton-line + .skeleton-line {
   margin-top: 7px;
   width: 55%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .recent-card--skeleton .recent-card__img,
+  .recent-card--skeleton .skeleton-line {
+    animation: none;
+    background: #ede9e3;
+    background-image: none;
+  }
 }
 
 /* ── Image lazy-load fade-in with blur-up placeholder ── */
