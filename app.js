@@ -4597,6 +4597,41 @@ function getSavedImportedRecipes() {
 
 // ── Channel recipe search ─────────────────────────────────────────────────────
 
+// Pre-gebouwde zoekindex: herbouw alleen als state.recipes verandert.
+// Slaat titleHay, ingredientHay, descriptionHay en channelinfo op per recept zodat
+// searchSavedRecipesForChannelQuery niet elke keer opnieuw 1000+ ingrediënten hoeft samen te voegen.
+let _recipeSearchIndex = [];
+let _recipeSearchIndexVersion = -1; // versietoken = state.recipes.length (goedkoop veranderingsdetectie)
+
+function buildRecipeSearchIndexIfNeeded() {
+  const recipes = state.recipes || [];
+  const version = recipes.length;
+  if (version === _recipeSearchIndexVersion) return;
+  _recipeSearchIndexVersion = version;
+  _recipeSearchIndex = recipes
+    .filter((r) => r && !SEED_RECIPE_IDS.has(r.id) && !r.isSeed)
+    .map((recipe) => {
+      const knownChannel = inferFollowedChannelForRecipeSource(recipe.sourceUrl || "");
+      let channelName = knownChannel?.name || "";
+      let channelColor = knownChannel?.color || "";
+      if (!knownChannel && recipe.sourceUrl) {
+        try {
+          const h = new URL(recipe.sourceUrl).hostname.replace(/^www\./, "");
+          if (/instagram\.com/i.test(h)) channelName = "Instagram";
+          else if (/youtube\.com|youtu\.be/i.test(h)) channelName = "YouTube";
+          else channelName = h.replace(/\.(nl|com|org|be|net)$/, "").replace(/^([^.]+).*/, (_, s) => s.charAt(0).toUpperCase() + s.slice(1));
+        } catch { channelName = "Opgeslagen"; }
+      }
+      if (!channelName) channelName = "Opgeslagen";
+      const channel = knownChannel || { id: "plately-local", name: channelName, color: channelColor };
+      const titleHay = String(recipe.title || "").toLowerCase();
+      const ingredientHay = (Array.isArray(recipe.ingredients) ? recipe.ingredients : [])
+        .map((item) => item?.name || item || "").join(" ").toLowerCase();
+      const descriptionHay = `${recipe.mealTag || ""} ${recipe.description || ""}`.toLowerCase();
+      return { recipe, channel, titleHay, ingredientHay, descriptionHay };
+    });
+}
+
 let channelSearchTimeout = null;
 /** Abort lopende /api/channel-search als de gebruiker verder typt of het paneel sluit */
 let channelSearchAbortController = null;
@@ -4710,38 +4745,19 @@ function inferFollowedChannelForRecipeSource(sourceUrl) {
 function searchSavedRecipesForChannelQuery(query, limit = 12) {
   const q = String(query || "").trim().toLowerCase();
   if (!q || q.length < 2) return [];
+  buildRecipeSearchIndexIfNeeded();
   const words = q.split(/\s+/).filter((w) => w.length >= 2).slice(0, 6);
+  const minHits = Math.max(1, Math.ceil(words.length * 0.5));
   const scored = [];
-  for (const recipe of state.recipes || []) {
-    if (!recipe || SEED_RECIPE_IDS.has(recipe.id) || recipe.isSeed) continue;
-    // Include all saved imported recipes — not just channel-linked ones.
-    const knownChannel = inferFollowedChannelForRecipeSource(recipe.sourceUrl || "");
-    let channelName = knownChannel?.name || "";
-    let channelColor = knownChannel?.color || "";
-    if (!knownChannel && recipe.sourceUrl) {
-      try {
-        const h = new URL(recipe.sourceUrl).hostname.replace(/^www\./, "");
-        if (/instagram\.com/i.test(h)) channelName = "Instagram";
-        else if (/youtube\.com|youtu\.be/i.test(h)) channelName = "YouTube";
-        else channelName = h.replace(/\.(nl|com|org|be|net)$/, "").replace(/^([^.]+).*/, (_, s) => s.charAt(0).toUpperCase() + s.slice(1));
-      } catch { channelName = "Opgeslagen"; }
-    }
-    if (!channelName) channelName = "Opgeslagen";
-    const channel = knownChannel || { id: "plately-local", name: channelName, color: channelColor };
-    const titleHay = String(recipe.title || "").toLowerCase();
-    const ingredientHay = (Array.isArray(recipe.ingredients) ? recipe.ingredients : [])
-      .map((item) => item?.name || item || "")
-      .join(" ")
-      .toLowerCase();
-    const descriptionHay = `${recipe.mealTag || ""} ${recipe.description || ""}`.toLowerCase();
+  for (const entry of _recipeSearchIndex) {
+    const { recipe, channel, titleHay, ingredientHay, descriptionHay } = entry;
     const titleExact = titleHay.includes(q);
-    const ingredientExact = ingredientHay.includes(q);
-    const descriptionExact = descriptionHay.includes(q);
+    const ingredientExact = !titleExact && ingredientHay.includes(q);
+    const descriptionExact = !titleExact && !ingredientExact && descriptionHay.includes(q);
     const titleHits = words.filter((w) => titleHay.includes(w)).length;
     const ingredientHits = words.filter((w) => ingredientHay.includes(w)).length;
     const descriptionHits = words.filter((w) => descriptionHay.includes(w)).length;
-    const totalHits = titleHits + ingredientHits + descriptionHits;
-    if (!titleExact && !ingredientExact && !descriptionExact && totalHits < Math.max(1, Math.ceil(words.length * 0.5))) continue;
+    if (!titleExact && !ingredientExact && !descriptionExact && (titleHits + ingredientHits + descriptionHits) < minHits) continue;
     const score =
       (titleExact ? 80 : 0) +
       (ingredientExact ? 34 : 0) +
@@ -12224,6 +12240,14 @@ bindEvent(searchInput, "input", (event) => {
   // Reset filter when starting a new search so results aren't hidden by old filter
   state.channelSearchFilter = null;
 
+  // Toon lokale resultaten direct (geen debounce) zodat opgeslagen recepten meteen verschijnen.
+  const immediateLocal = searchSavedRecipesForChannelQuery(query, 12);
+  if (immediateLocal.length) {
+    channelSearchSection?.classList.remove("hidden");
+    renderChannelSearchResults(immediateLocal);
+  }
+
+  // Externe search na debounce (scrapet websites, duurt langer)
   channelSearchTimeout = setTimeout(() => searchChannels(query), CHANNEL_SEARCH_DEBOUNCE_MS);
 });
 
