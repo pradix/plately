@@ -1818,16 +1818,58 @@ bindEvent(document.getElementById("forgotPasswordBtn"), "click", (e) => {
 
 bindEvent(document.getElementById("resetFormBack"), "click", (e) => {
   e.preventDefault();
-  const authForm = document.querySelector(".auth-screen__form:not(#resetEmailForm)");
+  // If on step 2, go back to step 1; otherwise close reset panel entirely
+  const step2 = document.getElementById("resetStep2");
+  if (step2 && !step2.classList.contains("hidden")) {
+    showResetStep1();
+    return;
+  }
+  const authForm = document.querySelector(".auth-screen__form:not(#resetEmailForm):not(#resetOtpForm)");
   const resetForm = document.getElementById("passwordResetForm");
   if (authForm) authForm.style.display = "";
   if (resetForm) resetForm.classList.add("hidden");
-  const resetFeedback = document.getElementById("resetFeedback");
-  if (resetFeedback) resetFeedback.textContent = "";
+  showResetStep1();
   syncAppleSignInRowVisibility();
   syncAuthSocialVisibility();
   scrollAuthModalToTop();
 });
+
+// Track the email used in step 1 for OTP verification in step 2
+let _resetOtpEmail = "";
+
+async function sendPasswordResetOtp(email) {
+  const response = await fetch("/api/auth/request-password-reset", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return response.json();
+}
+
+function showResetStep2(email) {
+  _resetOtpEmail = email;
+  const step1 = document.getElementById("resetStep1");
+  const step2 = document.getElementById("resetStep2");
+  const subtitle = document.getElementById("resetStep2Subtitle");
+  if (step1) step1.classList.add("hidden");
+  if (step2) step2.classList.remove("hidden");
+  if (subtitle) subtitle.textContent = `Voer de 6-cijferige code in die we naar ${email} hebben verstuurd.`;
+  // Focus first OTP box
+  const firstBox = document.querySelector(".otp-box");
+  if (firstBox) setTimeout(() => firstBox.focus(), 80);
+  scrollAuthModalToTop();
+}
+
+function showResetStep1() {
+  _resetOtpEmail = "";
+  const step1 = document.getElementById("resetStep1");
+  const step2 = document.getElementById("resetStep2");
+  if (step1) step1.classList.remove("hidden");
+  if (step2) step2.classList.add("hidden");
+  const fb = document.getElementById("resetFeedback");
+  if (fb) fb.textContent = "";
+  scrollAuthModalToTop();
+}
 
 bindEvent(document.getElementById("resetEmailForm"), "submit", async (e) => {
   e.preventDefault();
@@ -1841,37 +1883,123 @@ bindEvent(document.getElementById("resetEmailForm"), "submit", async (e) => {
   if (!email) return;
 
   resetSubmitBtn.disabled = true;
-  resetSubmitBtn.textContent = "Link wordt verstuurd...";
+  resetSubmitBtn.textContent = "Code wordt verstuurd...";
   if (resetFeedback) resetFeedback.textContent = "";
 
   try {
-    const response = await fetch("/api/auth/request-password-reset", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-
-    const data = await response.json();
-
+    const data = await sendPasswordResetOtp(email);
     if (data.ok) {
-      if (resetFeedback) resetFeedback.style.color = "#22c55e";
-      if (resetFeedback) resetFeedback.textContent = "Check je e-mail voor een reset link.";
-      resetEmail.value = "";
-      setTimeout(() => {
-        const authForm = document.querySelector(".auth-screen__form:not(#resetEmailForm)");
-        const resetForm = document.getElementById("passwordResetForm");
-        if (authForm) authForm.style.display = "";
-        if (resetForm) resetForm.classList.add("hidden");
-        syncAppleSignInRowVisibility();
-      }, 3000);
+      showResetStep2(email);
     } else {
       if (resetFeedback) resetFeedback.textContent = data.error || "Er is iets fout gegaan.";
     }
-  } catch (error) {
+  } catch {
     if (resetFeedback) resetFeedback.textContent = "Verbindingsfout. Probeer opnieuw.";
   } finally {
     resetSubmitBtn.disabled = false;
-    resetSubmitBtn.textContent = "Reset link versturen";
+    resetSubmitBtn.textContent = "Code versturen";
+  }
+});
+
+// OTP box — auto-advance, backspace, paste handling
+(function wireOtpBoxes() {
+  const container = document.getElementById("otpBoxes");
+  if (!container) return;
+  const boxes = Array.from(container.querySelectorAll(".otp-box"));
+
+  boxes.forEach((box, i) => {
+    box.addEventListener("input", () => {
+      const val = box.value.replace(/\D/g, "");
+      box.value = val ? val[val.length - 1] : "";
+      box.classList.toggle("otp-box--filled", box.value !== "");
+      if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
+    });
+
+    box.addEventListener("keydown", (e) => {
+      if (e.key === "Backspace" && !box.value && i > 0) {
+        boxes[i - 1].value = "";
+        boxes[i - 1].classList.remove("otp-box--filled");
+        boxes[i - 1].focus();
+      }
+    });
+
+    box.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const pasted = (e.clipboardData || window.clipboardData).getData("text").replace(/\D/g, "");
+      pasted.split("").forEach((ch, idx) => {
+        if (boxes[i + idx]) {
+          boxes[i + idx].value = ch;
+          boxes[i + idx].classList.add("otp-box--filled");
+        }
+      });
+      const next = boxes[Math.min(i + pasted.length, boxes.length - 1)];
+      if (next) next.focus();
+    });
+  });
+})();
+
+bindEvent(document.getElementById("resetOtpForm"), "submit", async (e) => {
+  e.preventDefault();
+  const boxes = Array.from(document.querySelectorAll(".otp-box"));
+  const code = boxes.map((b) => b.value).join("");
+  const newPassword = document.getElementById("resetNewPassword")?.value || "";
+  const submitBtn = document.getElementById("resetOtpSubmitBtn");
+  const feedback = document.getElementById("resetOtpFeedback");
+
+  if (code.length < 6) {
+    if (feedback) { feedback.style.color = "#ef4444"; feedback.textContent = "Voer alle 6 cijfers in."; }
+    return;
+  }
+
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Bezig..."; }
+  if (feedback) feedback.textContent = "";
+
+  try {
+    const response = await fetch("/api/auth/verify-reset-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: _resetOtpEmail, code, newPassword }),
+    });
+    const data = await response.json();
+
+    if (data.ok) {
+      if (feedback) { feedback.style.color = "#22c55e"; feedback.textContent = "Wachtwoord gewijzigd! Je kunt nu inloggen."; }
+      boxes.forEach((b) => { b.value = ""; b.classList.remove("otp-box--filled"); });
+      if (document.getElementById("resetNewPassword")) document.getElementById("resetNewPassword").value = "";
+      setTimeout(() => {
+        // Return to login form
+        const authForm = document.querySelector(".auth-screen__form:not(#resetEmailForm):not(#resetOtpForm)");
+        const resetForm = document.getElementById("passwordResetForm");
+        if (authForm) authForm.style.display = "";
+        if (resetForm) resetForm.classList.add("hidden");
+        showResetStep1();
+        syncAppleSignInRowVisibility();
+        openAuthModal("login");
+      }, 2000);
+    } else {
+      boxes.forEach((b) => b.classList.add("otp-box--error"));
+      setTimeout(() => boxes.forEach((b) => b.classList.remove("otp-box--error")), 400);
+      if (feedback) { feedback.style.color = "#ef4444"; feedback.textContent = data.error || "Onjuiste code."; }
+    }
+  } catch {
+    if (feedback) { feedback.style.color = "#ef4444"; feedback.textContent = "Verbindingsfout. Probeer opnieuw."; }
+  } finally {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Wachtwoord instellen"; }
+  }
+});
+
+bindEvent(document.getElementById("resetResendBtn"), "click", async () => {
+  if (!_resetOtpEmail) return;
+  const btn = document.getElementById("resetResendBtn");
+  const feedback = document.getElementById("resetOtpFeedback");
+  if (btn) { btn.disabled = true; btn.textContent = "Wordt verstuurd..."; }
+  try {
+    await sendPasswordResetOtp(_resetOtpEmail);
+    if (feedback) { feedback.style.color = "#22c55e"; feedback.textContent = "Nieuwe code verstuurd!"; }
+  } catch {
+    if (feedback) { feedback.style.color = "#ef4444"; feedback.textContent = "Versturen mislukt."; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Opnieuw versturen"; }
   }
 });
 

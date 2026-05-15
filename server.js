@@ -24,6 +24,47 @@ const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
 const gzipAsync = promisify(zlib.gzip);
 
+// Lazy-loaded nodemailer (only when email is needed)
+let _nodemailer = null;
+function getNodemailer() {
+  if (!_nodemailer) _nodemailer = require("nodemailer");
+  return _nodemailer;
+}
+
+async function sendEmail({ to, subject, html }) {
+  const host = process.env.SMTP_HOST;
+  const port = parseInt(process.env.SMTP_PORT || "587", 10);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const from = process.env.SMTP_FROM || user;
+
+  if (!host || !user || !pass) {
+    // Resend fallback if configured
+    const resendKey = process.env.RESEND_API_KEY;
+    if (resendKey) {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendKey}` },
+        body: JSON.stringify({ from: process.env.RESEND_FROM_EMAIL || "Plately <noreply@plately.app>", to: [to], subject, html }),
+      });
+      if (!res.ok) throw new Error(`Resend ${res.status}`);
+      return;
+    }
+    // No email service — log to console for dev
+    console.log(`📧 [DEV] E-mail naar ${to}\nOnderwerp: ${subject}\n(Stel SMTP_HOST/SMTP_USER/SMTP_PASS in voor echte e-mails)`);
+    return;
+  }
+
+  const nodemailer = getNodemailer();
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
+  await transporter.sendMail({ from, to, subject, html });
+}
+
 const ROOT_DIR = __dirname;
 const execFileAsync = promisify(execFile);
 
@@ -16887,7 +16928,15 @@ const server = http.createServer(async (request, response) => {
         throw new HttpError(400, "Geldig e-mailadres vereist.");
       }
 
-      // Check if user exists
+      // Rate-limit: one OTP per email per 60 seconds
+      if (!global.passwordResetOtps) global.passwordResetOtps = {};
+      const existing = global.passwordResetOtps[email];
+      if (existing && Date.now() < new Date(existing.expiresAt).getTime() - 14 * 60 * 1000) {
+        sendJson(response, 200, { ok: true, step: "code" });
+        return;
+      }
+
+      // Check if user exists (always respond OK to avoid user enumeration)
       let userExists = false;
       if (isPostgresEnabled()) {
         await ensurePostgresSchema();
@@ -16900,33 +16949,99 @@ const server = http.createServer(async (request, response) => {
       }
 
       if (!userExists) {
-        sendJson(response, 200, {
-          ok: true,
-          message: "Als dit e-mailadres bekend is, ontvang je een reset link.",
-        });
+        sendJson(response, 200, { ok: true, step: "code" });
         return;
       }
 
-      // Generate reset token
-      const resetToken = crypto.randomBytes(32).toString("hex");
-      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 min expiry
+      // Generate 6-digit OTP
+      const otpCode = String(Math.floor(100000 + crypto.randomInt(900000)));
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      global.passwordResetOtps[email] = { code: otpCode, expiresAt, attempts: 0 };
 
-      // Store token (in-memory for dev, would be database for prod)
-      if (!global.passwordResetTokens) {
-        global.passwordResetTokens = {};
+      // Send OTP by email
+      const hasSmtp = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS;
+      const hasResend = !!process.env.RESEND_API_KEY;
+      try {
+        await sendEmail({
+          to: email,
+          subject: `${otpCode} — jouw Plately inlogcode`,
+          html: `
+            <div style="font-family:sans-serif;max-width:420px;margin:0 auto;padding:32px 24px">
+              <img src="https://plately.app/assets/plately.png" alt="Plately" style="height:36px;margin-bottom:24px" />
+              <h2 style="margin:0 0 8px;font-size:20px">Wachtwoord vergeten?</h2>
+              <p style="margin:0 0 24px;color:#555">Gebruik de onderstaande code om je wachtwoord opnieuw in te stellen. De code is 15 minuten geldig.</p>
+              <div style="background:#f5f0ea;border-radius:12px;padding:24px;text-align:center;letter-spacing:8px;font-size:36px;font-weight:700;color:#1a1a1a">${otpCode}</div>
+              <p style="margin:24px 0 0;color:#888;font-size:13px">Heb je dit niet aangevraagd? Dan kun je deze e-mail negeren.</p>
+            </div>
+          `,
+        });
+      } catch (err) {
+        console.error("❌ E-mail verzenden mislukt:", err?.message || err);
       }
-      global.passwordResetTokens[resetToken] = { email, expiresAt };
-
-      // In production, send email with reset link
-      // For now, just return success message
-      console.log(`🔐 Password reset token for ${email}: ${resetToken}`);
 
       sendJson(response, 200, {
         ok: true,
-        message: "Als dit e-mailadres bekend is, ontvang je een reset link.",
-        // In dev mode, return the token (remove in production!)
-        ...(process.env.NODE_ENV !== "production" && { _devToken: resetToken }),
+        step: "code",
+        ...(!hasSmtp && !hasResend && { _devCode: otpCode }),
       });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/auth/verify-reset-otp" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const email = String(body.email || "").trim().toLowerCase();
+      const code = String(body.code || "").trim();
+      const newPassword = String(body.newPassword || "");
+
+      if (!email || !code || !newPassword) {
+        throw new HttpError(400, "Verplichte velden ontbreken.");
+      }
+      if (newPassword.length < 8) {
+        throw new HttpError(400, "Wachtwoord moet minstens 8 tekens zijn.");
+      }
+
+      if (!global.passwordResetOtps) global.passwordResetOtps = {};
+      const record = global.passwordResetOtps[email];
+
+      if (!record) {
+        throw new HttpError(400, "Geen actieve resetcode. Vraag een nieuwe aan.");
+      }
+      if (new Date() > new Date(record.expiresAt)) {
+        delete global.passwordResetOtps[email];
+        throw new HttpError(400, "Code is verlopen. Vraag een nieuwe aan.");
+      }
+
+      record.attempts = (record.attempts || 0) + 1;
+      if (record.attempts > 5) {
+        delete global.passwordResetOtps[email];
+        throw new HttpError(400, "Te veel pogingen. Vraag een nieuwe code aan.");
+      }
+      if (record.code !== code) {
+        throw new HttpError(400, `Onjuiste code. Nog ${6 - record.attempts} poging${6 - record.attempts === 1 ? "" : "en"}.`);
+      }
+
+      // Code correct — update password
+      delete global.passwordResetOtps[email];
+      const { hash: newHash, salt: newSalt } = createPasswordHash(newPassword);
+
+      if (isPostgresEnabled()) {
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        await pool.query(
+          `UPDATE plately_users SET password_hash = $1, password_salt = $2 WHERE LOWER(email) = $3`,
+          [newHash, newSalt, email]
+        );
+      } else {
+        const db = await loadDatabase();
+        const user = Object.values(db.users).find((u) => u.email.toLowerCase() === email);
+        if (user) {
+          user.password_hash = newHash;
+          user.password_salt = newSalt;
+          await saveDatabase(db);
+        }
+      }
+
+      sendJson(response, 200, { ok: true, message: "Wachtwoord succesvol gewijzigd. Je kunt nu inloggen." });
       return;
     }
 

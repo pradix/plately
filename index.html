@@ -9,7 +9,7 @@
       name="description"
       content="Plately is een webapp om recepten van Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.20.47" />
+    <meta name="plately-build" content="1.0.20.48" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -38,9 +38,9 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="preload" href="styles.css?v=1.0.20.47" as="style" />
-    <link rel="preload" href="app.js?v=1.0.20.47" as="script" />
-    <link rel="stylesheet" href="styles.css?v=1.0.20.47" />
+    <link rel="preload" href="styles.css?v=1.0.20.48" as="style" />
+    <link rel="preload" href="app.js?v=1.0.20.48" as="script" />
+    <link rel="stylesheet" href="styles.css?v=1.0.20.48" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -2259,19 +2259,49 @@
         <!-- Password reset form (hidden, shown when user clicks forgot) -->
         <div class="auth-screen__reset-form hidden" id="passwordResetForm">
           <button class="auth-screen__reset-back" type="button" id="resetFormBack">← Terug</button>
-          <h2 class="auth-screen__title" data-i18n="auth.resetTitle">Wachtwoord resetten</h2>
-          <p class="auth-screen__subtitle" data-i18n="auth.resetSubtitle">Voer je e-mailadres in om je wachtwoord opnieuw in te stellen.</p>
 
-          <form id="resetEmailForm" class="auth-screen__form">
-            <div class="auth-field">
-              <label class="auth-field__label" for="resetEmail">E-mailadres</label>
-              <input class="auth-field__input" id="resetEmail" name="email" type="email" placeholder="jij@voorbeeld.nl" autocomplete="email" required />
-            </div>
-            <p class="auth-screen__feedback" id="resetFeedback" aria-live="polite"></p>
-            <button class="auth-screen__submit" id="resetSubmitBtn" type="submit" data-i18n="auth.resetSubmit">Reset link versturen</button>
-          </form>
+          <!-- Step 1: enter email -->
+          <div id="resetStep1">
+            <h2 class="auth-screen__title">Wachtwoord vergeten</h2>
+            <p class="auth-screen__subtitle">Voer je e-mailadres in. Je ontvangt een 6-cijferige code.</p>
+            <form id="resetEmailForm" class="auth-screen__form">
+              <div class="auth-field">
+                <label class="auth-field__label" for="resetEmail">E-mailadres</label>
+                <input class="auth-field__input" id="resetEmail" name="email" type="email" placeholder="jij@voorbeeld.nl" autocomplete="email" required />
+              </div>
+              <p class="auth-screen__feedback" id="resetFeedback" aria-live="polite"></p>
+              <button class="auth-screen__submit" id="resetSubmitBtn" type="submit">Code versturen</button>
+            </form>
+          </div>
 
-          <p class="auth-screen__reset-note" data-i18n="auth.resetNote">Je ontvangt een e-mail met een link om je wachtwoord opnieuw in te stellen.</p>
+          <!-- Step 2: enter OTP + new password (hidden until step 1 succeeds) -->
+          <div id="resetStep2" class="hidden">
+            <h2 class="auth-screen__title">Code invoeren</h2>
+            <p class="auth-screen__subtitle" id="resetStep2Subtitle">Voer de 6-cijferige code in die we hebben verstuurd.</p>
+            <form id="resetOtpForm" class="auth-screen__form" autocomplete="off">
+              <div class="auth-field">
+                <label class="auth-field__label">Inlogcode</label>
+                <div class="otp-boxes" id="otpBoxes" aria-label="6-cijferige inlogcode">
+                  <input class="otp-box" type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" aria-label="Cijfer 1" />
+                  <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Cijfer 2" />
+                  <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Cijfer 3" />
+                  <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Cijfer 4" />
+                  <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Cijfer 5" />
+                  <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Cijfer 6" />
+                </div>
+              </div>
+              <div class="auth-field">
+                <label class="auth-field__label" for="resetNewPassword">Nieuw wachtwoord</label>
+                <input class="auth-field__input" id="resetNewPassword" name="newPassword" type="password" placeholder="Minimaal 8 tekens" autocomplete="new-password" minlength="8" required />
+              </div>
+              <p class="auth-screen__feedback" id="resetOtpFeedback" aria-live="polite"></p>
+              <button class="auth-screen__submit" id="resetOtpSubmitBtn" type="submit">Wachtwoord instellen</button>
+            </form>
+            <p class="auth-screen__reset-note">
+              Geen code ontvangen?
+              <button class="auth-link-btn" type="button" id="resetResendBtn">Opnieuw versturen</button>
+            </p>
+          </div>
         </div>
 
         <div class="auth-screen__social-buttons" id="authSocialRow">
@@ -2546,6 +2576,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=1.0.20.47" defer></script>
+    <script src="app.js?v=1.0.20.48" defer></script>
   </body>
 </html>
