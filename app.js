@@ -10359,28 +10359,32 @@ async function registerServiceWorker() {
     const registration = await navigator.serviceWorker.register(`/service-worker.js?v=${encodeURIComponent(buildVersion)}`);
     registration.update().catch(() => {});
 
-    let refreshing = false;
+    let updateToastShown = false;
+    const showUpdateToast = () => {
+      if (updateToastShown) return;
+      updateToastShown = true;
+      showToast("App bijgewerkt — tik om te vernieuwen.", {
+        variant: "info",
+        durationMs: 60000,
+        undoLabel: "Vernieuwen",
+        onUndo: () => window.location.reload(),
+      });
+    };
+
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (refreshing) {
-        return;
-      }
-      refreshing = true;
-      window.location.reload();
+      showUpdateToast();
     });
 
     if (registration.waiting) {
-      registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      showUpdateToast();
     }
 
     registration.addEventListener("updatefound", () => {
       const worker = registration.installing;
-      if (!worker) {
-        return;
-      }
-
+      if (!worker) return;
       worker.addEventListener("statechange", () => {
         if (worker.state === "installed" && navigator.serviceWorker.controller) {
-          worker.postMessage({ type: "SKIP_WAITING" });
+          showUpdateToast();
         }
       });
     });
@@ -12751,7 +12755,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.3";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.4";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
