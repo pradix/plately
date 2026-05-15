@@ -7326,18 +7326,24 @@ async function importInstagram(sourceUrl, note) {
 
   // Extracteer de Instagram shortcode voor embed-URL
   const igShortcode = String(sourceUrl || "").match(/\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/)?.[1] || "";
-  const igEmbedUrl = igShortcode ? `https://www.instagram.com/p/${igShortcode}/embed/` : "";
 
   if (META_APP_ID && META_APP_SECRET) {
     const token = `${META_APP_ID}|${META_APP_SECRET}`;
     const endpoint =
       `https://graph.facebook.com/v23.0/instagram_oembed?url=${encodeURIComponent(sourceUrl)}` +
-      `&omitscript=false&access_token=${encodeURIComponent(token)}`;
-
+      `&fields=author_name,author_url,html,thumbnail_url,title,provider_name,provider_url,type,version` +
+      `&access_token=${encodeURIComponent(token)}`;
+    console.log(`[IG] oEmbed aanroepen voor ${igShortcode || sourceUrl}`);
     oembed = await fetchJson(endpoint).catch((error) => {
       oembedErrorMessage = error instanceof Error ? error.message : String(error || "");
+      console.warn(`[IG] oEmbed mislukt: ${oembedErrorMessage}`);
       return null;
     });
+    if (oembed) {
+      console.log(`[IG] oEmbed OK — author: ${oembed.author_name}, caption-lengte: ${String(oembed.title || "").length}`);
+    }
+  } else {
+    console.warn(`[IG] META_APP_ID/SECRET niet ingesteld — oEmbed overgeslagen`);
   }
 
   const document = await fetchWebsiteDocument(sourceUrl).catch(() => null);
@@ -7350,10 +7356,14 @@ async function importInstagram(sourceUrl, note) {
   const textDerivedTitle = textFallback ? extractDishPhrase(textFallback) || extractRecipeTitleFromCaption(textFallback) : "";
   const textDerivedCaption = textFallback && isUsefulCaptionCandidate(textFallback) ? textFallback : "";
 
+  // oEmbed.title is de volledige Instagram-caption — zet hem vooraan zodat hij wint van og:description
+  const oembedCaption = sanitizeText(oembed?.title || "");
   let image = ogImage || oembed?.thumbnail_url || "";
   const author = oembed?.author_name || htmlSignals.authors[0] || "";
-  let captionCandidates = [ogDescription, textDerivedCaption, ...htmlSignals.captions, oembed?.title];
-  let bestCaption = pickBestCaptionCandidate(captionCandidates) || sanitizeText(ogDescription || oembed?.title || "");
+  let captionCandidates = [oembedCaption, ogDescription, textDerivedCaption, ...htmlSignals.captions];
+  let bestCaption = (oembedCaption.length > 40 ? oembedCaption : null)
+    || pickBestCaptionCandidate(captionCandidates)
+    || sanitizeText(ogDescription || oembedCaption || "");
 
   // Fallback 1: embed URL — bypasses login wall voor publieke posts.
   if (!bestCaption && igShortcode) {
