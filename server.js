@@ -5855,7 +5855,43 @@ async function fetchWebsiteDocumentViaFirecrawl(url) {
   }
 }
 
+const HTML_PROXY_URL = process.env.HTML_PROXY || "";
+const HTML_PROXY_SECRET = process.env.HTML_PROXY_SECRET || "PlatelyProxy";
+
+// Hosts that zijn geblokkeerd voor datacenter-IPs — route via CF Worker proxy
+const HTML_PROXY_HOSTS = new Set(["miljuschka.nl", "www.miljuschka.nl", "www.eefkooktzo.nl", "eefkooktzo.nl", "www.foodiesmagazine.nl", "foodiesmagazine.nl"]);
+
+async function fetchHtmlViaProxy(url) {
+  if (!HTML_PROXY_URL) return null;
+  try {
+    const proxyUrl = `${HTML_PROXY_URL}?url=${encodeURIComponent(url)}`;
+    const resp = await fetch(proxyUrl, {
+      headers: { "x-plately-secret": HTML_PROXY_SECRET },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!resp.ok) {
+      console.log(`[HTML-Proxy] ${resp.status} voor ${url}`);
+      return null;
+    }
+    const html = await resp.text();
+    return html && html.length > 500 ? html : null;
+  } catch (e) {
+    console.log(`[HTML-Proxy] fout voor ${url}: ${e.message}`);
+    return null;
+  }
+}
+
 async function fetchHtml(url) {
+  // Route geblokkeerde hosts via CF Worker proxy
+  try {
+    const host = new URL(url).hostname;
+    if (HTML_PROXY_URL && HTML_PROXY_HOSTS.has(host)) {
+      const proxied = await fetchHtmlViaProxy(url);
+      if (proxied) return proxied;
+      console.log(`[HTML-Proxy] fallback naar directe fetch voor ${host}`);
+    }
+  } catch { /* ongeldige URL, ga door */ }
+
   const document = await fetchWebsiteDocument(url);
   if (document.kind !== "html") {
     return "";
