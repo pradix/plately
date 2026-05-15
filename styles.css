@@ -7999,6 +7999,10 @@ button.ingredient-item {
   background: rgba(120,147,111,0.14);
   color: #2f3b2b;
 }
+.confirm-sheet__btn--alt.confirm-sheet__btn--destructive {
+  background: #ef4444;
+  color: #fff;
+}
 
 .swap-panel {
   margin-top: 14px;
