@@ -5613,11 +5613,16 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
   let lastStatus = 0;
   let lastError = null;
 
-  // Geblokkeerde hosts: probeer CF Worker HTML proxy eerst (snel, geen kosten)
-  if (HTML_PROXY_URL && HTML_PROXY_HOSTS.has(parsedUrl.hostname)) {
-    const proxied = await fetchHtmlViaProxy(url);
-    if (proxied) return { kind: "html", body: proxied, url };
-    console.log(`[HTML-Proxy] import fallback naar ZenRows voor ${parsedUrl.hostname}`);
+  // Geblokkeerde hosts: probeer WP REST API eerst (gratis, geen limieten),
+  // dan CF Worker HTML proxy als backup.
+  if (HTML_PROXY_HOSTS.has(parsedUrl.hostname)) {
+    const wpDoc = await fetchViaWordPressApi(url);
+    if (wpDoc) return wpDoc;
+    if (HTML_PROXY_URL) {
+      const proxied = await fetchHtmlViaProxy(url);
+      if (proxied) return { kind: "html", body: proxied, url };
+      console.log(`[HTML-Proxy] import fallback naar ZenRows voor ${parsedUrl.hostname}`);
+    }
   }
 
   // Miljuschka / EEF / Culy: directe HTML-profielen zijn vrijwel altijd 403.
@@ -5867,6 +5872,60 @@ const HTML_PROXY_SECRET = process.env.HTML_PROXY_SECRET || "PlatelyProxy";
 
 // Hosts that zijn geblokkeerd voor datacenter-IPs — route via CF Worker proxy
 const HTML_PROXY_HOSTS = new Set(["miljuschka.nl", "www.miljuschka.nl", "www.eefkooktzo.nl", "eefkooktzo.nl", "www.foodiesmagazine.nl", "foodiesmagazine.nl"]);
+
+async function fetchViaWordPressApi(url) {
+  let parsedUrl;
+  try { parsedUrl = new URL(url); } catch { return null; }
+
+  // Haal slug op uit het URL-pad (laatste niet-lege segment)
+  const segments = parsedUrl.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+  const slug = segments[segments.length - 1];
+  if (!slug || slug.length < 2) return null;
+
+  const base = `${parsedUrl.protocol}//${parsedUrl.host}`;
+
+  // Probeer standaard WP posts endpoint, dan custom post types
+  const endpoints = [
+    `${base}/wp-json/wp/v2/posts?slug=${encodeURIComponent(slug)}&_fields=title,content,excerpt,link,yoast_head`,
+    `${base}/wp-json/wp/v2/recept?slug=${encodeURIComponent(slug)}&_fields=title,content,excerpt,link,yoast_head`,
+    `${base}/wp-json/wp/v2/recipe?slug=${encodeURIComponent(slug)}&_fields=title,content,excerpt,link,yoast_head`,
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const resp = await fetch(endpoint, {
+        headers: { "Accept": "application/json", "User-Agent": "Mozilla/5.0" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const post = Array.isArray(data) ? data[0] : data;
+      if (!post?.content?.rendered) continue;
+
+      const title = post.title?.rendered || "";
+      const content = post.content.rendered || "";
+      const excerpt = post.excerpt?.rendered || "";
+      const yoastHead = post.yoast_head || "";
+      const canonicalUrl = post.link || url;
+
+      // Bouw een volledige HTML-pagina zodat bestaande parsers (JSON-LD, WPRM) werken
+      const html = `<!DOCTYPE html><html><head>
+        <title>${title}</title>
+        ${yoastHead}
+      </head><body>
+        <article>
+          <h1>${title}</h1>
+          ${excerpt}
+          ${content}
+        </article>
+      </body></html>`;
+
+      console.log(`[WP-API] ✅ ${parsedUrl.hostname} — "${title}" via ${endpoint}`);
+      return { kind: "html", body: html, url: canonicalUrl };
+    } catch { continue; }
+  }
+  return null;
+}
 
 async function fetchHtmlViaProxy(url) {
   if (!HTML_PROXY_URL) return null;

@@ -1542,7 +1542,7 @@ let iosSetupTrapDisposer = null;
 
 let confirmCallback = null;
 let confirmAltCallback = null;
-function showConfirm({ title, subtitle, confirmLabel = "Bevestigen", destructive = false, altLabel = "", onConfirm, onAlt }) {
+function showConfirm({ title, subtitle, confirmLabel = "Bevestigen", destructive = false, altLabel = "", altDestructive = false, onConfirm, onAlt }) {
   const sheet = document.getElementById("confirmSheet");
   const titleEl = document.getElementById("confirmSheetTitle");
   const subtitleEl = document.getElementById("confirmSheetSubtitle");
@@ -1558,7 +1558,7 @@ function showConfirm({ title, subtitle, confirmLabel = "Bevestigen", destructive
   if (altBtn) {
     const hasAlt = Boolean(String(altLabel || "").trim()) && typeof onAlt === "function";
     altBtn.textContent = String(altLabel || "").trim() || "Andere optie";
-    altBtn.classList.toggle("hidden", !hasAlt);
+    altBtn.className = "confirm-sheet__btn confirm-sheet__btn--alt" + (altDestructive ? " confirm-sheet__btn--destructive" : "") + (hasAlt ? "" : " hidden");
   }
   confirmCallback = onConfirm || null;
   confirmAltCallback = typeof onAlt === "function" ? onAlt : null;
@@ -5066,10 +5066,6 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
           ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
         </div>
         <div class="ch-card__actions">
-          <a class="ch-card__view${hasExternalView ? "" : " is-disabled"}" href="${escapeHtml(viewUrl)}" ${hasExternalView ? 'target="_blank" rel="noopener noreferrer"' : 'aria-disabled="true"'} aria-label="Bekijk ${escapeHtml(r.title)} op ${escapeHtml(r.channel)}">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z" fill="currentColor"/></svg>
-            Bekijk
-          </a>
           <button class="ch-card__import" type="button"
             data-channel-import-url="${escapeHtml(r.url)}"
             data-channel-import-thumb="${escapeHtml(thumbUrl || "")}"
@@ -5250,10 +5246,6 @@ function renderImportScreenResults(container, localResults, externalResults, isL
           ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
         </div>
         <div class="ch-card__actions">
-          ${!isLocal ? `<a class="ch-card__view" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer" aria-label="Bekijk ${escapeHtml(r.title)}">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5a1 1 0 0 1 1-1h3.5A1.5 1.5 0 0 1 20 5v3.5a1 1 0 1 1-2 0V6.91l-5.3 5.3a1 1 0 0 1-1.4-1.42L16.59 5.5H15a1 1 0 0 1-1-1Zm-8 4A2.5 2.5 0 0 1 8.5 6h3a1 1 0 1 1 0 2h-3a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-3a1 1 0 1 1 2 0v3a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 6 16.5v-8Z" fill="currentColor"/></svg>
-            Bekijk
-          </a>` : ""}
           <button class="ch-card__import" type="button"
             data-channel-import-url="${escapeHtml(r.url)}"
             data-channel-import-thumb="${escapeHtml(thumbUrl || "")}"
@@ -6173,12 +6165,7 @@ function renderDetailRecipe(resetServings = false) {
       </article>
     `;
   }
-  servingsDisplay.textContent = `${state.currentServings} pers.`;
-  if (servingsPresets) {
-    servingsPresets.querySelectorAll(".servings-preset-btn").forEach((btn) => {
-      btn.classList.toggle("is-active", Number(btn.dataset.servings) === state.currentServings);
-    });
-  }
+  servingsDisplay.textContent = `${state.currentServings} ${state.currentServings === 1 ? "persoon" : "personen"}`;
   detailStepCount.textContent = `${recipe.instructions.length} stappen`;
   if (addSelectedToGroceriesButton) {
     addSelectedToGroceriesButton.textContent = `Zet ${recipe.ingredients.length} ingrediënten op boodschappenlijst`;
@@ -6496,7 +6483,8 @@ function renderKookstand() {
   progress.currentStep = boundedIndex;
 
   kookstandTitle.textContent = recipe.title || "Recept";
-  kookstandServings.textContent = `${Math.max(1, state.currentServings || parseBaseServings(recipe.servings) || 2)} pers.`;
+  const kookN = Math.max(1, state.currentServings || parseBaseServings(recipe.servings) || 2);
+  kookstandServings.textContent = `${kookN} ${kookN === 1 ? "persoon" : "personen"}`;
   kookstandProgress.textContent = hasSteps ? `Stap ${boundedIndex + 1} van ${instructions.length}` : "Nog geen stappen";
   if (kookstandCounter) {
     kookstandCounter.textContent = hasSteps ? `${boundedIndex + 1}/${instructions.length}` : "—/—";
@@ -6780,12 +6768,12 @@ function renderGroceryListSwitcher() {
           title: `"${list.name}"`,
           subtitle: "Wat wil je doen?",
           confirmLabel: "Naam wijzigen",
-          cancelLabel: "Verwijderen",
-          destructive: false,
+          altLabel: "Verwijderen",
+          altDestructive: true,
           onConfirm: () => {
             openGroceryListNameModal("Hernoem lijst", list.name, (newName) => renameGroceryList(listId, newName));
           },
-          onCancel: () => {
+          onAlt: () => {
             if (state.groceryLists.length <= 1) {
               showToast("Je hebt minstens één lijst nodig.");
               return;
@@ -9496,6 +9484,8 @@ function applyPersistedAppState(user) {
       email: user.profile.email || "",
       photo: typeof user.profile.photo === "string" ? user.profile.photo : "",
       favoriteSupermarket: user.profile.favoriteSupermarket || "ah",
+      gender: user.profile.gender || "",
+      birthDate: user.profile.birthDate || "",
       onboardingSeenAt: onboardingSeenAt || null,
     };
   } else {
@@ -11945,6 +11935,10 @@ bindEvent(document.getElementById("profileSubChannelsSave"), "click", () => {
 bindEvent(document.getElementById("profileSubLanguageBack"), "click", () => closeProfileSubPanel("profileSubLanguage"));
 bindEvent(document.getElementById("profileSubChangelogBack"), "click", () => closeProfileSubPanel("profileSubChangelog"));
 bindEvent(document.getElementById("profileSubNotificationsBack"), "click", () => closeProfileSubPanel("profileSubNotifications"));
+bindEvent(document.getElementById("goToGuideHomescreenBtn"), "click", () => openProfileSubPanel("profileSubGuideHomescreen"));
+bindEvent(document.getElementById("profileSubGuideHomescreenBack"), "click", () => closeProfileSubPanel("profileSubGuideHomescreen"));
+bindEvent(document.getElementById("goToGuideInstagramBtn"), "click", () => openProfileSubPanel("profileSubGuideInstagram"));
+bindEvent(document.getElementById("profileSubGuideInstagramBack"), "click", () => closeProfileSubPanel("profileSubGuideInstagram"));
 
 // Language option selection (select but don't save yet)
 bindEvent(document.getElementById("profileSubLanguage"), "click", (e) => {
@@ -12126,7 +12120,7 @@ function applyServingsChange(next) {
     schedulePersistAppState();
     renderGroceryGroups();
     if (state.basketPreview) scheduleRefetchBasketWithPreferences();
-    showToast(`Hoeveelheden meegeschaald naar ${clamped} pers.`, { variant: "success" });
+    showToast(`Hoeveelheden meegeschaald naar ${clamped} ${clamped === 1 ? "persoon" : "personen"}.`, { variant: "success" });
   }
 
   state.currentServings = clamped;

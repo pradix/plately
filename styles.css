@@ -17271,3 +17271,112 @@ body {
 .legal-document a {
   color: var(--color-brand);
 }
+
+/* ══ Onboarding Guide ══ */
+.onboarding-guide__intro {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: var(--card-bg, #fff);
+  border-radius: 16px;
+  margin-bottom: 4px;
+}
+.onboarding-guide__icon {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.onboarding-guide__icon svg { width: 26px; height: 26px; }
+.onboarding-guide__intro-text {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--muted-strong, #555);
+  margin: 0;
+}
+.onboarding-guide__steps {
+  padding: 0 !important;
+  overflow: hidden;
+}
+.onboarding-guide__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--divider, #e8e8e4);
+}
+.onboarding-guide__step:last-child { border-bottom: none; }
+.onboarding-guide__num {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--color-brand, #8da485);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.onboarding-guide__step-body { flex: 1; min-width: 0; }
+.onboarding-guide__step-body strong {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text, #2a2a28);
+  margin-bottom: 3px;
+}
+.onboarding-guide__step-body p {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--muted-strong, #555);
+  margin: 0;
+}
+.onboarding-guide__inline-icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+  margin: 0 2px;
+}
+.onboarding-guide__code {
+  font-family: monospace;
+  font-size: 0.82rem;
+  background: var(--bg-muted, #f0f0ec);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--text);
+}
+.onboarding-guide__pill {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: var(--bg-muted, #f0f0ec);
+  border-radius: 20px;
+  padding: 2px 8px;
+  color: var(--text);
+}
+.onboarding-guide__tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #fef9c3;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #713f12;
+  margin-top: 16px;
+}
+.onboarding-guide__tip svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}

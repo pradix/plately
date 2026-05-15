@@ -370,7 +370,7 @@
                     <div class="detail-servings-row__top">
                       <div class="servings-control">
                         <button class="servings-btn" id="servingsDown" type="button" aria-label="Minder personen">−</button>
-                        <button class="servings-display-btn" id="servingsDisplay" type="button" aria-label="Aantal personen aanpassen">2 pers.</button>
+                        <button class="servings-display-btn" id="servingsDisplay" type="button" aria-label="Aantal personen aanpassen">2 personen</button>
                         <input class="servings-input hidden" id="servingsInput" type="number" min="1" max="99" aria-label="Aantal personen" />
                         <button class="servings-btn" id="servingsUp" type="button" aria-label="Meer personen">+</button>
                       </div>
@@ -378,13 +378,6 @@
                         <button class="ingredient-quick-btn" id="checkAllIngredientsButton" type="button" aria-label="Alle ingrediënten checken">Alles checken</button>
                         <button class="ingredient-quick-btn ingredient-quick-btn--secondary" id="uncheckAllIngredientsButton" type="button" aria-label="Alle ingrediënten uitvinken">Alles afhaken</button>
                       </div>
-                    </div>
-                    <div class="servings-presets" id="servingsPresets">
-                      <button class="servings-preset-btn" type="button" data-servings="1">1</button>
-                      <button class="servings-preset-btn" type="button" data-servings="2">2</button>
-                      <button class="servings-preset-btn" type="button" data-servings="4">4</button>
-                      <button class="servings-preset-btn" type="button" data-servings="6">6</button>
-                      <button class="servings-preset-btn" type="button" data-servings="8">8</button>
                     </div>
                   </div>
                   <ul class="ingredient-list" id="detailIngredientList"></ul>
@@ -737,6 +730,26 @@
                 </svg>
               </span>
               <span class="profile2-row__label">Notificaties</span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          </div>
+
+          <!-- AAN DE SLAG section -->
+          <p class="profile2-section-label">AAN DE SLAG</p>
+          <div class="profile2-card">
+            <button class="profile2-row" type="button" id="goToGuideHomescreenBtn">
+              <span class="profile2-row__icon" style="background:#e0f2fe">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#0369a1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+              </span>
+              <span class="profile2-row__label">Plately op je thuisscherm</span>
+              <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <div class="profile2-row-divider"></div>
+            <button class="profile2-row" type="button" id="goToGuideInstagramBtn">
+              <span class="profile2-row__icon" style="background:#fce7f3">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#be185d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="#be185d" stroke="none"/></svg>
+              </span>
+              <span class="profile2-row__label">Recept importeren via Instagram</span>
               <svg class="profile2-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
             </button>
           </div>
@@ -1189,6 +1202,157 @@
                   <span class="profile2-row__meta" id="pushTrigAhBonusMeta"></span>
                   <span class="toggle-switch" id="pushTrigAhBonusToggle" role="switch" aria-checked="false" tabindex="0"></span>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ Sub-panel: Thuisscherm gids ══ -->
+          <div class="profile-subpanel" id="profileSubGuideHomescreen" aria-hidden="true">
+            <header class="topbar--sub">
+              <button class="topbar-back-btn" id="profileSubGuideHomescreenBack" type="button" aria-label="Terug">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <h1 class="topbar-title">Plately op je thuisscherm</h1>
+              <span class="topbar-spacer"></span>
+            </header>
+            <div class="profile-subpanel__body onboarding-guide">
+              <div class="onboarding-guide__intro">
+                <div class="onboarding-guide__icon" style="background:linear-gradient(135deg,#8da485,#a8c8a0)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M19 13v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6M12 17V3M7 8l5-5 5 5"/></svg>
+                </div>
+                <p class="onboarding-guide__intro-text">Voeg Plately toe aan je thuisscherm zodat je de app direct kunt openen — zonder browser.</p>
+              </div>
+
+              <p class="profile2-section-label" style="margin-top:20px">iPhone / iPad (Safari)</p>
+              <div class="profile2-card onboarding-guide__steps">
+                <div class="onboarding-guide__step">
+                  <span class="onboarding-guide__num">1</span>
+                  <div class="onboarding-guide__step-body">
+                    <strong>Open Plately in Safari</strong>
+                    <p>Ga naar <span class="onboarding-guide__code">plately.app</span> in Safari. Andere browsers werken niet.</p>
+                  </div>
+                </div>
+                <div class="onboarding-guide__step">
+                  <span class="onboarding-guide__num">2</span>
+                  <div class="onboarding-guide__step-body">
+                    <strong>Tik op Delen</strong>
+                    <p>Tik op het <svg class="onboarding-guide__inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> deel-icoon onderin de browserbalk.</p>
+                  </div>
+                </div>
+                <div class="onboarding-guide__step">
+                  <span class="onboarding-guide__num">3</span>
+                  <div class="onboarding-guide__step-body">
+                    <strong>Zet op beginscherm</strong>
+                    <p>Scroll naar beneden en tik op <span class="onboarding-guide__pill">Zet op beginscherm</span>.</p>
+                  </div>
+                </div>
+                <div class="onboarding-guide__step">
+                  <span class="onboarding-guide__num">4</span>
+                  <div class="onboarding-guide__step-body">
+                    <strong>Naam bevestigen en toevoegen</strong>
+                    <p>Tik op <span class="onboarding-guide__pill">Voeg toe</span>. Het Plately-icoon verschijnt op je thuisscherm.</p>
+                  </div>
+                </div>
+              </div>
+
+              <p class="profile2-section-label" style="margin-top:20px">Android (Chrome)</p>
+              <div class="profile2-card onboarding-guide__steps">
+                <div class="onboarding-guide__step">
+                  <span class="onboarding-guide__num">1</span>
+                  <div class="onboarding-guide__step-body">
+                    <strong>Open Plately in Chrome</strong>
+                    <p>Ga naar <span class="onboarding-guide__code">plately.app</span> in Chrome.</p>
+                  </div>
+                </div>
+                <div class="onboarding-guide__step">
+                  <span class="onboarding-guide__num">2</span>
+                  <div class="onboarding-guide__step-body">
+                    <strong>Tik op het menu</strong>
+                    <p>Tik op de drie puntjes <strong>⋮</strong> rechtsboven in Chrome.</p>
+                  </div>
+                </div>
+                <div class="onboarding-guide__step">
+                  <span class="onboarding-guide__num">3</span>
+                  <div class="onboarding-guide__step-body">
+                    <strong>Toevoegen aan startscherm</strong>
+                    <p>Tik op <span class="onboarding-guide__pill">Toevoegen aan startscherm</span> en bevestig.</p>
+                  </div>
+                </div>
+                <div class="onboarding-guide__step">
+                  <span class="onboarding-guide__num">4</span>
+                  <div class="onboarding-guide__step-body">
+                    <strong>Klaar!</strong>
+                    <p>Het Plately-icoon staat nu op je startscherm. Tik erop om de app te openen.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="onboarding-guide__tip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#854d0e" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                Plately werkt als een app — je ziet geen browserbalk en ontvangt meldingen zodra je ze inschakelt.
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ Sub-panel: Instagram import gids ══ -->
+          <div class="profile-subpanel" id="profileSubGuideInstagram" aria-hidden="true">
+            <header class="topbar--sub">
+              <button class="topbar-back-btn" id="profileSubGuideInstagramBack" type="button" aria-label="Terug">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <h1 class="topbar-title">Importeren via Instagram</h1>
+              <span class="topbar-spacer"></span>
+            </header>
+            <div class="profile-subpanel__body onboarding-guide">
+              <div class="onboarding-guide__intro">
+                <div class="onboarding-guide__icon" style="background:linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.5" fill="white" stroke="none"/></svg>
+                </div>
+                <p class="onboarding-guide__intro-text">Zie je een lekker recept op Instagram? Kopieer de link en importeer het direct in Plately.</p>
+              </div>
+
+              <p class="profile2-section-label" style="margin-top:20px">STAP VOOR STAP</p>
+              <div class="profile2-card onboarding-guide__steps">
+                <div class="onboarding-guide__step">
+                  <span class="onboarding-guide__num">1</span>
+                  <div class="onboarding-guide__step-body">
+                    <strong>Open het recept op Instagram</strong>
+                    <p>Ga naar de post of reel met het recept dat je wilt opslaan.</p>
+                  </div>
+                </div>
+                <div class="onboarding-guide__step">
+                  <span class="onboarding-guide__num">2</span>
+                  <div class="onboarding-guide__step-body">
+                    <strong>Tik op de drie puntjes</strong>
+                    <p>Tik op <strong>⋯</strong> rechtsboven de post en kies <span class="onboarding-guide__pill">Link kopiëren</span>.</p>
+                  </div>
+                </div>
+                <div class="onboarding-guide__step">
+                  <span class="onboarding-guide__num">3</span>
+                  <div class="onboarding-guide__step-body">
+                    <strong>Open Plately</strong>
+                    <p>Schakel over naar Plately. De app detecteert de gekopieerde link automatisch en vraagt of je het recept wilt importeren.</p>
+                  </div>
+                </div>
+                <div class="onboarding-guide__step">
+                  <span class="onboarding-guide__num">4</span>
+                  <div class="onboarding-guide__step-body">
+                    <strong>Of plak de link handmatig</strong>
+                    <p>Tik op <span class="onboarding-guide__pill">+ Importeer</span> rechtsonder in de app en plak de Instagram-link in het invoerveld.</p>
+                  </div>
+                </div>
+                <div class="onboarding-guide__step">
+                  <span class="onboarding-guide__num">5</span>
+                  <div class="onboarding-guide__step-body">
+                    <strong>Recept opslaan</strong>
+                    <p>Plately haalt de titel, ingrediënten en stappen op. Controleer en tik op <span class="onboarding-guide__pill">Opslaan</span>.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="onboarding-guide__tip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#854d0e" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                Werkt ook met recepten van YouTube, TikTok, kookwebsites en meer — kopieer gewoon de link.
               </div>
             </div>
           </div>
