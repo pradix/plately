@@ -5613,13 +5613,13 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
   let lastStatus = 0;
   let lastError = null;
 
-  // Geblokkeerde hosts (Cloudflare): probeer Serper Scrape eerst (werkt door CF heen),
-  // dan WP REST API, dan CF Worker proxy als laatste redmiddel.
+  // Geblokkeerde hosts (Cloudflare): voor WP-sites probeer WP REST API eerst (gratis,
+  // geen credits), dan Serper Scrape (werkt door CF heen), dan CF Worker proxy.
   if (HTML_PROXY_HOSTS.has(parsedUrl.hostname)) {
-    const serperDoc = await fetchViaSerperScrape(url);
-    if (serperDoc) return serperDoc;
     const wpDoc = await fetchViaWordPressApi(url);
     if (wpDoc) return wpDoc;
+    const serperDoc = await fetchViaSerperScrape(url);
+    if (serperDoc) return serperDoc;
     if (HTML_PROXY_URL) {
       const proxied = await fetchHtmlViaProxy(url);
       if (proxied) return { kind: "html", body: proxied, url };

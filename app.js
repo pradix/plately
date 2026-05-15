@@ -5267,9 +5267,9 @@ function renderImportScreenResults(container, localResults, externalResults, isL
       </div>
     </div>`).join("");
 
-  // Lijst toont meer resultaten compacter; raster beperkt tot 6 extern zodat het niet te lang wordt
-  const MAX_LOCAL = 4;
-  const MAX_EXTERNAL = isList ? 10 : 6;
+  // Lijst toont meer resultaten compacter; raster beperkt tot 4 extern
+  const MAX_LOCAL = 3;
+  const MAX_EXTERNAL = isList ? 6 : 4;
   const shownLocal = localResults.slice(0, MAX_LOCAL);
   const shownExternal = externalResults.slice(0, MAX_EXTERNAL);
   const hiddenCount = Math.max(0, (localResults.length - MAX_LOCAL)) + Math.max(0, (externalResults.length - MAX_EXTERNAL));
