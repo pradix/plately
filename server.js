@@ -5613,16 +5613,18 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
   let lastStatus = 0;
   let lastError = null;
 
-  // Geblokkeerde hosts: probeer WP REST API eerst (gratis, geen limieten),
-  // dan CF Worker HTML proxy als backup.
+  // Geblokkeerde hosts (Cloudflare): probeer Serper Scrape eerst (werkt door CF heen),
+  // dan WP REST API, dan CF Worker proxy als laatste redmiddel.
   if (HTML_PROXY_HOSTS.has(parsedUrl.hostname)) {
+    const serperDoc = await fetchViaSerperScrape(url);
+    if (serperDoc) return serperDoc;
     const wpDoc = await fetchViaWordPressApi(url);
     if (wpDoc) return wpDoc;
     if (HTML_PROXY_URL) {
       const proxied = await fetchHtmlViaProxy(url);
       if (proxied) return { kind: "html", body: proxied, url };
-      console.log(`[HTML-Proxy] import fallback naar ZenRows voor ${parsedUrl.hostname}`);
     }
+    console.log(`[Blocked-Host] alle fallbacks mislukt voor ${parsedUrl.hostname}`);
   }
 
   // Miljuschka / EEF / Culy: directe HTML-profielen zijn vrijwel altijd 403.
@@ -5744,6 +5746,10 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
   // ZenRows: opt-in Cloudflare-bypass via ZENROWS_API_KEY — werkt voor sites die alle datacenter-IPs blokkeren.
   const zenResult = await fetchWithZenRows(url);
   if (zenResult) return zenResult;
+
+  // Serper Scrape: laatste redmiddel voor hardnekkig geblokkeerde sites (werkt door Cloudflare heen).
+  const serperFinal = await fetchViaSerperScrape(url);
+  if (serperFinal) return serperFinal;
 
   throw new HttpError(502, `Kon bronpagina niet ophalen (${lastStatus || 403})${lastError ? `: ${lastError.message}` : ""}.`);
 }
@@ -5872,6 +5878,52 @@ const HTML_PROXY_SECRET = process.env.HTML_PROXY_SECRET || "PlatelyProxy";
 
 // Hosts that zijn geblokkeerd voor datacenter-IPs — route via CF Worker proxy
 const HTML_PROXY_HOSTS = new Set(["miljuschka.nl", "www.miljuschka.nl", "www.eefkooktzo.nl", "eefkooktzo.nl", "www.foodiesmagazine.nl", "foodiesmagazine.nl"]);
+
+/**
+ * Serper Scrape API — werkt door Cloudflare heen, retourneert JSON-LD + volledige tekst.
+ * Kosten: ~6 credits/verzoek. Gratis vervanging voor ZenRows voor geblokkeerde hosts.
+ */
+async function fetchViaSerperScrape(url) {
+  const apiKey = String(process.env.SERPER_API_KEY || "").trim();
+  if (!apiKey) return null;
+  try {
+    const resp = await fetch("https://scrape.serper.dev", {
+      method: "POST",
+      headers: {
+        "X-API-KEY": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ url }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) {
+      console.log(`[Serper-Scrape] ${resp.status} voor ${url}`);
+      return null;
+    }
+    const data = await resp.json();
+    // Bouw een volledige HTML-pagina zodat bestaande JSON-LD en Open Graph parsers werken
+    const meta = data.metadata || {};
+    const jsonld = data.jsonld ? JSON.stringify(data.jsonld) : "";
+    const title = meta["og:title"] || meta["title"] || "";
+    const image = meta["og:image"] || meta["og:image:secure_url"] || "";
+    const description = meta["og:description"] || meta["description"] || "";
+    const html = `<!DOCTYPE html><html><head>
+      <title>${title}</title>
+      <meta property="og:title" content="${title.replace(/"/g, "&quot;")}">
+      <meta property="og:image" content="${image.replace(/"/g, "&quot;")}">
+      <meta property="og:description" content="${description.replace(/"/g, "&quot;")}">
+      ${jsonld ? `<script type="application/ld+json">${jsonld}</script>` : ""}
+    </head><body>
+      <h1>${title}</h1>
+      <div class="recipe-content">${data.text || ""}</div>
+    </body></html>`;
+    console.log(`[Serper-Scrape] ✅ ${new URL(url).hostname} — credits gebruikt: ${data.credits ?? "?"}`);
+    return { kind: "html", body: html, url };
+  } catch (err) {
+    console.log(`[Serper-Scrape] fout voor ${url}: ${err.message}`);
+    return null;
+  }
+}
 
 async function fetchViaWordPressApi(url) {
   let parsedUrl;
