@@ -9,7 +9,7 @@
       name="description"
       content="Plately is een webapp om recepten van Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.20.25" />
+    <meta name="plately-build" content="1.0.20.26" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -1215,82 +1215,46 @@
               <h1 class="topbar-title">Plately op je thuisscherm</h1>
               <span class="topbar-spacer"></span>
             </header>
-            <div class="profile-subpanel__body onboarding-guide">
-              <div class="onboarding-guide__intro">
-                <div class="onboarding-guide__icon" style="background:linear-gradient(135deg,#8da485,#a8c8a0)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M19 13v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6M12 17V3M7 8l5-5 5 5"/></svg>
-                </div>
-                <p class="onboarding-guide__intro-text">Voeg Plately toe aan je thuisscherm zodat je de app direct kunt openen — zonder browser.</p>
-              </div>
+            <div class="guide-body">
+              <p class="guide-intro">Voeg Plately toe aan je thuisscherm zodat je de app direct kunt openen — zonder browser.</p>
 
-              <p class="profile2-section-label" style="margin-top:20px">iPhone / iPad (Safari)</p>
-              <div class="profile2-card onboarding-guide__steps">
-                <div class="onboarding-guide__step">
-                  <span class="onboarding-guide__num">1</span>
-                  <div class="onboarding-guide__step-body">
-                    <strong>Open Plately in Safari</strong>
-                    <p>Ga naar <span class="onboarding-guide__code">plately.app</span> in Safari. Andere browsers werken niet.</p>
-                  </div>
+              <p class="guide-section-label">iPhone / iPad (Safari)</p>
+              <div class="guide-card">
+                <div class="guide-step">
+                  <span class="guide-num">1</span>
+                  <div class="guide-step-text"><strong>Open Plately in Safari</strong><br>Ga naar <span class="guide-code">app.plately.nl</span> — andere browsers werken niet voor installatie.</div>
                 </div>
-                <div class="onboarding-guide__step">
-                  <span class="onboarding-guide__num">2</span>
-                  <div class="onboarding-guide__step-body">
-                    <strong>Tik op Delen</strong>
-                    <p>Tik op het <svg class="onboarding-guide__inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> deel-icoon onderin de browserbalk.</p>
-                  </div>
+                <div class="guide-step">
+                  <span class="guide-num">2</span>
+                  <div class="guide-step-text"><strong>Tik op het Deel-icoon</strong><br>Het vierkantje met een pijl omhoog, onderin de Safari-balk.</div>
                 </div>
-                <div class="onboarding-guide__step">
-                  <span class="onboarding-guide__num">3</span>
-                  <div class="onboarding-guide__step-body">
-                    <strong>Zet op beginscherm</strong>
-                    <p>Scroll naar beneden en tik op <span class="onboarding-guide__pill">Zet op beginscherm</span>.</p>
-                  </div>
+                <div class="guide-step">
+                  <span class="guide-num">3</span>
+                  <div class="guide-step-text"><strong>Kies "Zet op beginscherm"</strong><br>Scroll omlaag in het deelmenu en tik op die optie.</div>
                 </div>
-                <div class="onboarding-guide__step">
-                  <span class="onboarding-guide__num">4</span>
-                  <div class="onboarding-guide__step-body">
-                    <strong>Naam bevestigen en toevoegen</strong>
-                    <p>Tik op <span class="onboarding-guide__pill">Voeg toe</span>. Het Plately-icoon verschijnt op je thuisscherm.</p>
-                  </div>
+                <div class="guide-step">
+                  <span class="guide-num">4</span>
+                  <div class="guide-step-text"><strong>Bevestig en klaar</strong><br>Tik op <span class="guide-pill">Voeg toe</span> — het Plately-icoon staat nu op je thuisscherm.</div>
                 </div>
               </div>
 
-              <p class="profile2-section-label" style="margin-top:20px">Android (Chrome)</p>
-              <div class="profile2-card onboarding-guide__steps">
-                <div class="onboarding-guide__step">
-                  <span class="onboarding-guide__num">1</span>
-                  <div class="onboarding-guide__step-body">
-                    <strong>Open Plately in Chrome</strong>
-                    <p>Ga naar <span class="onboarding-guide__code">plately.app</span> in Chrome.</p>
-                  </div>
+              <p class="guide-section-label">Android (Chrome)</p>
+              <div class="guide-card">
+                <div class="guide-step">
+                  <span class="guide-num">1</span>
+                  <div class="guide-step-text"><strong>Open Plately in Chrome</strong><br>Ga naar <span class="guide-code">app.plately.nl</span>.</div>
                 </div>
-                <div class="onboarding-guide__step">
-                  <span class="onboarding-guide__num">2</span>
-                  <div class="onboarding-guide__step-body">
-                    <strong>Tik op het menu</strong>
-                    <p>Tik op de drie puntjes <strong>⋮</strong> rechtsboven in Chrome.</p>
-                  </div>
+                <div class="guide-step">
+                  <span class="guide-num">2</span>
+                  <div class="guide-step-text"><strong>Tik op ⋮ rechtsboven</strong><br>Het menu van Chrome.</div>
                 </div>
-                <div class="onboarding-guide__step">
-                  <span class="onboarding-guide__num">3</span>
-                  <div class="onboarding-guide__step-body">
-                    <strong>Toevoegen aan startscherm</strong>
-                    <p>Tik op <span class="onboarding-guide__pill">Toevoegen aan startscherm</span> en bevestig.</p>
-                  </div>
-                </div>
-                <div class="onboarding-guide__step">
-                  <span class="onboarding-guide__num">4</span>
-                  <div class="onboarding-guide__step-body">
-                    <strong>Klaar!</strong>
-                    <p>Het Plately-icoon staat nu op je startscherm. Tik erop om de app te openen.</p>
-                  </div>
+                <div class="guide-step">
+                  <span class="guide-num">3</span>
+                  <div class="guide-step-text"><strong>Kies "Toevoegen aan startscherm"</strong><br>Bevestig in het dialoogvenster.</div>
                 </div>
               </div>
 
-              <div class="onboarding-guide__tip">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#854d0e" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-                Plately werkt als een app — je ziet geen browserbalk en ontvangt meldingen zodra je ze inschakelt.
-              </div>
+              <div class="guide-tip">Eenmaal geïnstalleerd opent Plately als echte app — geen browserbalk, wél meldingen.</div>
             </div>
           </div>
 
@@ -1303,57 +1267,34 @@
               <h1 class="topbar-title">Importeren via Instagram</h1>
               <span class="topbar-spacer"></span>
             </header>
-            <div class="profile-subpanel__body onboarding-guide">
-              <div class="onboarding-guide__intro">
-                <div class="onboarding-guide__icon" style="background:linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.5" fill="white" stroke="none"/></svg>
-                </div>
-                <p class="onboarding-guide__intro-text">Zie je een lekker recept op Instagram? Kopieer de link en importeer het direct in Plately.</p>
-              </div>
+            <div class="guide-body">
+              <p class="guide-intro">Zie je een lekker recept op Instagram? Kopieer de link en importeer het direct in Plately.</p>
 
-              <p class="profile2-section-label" style="margin-top:20px">STAP VOOR STAP</p>
-              <div class="profile2-card onboarding-guide__steps">
-                <div class="onboarding-guide__step">
-                  <span class="onboarding-guide__num">1</span>
-                  <div class="onboarding-guide__step-body">
-                    <strong>Open het recept op Instagram</strong>
-                    <p>Ga naar de post of reel met het recept dat je wilt opslaan.</p>
-                  </div>
+              <p class="guide-section-label">Stap voor stap</p>
+              <div class="guide-card">
+                <div class="guide-step">
+                  <span class="guide-num">1</span>
+                  <div class="guide-step-text"><strong>Open het recept op Instagram</strong><br>Ga naar de post of reel met het recept.</div>
                 </div>
-                <div class="onboarding-guide__step">
-                  <span class="onboarding-guide__num">2</span>
-                  <div class="onboarding-guide__step-body">
-                    <strong>Tik op de drie puntjes</strong>
-                    <p>Tik op <strong>⋯</strong> rechtsboven de post en kies <span class="onboarding-guide__pill">Link kopiëren</span>.</p>
-                  </div>
+                <div class="guide-step">
+                  <span class="guide-num">2</span>
+                  <div class="guide-step-text"><strong>Tik op ⋯ en kies "Link kopiëren"</strong><br>De drie puntjes rechtsboven de post.</div>
                 </div>
-                <div class="onboarding-guide__step">
-                  <span class="onboarding-guide__num">3</span>
-                  <div class="onboarding-guide__step-body">
-                    <strong>Open Plately</strong>
-                    <p>Schakel over naar Plately. De app detecteert de gekopieerde link automatisch en vraagt of je het recept wilt importeren.</p>
-                  </div>
+                <div class="guide-step">
+                  <span class="guide-num">3</span>
+                  <div class="guide-step-text"><strong>Schakel over naar Plately</strong><br>De app detecteert de gekopieerde link automatisch en vraagt of je het recept wilt importeren.</div>
                 </div>
-                <div class="onboarding-guide__step">
-                  <span class="onboarding-guide__num">4</span>
-                  <div class="onboarding-guide__step-body">
-                    <strong>Of plak de link handmatig</strong>
-                    <p>Tik op <span class="onboarding-guide__pill">+ Importeer</span> rechtsonder in de app en plak de Instagram-link in het invoerveld.</p>
-                  </div>
+                <div class="guide-step">
+                  <span class="guide-num">4</span>
+                  <div class="guide-step-text"><strong>Of plak de link handmatig</strong><br>Tik op het importeer-scherm, plak de Instagram-link en tik <span class="guide-pill">Importeren</span>.</div>
                 </div>
-                <div class="onboarding-guide__step">
-                  <span class="onboarding-guide__num">5</span>
-                  <div class="onboarding-guide__step-body">
-                    <strong>Recept opslaan</strong>
-                    <p>Plately haalt de titel, ingrediënten en stappen op. Controleer en tik op <span class="onboarding-guide__pill">Opslaan</span>.</p>
-                  </div>
+                <div class="guide-step">
+                  <span class="guide-num">5</span>
+                  <div class="guide-step-text"><strong>Controleer en sla op</strong><br>Plately haalt titel, ingrediënten en stappen op. Tik op <span class="guide-pill">Opslaan</span>.</div>
                 </div>
               </div>
 
-              <div class="onboarding-guide__tip">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#854d0e" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-                Werkt ook met recepten van YouTube, TikTok, kookwebsites en meer — kopieer gewoon de link.
-              </div>
+              <div class="guide-tip">Werkt ook met recepten van kookwebsites, YouTube en TikTok — kopieer gewoon de link.</div>
             </div>
           </div>
 

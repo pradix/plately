@@ -5446,6 +5446,8 @@ button.ingredient-item {
   transition: transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   z-index: 200;
   overflow-y: auto;
+  overflow-x: hidden;
+  touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
 }
 .profile-subpanel--active {
@@ -5648,6 +5650,107 @@ button.ingredient-item {
 
 .profile-subpanel__body {
   padding: 8px 0 100px;
+}
+
+/* Guide panels (homescreen + instagram) */
+.guide-body {
+  padding: 16px 16px 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.guide-intro {
+  margin: 0 0 8px;
+  font-size: 0.93rem;
+  line-height: 1.55;
+  color: var(--muted-strong);
+}
+
+.guide-section-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 8px 0 4px;
+}
+
+.guide-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.guide-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.guide-step:last-child {
+  border-bottom: none;
+}
+
+.guide-num {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-brand, #8da485);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  margin-top: 1px;
+}
+
+.guide-step-text {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text);
+  min-width: 0;
+}
+
+.guide-step-text strong {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.guide-code {
+  font-family: monospace;
+  font-size: 0.85em;
+  background: #f1f5f1;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--text);
+}
+
+.guide-pill {
+  display: inline-block;
+  background: #e8f2e7;
+  color: #3d6b36;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 0.85em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.guide-tip {
+  margin-top: 4px;
+  padding: 12px 14px;
+  background: #fef9ed;
+  border: 1px solid #f0d98b;
+  border-radius: 12px;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: #78570a;
 }
 
 .profile-subpanel__avatar-section {
