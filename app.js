@@ -6985,11 +6985,13 @@ function renderGroceryGroups() {
           <span class="grocery-check"></span>
           <span class="grocery-entry__content">
             <p class="grocery-entry__title">${displayTitle}</p>
-            ${categoryBadge}
-            ${multiRecipe && item.recipeTitle && item.recipeTitle.includes(",")
-              ? `<p class="grocery-entry__overlap">Gedeeld ingrediënt</p>` : ""}
+            <span class="grocery-entry__subline">
+              ${item.amount ? `<span class="grocery-entry__amount">${item.amount}</span>` : ""}
+              ${categoryBadge}
+              ${multiRecipe && item.recipeTitle && item.recipeTitle.includes(",")
+                ? `<span class="grocery-entry__overlap">Gedeeld</span>` : ""}
+            </span>
           </span>
-          <span class="grocery-entry__amount">${item.amount}</span>
           <span class="grocery-entry__img" aria-hidden="true">
             ${item.imageUrl
               ? `<img class="grocery-entry__ah-img" src="${escapeHtml(normalizeChannelThumbnailUrl(item.imageUrl))}" alt="" loading="lazy" />`
@@ -7094,7 +7096,6 @@ function renderGroceryGroups() {
         <span class="grocery-entry__content">
           <p class="grocery-entry__title">${escapeHtml(s.title)}</p>
         </span>
-        <span class="grocery-entry__amount"></span>
         <span class="grocery-entry__img" aria-hidden="true">${getIngredientVisualMarkup(s.title)}</span>
       </button>
       <button class="grocery-entry-action grocery-entry-action--add" type="button"
