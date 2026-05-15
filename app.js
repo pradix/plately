@@ -5027,22 +5027,38 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
 
     const showRatingSourceInPill = !effectiveFilter && presentChannelIds.length > 1;
 
-    const rows = filtered.length ? filtered : all;
+    let rows = filtered.length ? filtered : all;
     if (!filtered.length && effectiveFilter) {
       state.channelSearchFilter = null;
       renderChannelFilterChips(all);
     }
 
+    // Limiteer het aantal resultaten op basis van weergavemodus
+    const isList = homeSearchViewMode === "list";
+    const MAX_RESULTS = isList ? 8 : 6;
+    const hiddenCount = Math.max(0, rows.length - MAX_RESULTS);
+    rows = rows.slice(0, MAX_RESULTS);
+
     // Skip expensive full rerender when the visible set is effectively identical.
     const sig = `${rows.length}::${rows.slice(0, 22).map((r) => r?.url || "").join("|")}`;
-    const nextRenderKey = `${state.channelSearchQuery}||${state.channelSearchFilter || ""}||${sig}||${state.channelSearchIsSearching ? "1" : "0"}`;
+    const nextRenderKey = `${state.channelSearchQuery}||${state.channelSearchFilter || ""}||${sig}||${state.channelSearchIsSearching ? "1" : "0"}||${homeSearchViewMode}`;
     if (renderChannelSearchResults._lastKey === nextRenderKey) return;
     renderChannelSearchResults._lastKey = nextRenderKey;
+
+    // Sync toggle active state
+    document.querySelectorAll("#homeViewToggle .import-view-seg__btn").forEach((b) => {
+      b.classList.toggle("is-active", b.dataset.view === homeSearchViewMode);
+      b.setAttribute("aria-pressed", b.dataset.view === homeSearchViewMode ? "true" : "false");
+    });
 
     const loadingBanner = (state.channelSearchIsSearching && rows.length === 0)
       ? `<p class="ch-search-loading-more" style="grid-column:1/-1;text-align:center;padding:.75rem 1rem .5rem;font-size:.9rem;opacity:.7;color:var(--text,#2a2a28)">Zoeken…</p>`
       : "";
-    channelSearchResults.innerHTML = `<div class="ch-result-grid">${rows.map((r) => {
+    const moreHint = hiddenCount > 0 && !state.channelSearchIsSearching
+      ? `<p class="ch-search-more-hint" style="grid-column:1/-1">+ ${hiddenCount} meer — verfijn je zoekopdracht voor betere resultaten</p>`
+      : "";
+    const gridClass = isList ? "ch-result-grid ch-result-grid--list" : "ch-result-grid";
+    channelSearchResults.innerHTML = `<div class="${gridClass}">${rows.map((r) => {
       const channel = channelById.get(r.channelId);
       const channelColor = channel?.color || "#8da485";
       const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
@@ -5077,7 +5093,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
           </button>
         </div>
       </div>`;
-    }).join("")}${loadingBanner}</div>`;
+    }).join("")}${loadingBanner}${moreHint}</div>`;
   });
 }
 
@@ -5215,6 +5231,7 @@ async function searchChannels(query) {
 }
 
 let importViewMode = "list"; // "grid" | "list" — standaard lijst (compacter)
+let homeSearchViewMode = "list"; // zelfde voor het hoofdscherm
 
 function renderImportScreenResults(container, localResults, externalResults, isLoadingExternal) {
   if (!container) return;
@@ -14354,17 +14371,25 @@ bindEvent(document.getElementById("importViewToggle"), "click", (e) => {
   const view = btn.dataset.view;
   if (!view || view === importViewMode) return;
   importViewMode = view;
-  // Update active state op knoppen
-  document.querySelectorAll(".import-view-seg__btn").forEach((b) => {
+  document.querySelectorAll("#importViewToggle .import-view-seg__btn").forEach((b) => {
     b.classList.toggle("is-active", b.dataset.view === importViewMode);
     b.setAttribute("aria-pressed", b.dataset.view === importViewMode ? "true" : "false");
   });
-  // Herrender met nieuwe limieten
   const results = document.getElementById("importChannelSearchResults");
   if (results) {
     const grid = results.querySelector(".ch-result-grid");
     if (grid) grid.classList.toggle("ch-result-grid--list", importViewMode === "list");
   }
+});
+
+bindEvent(document.getElementById("homeViewToggle"), "click", (e) => {
+  const btn = e.target.closest(".import-view-seg__btn");
+  if (!btn) return;
+  const view = btn.dataset.view;
+  if (!view || view === homeSearchViewMode) return;
+  homeSearchViewMode = view;
+  renderChannelSearchResults._lastKey = null; // forceer herrender
+  renderChannelSearchResults(state.channelSearchAllResults || []);
 });
 
 bindEvent(document.getElementById("importChannelSearchClose"), "click", () => {

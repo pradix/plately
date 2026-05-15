@@ -9,7 +9,7 @@
       name="description"
       content="Plately is een webapp om recepten van Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.20.28" />
+    <meta name="plately-build" content="1.0.20.29" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -110,7 +110,17 @@
           <section class="channel-search-section hidden" id="channelSearchSection">
             <div class="channel-search-header">
               <h2>Gevonden op kanalen</h2>
-              <button type="button" class="ghost-link" id="channelSearchClose">Sluiten</button>
+              <div class="import-search-header-right">
+                <div class="import-view-seg" id="homeViewToggle" role="group" aria-label="Weergave">
+                  <button type="button" class="import-view-seg__btn" data-view="grid" aria-pressed="false" title="Rasterweergave">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                  </button>
+                  <button type="button" class="import-view-seg__btn is-active" data-view="list" aria-pressed="true" title="Lijstweergave">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
+                  </button>
+                </div>
+                <button type="button" class="ghost-link" id="channelSearchClose">Sluiten</button>
+              </div>
             </div>
             <!-- Channel filter pills -->
             <div class="channel-search-filters" id="channelSearchFilters"></div>
