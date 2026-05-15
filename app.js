@@ -5077,6 +5077,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
         </div>
         <div class="ch-card__body">
           <p class="ch-card__title">${escapeHtml(r.title)}</p>
+          <span class="ch-card__channel-label">${escapeHtml(r.channel || "")}</span>
           ${formatChannelSearchRatingHtml(r, { showRatingSource: showRatingSourceInPill })}
           ${r.description ? `<p class="ch-card__desc">${escapeHtml(r.description)}</p>` : ""}
           ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
@@ -5230,8 +5231,8 @@ async function searchChannels(query) {
   }
 }
 
-let importViewMode = "list"; // "grid" | "list" — standaard lijst (compacter)
-let homeSearchViewMode = "list"; // zelfde voor het hoofdscherm
+let importViewMode = "grid"; // "grid" | "list" — standaard raster
+let homeSearchViewMode = "grid"; // zelfde voor het hoofdscherm
 
 function renderImportScreenResults(container, localResults, externalResults, isLoadingExternal) {
   if (!container) return;
@@ -5259,6 +5260,7 @@ function renderImportScreenResults(container, localResults, externalResults, isL
         </div>
         <div class="ch-card__body">
           <p class="ch-card__title">${escapeHtml(r.title)}</p>
+          <span class="ch-card__channel-label">${escapeHtml(badgeLabel)}</span>
           ${formatChannelSearchRatingHtml(r, { showRatingSource: false })}
           ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
         </div>
