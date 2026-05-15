@@ -3679,7 +3679,7 @@ function buildMatchedChoiceFromProduct(store, item, product, badge = "Gevonden")
     emoji: getBasketEmoji(ingredientTitle),
     searchTerm: ingredientTitle,
     productId,
-    imageUrl: sanitizeText(product.imageUrl || ""),
+    imageUrl: (() => { const raw = sanitizeText(product.imageUrl || ""); return isAllowedImageProxyUrl(raw) ? `/api/image-proxy?url=${encodeURIComponent(raw)}` : raw; })(),
     labels: Array.isArray(product.labels) ? product.labels : [],
     isBonus: Boolean(product.isBonus),
     promotionLabel: sanitizeText(product.promotionLabel || ""),
@@ -16758,7 +16758,10 @@ const server = http.createServer(async (request, response) => {
       const photos = {};
       for (const result of photoResults) {
         if (result.status === "fulfilled" && result.value.imageUrl) {
-          photos[result.value.id] = result.value.imageUrl;
+          const raw = result.value.imageUrl;
+          photos[result.value.id] = isAllowedImageProxyUrl(raw)
+            ? `/api/image-proxy?url=${encodeURIComponent(raw)}`
+            : raw;
         }
       }
       sendJson(response, 200, { ok: true, photos });
@@ -19906,6 +19909,41 @@ const server = http.createServer(async (request, response) => {
       } catch (error) {
         console.error("❌ Error in /api/admin/channel-test/import:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/logs" && request.method === "GET") {
+      try {
+        const fs = require("fs");
+        const os = require("os");
+        const path = require("path");
+        const lines = parseInt(requestUrl.searchParams.get("lines") || "200", 10);
+        const pm2LogDir = path.join(os.homedir(), ".pm2", "logs");
+        const candidates = ["plately-beta-out.log", "plately-beta-error.log", "plately-out.log", "plately-error.log"];
+        const result = {};
+        for (const name of candidates) {
+          const fullPath = path.join(pm2LogDir, name);
+          try {
+            const stat = fs.statSync(fullPath);
+            if (stat.isFile()) {
+              const size = stat.size;
+              const fd = fs.openSync(fullPath, "r");
+              let readSize = Math.min(size, lines * 200);
+              let buf = Buffer.alloc(readSize);
+              fs.readSync(fd, buf, 0, readSize, Math.max(0, size - readSize));
+              fs.closeSync(fd);
+              const text = buf.toString("utf8");
+              const allLines = text.split("\n");
+              // Drop first line (may be partial), take last `lines` lines
+              result[name] = allLines.slice(allLines.length > 1 ? 1 : 0).slice(-lines).join("\n");
+            }
+          } catch {
+            // file doesn't exist or unreadable
+          }
+        }
+        return sendJson(response, 200, { ok: true, logs: result });
+      } catch (err) {
+        return sendJson(response, 500, { ok: false, error: err.message });
       }
     }
 

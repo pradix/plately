@@ -699,6 +699,7 @@
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="activity">Activiteit</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="notifications">Notificaties</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Kanaal test</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="logs">Logs</button>
       </div>
     </nav>
 
@@ -1292,6 +1293,31 @@
           </div>
           <div id="seoRatingsStatus" class="muted" style="font-size:12px;margin-bottom:8px">Kies dry-run of uitvoeren.</div>
           <pre id="seoRatingsOutput" class="mono" style="display:block;margin:0;padding:12px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto">—</pre>
+        </div>
+      </div>
+
+      <div class="admin-tab-section" id="adminTabLogs" data-tab="logs">
+        <div class="section">
+          <div class="section-header">
+            <h2>🪵 Server logs</h2>
+            <div class="muted">Laatste regels uit PM2-logbestanden (stdout + stderr)</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+            <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Regels
+              <select id="logsLinesSelect" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
+                <option value="100">100</option>
+                <option value="200" selected>200</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+              </select>
+            </label>
+            <button id="logsRefreshBtn" type="button" class="btn" style="padding:6px 14px;font-size:13px">↺ Verversen</button>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
+              <input type="checkbox" id="logsAutoRefresh"> Auto-refresh (5s)
+            </label>
+          </div>
+          <div id="logsStatus" style="font-size:12px;color:var(--muted);margin-bottom:8px"></div>
+          <div id="logsContainer"></div>
         </div>
       </div>
 
@@ -5254,6 +5280,13 @@
       if (next === "activity") {
         loadAnalytics();
       }
+      if (next === "logs") {
+        loadLogs();
+      } else {
+        stopLogsAutoRefresh();
+        const cb = document.getElementById("logsAutoRefresh");
+        if (cb) cb.checked = false;
+      }
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     }
 
@@ -5445,6 +5478,50 @@
         if (btn) btn.disabled = false;
       }
     }
+
+    // --- Logs tab ---
+    let logsAutoRefreshTimer = null;
+    async function loadLogs() {
+      const lines = document.getElementById("logsLinesSelect")?.value || "200";
+      const statusEl = document.getElementById("logsStatus");
+      const container = document.getElementById("logsContainer");
+      if (statusEl) statusEl.textContent = "Laden…";
+      try {
+        const res = await fetch(`/api/admin/logs?lines=${lines}`);
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "Fout");
+        if (statusEl) statusEl.textContent = `Bijgewerkt: ${new Date().toLocaleTimeString("nl-NL")}`;
+        if (!container) return;
+        const files = Object.keys(data.logs || {});
+        if (!files.length) { container.innerHTML = '<p class="muted">Geen logbestanden gevonden.</p>'; return; }
+        container.innerHTML = files.map(name => {
+          const isErr = name.includes("error");
+          return `<div style="margin-bottom:20px">
+            <div style="font-size:12px;font-weight:600;color:${isErr ? "var(--danger,#c0392b)" : "var(--text)"};margin-bottom:4px">${name}</div>
+            <pre style="margin:0;padding:12px;background:${isErr ? "rgba(192,57,43,0.05)" : "rgba(0,0,0,0.03)"};border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all;max-height:400px;overflow:auto">${escHtml(data.logs[name] || "(leeg)")}</pre>
+          </div>`;
+        }).join("");
+        // Scroll each pre to bottom
+        container.querySelectorAll("pre").forEach(p => { p.scrollTop = p.scrollHeight; });
+      } catch (err) {
+        if (statusEl) statusEl.textContent = `Fout: ${err.message}`;
+      }
+    }
+    function escHtml(s) {
+      return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+    function startLogsAutoRefresh() {
+      stopLogsAutoRefresh();
+      logsAutoRefreshTimer = setInterval(loadLogs, 5000);
+    }
+    function stopLogsAutoRefresh() {
+      if (logsAutoRefreshTimer) { clearInterval(logsAutoRefreshTimer); logsAutoRefreshTimer = null; }
+    }
+    document.getElementById("logsRefreshBtn")?.addEventListener("click", loadLogs);
+    document.getElementById("logsLinesSelect")?.addEventListener("change", loadLogs);
+    document.getElementById("logsAutoRefresh")?.addEventListener("change", (e) => {
+      if (e.target.checked) startLogsAutoRefresh(); else stopLogsAutoRefresh();
+    });
 
     initAdminTabs();
     initAnalyticsControls();

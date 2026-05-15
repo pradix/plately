@@ -12390,18 +12390,6 @@ function tryAdjustBasketServings(delta) {
   if (next < 1 || next > 24) return;
   if (next === state.basketServings) return;
 
-  const isAh = preview.store === "albert-heijn";
-  const hasItems = Array.isArray(preview.items) && preview.items.length > 0;
-  if (isAh && hasItems) {
-    const oldN = state.basketServings;
-    const base = state.basketBaseServings || 2;
-    const ok = window.confirm(
-      `Porties voor de mand: ${oldN} → ${next} personen (t.o.v. ${base} pers. in het recept).\n\n` +
-        `Hoeveelheden en prijzen in dit overzicht schalen mee. Doorgaan?`
-    );
-    if (!ok) return;
-  }
-
   state.basketServings = next;
   renderBasketPreview();
 }
@@ -12755,7 +12743,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.6";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.7";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
