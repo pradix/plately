@@ -9016,6 +9016,66 @@ function getAHPromotionLabel(product) {
   return "BONUS";
 }
 
+// Valt terug op www.ah.nl website-scraping via Firecrawl als het token-endpoint geblokkeerd is.
+// Firecrawl rendert de Nuxt-pagina en we extraheren het embedded products-JSON.
+async function _fetchAHSearchViaFirecrawlWeb(searchTerm) {
+  const apiKey = firecrawlApiKey();
+  if (!apiKey) return null;
+  const searchUrl = `https://www.ah.nl/zoeken?query=${encodeURIComponent(searchTerm)}&sortBy=RELEVANCE`;
+  try {
+    const resp = await fetch("https://api.firecrawl.dev/v2/scrape", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: searchUrl,
+        formats: ["rawHtml"],
+        onlyMainContent: false,
+        waitFor: 3000,
+        timeout: 30000,
+      }),
+      signal: AbortSignal.timeout(35000),
+    });
+    if (!resp.ok) {
+      console.warn(`[AH/FC-web] HTTP ${resp.status} voor "${searchTerm}"`);
+      return null;
+    }
+    const json = await resp.json();
+    const raw = String(json?.data?.rawHtml || "");
+    if (!raw) return null;
+
+    // Walk through the HTML looking for JSON objects with a "products" array.
+    // AH Nuxt pages embed the API state in <script> tags.
+    let searchFrom = 0;
+    while (searchFrom < raw.length) {
+      const keyIdx = raw.indexOf('"products"', searchFrom);
+      if (keyIdx === -1) break;
+      searchFrom = keyIdx + 1;
+      // Find the opening brace of the enclosing object
+      let objStart = keyIdx - 1;
+      while (objStart >= 0 && raw[objStart] !== '{') objStart--;
+      if (objStart < 0 || raw[objStart] !== '{') continue;
+      // Balance braces to find the closing brace
+      let depth = 0, objEnd = -1;
+      for (let i = objStart; i < Math.min(raw.length, objStart + 2_000_000); i++) {
+        if (raw[i] === '{') depth++;
+        else if (raw[i] === '}') { if (--depth === 0) { objEnd = i + 1; break; } }
+      }
+      if (objEnd === -1) continue;
+      const parsed = safelyParseJson(raw.slice(objStart, objEnd));
+      if (parsed?.products && Array.isArray(parsed.products) && parsed.products.length > 0) {
+        const prods = parsed.products.map(parseAHProduct);
+        console.log(`[AH/FC-web] ${prods.length} producten via website voor "${searchTerm}"`);
+        return prods;
+      }
+    }
+    console.warn(`[AH/FC-web] Geen products-data in HTML voor "${searchTerm}"`);
+    return null;
+  } catch (err) {
+    console.warn(`[AH/FC-web] Fout voor "${searchTerm}": ${err?.message}`);
+    return null;
+  }
+}
+
 // Haalt AH producten op via Firecrawl als api.ah.nl geblokkeerd is (HTTP 4xx).
 // Firecrawl gebruikt zijn eigen IPs en is niet geblokkeerd door AH.
 // Geeft null terug als Firecrawl niet beschikbaar is, [] als geen producten gevonden.
@@ -9077,7 +9137,19 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
   if (cached) return cached.slice(0, count);
 
   try {
-    const token = await fetchAHAnonymousToken();
+    let token;
+    try {
+      token = await fetchAHAnonymousToken();
+    } catch {
+      // Token-endpoint is geblokkeerd vanuit dit server-IP — val terug op website-scraping
+      console.warn(`[AH] Token geblokkeerd voor "${searchTerm}", probeer Firecrawl web-fallback`);
+      const webResults = await _fetchAHSearchViaFirecrawlWeb(searchTerm);
+      if (webResults !== null) {
+        if (webResults.length > 0) _setAHSearchCache(cacheKey, webResults);
+        return webResults.slice(0, count);
+      }
+      return [];
+    }
     const searchUrl =
       `${AH_API_BASE}/mobile-services/product/search/v2` +
       `?query=${encodeURIComponent(searchTerm)}&size=${searchSize}&sortOn=RELEVANCE`;
