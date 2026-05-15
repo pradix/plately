@@ -15,7 +15,7 @@ try {
     if (eq === -1) continue;
     const key = trimmed.slice(0, eq).trim();
     const val = trimmed.slice(eq + 1).trim().replace(/^['"]|['"]$/g, "");
-    if (key && !(key in process.env)) process.env[key] = val;
+    if (key && val) process.env[key] = val; // .env is altijd leidend als waarde niet leeg is
   }
 } catch { /* no .env file — that's fine */ }
 const crypto = require("node:crypto");
