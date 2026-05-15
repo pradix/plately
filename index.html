@@ -9,7 +9,7 @@
       name="description"
       content="Plately is een webapp om recepten van Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.20.35" />
+    <meta name="plately-build" content="1.0.20.36" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -1215,46 +1215,87 @@
               <h1 class="topbar-title">Plately op je thuisscherm</h1>
               <span class="topbar-spacer"></span>
             </header>
-            <div class="guide-body">
-              <p class="guide-intro">Voeg Plately toe aan je thuisscherm zodat je de app direct kunt openen — zonder browser.</p>
-
-              <p class="guide-section-label">iPhone / iPad (Safari)</p>
-              <div class="guide-card">
-                <div class="guide-step">
-                  <span class="guide-num">1</span>
-                  <div class="guide-step-text"><strong>Open Plately in Safari</strong><br>Ga naar <span class="guide-code">app.plately.nl</span> — andere browsers werken niet voor installatie.</div>
+            <div class="richguide">
+              <!-- iPhone / iPad section -->
+              <div class="richguide__section">
+                <div class="richguide__hero">
+                  <h2 class="richguide__hero-title">Installeren op iPhone of iPad</h2>
+                  <p class="richguide__hero-sub">Voeg Plately toe aan je thuisscherm en open het als een echte app — zonder browserbalk.</p>
                 </div>
-                <div class="guide-step">
-                  <span class="guide-num">2</span>
-                  <div class="guide-step-text"><strong>Tik op het Deel-icoon</strong><br>Het vierkantje met een pijl omhoog, onderin de Safari-balk.</div>
+                <div class="richguide__section-header">
+                  <span class="richguide__icon richguide__icon--ios">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>
+                  </span>
+                  <p class="richguide__section-label">Stap voor stap — Safari</p>
                 </div>
-                <div class="guide-step">
-                  <span class="guide-num">3</span>
-                  <div class="guide-step-text"><strong>Kies "Zet op beginscherm"</strong><br>Scroll omlaag in het deelmenu en tik op die optie.</div>
+                <div class="richguide__steps">
+                  <div class="richguide__step">
+                    <span class="richguide__step-num">1</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Open Plately in Safari</p>
+                      <p class="richguide__step-desc">Ga naar <span class="richguide__code">app.plately.nl</span> — andere browsers werken niet voor installatie.</p>
+                    </div>
+                  </div>
+                  <div class="richguide__step">
+                    <span class="richguide__step-num">2</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Tik op het Deel-icoon</p>
+                      <p class="richguide__step-desc">Het vierkantje met een pijl omhoog, onderin de Safari-balk.</p>
+                    </div>
+                  </div>
+                  <div class="richguide__step">
+                    <span class="richguide__step-num">3</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Kies "Zet op beginscherm"</p>
+                      <p class="richguide__step-desc">Scroll omlaag in het deelmenu en tik op die optie.</p>
+                    </div>
+                  </div>
+                  <div class="richguide__step">
+                    <span class="richguide__step-num richguide__step-num--final">4</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Bevestig en klaar</p>
+                      <p class="richguide__step-desc">Tik op <span class="richguide__pill">Voeg toe</span> — het Plately-icoon staat nu op je thuisscherm.</p>
+                    </div>
+                  </div>
                 </div>
-                <div class="guide-step">
-                  <span class="guide-num">4</span>
-                  <div class="guide-step-text"><strong>Bevestig en klaar</strong><br>Tik op <span class="guide-pill">Voeg toe</span> — het Plately-icoon staat nu op je thuisscherm.</div>
+                <div class="richguide__tip">Eenmaal geïnstalleerd opent Plately als echte app — geen browserbalk, wél meldingen.</div>
+              </div>
+              <!-- Android section -->
+              <div class="richguide__section">
+                <div class="richguide__hero">
+                  <h2 class="richguide__hero-title">Installeren op Android</h2>
+                  <p class="richguide__hero-sub">Voeg Plately toe via Chrome aan je startscherm voor een app-ervaring.</p>
+                </div>
+                <div class="richguide__section-header">
+                  <span class="richguide__icon richguide__icon--android">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 16a7 7 0 0014 0V8H5v8z"/><path d="M8 8V5a4 4 0 018 0v3"/><line x1="9" y1="20" x2="9" y2="22"/><line x1="15" y1="20" x2="15" y2="22"/></svg>
+                  </span>
+                  <p class="richguide__section-label">Stap voor stap — Chrome</p>
+                </div>
+                <div class="richguide__steps">
+                  <div class="richguide__step">
+                    <span class="richguide__step-num">1</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Open Plately in Chrome</p>
+                      <p class="richguide__step-desc">Ga naar <span class="richguide__code">app.plately.nl</span>.</p>
+                    </div>
+                  </div>
+                  <div class="richguide__step">
+                    <span class="richguide__step-num">2</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Tik op ⋮ rechtsboven</p>
+                      <p class="richguide__step-desc">Het menu van Chrome.</p>
+                    </div>
+                  </div>
+                  <div class="richguide__step">
+                    <span class="richguide__step-num richguide__step-num--final">3</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Kies "Toevoegen aan startscherm"</p>
+                      <p class="richguide__step-desc">Bevestig in het dialoogvenster — klaar.</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              <p class="guide-section-label">Android (Chrome)</p>
-              <div class="guide-card">
-                <div class="guide-step">
-                  <span class="guide-num">1</span>
-                  <div class="guide-step-text"><strong>Open Plately in Chrome</strong><br>Ga naar <span class="guide-code">app.plately.nl</span>.</div>
-                </div>
-                <div class="guide-step">
-                  <span class="guide-num">2</span>
-                  <div class="guide-step-text"><strong>Tik op ⋮ rechtsboven</strong><br>Het menu van Chrome.</div>
-                </div>
-                <div class="guide-step">
-                  <span class="guide-num">3</span>
-                  <div class="guide-step-text"><strong>Kies "Toevoegen aan startscherm"</strong><br>Bevestig in het dialoogvenster.</div>
-                </div>
-              </div>
-
-              <div class="guide-tip">Eenmaal geïnstalleerd opent Plately als echte app — geen browserbalk, wél meldingen.</div>
             </div>
           </div>
 
@@ -1264,37 +1305,104 @@
               <button class="topbar-back-btn" id="profileSubGuideInstagramBack" type="button" aria-label="Terug">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
-              <h1 class="topbar-title">Importeren via Instagram</h1>
+              <h1 class="topbar-title">Recepten importeren</h1>
               <span class="topbar-spacer"></span>
             </header>
-            <div class="guide-body">
-              <p class="guide-intro">Zie je een lekker recept op Instagram? Kopieer de link en importeer het direct in Plately.</p>
-
-              <p class="guide-section-label">Stap voor stap</p>
-              <div class="guide-card">
-                <div class="guide-step">
-                  <span class="guide-num">1</span>
-                  <div class="guide-step-text"><strong>Open het recept op Instagram</strong><br>Ga naar de post of reel met het recept.</div>
+            <div class="richguide">
+              <!-- Instagram section -->
+              <div class="richguide__section">
+                <div class="richguide__hero">
+                  <h2 class="richguide__hero-title">Recept importeren vanuit Instagram</h2>
+                  <p class="richguide__hero-sub">Zie je een lekker recept op Instagram? Met Plately importeer je het binnen een paar seconden.</p>
                 </div>
-                <div class="guide-step">
-                  <span class="guide-num">2</span>
-                  <div class="guide-step-text"><strong>Tik op ⋯ en kies "Link kopiëren"</strong><br>De drie puntjes rechtsboven de post.</div>
+                <div class="richguide__section-header">
+                  <span class="richguide__icon richguide__icon--ig">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+                  </span>
+                  <p class="richguide__section-label">Stap voor stap</p>
                 </div>
-                <div class="guide-step">
-                  <span class="guide-num">3</span>
-                  <div class="guide-step-text"><strong>Schakel over naar Plately</strong><br>De app detecteert de gekopieerde link automatisch en vraagt of je het recept wilt importeren.</div>
-                </div>
-                <div class="guide-step">
-                  <span class="guide-num">4</span>
-                  <div class="guide-step-text"><strong>Of plak de link handmatig</strong><br>Tik op het importeer-scherm, plak de Instagram-link en tik <span class="guide-pill">Importeren</span>.</div>
-                </div>
-                <div class="guide-step">
-                  <span class="guide-num">5</span>
-                  <div class="guide-step-text"><strong>Controleer en sla op</strong><br>Plately haalt titel, ingrediënten en stappen op. Tik op <span class="guide-pill">Opslaan</span>.</div>
+                <div class="richguide__steps">
+                  <div class="richguide__step">
+                    <span class="richguide__step-num">1</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Open het recept op Instagram</p>
+                      <p class="richguide__step-desc">Ga naar de post of reel met het recept dat je wilt bewaren.</p>
+                    </div>
+                  </div>
+                  <div class="richguide__step">
+                    <span class="richguide__step-num">2</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Tik op ⋯ en kies "Link kopiëren"</p>
+                      <p class="richguide__step-desc">De drie puntjes rechtsboven de post.</p>
+                    </div>
+                  </div>
+                  <div class="richguide__step">
+                    <span class="richguide__step-num">3</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Schakel over naar Plately</p>
+                      <p class="richguide__step-desc">De app detecteert de gekopieerde link automatisch en vraagt of je het recept wilt importeren.</p>
+                    </div>
+                  </div>
+                  <div class="richguide__step">
+                    <span class="richguide__step-num">4</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Of plak de link handmatig</p>
+                      <p class="richguide__step-desc">Tik op het importeer-scherm, plak de Instagram-link en tik <span class="richguide__pill">Importeren</span>.</p>
+                    </div>
+                  </div>
+                  <div class="richguide__step">
+                    <span class="richguide__step-num richguide__step-num--final">5</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Controleer en sla op</p>
+                      <p class="richguide__step-desc">Plately haalt titel, ingrediënten en stappen op. Tik op <span class="richguide__pill">Opslaan</span>.</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              <div class="guide-tip">Werkt ook met recepten van kookwebsites, YouTube en TikTok — kopieer gewoon de link.</div>
+              <!-- Website section -->
+              <div class="richguide__section">
+                <div class="richguide__hero">
+                  <h2 class="richguide__hero-title">Recept importeren vanaf een website</h2>
+                  <p class="richguide__hero-sub">Werkt met honderden kookwebsites zoals Miljuschka, 15gram, Allerhande en meer.</p>
+                </div>
+                <div class="richguide__section-header">
+                  <span class="richguide__icon richguide__icon--web">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                  </span>
+                  <p class="richguide__section-label">Stap voor stap</p>
+                </div>
+                <div class="richguide__steps">
+                  <div class="richguide__step">
+                    <span class="richguide__step-num">1</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Ga naar het recept op de website</p>
+                      <p class="richguide__step-desc">Open de pagina met het recept in je browser.</p>
+                    </div>
+                  </div>
+                  <div class="richguide__step">
+                    <span class="richguide__step-num">2</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Kopieer de URL uit de adresbalk</p>
+                      <p class="richguide__step-desc">Tik op de adresbalk en kopieer het volledige webadres.</p>
+                    </div>
+                  </div>
+                  <div class="richguide__step">
+                    <span class="richguide__step-num">3</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Schakel over naar Plately</p>
+                      <p class="richguide__step-desc">De app herkent de gekopieerde link en vraagt of je het recept wilt importeren.</p>
+                    </div>
+                  </div>
+                  <div class="richguide__step">
+                    <span class="richguide__step-num richguide__step-num--final">4</span>
+                    <div class="richguide__step-content">
+                      <p class="richguide__step-title">Controleer en sla op</p>
+                      <p class="richguide__step-desc">Plately importeert het recept automatisch. Tik op <span class="richguide__pill">Opslaan</span> om het te bewaren.</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="richguide__tip">Werkt ook met YouTube en TikTok receptvideo's — kopieer gewoon de link.</div>
+              </div>
             </div>
           </div>
 
