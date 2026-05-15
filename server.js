@@ -7326,6 +7326,7 @@ async function importInstagram(sourceUrl, note) {
 
   // Extracteer de Instagram shortcode voor embed-URL
   const igShortcode = String(sourceUrl || "").match(/\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/)?.[1] || "";
+  const igEmbedUrl = igShortcode ? `https://www.instagram.com/p/${igShortcode}/embed/` : "";
 
   if (META_APP_ID && META_APP_SECRET) {
     const token = `${META_APP_ID}|${META_APP_SECRET}`;
