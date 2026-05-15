@@ -15618,6 +15618,53 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (
+      (requestUrl.pathname === "/terms" || requestUrl.pathname === "/terms-of-service") &&
+      request.method === "GET"
+    ) {
+      const html = buildSimpleHtmlPage("Gebruiksvoorwaarden — Plately", `
+        <h1>Gebruiksvoorwaarden</h1>
+        <p><strong>Laatst bijgewerkt:</strong> mei 2025</p>
+
+        <h2>1. Over Plately</h2>
+        <p>Plately is een webapp waarmee je recepten kunt opslaan, importeren en organiseren. Door gebruik te maken van Plately ga je akkoord met deze gebruiksvoorwaarden.</p>
+
+        <h2>2. Gebruik van de app</h2>
+        <ul>
+          <li>Je mag Plately uitsluitend gebruiken voor persoonlijk, niet-commercieel gebruik.</li>
+          <li>Je bent verantwoordelijk voor de inhoud die je opslaat in de app.</li>
+          <li>Je mag de app niet gebruiken voor het verspreiden van schadelijke, illegale of misleidende inhoud.</li>
+          <li>Je mag de app niet proberen te reverse-engineeren, kopiëren of misbruiken.</li>
+        </ul>
+
+        <h2>3. Account</h2>
+        <p>Als je een account aanmaakt, ben je verantwoordelijk voor de beveiliging van je inloggegevens. Meld ongeautoriseerd gebruik zo snel mogelijk via <a href="mailto:support@plately.nl">support@plately.nl</a>.</p>
+
+        <h2>4. Intellectueel eigendom</h2>
+        <p>De app en de bijbehorende technologie zijn eigendom van Plately. Recepten die je importeert blijven eigendom van de oorspronkelijke makers. Plately claimt geen eigendom over door jou opgeslagen inhoud.</p>
+
+        <h2>5. Beschikbaarheid</h2>
+        <p>We streven naar een betrouwbare beschikbaarheid van de app, maar kunnen geen ononderbroken toegang garanderen. We behouden het recht om de app (tijdelijk) aan te passen of offline te halen voor onderhoud.</p>
+
+        <h2>6. Aansprakelijkheid</h2>
+        <p>Plately is niet aansprakelijk voor schade die voortvloeit uit het gebruik van de app, onjuiste receptinformatie, of het tijdelijk niet beschikbaar zijn van de service.</p>
+
+        <h2>7. Wijzigingen</h2>
+        <p>We kunnen deze voorwaarden op elk moment aanpassen. Bij ingrijpende wijzigingen informeren we je via de app of per e-mail. Voortgezet gebruik na wijziging geldt als acceptatie.</p>
+
+        <h2>8. Toepasselijk recht</h2>
+        <p>Op deze voorwaarden is Nederlands recht van toepassing. Geschillen worden voorgelegd aan de bevoegde rechter in Nederland.</p>
+
+        <h2>9. Contact</h2>
+        <p>Vragen over deze voorwaarden? Mail naar <a href="mailto:support@plately.nl">support@plately.nl</a>.</p>
+
+        <p style="margin-top:2rem;color:#888;font-size:.9rem;">Plately · <a href="/privacy-policy">Privacybeleid</a> · <a href="/data-deletion">Gegevens verwijderen</a></p>
+      `);
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", ...HTTP_HEADERS });
+      response.end(html);
+      return;
+    }
+
     if (requestUrl.pathname === "/api/share/create" && request.method === "POST") {
       const body = await readRequestBody(request);
       const payload = body?.payload && typeof body.payload === "object" ? body.payload : null;
