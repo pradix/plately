@@ -1405,10 +1405,14 @@
             <div class="channel-search-header">
               <h2>Zoekresultaten</h2>
               <div class="import-search-header-right">
-                <button type="button" class="import-view-toggle" id="importViewToggle" aria-label="Weergave wisselen" title="Lijst / Raster">
-                  <svg class="import-view-toggle__grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-                  <svg class="import-view-toggle__list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1" fill="currentColor"/><circle cx="3" cy="12" r="1" fill="currentColor"/><circle cx="3" cy="18" r="1" fill="currentColor"/></svg>
-                </button>
+                <div class="import-view-seg" id="importViewToggle" role="group" aria-label="Weergave">
+                  <button type="button" class="import-view-seg__btn" data-view="grid" aria-pressed="false" title="Rasterweergave">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                  </button>
+                  <button type="button" class="import-view-seg__btn is-active" data-view="list" aria-pressed="true" title="Lijstweergave">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
+                  </button>
+                </div>
                 <button type="button" class="ghost-link" id="importChannelSearchClose">Sluiten</button>
               </div>
             </div>

@@ -12130,22 +12130,31 @@ body {
   align-items: center;
   gap: 10px;
 }
-.import-view-toggle {
-  background: none;
-  border: 1px solid var(--line, rgba(0,0,0,0.1));
+/* Segmented view toggle */
+.import-view-seg {
+  display: flex;
+  border: 1px solid var(--line, rgba(0,0,0,0.12));
   border-radius: 8px;
-  padding: 5px 7px;
+  overflow: hidden;
+  background: var(--bg-muted, #f0f0ec);
+}
+.import-view-seg__btn {
+  background: none;
+  border: none;
+  padding: 5px 9px;
   cursor: pointer;
   display: flex;
   align-items: center;
   color: var(--muted-strong, #a6a299);
-  transition: color 0.15s, background 0.15s;
+  transition: background 0.15s, color 0.15s;
+  line-height: 0;
 }
-.import-view-toggle:hover { background: rgba(0,0,0,0.04); color: var(--text); }
-.import-view-toggle svg { width: 16px; height: 16px; display: block; }
-.import-view-toggle .import-view-toggle__list { display: none; }
-.import-view-toggle[data-mode="list"] .import-view-toggle__grid { display: none; }
-.import-view-toggle[data-mode="list"] .import-view-toggle__list { display: block; }
+.import-view-seg__btn:first-child { border-right: 1px solid var(--line, rgba(0,0,0,0.12)); }
+.import-view-seg__btn svg { width: 15px; height: 15px; display: block; }
+.import-view-seg__btn.is-active {
+  background: var(--color-brand, #8da485);
+  color: #fff;
+}
 .ch-card__visual { height: 130px; }
 
 .channel-search-filters {
@@ -17379,4 +17388,12 @@ body {
   width: 16px;
   height: 16px;
   margin-top: 1px;
+}
+
+.ch-search-more-hint {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--muted-strong, #a6a299);
+  padding: 6px 12px 10px;
+  margin: 0;
 }

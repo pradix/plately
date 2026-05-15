@@ -5214,7 +5214,7 @@ async function searchChannels(query) {
   }
 }
 
-let importViewMode = "grid"; // "grid" | "list"
+let importViewMode = "list"; // "grid" | "list" — standaard lijst (compacter)
 
 function renderImportScreenResults(container, localResults, externalResults, isLoadingExternal) {
   if (!container) return;
@@ -5267,10 +5267,12 @@ function renderImportScreenResults(container, localResults, externalResults, isL
       </div>
     </div>`).join("");
 
+  // Lijst toont meer resultaten compacter; raster beperkt tot 6 extern zodat het niet te lang wordt
   const MAX_LOCAL = 4;
-  const MAX_EXTERNAL = 8;
+  const MAX_EXTERNAL = isList ? 10 : 6;
   const shownLocal = localResults.slice(0, MAX_LOCAL);
   const shownExternal = externalResults.slice(0, MAX_EXTERNAL);
+  const hiddenCount = Math.max(0, (localResults.length - MAX_LOCAL)) + Math.max(0, (externalResults.length - MAX_EXTERNAL));
 
   const gridClass = isList ? "ch-result-grid ch-result-grid--list" : "ch-result-grid";
   let html = `<div class="${gridClass}">`;
@@ -5285,6 +5287,9 @@ function renderImportScreenResults(container, localResults, externalResults, isL
   }
   if (!shownLocal.length && !shownExternal.length && !isLoadingExternal) {
     html += `<p style="grid-column:1/-1;text-align:center;padding:2rem 1rem;color:var(--muted-strong)">Geen resultaten gevonden.</p>`;
+  }
+  if (hiddenCount > 0 && !isLoadingExternal) {
+    html += `<p class="ch-search-more-hint" style="grid-column:1/-1">+ ${hiddenCount} meer — verfijn je zoekopdracht voor betere resultaten</p>`;
   }
   html += "</div>";
   container.innerHTML = html;
@@ -14342,16 +14347,22 @@ if (importSearchInput) {
   });
 }
 
-bindEvent(document.getElementById("importViewToggle"), "click", () => {
-  importViewMode = importViewMode === "grid" ? "list" : "grid";
-  const toggle = document.getElementById("importViewToggle");
-  if (toggle) toggle.dataset.mode = importViewMode;
+bindEvent(document.getElementById("importViewToggle"), "click", (e) => {
+  const btn = e.target.closest(".import-view-seg__btn");
+  if (!btn) return;
+  const view = btn.dataset.view;
+  if (!view || view === importViewMode) return;
+  importViewMode = view;
+  // Update active state op knoppen
+  document.querySelectorAll(".import-view-seg__btn").forEach((b) => {
+    b.classList.toggle("is-active", b.dataset.view === importViewMode);
+    b.setAttribute("aria-pressed", b.dataset.view === importViewMode ? "true" : "false");
+  });
+  // Herrender met nieuwe limieten
   const results = document.getElementById("importChannelSearchResults");
   if (results) {
     const grid = results.querySelector(".ch-result-grid");
-    if (grid) {
-      grid.classList.toggle("ch-result-grid--list", importViewMode === "list");
-    }
+    if (grid) grid.classList.toggle("ch-result-grid--list", importViewMode === "list");
   }
 });
 
