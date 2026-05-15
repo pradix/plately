@@ -517,6 +517,13 @@ function wireRecipeCardImageFallbacks(root) {
       },
       { once: true }
     );
+    // Prefetch on hover: promote lazy image to eager when user hovers the card
+    const card = img.closest(".recent-card, .recipe-card");
+    if (card) {
+      card.addEventListener("mouseenter", () => {
+        if (img.loading === "lazy") img.loading = "eager";
+      }, { once: true });
+    }
   });
 }
 
@@ -9822,6 +9829,15 @@ function normalizeUiErrorMessage(message, code = "") {
   return text;
 }
 
+function renderImportFeedback(el, message, type) {
+  if (!el) return;
+  if (type === "error" && message) {
+    el.innerHTML = `<span class="import-error-box"><span class="import-error-box__icon" aria-hidden="true">⚠️</span><span class="import-error-box__text">${escapeHtml(message)}</span></span>`;
+  } else {
+    el.textContent = message || "";
+  }
+}
+
 /**
  * Strikte interpretatie van booleans uit JSON/API.
  * `Boolean("false") === true` in JavaScript — dat zou ten onrechte "ingelogd" kunnen tonen.
@@ -11364,7 +11380,7 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
     onDone(importedRecipe);
   } catch (error) {
     const message = normalizeUiErrorMessage(error?.message || "");
-    setFeedback(message);
+    setFeedback(message, "error");
     if (!navigator.onLine) {
       showToast("Geen internet. Probeer opnieuw zodra je verbinding hebt.", {
         variant: "error",
@@ -14094,8 +14110,8 @@ bindEvent(importForm, "submit", async (event) => {
   await submitImport(
     url,
     note,
-    (message) => {
-      importFeedback.textContent = message;
+    (message, type) => {
+      renderImportFeedback(importFeedback, message, type);
     },
     (isLoading) => {
       submitButton.disabled = isLoading;
@@ -14985,8 +15001,8 @@ function handleUrlSchemeImport() {
         submitImport(
           url,
           '',
-          (message) => {
-            if (importFeedback) importFeedback.textContent = message;
+          (message, type) => {
+            if (importFeedback) renderImportFeedback(importFeedback, message, type);
           },
           (isLoading) => {
             if (submitButton) {

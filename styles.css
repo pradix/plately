@@ -3671,7 +3671,6 @@ button.ingredient-item {
 }
 
 .import-guide__steps {
-  list-style: none;
   margin: 0;
   padding: 10px 16px 14px;
   display: flex;
@@ -16394,7 +16393,7 @@ body {
   display: block;
   width: calc(100% - 18px);
   margin: 9px;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 10;
   border-radius: 14px;
   object-fit: cover;
   background: linear-gradient(135deg, rgba(141, 164, 133, 0.11), rgba(246, 182, 157, 0.12));
@@ -16466,11 +16465,12 @@ body {
 .recent-card__favicon,
 .recipe-card__favicon,
 .source-favicon {
-  top: 14px;
-  right: 14px;
+  top: 18px;
+  right: 18px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 4px 14px rgba(36, 60, 43, 0.16);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 2px 6px rgba(36, 60, 43, 0.10);
+  opacity: 0.88;
 }
 
 .recent-card--add,
@@ -16574,10 +16574,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 28px;
+  /* pill grows via padding so it stays centered at any screen width */
+  padding: 5px 14px;
+  min-width: 44px;
+  max-width: 72px;
+  height: 30px;
   border-radius: 999px;
-  transition: background 200ms ease, width 200ms cubic-bezier(.22,1,.36,1);
+  transition: background 200ms ease;
+  box-sizing: border-box;
 }
 
 .nav-item--active .nav-icon-wrap {
@@ -17834,15 +17838,22 @@ body {
   width: 55%;
 }
 
-/* ── Image lazy-load fade-in ── */
+/* ── Image lazy-load fade-in with blur-up placeholder ── */
 .recent-card__img,
 .recipe-card img {
   opacity: 0;
-  transition: opacity 0.28s ease;
+  transition: opacity 0.3s ease;
+  /* warm gradient placeholder visible while loading */
+  background: linear-gradient(
+    135deg,
+    rgba(141, 164, 133, 0.13) 0%,
+    rgba(246, 182, 157, 0.13) 100%
+  );
 }
 .recent-card__img.img-loaded,
 .recipe-card img.img-loaded {
   opacity: 1;
+  background: none;
 }
 
 /* ── Offline banner slide animation ──
@@ -17919,4 +17930,36 @@ body {
 }
 .nav-item--profile.nav-item--active .nav-icon-wrap--avatar {
   box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px rgba(58, 92, 55, 0.55);
+}
+
+/* ── content-visibility: auto — skip off-screen render work ── */
+.grocery-group {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 200px;
+}
+.recent-card {
+  contain: layout style;
+}
+
+/* ── Import error box ── */
+.import-error-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 13px;
+  margin-top: 4px;
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  border-radius: 10px;
+  color: #b91c1c;
+  font-size: 0.83rem;
+  line-height: 1.4;
+}
+.import-error-box__icon {
+  flex-shrink: 0;
+  font-size: 1em;
+  line-height: 1.4;
+}
+.import-error-box__text {
+  flex: 1;
 }
