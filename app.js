@@ -5039,8 +5039,8 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
     if (renderChannelSearchResults._lastKey === nextRenderKey) return;
     renderChannelSearchResults._lastKey = nextRenderKey;
 
-    const loadingBanner = state.channelSearchIsSearching
-      ? `<p class="ch-search-loading-more" style="grid-column:1/-1;text-align:center;padding:.75rem 1rem .5rem;font-size:.9rem;opacity:.7;color:var(--text,#2a2a28)">Bezig met extern zoeken…</p>`
+    const loadingBanner = (state.channelSearchIsSearching && rows.length === 0)
+      ? `<p class="ch-search-loading-more" style="grid-column:1/-1;text-align:center;padding:.75rem 1rem .5rem;font-size:.9rem;opacity:.7;color:var(--text,#2a2a28)">Zoeken…</p>`
       : "";
     channelSearchResults.innerHTML = `<div class="ch-result-grid">${rows.map((r) => {
       const channel = channelById.get(r.channelId);
