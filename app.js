@@ -6643,6 +6643,38 @@ function switchGroceryList(listId) {
   schedulePersistAppState();
 }
 
+function openGroceryListNameModal(title, defaultValue, onConfirm) {
+  const modal = document.getElementById("groceryListNameModal");
+  const titleEl = document.getElementById("groceryListNameModalTitle");
+  const input = document.getElementById("groceryListNameInput");
+  const confirmBtn = document.getElementById("groceryListNameConfirmBtn");
+  const cancelBtn = document.getElementById("groceryListNameCancelBtn");
+  const backdrop = document.getElementById("groceryListNameModalBackdrop");
+  if (!modal || !input || !confirmBtn || !cancelBtn) return;
+  titleEl.textContent = title;
+  input.value = defaultValue || "";
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+  setTimeout(() => { input.focus(); input.select(); }, 80);
+
+  const close = () => {
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+    confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+    cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+    backdrop?.replaceWith(backdrop.cloneNode(true));
+  };
+  const submit = () => {
+    const val = input.value.trim();
+    close();
+    if (val) onConfirm(val);
+  };
+  document.getElementById("groceryListNameConfirmBtn").addEventListener("click", submit);
+  document.getElementById("groceryListNameCancelBtn").addEventListener("click", close);
+  document.getElementById("groceryListNameModalBackdrop").addEventListener("click", close);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") close(); }, { once: true });
+}
+
 function createGroceryList(name) {
   const id = "gl_" + Math.random().toString(36).slice(2, 10);
   const list = { id, name: name || "Nieuwe lijst", items: [] };
@@ -6729,8 +6761,7 @@ function renderGroceryListSwitcher() {
           cancelLabel: "Verwijderen",
           destructive: false,
           onConfirm: () => {
-            const newName = window.prompt("Nieuwe naam:", list.name);
-            if (newName) renameGroceryList(listId, newName);
+            openGroceryListNameModal("Hernoem lijst", list.name, (newName) => renameGroceryList(listId, newName));
           },
           onCancel: () => {
             if (state.groceryLists.length <= 1) {
@@ -6763,8 +6794,7 @@ function renderGroceryListSwitcher() {
   const addBtn = container.querySelector("#glAddListBtn");
   if (addBtn) {
     addBtn.addEventListener("click", () => {
-      const name = window.prompt("Naam van de nieuwe lijst:", "Nieuwe lijst");
-      if (name && name.trim()) createGroceryList(name.trim());
+      openGroceryListNameModal("Nieuwe lijst", "", (name) => createGroceryList(name));
     });
   }
 }

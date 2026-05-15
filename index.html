@@ -9,7 +9,7 @@
       name="description"
       content="Plately is een webapp om recepten van Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.20.16" />
+    <meta name="plately-build" content="1.0.20.17" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -38,8 +38,8 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="preload" href="styles.css?v=1.0.20.16" as="style" />
-    <link rel="stylesheet" href="styles.css?v=1.0.20.16" />
+    <link rel="preload" href="styles.css?v=1.0.20.17" as="style" />
+    <link rel="stylesheet" href="styles.css?v=1.0.20.17" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -2154,6 +2154,19 @@
     </div>
 
     <!-- Cookbook name modal -->
+    <!-- Grocery list name modal -->
+    <div class="mini-modal hidden" id="groceryListNameModal" aria-hidden="true">
+      <div class="mini-modal__backdrop" id="groceryListNameModalBackdrop"></div>
+      <div class="mini-modal__box" role="dialog" aria-modal="true" aria-labelledby="groceryListNameModalTitle">
+        <h3 class="mini-modal__title" id="groceryListNameModalTitle">Nieuwe lijst</h3>
+        <input class="mini-modal__input" id="groceryListNameInput" type="text" placeholder="Naam van je lijst..." maxlength="40" autocomplete="off" />
+        <div class="mini-modal__actions">
+          <button class="secondary-button" type="button" id="groceryListNameCancelBtn">Annuleren</button>
+          <button class="primary-button" type="button" id="groceryListNameConfirmBtn">Opslaan</button>
+        </div>
+      </div>
+    </div>
+
     <div class="mini-modal hidden" id="cookbookNameModal" aria-hidden="true">
       <div class="mini-modal__backdrop" id="cookbookNameModalBackdrop"></div>
       <div class="mini-modal__box" role="dialog" aria-modal="true" aria-labelledby="cookbookNameModalTitle">
@@ -2224,6 +2237,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=1.0.20.16" defer></script>
+    <script src="app.js?v=1.0.20.17" defer></script>
   </body>
 </html>
