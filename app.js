@@ -13863,6 +13863,58 @@ bindEvent(document.getElementById("switchToRegisterButton"), "click", () => {
   openAuthModal("register");
 });
 
+// Mode tab switcher (visual tabs above the form)
+document.querySelectorAll(".auth-mode-tab[data-tab]").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    const mode = tab.dataset.tab === "register" ? "register" : "login";
+    openAuthModal(mode);
+    document.querySelectorAll(".auth-mode-tab").forEach((t) => {
+      t.setAttribute("aria-selected", String(t.dataset.tab === mode));
+    });
+  });
+});
+
+// Password strength indicator (register mode)
+(function () {
+  const input = document.getElementById("authPassword");
+  const bar = document.getElementById("authPwBar");
+  const label = document.getElementById("authPwLabel");
+  if (!input || !bar || !label) return;
+  const LABELS = ["", "Te kort", "Zwak", "Redelijk", "Sterk"];
+  function score(pw) {
+    if (!pw || pw.length < 4) return 0;
+    let s = 0;
+    if (pw.length >= 8) s++;
+    if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) s++;
+    if (/\d/.test(pw)) s++;
+    if (/[^A-Za-z0-9]/.test(pw)) s++;
+    return Math.min(s, 4);
+  }
+  input.addEventListener("input", () => {
+    const modal = document.getElementById("authModal");
+    if (!modal || (modal.dataset.authMode || "login") !== "register") return;
+    const s = score(input.value);
+    bar.setAttribute("data-level", s > 0 ? String(s) : "");
+    bar.style.width = s > 0 ? "" : "0%";
+    label.textContent = s > 0 ? LABELS[s] : "";
+  });
+})();
+
+// Shake auth form on feedback error
+(function () {
+  const feedback = document.getElementById("authFeedback");
+  const form = document.getElementById("authForm");
+  if (!feedback || !form) return;
+  new MutationObserver(() => {
+    if (feedback.textContent.trim()) {
+      form.classList.remove("auth-screen__form--shake");
+      void form.offsetWidth; // reflow to restart animation
+      form.classList.add("auth-screen__form--shake");
+      form.addEventListener("animationend", () => form.classList.remove("auth-screen__form--shake"), { once: true });
+    }
+  }).observe(feedback, { childList: true, characterData: true, subtree: true });
+})();
+
 // Instagram link button (opens in new tab — handled by anchor href)
 
 bindEvent(authForm, "submit", async (event) => {

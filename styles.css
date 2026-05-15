@@ -7000,6 +7000,145 @@ button.ingredient-item {
   background: var(--color-surface-3);
 }
 
+/* ── Auth: mode tab switcher ─────────────────────────────────────────────── */
+.auth-mode-tabs {
+  display: flex;
+  background: color-mix(in srgb, var(--color-border) 55%, transparent);
+  border-radius: 12px;
+  padding: 3px;
+  margin-bottom: 18px;
+  gap: 2px;
+}
+.auth-mode-tab {
+  flex: 1;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--muted-strong);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+  letter-spacing: -0.01em;
+}
+.auth-mode-tab:hover { color: var(--color-text); }
+/* Active tab state driven by parent data-auth-mode */
+.auth-screen[data-auth-mode="login"]    .auth-mode-tab[data-tab="login"],
+.auth-screen[data-auth-mode="register"] .auth-mode-tab[data-tab="register"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.05);
+}
+
+/* ── Auth: benefits strip ────────────────────────────────────────────────── */
+.auth-benefits {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+}
+.auth-benefit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--muted-strong);
+  white-space: nowrap;
+}
+.auth-benefit__icon { font-size: 0.9em; line-height: 1; }
+
+/* ── Auth: input icons ───────────────────────────────────────────────────── */
+.auth-field--with-icon { position: relative; }
+.auth-field--with-icon > .auth-field__input,
+.auth-field--with-icon .auth-field__password-wrap .auth-field__input { padding-left: 42px; }
+.auth-field__icon {
+  position: absolute;
+  left: 14px;
+  bottom: 0;
+  height: 54px; /* matches input height */
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  color: var(--muted);
+}
+.auth-field__icon svg { width: 18px; height: 18px; display: block; }
+/* shift icon up when forgot-link is present (taller field) */
+.auth-field--with-icon .auth-field__password-wrap .auth-field__icon {
+  bottom: auto;
+  top: 0;
+  height: 54px;
+}
+
+/* ── Auth: password strength bar ─────────────────────────────────────────── */
+.auth-pw-strength {
+  margin-top: 6px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+}
+.auth-screen[data-auth-mode="register"] .auth-pw-strength { display: flex; }
+.auth-pw-strength__track {
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-border) 80%, transparent);
+  overflow: hidden;
+}
+.auth-pw-strength__bar {
+  height: 100%;
+  border-radius: 999px;
+  width: 0%;
+  transition: width 0.3s ease, background 0.3s ease;
+  background: #e05252;
+}
+.auth-pw-strength__bar[data-level="1"] { width: 25%; background: #e05252; }
+.auth-pw-strength__bar[data-level="2"] { width: 50%; background: #f59e0b; }
+.auth-pw-strength__bar[data-level="3"] { width: 75%; background: #4ade80; }
+.auth-pw-strength__bar[data-level="4"] { width: 100%; background: #22c55e; }
+.auth-pw-strength__label {
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-weight: 600;
+  height: 14px;
+}
+
+/* Hide old toggle buttons — replaced by .auth-mode-tabs */
+.auth-screen__alt-action { display: none !important; }
+
+/* ── Auth: trust badge ───────────────────────────────────────────────────── */
+.auth-trust {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+.auth-trust__sep { opacity: 0.4; }
+
+/* ── Auth: shake on error ────────────────────────────────────────────────── */
+@keyframes authShake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+.auth-screen__form--shake {
+  animation: authShake 0.38s cubic-bezier(.36,.07,.19,.97) both;
+}
+
 /* ══ Onboarding screen ════════════════════════════════════════════════════════ */
 .onboarding-screen {
   position: fixed;
