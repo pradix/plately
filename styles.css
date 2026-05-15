@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fraunces:opsz,wght@9..144,300..900&display=swap");
 
 :root {
   color-scheme: light;
@@ -48,10 +48,10 @@
   --space-12: 32px;
 
   /* Typography */
-  --font-display: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-display: "Fraunces", "Georgia", serif;
   --font-body: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
-  --font-size-xs: 0.78rem;
-  --font-size-sm: 0.88rem;
+  --font-size-xs: 0.8rem;
+  --font-size-sm: 0.91rem;
   --font-size-md: 0.97rem;
   --font-size-lg: 1.15rem;
   --font-size-xl: 1.35rem;
@@ -4251,8 +4251,9 @@ button.ingredient-item {
 }
 
 .nav-item span {
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.015em;
 }
 
 .nav-item--active {
@@ -5677,18 +5678,20 @@ button.ingredient-item {
 }
 
 .guide-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 16px;
   overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
 
 .guide-step {
-  display: flex;
+  display: flex !important;
+  flex-direction: row !important;
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
 }
 
 .guide-step:last-child {
@@ -5697,16 +5700,18 @@ button.ingredient-item {
 
 .guide-num {
   flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background: var(--color-brand, #8da485);
+  background: #8da485;
   color: #fff;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin-top: 1px;
+  line-height: 1;
 }
 
 .guide-step-text {
@@ -11835,10 +11840,10 @@ body {
 }
 
 .nav-label {
-  font-size: 0.74rem;
-  font-weight: 500;
+  font-size: 0.62rem;
+  font-weight: 600;
   line-height: 1.1;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.015em;
   white-space: nowrap;
   text-align: center;
 }
@@ -16483,8 +16488,10 @@ body {
 
 .nav-label {
   color: currentColor;
-  font-weight: 700;
-  letter-spacing: 0;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  white-space: nowrap;
 }
 
 .nav-icon-wrap,
@@ -17641,4 +17648,35 @@ body {
   color: var(--muted-strong, #a6a299);
   padding: 6px 12px 10px;
   margin: 0;
+}
+
+.ch-card__channel-favicon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  object-fit: contain;
+  margin-bottom: 2px;
+  flex-shrink: 0;
+}
+
+.ch-load-more-btn {
+  grid-column: 1 / -1;
+  display: block;
+  width: 100%;
+  padding: 11px 16px;
+  background: var(--color-surface, #fff);
+  border: 1.5px solid var(--color-border, #e8e4dc);
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-brand, #6a9464);
+  cursor: pointer;
+  text-align: center;
+  margin-top: 4px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.ch-load-more-btn:active {
+  background: #f2f7f1;
+  border-color: var(--color-brand, #6a9464);
 }

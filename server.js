@@ -16573,6 +16573,34 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/auth/magic" && request.method === "GET") {
+      const secret = String(requestUrl.searchParams.get("s") || "").trim();
+      const magicSecret = String(process.env.MAGIC_LINK_SECRET || "").trim();
+      if (!magicSecret || !secret || secret !== magicSecret) {
+        response.writeHead(404, { "Content-Type": "text/plain" });
+        response.end("Not found");
+        return;
+      }
+      if (!isPostgresEnabled()) {
+        response.writeHead(302, { Location: "/?error=db_required" });
+        response.end();
+        return;
+      }
+      await ensurePostgresSchema();
+      const pool = await getPostgresPool();
+      const result = await pool.query(`SELECT * FROM plately_users WHERE lower(email) = lower($1) LIMIT 1`, [ADMIN_EMAIL]);
+      const user = result.rows[0];
+      if (!user) {
+        response.writeHead(302, { Location: "/?error=no_account" });
+        response.end();
+        return;
+      }
+      await createAuthSession(response, user.id);
+      response.writeHead(302, { Location: "/" });
+      response.end();
+      return;
+    }
+
     if (requestUrl.pathname === "/api/auth/apple-config" && request.method === "GET") {
       const enabled = isPostgresEnabled() && Boolean(APPLE_CLIENT_ID);
       const origin = getRequestPublicOrigin(request).replace(/\/$/, "");

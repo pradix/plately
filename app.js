@@ -5049,31 +5049,26 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
       renderChannelFilterChips(all);
     }
 
-    // Limiteer het aantal resultaten op basis van weergavemodus
-    const isList = homeSearchViewMode === "list";
-    const MAX_RESULTS = isList ? 8 : 6;
-    const hiddenCount = Math.max(0, rows.length - MAX_RESULTS);
-    rows = rows.slice(0, MAX_RESULTS);
+    // Toon initieel 10 resultaten, uitbreidbaar via "Meer laden"
+    const INITIAL_RESULTS = 10;
+    const visibleCount = state.channelSearchVisibleCount || INITIAL_RESULTS;
+    const totalRows = rows.length;
+    const hiddenCount = Math.max(0, totalRows - visibleCount);
+    rows = rows.slice(0, visibleCount);
 
     // Skip expensive full rerender when the visible set is effectively identical.
     const sig = `${rows.length}::${rows.slice(0, 22).map((r) => r?.url || "").join("|")}`;
-    const nextRenderKey = `${state.channelSearchQuery}||${state.channelSearchFilter || ""}||${sig}||${state.channelSearchIsSearching ? "1" : "0"}||${homeSearchViewMode}`;
+    const nextRenderKey = `${state.channelSearchQuery}||${state.channelSearchFilter || ""}||${sig}||${state.channelSearchIsSearching ? "1" : "0"}||${visibleCount}`;
     if (renderChannelSearchResults._lastKey === nextRenderKey) return;
     renderChannelSearchResults._lastKey = nextRenderKey;
-
-    // Sync toggle active state
-    document.querySelectorAll("#homeViewToggle .import-view-seg__btn").forEach((b) => {
-      b.classList.toggle("is-active", b.dataset.view === homeSearchViewMode);
-      b.setAttribute("aria-pressed", b.dataset.view === homeSearchViewMode ? "true" : "false");
-    });
 
     const loadingBanner = (state.channelSearchIsSearching && rows.length === 0)
       ? `<p class="ch-search-loading-more" style="grid-column:1/-1;text-align:center;padding:.75rem 1rem .5rem;font-size:.9rem;opacity:.7;color:var(--text,#2a2a28)">Zoeken…</p>`
       : "";
     const moreHint = hiddenCount > 0 && !state.channelSearchIsSearching
-      ? `<p class="ch-search-more-hint" style="grid-column:1/-1">+ ${hiddenCount} meer — verfijn je zoekopdracht voor betere resultaten</p>`
+      ? `<button type="button" class="ch-load-more-btn" data-action="load-more-channel-search">+ ${hiddenCount} meer laden</button>`
       : "";
-    const gridClass = isList ? "ch-result-grid ch-result-grid--list" : "ch-result-grid";
+    const gridClass = "ch-result-grid";
     channelSearchResults.innerHTML = `<div class="${gridClass}">${rows.map((r) => {
       const channel = channelById.get(r.channelId);
       const channelColor = channel?.color || "#8da485";
@@ -5093,7 +5088,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
         </div>
         <div class="ch-card__body">
           <p class="ch-card__title">${escapeHtml(r.title)}</p>
-          <span class="ch-card__channel-label">${escapeHtml(r.channel || "")}</span>
+          ${(() => { const fav = getSourceIconUrl(r.url || ""); return fav ? `<img class="ch-card__channel-favicon" src="${escapeHtml(fav)}" alt="${escapeHtml(r.channel || "")}" loading="lazy" onerror="this.style.display='none'" />` : (r.channel ? `<span class="ch-card__channel-label">${escapeHtml(r.channel)}</span>` : ""); })()}
           ${formatChannelSearchRatingHtml(r, { showRatingSource: showRatingSourceInPill })}
           ${r.description ? `<p class="ch-card__desc">${escapeHtml(r.description)}</p>` : ""}
           ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
@@ -5248,7 +5243,6 @@ async function searchChannels(query) {
 }
 
 let importViewMode = "grid"; // "grid" | "list" — standaard raster
-let homeSearchViewMode = "grid"; // zelfde voor het hoofdscherm
 
 function renderImportScreenResults(container, localResults, externalResults, isLoadingExternal) {
   if (!container) return;
@@ -5276,7 +5270,7 @@ function renderImportScreenResults(container, localResults, externalResults, isL
         </div>
         <div class="ch-card__body">
           <p class="ch-card__title">${escapeHtml(r.title)}</p>
-          <span class="ch-card__channel-label">${escapeHtml(badgeLabel)}</span>
+          ${(() => { const fav = getSourceIconUrl(r.url || ""); return fav ? `<img class="ch-card__channel-favicon" src="${escapeHtml(fav)}" alt="${escapeHtml(badgeLabel)}" loading="lazy" onerror="this.style.display='none'" />` : (badgeLabel ? `<span class="ch-card__channel-label">${escapeHtml(badgeLabel)}</span>` : ""); })()}
           ${formatChannelSearchRatingHtml(r, { showRatingSource: false })}
           ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
         </div>
@@ -12237,8 +12231,9 @@ bindEvent(searchInput, "input", (event) => {
     return;
   }
 
-  // Reset filter when starting a new search so results aren't hidden by old filter
+  // Reset filter en visible count bij nieuwe zoekopdracht
   state.channelSearchFilter = null;
+  state.channelSearchVisibleCount = 10;
 
   // Toon lokale resultaten direct (geen debounce) zodat opgeslagen recepten meteen verschijnen.
   const immediateLocal = searchSavedRecipesForChannelQuery(query, 12);
@@ -12371,6 +12366,14 @@ bindEvent(document.getElementById("channelSearchSection"), "click", (event) => {
   if (!(chip instanceof HTMLElement) || !chip.hasAttribute("data-ch-filter")) return;
   const filter = chip.dataset.chFilter || null;
   renderChannelSearchResults(null, filter);
+});
+
+// "Meer laden" knop in zoekresultaten
+bindEvent(channelSearchResults, "click", (event) => {
+  if (!event.target.closest("[data-action='load-more-channel-search']")) return;
+  state.channelSearchVisibleCount = (state.channelSearchVisibleCount || 10) + 10;
+  renderChannelSearchResults._lastKey = null;
+  renderChannelSearchResults(state.channelSearchAllResults || []);
 });
 
 // Import button inside channel search results
@@ -14408,15 +14411,6 @@ bindEvent(document.getElementById("importViewToggle"), "click", (e) => {
   }
 });
 
-bindEvent(document.getElementById("homeViewToggle"), "click", (e) => {
-  const btn = e.target.closest(".import-view-seg__btn");
-  if (!btn) return;
-  const view = btn.dataset.view;
-  if (!view || view === homeSearchViewMode) return;
-  homeSearchViewMode = view;
-  renderChannelSearchResults._lastKey = null; // forceer herrender
-  renderChannelSearchResults(state.channelSearchAllResults || []);
-});
 
 bindEvent(document.getElementById("importChannelSearchClose"), "click", () => {
   const section = document.getElementById("importChannelSearchSection");
