@@ -9,7 +9,7 @@
       name="description"
       content="Plately is een webapp om recepten van Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.20.36" />
+    <meta name="plately-build" content="1.0.20.37" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -234,6 +234,12 @@
               <button class="detail-icon-action" id="saveRecipeButton" type="button" aria-label="Bewaar recept" title="Sla dit recept op in je bibliotheek voor later">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v13.2a.8.8 0 0 1-1.28.64L12 15.5l-6.22 4.34A.8.8 0 0 1 4.5 19.2V6A1.5 1.5 0 0 1 6 4.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <button class="detail-icon-action" id="heroShareRecipeButton" type="button" aria-label="Recept delen">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
                 </svg>
               </button>
             </div>
@@ -525,6 +531,13 @@
               <input id="groceryQuickInput" class="grocery-quick-input" type="text" placeholder="Zoek of voeg toe..." autocomplete="off" />
             </div>
             <div class="grocery-suggest-dropdown hidden" id="grocerySuggestDropdown" role="listbox"></div>
+          </div>
+
+          <!-- Sort pills — shown when items exist -->
+          <div class="grocery-sort-bar hidden" id="grocerySortBar" aria-label="Sorteer boodschappenlijst">
+            <button class="grocery-sort-pill is-active" data-grocery-sort="default" type="button">Per recept</button>
+            <button class="grocery-sort-pill" data-grocery-sort="alpha" type="button">A → Z</button>
+            <button class="grocery-sort-pill" data-grocery-sort="category" type="button">Per categorie</button>
           </div>
 
           <!-- AH order CTA pill — shown when items exist -->

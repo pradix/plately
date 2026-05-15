@@ -496,9 +496,16 @@ const RECIPE_CARD_IMG_FALLBACK = "assets/hero-burger.svg";
 
 function wireRecipeCardImageFallbacks(root) {
   const scope = root && typeof root.querySelectorAll === "function" ? root : document;
-  scope.querySelectorAll("img.recent-card__img").forEach((img) => {
+  scope.querySelectorAll("img.recent-card__img, .recipe-card img").forEach((img) => {
     if (img.dataset.platelyImgFallback === "1") return;
     img.dataset.platelyImgFallback = "1";
+    // Fade-in on load
+    if (img.complete && img.naturalWidth > 0) {
+      img.classList.add("img-loaded");
+    } else {
+      img.addEventListener("load", () => img.classList.add("img-loaded"), { once: true });
+      img.addEventListener("error", () => img.classList.add("img-loaded"), { once: true });
+    }
     img.addEventListener(
       "error",
       () => {
@@ -511,6 +518,21 @@ function wireRecipeCardImageFallbacks(root) {
       { once: true }
     );
   });
+}
+
+function buildSkeletonRecipeGrid(count = 6) {
+  return Array.from({ length: count }, () => `
+    <div class="recent-card recent-card--skeleton" aria-hidden="true">
+      <div class="recent-card__img"></div>
+      <div class="recent-card__body">
+        <div>
+          <div class="skeleton-line" style="width:82%"></div>
+          <div class="skeleton-line"></div>
+        </div>
+        <div class="skeleton-line" style="width:40%;height:9px;margin-top:4px"></div>
+      </div>
+    </div>
+  `).join("");
 }
 
 // (Home "Snel aan de slag" panel removed)
@@ -619,6 +641,7 @@ const state = {
   groceryItems: [],
   groceryLists: [],
   activeGroceryListId: "",
+  grocerySort: "default",
   basketPreview: null,
   basketServings: 2, // current persons
   basketBaseServings: 2, // base when basket was opened
@@ -1034,6 +1057,8 @@ const importFeedback = document.getElementById("importFeedback");
 const quickRecipeGrid = document.getElementById("quickRecipeGrid");
 const categoryGrid = document.getElementById("categoryGrid");
 const recipeGrid = document.getElementById("recipeGrid");
+// Show skeleton immediately so home doesn't flash empty on cold load
+if (recipeGrid) recipeGrid.innerHTML = buildSkeletonRecipeGrid(6);
 const featuredCard = document.getElementById("featuredCard");
 const featuredImage = document.getElementById("featuredImage");
 const featuredSourceIcon = document.getElementById("featuredSourceIcon");
@@ -6119,6 +6144,7 @@ function renderDetailRecipe(resetServings = false) {
       }
     }
   }
+  detailHeroImage.classList.remove("img-loaded");
   detailHeroImage.src = recipe.image;
   detailHeroImage.alt = recipe.alt;
   const heroSrc = String(recipe.image || "").trim();
@@ -6126,6 +6152,12 @@ function renderDetailRecipe(resetServings = false) {
   detailHeroImage.loading = isPlaceholderHero ? "lazy" : "eager";
   detailHeroImage.fetchPriority = isPlaceholderHero ? "low" : "high";
   detailHeroImage.decoding = "async";
+  if (detailHeroImage.complete && detailHeroImage.naturalWidth > 0) {
+    detailHeroImage.classList.add("img-loaded");
+  } else {
+    detailHeroImage.addEventListener("load", () => detailHeroImage.classList.add("img-loaded"), { once: true });
+    detailHeroImage.addEventListener("error", () => detailHeroImage.classList.add("img-loaded"), { once: true });
+  }
   detailTitle.textContent = recipe.title;
   detailMealTag.textContent = recipe.mealTag;
   if (detailMetaChips) {
@@ -6926,6 +6958,13 @@ function renderGroceryGroups() {
   if (groceryOrder) {
     groceryOrder.classList.toggle("hidden", !state.groceryItems.length);
   }
+  const sortBar = document.getElementById("grocerySortBar");
+  if (sortBar) {
+    sortBar.classList.toggle("hidden", !state.groceryItems.length);
+    sortBar.querySelectorAll("[data-grocery-sort]").forEach((pill) => {
+      pill.classList.toggle("is-active", pill.dataset.grocerySort === (state.grocerySort || "default"));
+    });
+  }
   if (orderAHItemCount) {
     orderAHItemCount.textContent = `Zet ${uncheckedCount} producten klaar`;
   }
@@ -7037,8 +7076,44 @@ function renderGroceryGroups() {
   }
 
   let html = "";
+  const grocerySort = state.grocerySort || "default";
 
-  if (multiRecipe) {
+  if (grocerySort === "alpha") {
+    // Flat list, A-Z (unchecked first, then checked), regardless of recipe
+    const sorted = [...state.groceryItems].sort((a, b) => {
+      if (a.checked !== b.checked) return Number(a.checked) - Number(b.checked);
+      return (a.title || "").localeCompare(b.title || "", "nl");
+    });
+    html = `
+      <section class="grocery-group">
+        <div class="grocery-group__header grocery-group__header--aisle">
+          <h2>Alle items (A–Z)</h2>
+        </div>
+        ${sorted.map(renderGroceryItem).join("")}
+      </section>
+    `;
+  } else if (grocerySort === "category") {
+    // Group all items by ingredient category, ignoring which recipe they belong to
+    const catGroups = state.groceryItems.reduce((acc, item) => {
+      const key = item.group || "overig";
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(item);
+      return acc;
+    }, {});
+    html = Object.entries(catGroups)
+      .map(([group, items]) => {
+        const meta = getGroupMeta(group);
+        const sortedItems = [...items].sort((a, b) => Number(a.checked) - Number(b.checked));
+        return `
+          <section class="grocery-group">
+            <div class="grocery-group__header grocery-group__header--aisle">
+              <h2>${meta.title}</h2>
+            </div>
+            ${sortedItems.map(renderGroceryItem).join("")}
+          </section>
+        `;
+      }).join("");
+  } else if (multiRecipe) {
     const shared = state.groceryItems.filter((i) => i.recipeTitle && i.recipeTitle.includes(","));
     const sharedTitleSet = new Set(shared.map((i) => i.recipeTitle || ""));
     // Group by recipe; samengevoegde titels (“A, B”) alleen onder Gedeelde ingrediënten
@@ -11413,6 +11488,14 @@ bindEvent(document.getElementById("viewAllImportsButton"), "click", () => {
 bindEvent(document.getElementById("viewAllCookbooksBtn"), "click", () => {
   switchView("cookbooks");
 });
+// Grocery sort pills
+bindEvent(document.getElementById("grocerySortBar"), "click", (e) => {
+  const pill = e.target.closest("[data-grocery-sort]");
+  if (!pill) return;
+  state.grocerySort = pill.dataset.grocerySort || "default";
+  renderGroceryGroups();
+});
+
 bindEvent(document.getElementById("groceryClearButton"), "click", () => {
   if (!state.groceryItems.length) return;
   showConfirm({
@@ -11660,6 +11743,7 @@ brandHomeButtons.forEach((button) => {
   button.addEventListener("click", goHome);
 });
 bindEvent(shareRecipeButton, "click", shareSelectedRecipe);
+bindEvent(document.getElementById("heroShareRecipeButton"), "click", shareSelectedRecipe);
 bindEvent(favoriteRecipeButton, "click", () => {
   const recipe = getSelectedRecipe();
   if (recipe) toggleRecipeFavorite(recipe.id);
