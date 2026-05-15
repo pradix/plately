@@ -9,7 +9,7 @@
       name="description"
       content="Plately is een webapp om recepten van Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.20.23" />
+    <meta name="plately-build" content="1.0.20.24" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -1419,17 +1419,62 @@
             <div class="channel-search-list" id="importChannelSearchResults"></div>
           </section>
 
-          <!-- Visual hero -->
-          <div class="import-hero">
-            <div class="import-hero__icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 3v13"/>
-                <path d="M7 11l5 5 5-5"/>
-                <path d="M5 19h14"/>
-              </svg>
+          <!-- Import guide (empty state) -->
+          <div class="import-guide">
+            <p class="import-guide__lead">Haal recepten binnen van Instagram of elke website — automatisch.</p>
+
+            <!-- Instagram card -->
+            <div class="import-guide__card">
+              <div class="import-guide__card-header">
+                <span class="import-guide__card-icon import-guide__card-icon--ig">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" width="20" height="20">
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                  </svg>
+                </span>
+                <span class="import-guide__card-title">Via Instagram</span>
+              </div>
+              <ol class="import-guide__steps">
+                <li class="import-guide__step">
+                  <span class="import-guide__step-num">1</span>
+                  <span class="import-guide__step-body">Open het recept-reel op Instagram.</span>
+                </li>
+                <li class="import-guide__step">
+                  <span class="import-guide__step-num">2</span>
+                  <span class="import-guide__step-body">Tik op <strong>···</strong> en kies <strong>Link kopiëren</strong>.</span>
+                </li>
+                <li class="import-guide__step">
+                  <span class="import-guide__step-num">3</span>
+                  <span class="import-guide__step-body">Plak de link hierboven en tik <strong>Importeren</strong>.</span>
+                </li>
+              </ol>
             </div>
-            <h1 class="import-hero__title">Importeer recept</h1>
-            <p class="import-hero__subtitle">Plak een link van Instagram of een website en wij halen titel, ingrediënten en stappen automatisch op.</p>
+
+            <!-- Website card -->
+            <div class="import-guide__card">
+              <div class="import-guide__card-header">
+                <span class="import-guide__card-icon import-guide__card-icon--web">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="20" height="20">
+                    <circle cx="12" cy="12" r="9"/>
+                    <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>
+                  </svg>
+                </span>
+                <span class="import-guide__card-title">Via een website</span>
+              </div>
+              <ol class="import-guide__steps">
+                <li class="import-guide__step">
+                  <span class="import-guide__step-num">1</span>
+                  <span class="import-guide__step-body">Ga naar het recept op de website (bijv. Miljuschka, 15gram, …).</span>
+                </li>
+                <li class="import-guide__step">
+                  <span class="import-guide__step-num">2</span>
+                  <span class="import-guide__step-body">Kopieer de URL uit de adresbalk.</span>
+                </li>
+                <li class="import-guide__step">
+                  <span class="import-guide__step-num">3</span>
+                  <span class="import-guide__step-body">Plak de link hierboven en tik <strong>Importeren</strong>.</span>
+                </li>
+              </ol>
+            </div>
           </div>
 
           <!-- Supported platforms -->
