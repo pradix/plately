@@ -9138,6 +9138,7 @@ async function _fetchAHSearchViaFirecrawlWeb(searchTerm) {
 // Firecrawl gebruikt zijn eigen IPs en is niet geblokkeerd door AH.
 // Geeft null terug als Firecrawl niet beschikbaar is, [] als geen producten gevonden.
 async function _fetchAHSearchViaFirecrawl(searchUrl, token, searchTerm) {
+  if (AH_API_BASE !== "https://api.ah.nl") return null; // proxy actief, Firecrawl niet nodig
   const apiKey = firecrawlApiKey();
   if (!apiKey) return null;
   try {
