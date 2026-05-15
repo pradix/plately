@@ -2326,6 +2326,16 @@ function buildAppStateFromUser(user) {
     groceryItems: Array.isArray(appState.groceryItems)
       ? appState.groceryItems.map((item, index) => sanitizeGroceryItemForStorage(item, index))
       : [],
+    groceryLists: Array.isArray(appState.groceryLists)
+      ? appState.groceryLists.map((list) => ({
+          id: sanitizeText(list.id || ""),
+          name: sanitizeText(list.name || "Mijn lijst").slice(0, 80),
+          items: Array.isArray(list.items)
+            ? list.items.map((item, index) => sanitizeGroceryItemForStorage(item, index))
+            : [],
+        }))
+      : [],
+    activeGroceryListId: sanitizeText(appState.activeGroceryListId || ""),
     recipeProgress: sanitizeRecipeProgressForStorage(appState.recipeProgress),
     featuredRecipeId: sanitizeText(appState.featuredRecipeId || "recipe-1"),
     selectedRecipeId: sanitizeText(appState.selectedRecipeId || "recipe-1"),
@@ -2875,6 +2885,24 @@ function sanitizeUserStatePayload(body, currentUser) {
     ? body.groceryItems.map((item, index) => sanitizeGroceryItemForStorage(item, index))
     : currentUser.groceryItems;
 
+  // Grocery lists (multiple lists feature)
+  let groceryLists = currentUser.groceryLists || [];
+  if (Array.isArray(body?.groceryLists)) {
+    groceryLists = body.groceryLists.map((list) => ({
+      id: sanitizeText(list.id || ""),
+      name: sanitizeText(list.name || "Mijn lijst").slice(0, 80),
+      items: Array.isArray(list.items)
+        ? list.items.map((item, index) => sanitizeGroceryItemForStorage(item, index))
+        : [],
+    }));
+  } else if (!groceryLists.length && groceryItems.length) {
+    // Backward compat: build default list from flat groceryItems
+    groceryLists = [{ id: "gl_default", name: "Mijn lijst", items: groceryItems }];
+  }
+  const activeGroceryListId = typeof body?.activeGroceryListId === "string"
+    ? sanitizeText(body.activeGroceryListId)
+    : (currentUser.activeGroceryListId || "");
+
   const recipeProgress = body?.recipeProgress
     ? sanitizeRecipeProgressForStorage(body.recipeProgress)
     : currentUser.recipeProgress;
@@ -2902,6 +2930,8 @@ function sanitizeUserStatePayload(body, currentUser) {
     onboardingSeenAt,
     mealPlan,
     groceryItems,
+    groceryLists,
+    activeGroceryListId,
     recipeProgress,
     featuredRecipeId: sanitizeText(body?.featuredRecipeId || currentUser.featuredRecipeId || "recipe-1"),
     selectedRecipeId: sanitizeText(body?.selectedRecipeId || currentUser.selectedRecipeId || "recipe-1"),
@@ -8789,7 +8819,7 @@ let ahTokenCache = { token: "", expiresAt: 0 };
 // In-memory cache voor AH productzoekopdrachten — vermindert API-calls drastisch
 // en maakt de app bestand tegen tijdelijke rate-limits.
 const _ahSearchCache = new Map();
-const AH_SEARCH_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 uur
+const AH_SEARCH_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 uur
 const AH_SEARCH_CACHE_MAX = 600;
 
 function _getAHSearchCache(key) {
@@ -9045,6 +9075,8 @@ function getAHPromotionLabel(product) {
 // Valt terug op www.ah.nl website-scraping via Firecrawl als het token-endpoint geblokkeerd is.
 // Firecrawl rendert de Nuxt-pagina en we extraheren het embedded products-JSON.
 async function _fetchAHSearchViaFirecrawlWeb(searchTerm) {
+  // Sla over als proxy geconfigureerd is — proxy handelt token af, Firecrawl niet nodig
+  if (AH_API_BASE !== "https://api.ah.nl") return null;
   const apiKey = firecrawlApiKey();
   if (!apiKey) return null;
   const searchUrl = `https://www.ah.nl/zoeken?query=${encodeURIComponent(searchTerm)}&sortBy=RELEVANCE`;

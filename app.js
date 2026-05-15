@@ -617,6 +617,8 @@ const state = {
   },
   language: "nl",
   groceryItems: [],
+  groceryLists: [],
+  activeGroceryListId: "",
   basketPreview: null,
   basketServings: 2, // current persons
   basketBaseServings: 2, // base when basket was opened
@@ -4223,7 +4225,10 @@ function consolidateUncheckedGroceryDuplicates() {
   }
 
   if (!removeIds.size) return;
-  state.groceryItems = items.filter((i) => i && !removeIds.has(i.id));
+  // Mutate in-place to preserve the reference to the active grocery list's items array
+  const filtered = items.filter((i) => i && !removeIds.has(i.id));
+  items.length = 0;
+  items.push(...filtered);
 }
 
 function rescaleGroceryAmountsForRecipe(recipeId, ratio) {
@@ -6594,6 +6599,148 @@ function renderGrocerySummary() {
   grocerySummaryChips.innerHTML = "";
 }
 
+// ── Multiple grocery lists ──────────────────────────────────────────────────
+
+function getActiveGroceryList() {
+  return state.groceryLists.find((l) => l.id === state.activeGroceryListId) || state.groceryLists[0] || null;
+}
+
+function switchGroceryList(listId) {
+  const list = state.groceryLists.find((l) => l.id === listId);
+  if (!list) return;
+  state.activeGroceryListId = list.id;
+  state.groceryItems = list.items;
+  renderGroceryGroups();
+  renderGroceryListSwitcher();
+  schedulePersistAppState();
+}
+
+function createGroceryList(name) {
+  const id = "gl_" + Math.random().toString(36).slice(2, 10);
+  const list = { id, name: name || "Nieuwe lijst", items: [] };
+  state.groceryLists.push(list);
+  switchGroceryList(id);
+}
+
+function deleteGroceryList(listId) {
+  if (state.groceryLists.length <= 1) return; // altijd minstens 1
+  state.groceryLists = state.groceryLists.filter((l) => l.id !== listId);
+  switchGroceryList(state.groceryLists[0].id);
+}
+
+function renameGroceryList(listId, newName) {
+  const list = state.groceryLists.find((l) => l.id === listId);
+  if (list && newName.trim()) {
+    list.name = newName.trim();
+    renderGroceryListSwitcher();
+    schedulePersistAppState();
+  }
+}
+
+function ensureGroceryListsInitialized() {
+  if (!state.groceryLists || state.groceryLists.length === 0) {
+    // Migrate existing groceryItems into a default list
+    const defaultList = { id: "gl_default", name: "Mijn lijst", items: state.groceryItems || [] };
+    state.groceryLists = [defaultList];
+    state.activeGroceryListId = defaultList.id;
+    state.groceryItems = defaultList.items;
+  } else {
+    // Ensure activeGroceryListId points to a real list
+    const active = state.groceryLists.find((l) => l.id === state.activeGroceryListId);
+    if (!active) {
+      state.activeGroceryListId = state.groceryLists[0].id;
+    }
+    // Always keep state.groceryItems as a direct reference to active list's items
+    const activeList = state.groceryLists.find((l) => l.id === state.activeGroceryListId);
+    if (activeList) {
+      state.groceryItems = activeList.items;
+    }
+  }
+}
+
+function renderGroceryListSwitcher() {
+  const container = document.getElementById("groceryListSwitcher");
+  if (!container) return;
+
+  const lists = state.groceryLists;
+  const activeId = state.activeGroceryListId;
+
+  let html = lists
+    .map(
+      (list) =>
+        `<button class="gl-chip${list.id === activeId ? " gl-chip--active" : ""}" type="button" data-gl-id="${escapeHtml(list.id)}">${escapeHtml(list.name)}</button>`
+    )
+    .join("");
+
+  html += `<button class="gl-chip gl-chip--add" type="button" id="glAddListBtn" aria-label="Nieuwe lijst">+</button>`;
+
+  container.innerHTML = html;
+
+  // Bind list switch clicks
+  container.querySelectorAll(".gl-chip[data-gl-id]").forEach((btn) => {
+    const listId = btn.dataset.glId;
+
+    // Tap → switch
+    btn.addEventListener("click", () => {
+      if (listId !== state.activeGroceryListId) {
+        switchGroceryList(listId);
+      }
+    });
+
+    // Long-press → options
+    let pressTimer = null;
+    const startPress = () => {
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        const list = state.groceryLists.find((l) => l.id === listId);
+        if (!list) return;
+        showConfirm({
+          title: `"${list.name}"`,
+          subtitle: "Wat wil je doen?",
+          confirmLabel: "Naam wijzigen",
+          cancelLabel: "Verwijderen",
+          destructive: false,
+          onConfirm: () => {
+            const newName = window.prompt("Nieuwe naam:", list.name);
+            if (newName) renameGroceryList(listId, newName);
+          },
+          onCancel: () => {
+            if (state.groceryLists.length <= 1) {
+              showToast("Je hebt minstens één lijst nodig.");
+              return;
+            }
+            showConfirm({
+              title: `"${list.name}" verwijderen?`,
+              subtitle: "Alle items op deze lijst worden verwijderd.",
+              confirmLabel: "Verwijderen",
+              destructive: true,
+              onConfirm: () => deleteGroceryList(listId),
+            });
+          },
+        });
+      }, 600);
+    };
+    const cancelPress = () => {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    };
+    btn.addEventListener("touchstart", startPress, { passive: true });
+    btn.addEventListener("touchend", cancelPress);
+    btn.addEventListener("touchcancel", cancelPress);
+    btn.addEventListener("mousedown", startPress);
+    btn.addEventListener("mouseup", cancelPress);
+    btn.addEventListener("mouseleave", cancelPress);
+  });
+
+  // Bind add button
+  const addBtn = container.querySelector("#glAddListBtn");
+  if (addBtn) {
+    addBtn.addEventListener("click", () => {
+      const name = window.prompt("Naam van de nieuwe lijst:", "Nieuwe lijst");
+      if (name && name.trim()) createGroceryList(name.trim());
+    });
+  }
+}
+
 function updateGroceryIntroCopy() {
   const sub = document.getElementById("grocerySubtitle");
   const hint = document.getElementById("groceryContextHint");
@@ -6663,8 +6810,10 @@ function getPantryOptionalSuggestionsForRecipe(recipe, existingKeySet) {
 }
 
 function renderGroceryGroups() {
+  ensureGroceryListsInitialized();
   consolidateUncheckedGroceryDuplicates();
   persistGroceryItemsLocally();
+  renderGroceryListSwitcher();
   updateGroceryIntroCopy();
   const uncheckedCount = state.groceryItems.filter((item) => !item.checked).length;
   if (groceryToolbar) {
@@ -9193,6 +9342,8 @@ function buildPersistedAppState() {
     selectedCookbookId: state.selectedCookbookId,
     mealPlan: { ...state.mealPlan },
     groceryItems: state.groceryItems.map((item) => ({ ...item })),
+    groceryLists: state.groceryLists.map((list) => ({ ...list, items: list.items.map((item) => ({ ...item })) })),
+    activeGroceryListId: state.activeGroceryListId,
     recipeProgress: Object.fromEntries(
       Object.entries(state.recipeProgress).map(([recipeId, progress]) => [
         recipeId,
@@ -9221,6 +9372,8 @@ function applyPersistedAppState(user) {
     state.recipes = [];
     state.cookbooks = [];
     state.groceryItems = [];
+    state.groceryLists = [];
+    state.activeGroceryListId = "";
     state.recipeProgress = {};
     state.mealPlan = {
       maandag: null,
@@ -9305,7 +9458,25 @@ function applyPersistedAppState(user) {
     };
   }
 
-  state.groceryItems = Array.isArray(user.groceryItems) ? user.groceryItems.map((item) => ({ ...item })) : [];
+  // Load groceryLists (new) or migrate from flat groceryItems (legacy)
+  const rawGroceryItems = Array.isArray(user.groceryItems) ? user.groceryItems.map((item) => ({ ...item })) : [];
+  if (Array.isArray(user.groceryLists) && user.groceryLists.length > 0) {
+    state.groceryLists = user.groceryLists.map((list) => ({
+      id: list.id || "gl_default",
+      name: list.name || "Mijn lijst",
+      items: Array.isArray(list.items) ? list.items.map((item) => ({ ...item })) : [],
+    }));
+    state.activeGroceryListId = user.activeGroceryListId || state.groceryLists[0].id;
+    const activeList = state.groceryLists.find((l) => l.id === state.activeGroceryListId) || state.groceryLists[0];
+    state.activeGroceryListId = activeList.id;
+    state.groceryItems = activeList.items;
+  } else {
+    // Migration: wrap legacy flat array in a default list
+    const defaultList = { id: "gl_default", name: "Mijn lijst", items: rawGroceryItems };
+    state.groceryLists = [defaultList];
+    state.activeGroceryListId = defaultList.id;
+    state.groceryItems = defaultList.items;
+  }
   state.recipeProgress = normalizeRecipeProgressState(user.recipeProgress);
 
   if (typeof user.featuredRecipeId === "string" && getRecipeById(user.featuredRecipeId)) {
@@ -9983,6 +10154,7 @@ async function bootstrapSession() {
     // If server didn't provide grocery items but we have them locally, restore from localStorage
     if ((!payload?.user?.groceryItems || !Array.isArray(payload.user.groceryItems)) && localGroceryItems) {
       state.groceryItems = localGroceryItems;
+      ensureGroceryListsInitialized();
     }
 
     // applyPersistedAppState may have reset state.auth.authenticated based on
@@ -10002,7 +10174,10 @@ async function bootstrapSession() {
     } catch {}
     try {
       const saved = localStorage.getItem("plately-grocery-items");
-      if (saved !== null) state.groceryItems = JSON.parse(saved);
+      if (saved !== null) {
+        state.groceryItems = JSON.parse(saved);
+        ensureGroceryListsInitialized();
+      }
     } catch {}
     state.offlineMode = true;
   } finally {
@@ -11083,7 +11258,7 @@ bindEvent(addSelectedToGroceriesButton, "click", () => {
   switchView("grocery");
 });
 bindEvent(clearGroceryListButton, "click", () => {
-  state.groceryItems = [];
+  state.groceryItems.length = 0; // clear in-place to preserve list reference
   renderGroceryGroups();
   persistGroceryItemsLocally(); // save [] to localStorage immediately
   persistAppState();            // save to server immediately (no delay)
@@ -11141,7 +11316,7 @@ bindEvent(document.getElementById("groceryClearButton"), "click", () => {
     confirmLabel: "Leegmaken",
     destructive: true,
     onConfirm: () => {
-      state.groceryItems = [];
+      state.groceryItems.length = 0; // clear in-place to preserve list reference
       renderGroceryGroups();
       renderNavBadge();
       persistGroceryItemsLocally();
@@ -11301,7 +11476,7 @@ if (groceryQuickInput) {
   });
 }
 bindEvent(clearGroceryToolbarButton, "click", () => {
-  state.groceryItems = [];
+  state.groceryItems.length = 0; // clear in-place to preserve list reference
   renderGroceryGroups();
   schedulePersistAppState();
   showToast("Boodschappenlijst leeggemaakt.");
@@ -12743,7 +12918,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.13";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.14";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;

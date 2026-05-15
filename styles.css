@@ -3234,6 +3234,54 @@ button.ingredient-item {
   display: none;
 }
 
+/* ── Grocery list switcher ── */
+.gl-switcher {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  min-height: 40px;
+}
+.gl-switcher::-webkit-scrollbar { display: none; }
+.gl-switcher:empty { display: none; }
+
+.gl-chip {
+  flex-shrink: 0;
+  padding: 5px 14px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(74, 107, 76, 0.3);
+  background: #fff;
+  color: #4a6b4c;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.gl-chip:active { opacity: 0.8; }
+.gl-chip--active {
+  background: #4a6b4c;
+  border-color: #4a6b4c;
+  color: #fff;
+}
+.gl-chip--add {
+  border-style: dashed;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 3px 12px;
+  color: #7a9e7c;
+  border-color: rgba(74, 107, 76, 0.25);
+}
+.gl-chip--add:hover {
+  background: rgba(74, 107, 76, 0.08);
+}
+
 /* ── Servings control ── */
 .servings-control {
   display: flex;
