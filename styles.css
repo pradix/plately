@@ -11896,7 +11896,7 @@ body {
   justify-items: center;
   align-content: center;
   gap: 3px;
-  color: #8fa888;
+  color: #1a1a1a;
 }
 
 .nav-item svg {
@@ -16561,7 +16561,7 @@ body {
   padding: 4px 2px 5px;
   border-radius: 0;
   background: transparent;
-  color: #8fa888;
+  color: #1a1a1a;
   gap: 3px;
   transition: color 180ms ease;
 }
