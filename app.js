@@ -7091,7 +7091,7 @@ function updateIngredientImages() {
       const img = wrapper.querySelector(".ingredient-image");
       const fallback = wrapper.querySelector(".ingredient-image-fallback");
       if (img) {
-        img.src = ingredient.imageUrl;
+        img.src = normalizeChannelThumbnailUrl(ingredient.imageUrl);
         img.alt = ingredient.name;
         img.onload = () => {
           if (fallback) fallback.style.display = "none";
@@ -12755,7 +12755,7 @@ bindEvent(document.getElementById("goToNotificationsBtn"), "click", () => {
 
 // "Over deze App" → about sub-panel
 const BUILD_META_EL = document.querySelector('meta[name="plately-build"]');
-const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.5";
+const APP_VERSION = BUILD_META_EL?.getAttribute?.("content")?.trim() || "1.0.20.6";
 const aboutVersionMeta = document.getElementById("profileAboutVersionMeta");
 const aboutVersionDisplay = document.getElementById("profileAboutVersion");
 if (aboutVersionMeta) aboutVersionMeta.textContent = `v${APP_VERSION}`;
