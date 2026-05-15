@@ -5613,6 +5613,13 @@ async function fetchWebsiteDocument(url, maxRetries = 2) {
   let lastStatus = 0;
   let lastError = null;
 
+  // Geblokkeerde hosts: probeer CF Worker HTML proxy eerst (snel, geen kosten)
+  if (HTML_PROXY_URL && HTML_PROXY_HOSTS.has(parsedUrl.hostname)) {
+    const proxied = await fetchHtmlViaProxy(url);
+    if (proxied) return { kind: "html", body: proxied, url };
+    console.log(`[HTML-Proxy] import fallback naar ZenRows voor ${parsedUrl.hostname}`);
+  }
+
   // Miljuschka / EEF / Culy: directe HTML-profielen zijn vrijwel altijd 403.
   // ZenRows (premium_proxy) levert volledige HTML met JSON-LD + WPRM-structuur;
   // dat is veel beter dan Jina's markdown-extractie (die social-media iconen,
