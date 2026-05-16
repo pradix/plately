@@ -18817,6 +18817,28 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    // Endpoint to update the AH anonymous token from an external cron (Mac/CI).
+    // Protected by AH_TOKEN_REFRESH_SECRET env var (shared secret in X-Plately-Key header).
+    if (requestUrl.pathname === "/api/admin/ah-token-refresh" && request.method === "POST") {
+      const expectedKey = String(process.env.AH_TOKEN_REFRESH_SECRET || "").trim();
+      const providedKey = String(request.headers["x-plately-key"] || "").trim();
+      if (!expectedKey || !providedKey || providedKey !== expectedKey) {
+        sendJson(response, 403, { ok: false, error: "Ongeldige sleutel." });
+        return;
+      }
+      const body = await readRequestBody(request);
+      const token = sanitizeText(body.token || "");
+      if (!token || token.length < 10) {
+        sendJson(response, 400, { ok: false, error: "Geen geldig token opgegeven." });
+        return;
+      }
+      // Update in-memory cache (expires_in from AH is ~604800s = 7 days)
+      ahTokenCache = { token, expiresAt: Date.now() + 6 * 24 * 60 * 60 * 1000 };
+      console.log(`[AH] Token bijgewerkt via /api/admin/ah-token-refresh (eerste 12 chars: ${token.slice(0, 12)}…)`);
+      sendJson(response, 200, { ok: true, message: "AH token bijgewerkt." });
+      return;
+    }
+
     if (requestUrl.pathname === "/api/admin/import-errors" && request.method === "GET") {
       try {
         await requireAdmin(request);
