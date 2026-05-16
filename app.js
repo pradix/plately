@@ -528,15 +528,13 @@ function wireRecipeCardImageFallbacks(root) {
 }
 
 function buildSkeletonRecipeGrid(count = 6) {
-  return Array.from({ length: count }, () => `
-    <div class="recent-card recent-card--skeleton" aria-hidden="true">
-      <div class="recent-card__img"></div>
-      <div class="recent-card__body">
-        <div>
-          <div class="skeleton-line" style="width:82%"></div>
-          <div class="skeleton-line"></div>
-        </div>
-        <div class="skeleton-line" style="width:40%;height:9px;margin-top:4px"></div>
+  return Array.from({ length: count }, (_, i) => `
+    <div class="recipe-card recipe-card--skeleton" aria-hidden="true" style="animation-delay:${i * 60}ms">
+      <div class="recipe-card__img-wrap"></div>
+      <div class="recipe-card__body">
+        <div class="skeleton-line" style="width:${75 + (i % 3) * 8}%;height:14px;margin-bottom:2px"></div>
+        <div class="skeleton-line" style="width:${45 + (i % 2) * 20}%;height:12px"></div>
+        <div class="skeleton-line" style="width:38%;height:10px;margin-top:4px"></div>
       </div>
     </div>
   `).join("");
@@ -6033,6 +6031,9 @@ function renderCookbookFilterBar() {
 }
 
 function renderRecipeGrid() {
+  // Keep skeleton while session is still loading.
+  if (!state.session.ready) return;
+
   const isSearching = !!state.searchQuery.trim();
   const gridSection = document.getElementById("recipeGridSection");
 
@@ -10870,24 +10871,20 @@ async function registerServiceWorker() {
     const registration = await navigator.serviceWorker.register(`/service-worker.js?v=${encodeURIComponent(buildVersion)}`);
     registration.update().catch(() => {});
 
-    let updateToastShown = false;
-    const showUpdateToast = () => {
-      if (updateToastShown) return;
-      updateToastShown = true;
-      showToast("App bijgewerkt — tik om te vernieuwen.", {
-        variant: "info",
-        durationMs: 60000,
-        undoLabel: "Vernieuwen",
-        onUndo: () => window.location.reload(),
-      });
+    let reloadScheduled = false;
+    const scheduleReload = () => {
+      if (reloadScheduled) return;
+      reloadScheduled = true;
+      // Give the new SW 800ms to finish caching the app shell before reload.
+      window.setTimeout(() => window.location.reload(), 800);
     };
 
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      showUpdateToast();
-    });
+    // New SW took control → reload so fresh CSS/JS are served from new cache.
+    navigator.serviceWorker.addEventListener("controllerchange", scheduleReload);
 
+    // SW was already waiting when we registered (e.g. tab was open in background).
     if (registration.waiting) {
-      showUpdateToast();
+      registration.waiting.postMessage({ type: "SKIP_WAITING" });
     }
 
     registration.addEventListener("updatefound", () => {
@@ -10895,7 +10892,8 @@ async function registerServiceWorker() {
       if (!worker) return;
       worker.addEventListener("statechange", () => {
         if (worker.state === "installed" && navigator.serviceWorker.controller) {
-          showUpdateToast();
+          // Activate the new SW immediately — controllerchange will then trigger reload.
+          worker.postMessage({ type: "SKIP_WAITING" });
         }
       });
     });

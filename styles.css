@@ -249,6 +249,7 @@ img {
   gap: 8px;
 }
 .recipe-card--skeleton .skeleton-line {
+  height: 13px;
   border-radius: 6px;
   background: linear-gradient(90deg, #f0ede8 25%, #e8e4de 50%, #f0ede8 75%);
   background-size: 200% 100%;

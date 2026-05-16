@@ -18819,6 +18819,24 @@ const server = http.createServer(async (request, response) => {
 
     // Endpoint to update the AH anonymous token from an external cron (Mac/CI).
     // Protected by AH_TOKEN_REFRESH_SECRET env var (shared secret in X-Plately-Key header).
+    if (requestUrl.pathname === "/api/admin/ah-token-status" && request.method === "GET") {
+      await requireAdmin(request);
+      const hasToken = Boolean(ahTokenCache.token);
+      const expiresAt = ahTokenCache.expiresAt || 0;
+      const staticToken = String(process.env.AH_ANONYMOUS_TOKEN || "").trim();
+      sendJson(response, 200, {
+        ok: true,
+        hasToken,
+        source: staticToken ? "env" : "dynamic",
+        tokenPreview: hasToken ? ahTokenCache.token.slice(0, 12) + "…" : null,
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+        expiresInMs: expiresAt ? Math.max(0, expiresAt - Date.now()) : 0,
+        proxyUrl: String(process.env.AH_API_PROXY || ""),
+        proxyEnabled: Boolean(process.env.AH_API_PROXY),
+      });
+      return;
+    }
+
     if (requestUrl.pathname === "/api/admin/ah-token-refresh" && request.method === "POST") {
       const expectedKey = String(process.env.AH_TOKEN_REFRESH_SECRET || "").trim();
       const providedKey = String(request.headers["x-plately-key"] || "").trim();

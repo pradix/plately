@@ -919,8 +919,20 @@
           <div class="stat-label">Actief (7d)</div>
         </div>
         <div class="stat-card">
+          <div class="stat-value" id="activeUsers30">-</div>
+          <div class="stat-label">Actief (30d)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="newUsers7d">-</div>
+          <div class="stat-label">Nieuw (7d)</div>
+        </div>
+        <div class="stat-card">
           <div class="stat-value" id="totalRecipes">-</div>
           <div class="stat-label">Recepten</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="avgRecipesPerUser">-</div>
+          <div class="stat-label">Gem. recepten/user</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="totalCookbooks">-</div>
@@ -928,7 +940,7 @@
         </div>
         <div class="stat-card">
           <div class="stat-value" id="totalGroceries">-</div>
-          <div class="stat-label">Boodschappen</div>
+          <div class="stat-label">Boodschappenlijsten</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="totalCustomChannels">-</div>
@@ -937,6 +949,34 @@
         <div class="stat-card">
           <div class="stat-value" id="pendingCustomChannels">-</div>
           <div class="stat-label">In behandeling</div>
+        </div>
+      </div>
+
+      <div class="section" id="ahTokenSection" style="margin-top:16px">
+        <div class="section-header">
+          <h2>AH Token status</h2>
+          <button class="btn btn-sm" id="ahTokenRefreshBtn" type="button">↻ Vernieuwen</button>
+        </div>
+        <div id="ahTokenContent" style="margin-top:10px">
+          <div class="stats-grid" style="margin-bottom:10px">
+            <div class="stat-card" id="ahTokenStatusCard">
+              <div class="stat-value" id="ahTokenStatus">-</div>
+              <div class="stat-label">Status</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="ahTokenSource">-</div>
+              <div class="stat-label">Bron</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="ahTokenExpiry">-</div>
+              <div class="stat-label">Verloopt over</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="ahProxyStatus">-</div>
+              <div class="stat-label">CF Proxy</div>
+            </div>
+          </div>
+          <div style="font-size:12px;color:#888;line-height:1.6" id="ahTokenMeta"></div>
         </div>
       </div>
 
@@ -1712,14 +1752,28 @@
         const totalRecipes = stats.users.reduce((sum, u) => sum + u.recipes, 0);
         const totalCookbooks = stats.users.reduce((sum, u) => sum + u.cookbooks, 0);
         const totalGroceries = stats.users.reduce((sum, u) => sum + u.groceryItems, 0);
+        const now = Date.now();
         const activeUsers = stats.users.filter((u) => {
           const updated = new Date(u.updatedAt).getTime();
-          return Number.isFinite(updated) && (Date.now() - updated) < 604800000;
+          return Number.isFinite(updated) && (now - updated) < 7 * 86400000;
         }).length;
+        const activeUsers30 = stats.users.filter((u) => {
+          const updated = new Date(u.updatedAt).getTime();
+          return Number.isFinite(updated) && (now - updated) < 30 * 86400000;
+        }).length;
+        const newUsers7d = stats.users.filter((u) => {
+          const created = new Date(u.createdAt).getTime();
+          return Number.isFinite(created) && (now - created) < 7 * 86400000;
+        }).length;
+        const usersWithRecipes = stats.users.filter((u) => u.recipes > 0).length;
+        const avgRecipes = usersWithRecipes > 0 ? (totalRecipes / usersWithRecipes).toFixed(1) : "0";
 
         document.getElementById("totalUsers").textContent = stats.totalUsers;
         document.getElementById("activeUsers").textContent = activeUsers;
+        document.getElementById("activeUsers30").textContent = activeUsers30;
+        document.getElementById("newUsers7d").textContent = newUsers7d;
         document.getElementById("totalRecipes").textContent = totalRecipes;
+        document.getElementById("avgRecipesPerUser").textContent = avgRecipes;
         document.getElementById("totalCookbooks").textContent = totalCookbooks;
         document.getElementById("totalGroceries").textContent = totalGroceries;
         document.getElementById("totalCustomChannels").textContent = stats.customChannels?.total ?? 0;
@@ -1738,6 +1792,7 @@
         initInventoryUserFilter();
         loadInventory(); // independent block (own loading/error)
         await loadAdminDeployInfo();
+        loadAhTokenStatus();
         const lastUpdatedPill = document.getElementById("lastUpdatedPill");
         if (lastUpdatedPill) lastUpdatedPill.textContent = `Laatst bijgewerkt: ${formatDate(new Date())}`;
 
@@ -4285,6 +4340,55 @@
       parts.push(m + "m " + r + "s");
       return parts.join(" ");
     }
+
+    async function loadAhTokenStatus() {
+      try {
+        const res = await fetch("/api/admin/ah-token-status", adminFetchInit());
+        const d = await res.json();
+        if (!d.ok) throw new Error(d.error || "Fout");
+
+        const statusEl = document.getElementById("ahTokenStatus");
+        const card = document.getElementById("ahTokenStatusCard");
+        if (d.hasToken) {
+          statusEl.textContent = "✓ Actief";
+          if (card) card.style.setProperty("--stat-color", "#22c55e");
+        } else {
+          statusEl.textContent = "✗ Geen token";
+          if (card) card.style.setProperty("--stat-color", "#ef4444");
+        }
+
+        const src = document.getElementById("ahTokenSource");
+        if (src) src.textContent = d.source === "env" ? "Env-var" : "Dynamisch";
+
+        const exp = document.getElementById("ahTokenExpiry");
+        if (exp) {
+          if (d.expiresInMs > 0) {
+            const h = Math.floor(d.expiresInMs / 3600000);
+            const days = Math.floor(h / 24);
+            exp.textContent = days > 0 ? `${days}d ${h % 24}u` : `${h}u`;
+          } else {
+            exp.textContent = d.hasToken ? "Onbekend" : "—";
+          }
+        }
+
+        const proxy = document.getElementById("ahProxyStatus");
+        if (proxy) proxy.textContent = d.proxyEnabled ? "✓ Aan" : "✗ Uit";
+
+        const meta = document.getElementById("ahTokenMeta");
+        if (meta) {
+          const parts = [];
+          if (d.tokenPreview) parts.push(`Token: ${d.tokenPreview}`);
+          if (d.expiresAt) parts.push(`Verloopt: ${new Date(d.expiresAt).toLocaleString("nl-NL")}`);
+          if (d.proxyUrl) parts.push(`Proxy: ${d.proxyUrl}`);
+          meta.textContent = parts.join(" · ");
+        }
+      } catch (e) {
+        const meta = document.getElementById("ahTokenMeta");
+        if (meta) meta.textContent = "Kon status niet laden: " + e.message;
+      }
+    }
+
+    document.getElementById("ahTokenRefreshBtn")?.addEventListener("click", () => loadAhTokenStatus());
 
     async function loadAdminDeployInfo() {
       const loading = document.getElementById("adminDeployLoading");
