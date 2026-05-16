@@ -15391,11 +15391,91 @@ function resetOnboardingData() {
   };
 }
 
+const WELCOME_DONE_KEY = "plately_onboarding_done";
+let _welcomeStep = 0;
+const WELCOME_TOTAL = 3;
+
+function showWelcomeOverlay(onFinish) {
+  const overlay = document.getElementById("welcomeOverlay");
+  const nextBtn = document.getElementById("welcomeNext");
+  if (!overlay) { onFinish?.(); return; }
+
+  _welcomeStep = 0;
+  _updateWelcomeStep(false);
+  overlay.removeAttribute("hidden");
+  overlay.classList.remove("welcome-overlay--fading");
+
+  function finish() {
+    try { localStorage.setItem(WELCOME_DONE_KEY, "1"); } catch {}
+    overlay.classList.add("welcome-overlay--fading");
+    window.setTimeout(() => {
+      overlay.setAttribute("hidden", "");
+      overlay.classList.remove("welcome-overlay--fading");
+      onFinish?.();
+    }, 420);
+  }
+
+  if (nextBtn) {
+    nextBtn.onclick = null;
+    nextBtn.onclick = () => {
+      if (_welcomeStep < WELCOME_TOTAL - 1) {
+        _welcomeStep++;
+        _updateWelcomeStep(true);
+      } else {
+        finish();
+      }
+    };
+  }
+
+  let _touchStartX = 0;
+  overlay.ontouchstart = (e) => { _touchStartX = e.touches[0].clientX; };
+  overlay.ontouchend = (e) => {
+    const dx = e.changedTouches[0].clientX - _touchStartX;
+    if (Math.abs(dx) < 40) return;
+    if (dx < 0 && _welcomeStep < WELCOME_TOTAL - 1) { _welcomeStep++; _updateWelcomeStep(true); }
+    else if (dx > 0 && _welcomeStep > 0) { _welcomeStep--; _updateWelcomeStep(false); }
+    else if (dx < 0 && _welcomeStep === WELCOME_TOTAL - 1) { finish(); }
+  };
+}
+
+function _updateWelcomeStep(forward) {
+  for (let i = 0; i < WELCOME_TOTAL; i++) {
+    const el = document.getElementById(`welcomeStep${i + 1}`);
+    if (!el) continue;
+    if (i === _welcomeStep) {
+      el.classList.remove("welcome-step--hidden");
+      el.classList.toggle("welcome-step--back", !forward && i > 0);
+      void el.offsetWidth;
+    } else {
+      el.classList.add("welcome-step--hidden");
+      el.classList.remove("welcome-step--back");
+    }
+  }
+  document.querySelectorAll(".welcome-dot").forEach((dot, i) => {
+    dot.classList.toggle("welcome-dot--active", i === _welcomeStep);
+  });
+  const btn = document.getElementById("welcomeNext");
+  if (btn) {
+    btn.textContent = _welcomeStep === WELCOME_TOTAL - 1 ? "Aan de slag →" : "Volgende →";
+    btn.classList.toggle("welcome-cta--last", _welcomeStep === WELCOME_TOTAL - 1);
+  }
+}
+
 function showOnboarding() {
   resetOnboardingData();
   removeEmbeddedBrowserAuthHint();
   authModal.classList.add("hidden");
   authModal.setAttribute("aria-hidden", "true");
+
+  const alreadySeen = (() => { try { return localStorage.getItem(WELCOME_DONE_KEY) === "1"; } catch { return false; } })();
+  if (!alreadySeen) {
+    showWelcomeOverlay(() => _showOnboardingScreen());
+    return;
+  }
+  _showOnboardingScreen();
+}
+
+function _showOnboardingScreen() {
   onboardingScreen.classList.remove("hidden");
 
   const overlay = document.getElementById("onboardingOverlay");

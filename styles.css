@@ -18203,3 +18203,119 @@ body {
 .import-error-box__text {
   flex: 1;
 }
+
+/* ── Welcome onboarding overlay ── */
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, #f5f0e8 0%, #eaf1eb 50%, #fdf3ee 100%);
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+}
+.welcome-overlay[hidden] { display: none; }
+.welcome-overlay--fading {
+  animation: welcomeFadeOut 0.4s ease forwards;
+}
+@keyframes welcomeFadeOut {
+  to { opacity: 0; pointer-events: none; }
+}
+.welcome-overlay__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 420px;
+  padding: 2.5rem 1.75rem 2rem;
+  text-align: center;
+  gap: 1.5rem;
+}
+.welcome-steps {
+  width: 100%;
+  position: relative;
+  min-height: 280px;
+}
+.welcome-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  animation: welcomeSlideIn 0.35s ease;
+}
+.welcome-step--hidden { display: none; }
+@keyframes welcomeSlideIn {
+  from { opacity: 0; transform: translateX(32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes welcomeSlideInBack {
+  from { opacity: 0; transform: translateX(-32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.welcome-step--back {
+  animation: welcomeSlideInBack 0.35s ease;
+}
+.welcome-step__illus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.welcome-step__logo {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  border-radius: 22px;
+  box-shadow: 0 8px 32px rgba(77,112,82,.18);
+}
+.welcome-step__icon {
+  width: 96px;
+  height: 96px;
+}
+.welcome-step__title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #1a1a1a;
+  line-height: 1.2;
+  margin: 0;
+}
+.welcome-step__text {
+  font-size: 1.05rem;
+  color: #4a4a4a;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 300px;
+}
+.welcome-dots {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+.welcome-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c8d5c9;
+  transition: background 0.25s, transform 0.25s;
+}
+.welcome-dot--active {
+  background: #4d7052;
+  transform: scale(1.35);
+}
+.welcome-cta {
+  width: 100%;
+  max-width: 320px;
+  padding: 1rem 1.5rem;
+  background: #4d7052;
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.welcome-cta:active { transform: scale(0.97); }
+.welcome-cta--last { background: #e8542a; }

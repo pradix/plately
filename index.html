@@ -2582,6 +2582,62 @@
       </div>
     </div>
 
+    <!-- Welcome slideshow overlay for new users -->
+    <div id="welcomeOverlay" class="welcome-overlay" aria-modal="true" role="dialog" aria-label="Welkom bij Plately" hidden>
+      <div class="welcome-overlay__inner">
+        <div class="welcome-steps" id="welcomeSteps">
+
+          <!-- Step 1: Welkom -->
+          <div class="welcome-step" id="welcomeStep1">
+            <div class="welcome-step__illus">
+              <img src="assets/plately-logo.svg" alt="Plately logo" class="welcome-step__logo" />
+            </div>
+            <h1 class="welcome-step__title">Welkom bij Plately! 👋</h1>
+            <p class="welcome-step__text">Jouw persoonlijke receptenboek. Sla recepten op van elke website.</p>
+          </div>
+
+          <!-- Step 2: Importeren -->
+          <div class="welcome-step welcome-step--hidden" id="welcomeStep2">
+            <div class="welcome-step__illus">
+              <svg class="welcome-step__icon" viewBox="0 0 80 80" fill="none" aria-hidden="true">
+                <rect x="8" y="28" width="64" height="36" rx="8" fill="#4d7052" opacity=".12"/>
+                <rect x="8" y="28" width="64" height="36" rx="8" stroke="#4d7052" stroke-width="3"/>
+                <path d="M20 46h40M20 38h20" stroke="#4d7052" stroke-width="3" stroke-linecap="round"/>
+                <circle cx="60" cy="22" r="12" fill="#e8542a"/>
+                <path d="M60 17v10M55 22h10" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h1 class="welcome-step__title">Importeer recepten</h1>
+            <p class="welcome-step__text">Plak een link van AH, Jumbo, Instagram, TikTok of elke andere website.</p>
+          </div>
+
+          <!-- Step 3: Klaar -->
+          <div class="welcome-step welcome-step--hidden" id="welcomeStep3">
+            <div class="welcome-step__illus">
+              <svg class="welcome-step__icon" viewBox="0 0 80 80" fill="none" aria-hidden="true">
+                <circle cx="40" cy="40" r="32" fill="#e8542a" opacity=".12"/>
+                <path d="M40 20c0 0-18 10-18 24a18 18 0 0 0 36 0C58 30 40 20 40 20z" fill="#e8542a" opacity=".7"/>
+                <path d="M32 40l6 6 10-12" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h1 class="welcome-step__title">Klaar om te koken!</h1>
+            <p class="welcome-step__text">Je account is aangemaakt. Voeg je eerste recept toe.</p>
+          </div>
+
+        </div>
+
+        <!-- Progress dots -->
+        <div class="welcome-dots" aria-hidden="true">
+          <span class="welcome-dot welcome-dot--active" data-welcome-step="0"></span>
+          <span class="welcome-dot" data-welcome-step="1"></span>
+          <span class="welcome-dot" data-welcome-step="2"></span>
+        </div>
+
+        <!-- CTA button -->
+        <button class="welcome-cta" id="welcomeNext" type="button">Volgende →</button>
+      </div>
+    </div>
+
     <script src="app.js?v=1.0.20.50" defer></script>
   </body>
 </html>
