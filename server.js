@@ -9132,9 +9132,17 @@ let ahTokenCache = { token: "", expiresAt: 0 };
     }, AUTO_REFRESH_INTERVAL);
     // Warm-up: haal direct een token op zodat de eerste request niet hoeft te wachten.
     setImmediate(() =>
-      fetchAHAnonymousToken().catch((err) =>
-        console.warn(`[AH] Initieel token ophalen mislukt: ${err?.message || err}`)
-      )
+      fetchAHAnonymousToken().catch((err) => {
+        console.warn(`[AH] Initieel token ophalen mislukt: ${err?.message || err}`);
+        console.warn(`[AH] Fix: stel AH_ANONYMOUS_TOKEN in als env-var of gebruik AH_API_PROXY voor een CF Worker.`);
+        // Retry elke 60 minuten totdat het lukt (bv. na een netwerk-probleem).
+        const retryInterval = setInterval(() => {
+          if (ahTokenCache.token) { clearInterval(retryInterval); return; }
+          fetchAHAnonymousToken()
+            .then(() => { console.log("[AH] Token alsnog verkregen."); clearInterval(retryInterval); })
+            .catch(() => {});
+        }, 60 * 60 * 1000);
+      })
     );
   }
 }
