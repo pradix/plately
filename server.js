@@ -18839,6 +18839,25 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/admin/send-welcome" && request.method === "POST") {
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const to = sanitizeText(body.email || "");
+        const name = sanitizeText(body.name || "");
+        if (!to) { sendJson(response, 400, { ok: false, error: "Geen e-mailadres opgegeven." }); return; }
+        await sendEmail({
+          to,
+          subject: "Welkom bij Plately! 🎉",
+          html: buildWelcomeEmailHtml({ name }),
+        });
+        sendJson(response, 200, { ok: true, message: `Welkomstmail verstuurd naar ${to}.` });
+      } catch (err) {
+        sendJson(response, err.status || 500, { ok: false, error: err.message });
+      }
+      return;
+    }
+
     if (requestUrl.pathname === "/api/admin/import-errors" && request.method === "GET") {
       try {
         await requireAdmin(request);
