@@ -16960,7 +16960,7 @@ const server = http.createServer(async (request, response) => {
         await sendEmail({
           to: email,
           subject: `${otpCode} — jouw Plately inlogcode`,
-          text: `Jouw Plately inlogcode: ${otpCode}\n\nDeze code is 10 minuten geldig.\nHeb je dit niet aangevraagd? Dan kun je deze e-mail veilig negeren.`,
+          text: `Jouw inlogcode voor Plately:\n\n${otpCode}\n\nDeze code is 10 minuten geldig.\nHeb je dit niet aangevraagd? Dan kun je deze e-mail veilig negeren.`,
           html: buildOtpEmailHtml({
             heading: isNewUser ? "Welkom bij Plately! 🎉" : "Jouw inlogcode",
             intro: `Gebruik de onderstaande code om ${isNewUser ? "je account aan te maken" : "in te loggen"}. De code is <strong>10 minuten</strong> geldig.`,
@@ -17220,7 +17220,7 @@ const server = http.createServer(async (request, response) => {
         await sendEmail({
           to: email,
           subject: `${otpCode} — Plately wachtwoord resetten`,
-          text: `Jouw Plately herstelcode: ${otpCode}\n\nDeze code is 15 minuten geldig.\nHeb je dit niet aangevraagd? Dan kun je deze e-mail veilig negeren.`,
+          text: `Jouw herstelcode voor Plately:\n\n${otpCode}\n\nDeze code is 15 minuten geldig.\nHeb je dit niet aangevraagd? Dan kun je deze e-mail veilig negeren.`,
           html: buildOtpEmailHtml({
             heading: "Wachtwoord vergeten?",
             intro: "Gebruik de onderstaande code om je wachtwoord opnieuw in te stellen. De code is <strong>15 minuten</strong> geldig.",
