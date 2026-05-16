@@ -18819,6 +18819,21 @@ const server = http.createServer(async (request, response) => {
 
     // Endpoint to update the AH anonymous token from an external cron (Mac/CI).
     // Protected by AH_TOKEN_REFRESH_SECRET env var (shared secret in X-Plately-Key header).
+    if (requestUrl.pathname === "/api/admin/ah-token-fetch" && request.method === "POST") {
+      await requireAdmin(request);
+      try {
+        const token = await fetchAHAnonymousToken();
+        sendJson(response, 200, {
+          ok: true,
+          tokenPreview: token ? token.slice(0, 12) + "…" : null,
+          expiresAt: ahTokenCache.expiresAt ? new Date(ahTokenCache.expiresAt).toISOString() : null,
+        });
+      } catch (err) {
+        sendJson(response, 502, { ok: false, error: err?.message || "Token ophalen mislukt." });
+      }
+      return;
+    }
+
     if (requestUrl.pathname === "/api/admin/ah-token-status" && request.method === "GET") {
       await requireAdmin(request);
       const hasToken = Boolean(ahTokenCache.token);

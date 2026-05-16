@@ -955,7 +955,10 @@
       <div class="section" id="ahTokenSection" style="margin-top:16px">
         <div class="section-header">
           <h2>AH Token status</h2>
-          <button class="btn btn-sm" id="ahTokenRefreshBtn" type="button">↻ Vernieuwen</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm" id="ahTokenFetchBtn" type="button">⬇ Token ophalen</button>
+            <button class="btn btn-sm" id="ahTokenRefreshBtn" type="button">↻ Status vernieuwen</button>
+          </div>
         </div>
         <div id="ahTokenContent" style="margin-top:10px">
           <div class="stats-grid" style="margin-bottom:10px">
@@ -4389,6 +4392,26 @@
     }
 
     document.getElementById("ahTokenRefreshBtn")?.addEventListener("click", () => loadAhTokenStatus());
+
+    document.getElementById("ahTokenFetchBtn")?.addEventListener("click", async () => {
+      const btn = document.getElementById("ahTokenFetchBtn");
+      const meta = document.getElementById("ahTokenMeta");
+      btn.disabled = true;
+      btn.textContent = "⏳ Bezig…";
+      try {
+        const res = await fetch("/api/admin/ah-token-fetch", { method: "POST", ...adminFetchInit() });
+        const d = await res.json();
+        if (!d.ok) throw new Error(d.error || "Mislukt");
+        btn.textContent = "✓ Gelukt";
+        if (meta) meta.textContent = `Token: ${d.tokenPreview} · Verloopt: ${new Date(d.expiresAt).toLocaleString("nl-NL")}`;
+        await loadAhTokenStatus();
+      } catch (e) {
+        btn.textContent = "✗ Mislukt";
+        if (meta) meta.textContent = "Fout: " + e.message;
+      } finally {
+        setTimeout(() => { btn.disabled = false; btn.textContent = "⬇ Token ophalen"; }, 3000);
+      }
+    });
 
     async function loadAdminDeployInfo() {
       const loading = document.getElementById("adminDeployLoading");
