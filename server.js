@@ -3362,7 +3362,7 @@ function createStoreChoice(store, choice) {
     labels,
   };
   return {
-    id: `${store}-${normalizedChoice.searchTerm.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-")}`,
+    id: `${store}-${String(normalizedChoice.searchTerm || normalizedChoice.title || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-")}`,
     title: normalizedChoice.title,
     subtitle: normalizedChoice.subtitle,
     price: normalizedChoice.price,
