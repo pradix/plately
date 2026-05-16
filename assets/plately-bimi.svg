@@ -3,42 +3,43 @@
      role="img" aria-labelledby="bimi-title">
   <title id="bimi-title">Plately</title>
 
-  <!-- Green background -->
+  <!-- Groene achtergrond -->
   <rect width="200" height="200" fill="#4d7052"/>
 
-  <!-- Outer circle -->
-  <circle cx="100" cy="100" r="95" fill="none" stroke="white" stroke-width="12"/>
+  <!-- P-frame als dikke stroke (linker lat + bovenkant + D-curve) -->
+  <path d="M 62 160 L 62 30 Q 62 18 75 18 L 118 18 Q 170 18 170 97 Q 170 174 118 174 L 75 174 Q 62 174 62 160"
+        fill="none" stroke="white" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- Leaf left side -->
-  <path d="M 35 120 Q 20 110 25 85 Q 30 70 45 75 Q 40 85 42 100 Q 40 115 35 120" fill="white"/>
-  <path d="M 38 100 Q 32 92 40 82" fill="none" stroke="#4d7052" stroke-width="1.5" opacity="0.6"/>
+  <!-- Kom onderaan (gevuld, sluit aan op de P-frame onderkant) -->
+  <path d="M 54 172 Q 56 196 101 198 Q 146 196 148 172 Z"
+        fill="white"/>
 
-  <!-- Bowl container -->
-  <path d="M 60 55 L 75 55 Q 85 55 85 65 L 85 130 Q 85 140 75 140 L 60 140 Q 50 140 50 130 L 50 65 Q 50 55 60 55"
-        fill="none" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Blad links (buiten de P, bewust links van de lat) -->
+  <path d="M 53 152 Q 14 130 16 90 Q 18 52 50 60 Q 44 82 45 106 Q 44 130 53 152 Z"
+        fill="white"/>
+  <path d="M 32 120 Q 24 107 33 93"
+        fill="none" stroke="#4d7052" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
 
-  <!-- Bowl bottom -->
-  <ellipse cx="85" cy="140" rx="30" ry="15" fill="white"/>
-
-  <!-- Whisk -->
-  <g transform="translate(75, 80)">
-    <line x1="0" y1="0" x2="0" y2="25" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-    <path d="M -6 10 Q -8 15 -6 20" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
-    <path d="M -3 8 Q -4 15 -3 22" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
-    <path d="M 0 8 Q 0 15 0 22" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
-    <path d="M 3 8 Q 4 15 3 22" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
-    <path d="M 6 10 Q 8 15 6 20" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+  <!-- Garde (links, in de P) -->
+  <g transform="translate(88, 80)">
+    <circle cx="0" cy="-8" r="3" fill="none" stroke="white" stroke-width="2.5"/>
+    <line x1="0" y1="-5" x2="0" y2="22" stroke="white" stroke-width="4" stroke-linecap="round"/>
+    <path d="M -9 8 Q -12 19 -9 26" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M -4 6 Q -6 19 -4 26" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M  4 6 Q  6 19  4 26" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M  9 8 Q 12 19  9 26" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
   </g>
 
-  <!-- Spoon -->
-  <g transform="translate(95, 75)">
-    <line x1="0" y1="0" x2="0" y2="30" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-    <ellipse cx="0" cy="38" rx="8" ry="10" fill="white"/>
+  <!-- Lepel (rechts, in de P) -->
+  <g transform="translate(118, 72)">
+    <circle cx="0" cy="-3" r="3" fill="none" stroke="white" stroke-width="2.5"/>
+    <line x1="0" y1="0" x2="0" y2="30" stroke="white" stroke-width="4" stroke-linecap="round"/>
+    <ellipse cx="0" cy="41" rx="9" ry="12" fill="white"/>
   </g>
 
-  <!-- Heart -->
-  <g transform="translate(85, 105)">
-    <path d="M 0 5 C -4 2 -8 2 -8 -2 C -8 -5 -5 -8 0 -4 C 5 -8 8 -5 8 -2 C 8 2 4 2 0 5"
-          fill="#ff6b4a"/>
+  <!-- Hart -->
+  <g transform="translate(101, 123)">
+    <path d="M 0 9 C -7 3 -13 3 -13 -4 C -13 -10 -6 -13 0 -7 C 6 -13 13 -10 13 -4 C 13 3 7 3 0 9"
+          fill="#e8542a"/>
   </g>
 </svg>
