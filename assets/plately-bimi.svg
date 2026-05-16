@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="0 0 100 100" version="1.2" baseProfile="tiny-ps"
+     role="img" aria-labelledby="bimi-title">
+  <title id="bimi-title">Plately</title>
+
+  <!-- Achtergrond -->
+  <rect width="100" height="100" rx="0" fill="#4d7052"/>
+
+  <!-- Buitenste cirkel (logo ring) -->
+  <circle cx="50" cy="50" r="42" fill="none" stroke="white" stroke-width="4" opacity="0.25"/>
+
+  <!-- Bord (plaat) -->
+  <circle cx="50" cy="56" r="26" fill="rgba(255,255,255,0.12)"/>
+  <circle cx="50" cy="56" r="26" fill="none" stroke="white" stroke-width="3.5"/>
+
+  <!-- Lepel -->
+  <line x1="38" y1="22" x2="38" y2="44" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <ellipse cx="38" cy="18" rx="5" ry="7" fill="white"/>
+
+  <!-- Vork -->
+  <line x1="62" y1="22" x2="62" y2="44" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <line x1="57" y1="14" x2="57" y2="24" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <line x1="62" y1="14" x2="62" y2="24" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <line x1="67" y1="14" x2="67" y2="24" stroke="white" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Hart -->
+  <path d="M50 51 C47 47 42 47 42 52 C42 56 46 59 50 63 C54 59 58 56 58 52 C58 47 53 47 50 51Z"
+        fill="#ff6b4a"/>
+</svg>
