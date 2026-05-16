@@ -37,8 +37,9 @@ function buildOtpEmailHtml({ heading, intro, code, outro }) {
         <tr><td align="center" style="padding-bottom:24px">
           <table cellpadding="0" cellspacing="0">
             <tr>
-              <td style="background:#5a7a5e;border-radius:14px;padding:10px 14px;vertical-align:middle">
-                <span style="font-size:20px;line-height:1">🍃</span>
+              <td style="vertical-align:middle">
+                <img src="https://plately.nl/assets/icon-192.png" alt="Plately" width="44" height="44"
+                     style="display:block;border-radius:12px;border:0" />
               </td>
               <td style="padding-left:10px;vertical-align:middle">
                 <span style="font-size:22px;font-weight:700;color:#2d2d2d;letter-spacing:-0.5px">Plately</span>
@@ -268,6 +269,32 @@ function computeDefaultDataDir() {
 // Wordt na start gevalideerd / verplaatst als schrijven op /data niet lukt (Render zonder disk).
 let DATA_DIR = computeDefaultDataDir();
 let DATA_FILE = path.join(DATA_DIR, "plately-db.json");
+let OTP_FILE = path.join(DATA_DIR, "plately-otps.json");
+
+async function loadOtps() {
+  try {
+    const raw = await fsp.readFile(path.join(DATA_DIR, "plately-otps.json"), "utf8");
+    const parsed = JSON.parse(raw);
+    // Prune expired entries on load
+    const now = Date.now();
+    for (const key of Object.keys(parsed)) {
+      if (!parsed[key]?.expiresAt || now > new Date(parsed[key].expiresAt).getTime()) {
+        delete parsed[key];
+      }
+    }
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+async function saveOtps(otps) {
+  try {
+    await fsp.writeFile(path.join(DATA_DIR, "plately-otps.json"), JSON.stringify(otps), "utf8");
+  } catch (err) {
+    console.error("❌ OTP opslaan mislukt:", err?.message);
+  }
+}
 
 let resolveDataPathsPromise = null;
 
@@ -16894,11 +16921,13 @@ const server = http.createServer(async (request, response) => {
         throw new HttpError(400, "Voer een geldig e-mailadres in.");
       }
 
+      const loginOtps = await loadOtps();
+
       // Rate-limit: max 1 OTP per 60 seconds
-      if (!global.loginOtps) global.loginOtps = {};
-      const existing = global.loginOtps[email];
+      const existing = loginOtps[`login:${email}`];
       if (existing && Date.now() < new Date(existing.expiresAt).getTime() - 9 * 60 * 1000) {
-        sendJson(response, 200, { ok: true });
+        const isNewUserCached = existing.isNewUser ?? false;
+        sendJson(response, 200, { ok: true, isNewUser: isNewUserCached });
         return;
       }
 
@@ -16914,7 +16943,8 @@ const server = http.createServer(async (request, response) => {
       }
 
       const otpCode = String(Math.floor(100000 + crypto.randomInt(900000)));
-      global.loginOtps[email] = { code: otpCode, expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), name, attempts: 0 };
+      loginOtps[`login:${email}`] = { code: otpCode, expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), name, attempts: 0, isNewUser };
+      await saveOtps(loginOtps);
 
       try {
         await sendEmail({
@@ -16945,24 +16975,28 @@ const server = http.createServer(async (request, response) => {
         throw new HttpError(400, "Verplichte velden ontbreken.");
       }
 
-      if (!global.loginOtps) global.loginOtps = {};
-      const record = global.loginOtps[email];
+      const loginOtps = await loadOtps();
+      const record = loginOtps[`login:${email}`];
 
-      if (!record) throw new HttpError(400, "Geen actieve code. Vraag een nieuwe aan.");
+      if (!record) throw new HttpError(400, "Geen actieve code. Vraag een nieuwe code aan via 'Opnieuw versturen'.");
       if (new Date() > new Date(record.expiresAt)) {
-        delete global.loginOtps[email];
+        delete loginOtps[`login:${email}`];
+        await saveOtps(loginOtps);
         throw new HttpError(400, "Code is verlopen. Vraag een nieuwe aan.");
       }
       record.attempts = (record.attempts || 0) + 1;
       if (record.attempts > 5) {
-        delete global.loginOtps[email];
+        delete loginOtps[`login:${email}`];
+        await saveOtps(loginOtps);
         throw new HttpError(400, "Te veel pogingen. Vraag een nieuwe code aan.");
       }
       if (record.code !== code) {
+        await saveOtps(loginOtps);
         throw new HttpError(400, `Onjuiste code. Nog ${6 - record.attempts} poging${6 - record.attempts === 1 ? "" : "en"}.`);
       }
       const storedName = record.name || name;
-      delete global.loginOtps[email];
+      delete loginOtps[`login:${email}`];
+      await saveOtps(loginOtps);
 
       if (isPostgresEnabled()) {
         await ensurePostgresSchema();
@@ -17117,10 +17151,11 @@ const server = http.createServer(async (request, response) => {
         throw new HttpError(400, "Geldig e-mailadres vereist.");
       }
 
+      const resetOtps = await loadOtps();
+
       // Rate-limit: one OTP per email per 60 seconds
-      if (!global.passwordResetOtps) global.passwordResetOtps = {};
-      const existing = global.passwordResetOtps[email];
-      if (existing && Date.now() < new Date(existing.expiresAt).getTime() - 14 * 60 * 1000) {
+      const existingReset = resetOtps[`reset:${email}`];
+      if (existingReset && Date.now() < new Date(existingReset.expiresAt).getTime() - 14 * 60 * 1000) {
         sendJson(response, 200, { ok: true, step: "code" });
         return;
       }
@@ -17145,7 +17180,8 @@ const server = http.createServer(async (request, response) => {
       // Generate 6-digit OTP
       const otpCode = String(Math.floor(100000 + crypto.randomInt(900000)));
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-      global.passwordResetOtps[email] = { code: otpCode, expiresAt, attempts: 0 };
+      resetOtps[`reset:${email}`] = { code: otpCode, expiresAt, attempts: 0 };
+      await saveOtps(resetOtps);
 
       // Send OTP by email
       const hasSmtp = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS;
@@ -17186,28 +17222,32 @@ const server = http.createServer(async (request, response) => {
         throw new HttpError(400, "Wachtwoord moet minstens 8 tekens zijn.");
       }
 
-      if (!global.passwordResetOtps) global.passwordResetOtps = {};
-      const record = global.passwordResetOtps[email];
+      const resetOtps = await loadOtps();
+      const record = resetOtps[`reset:${email}`];
 
       if (!record) {
         throw new HttpError(400, "Geen actieve resetcode. Vraag een nieuwe aan.");
       }
       if (new Date() > new Date(record.expiresAt)) {
-        delete global.passwordResetOtps[email];
+        delete resetOtps[`reset:${email}`];
+        await saveOtps(resetOtps);
         throw new HttpError(400, "Code is verlopen. Vraag een nieuwe aan.");
       }
 
       record.attempts = (record.attempts || 0) + 1;
       if (record.attempts > 5) {
-        delete global.passwordResetOtps[email];
+        delete resetOtps[`reset:${email}`];
+        await saveOtps(resetOtps);
         throw new HttpError(400, "Te veel pogingen. Vraag een nieuwe code aan.");
       }
       if (record.code !== code) {
+        await saveOtps(resetOtps);
         throw new HttpError(400, `Onjuiste code. Nog ${6 - record.attempts} poging${6 - record.attempts === 1 ? "" : "en"}.`);
       }
 
       // Code correct — update password
-      delete global.passwordResetOtps[email];
+      delete resetOtps[`reset:${email}`];
+      await saveOtps(resetOtps);
       const { hash: newHash, salt: newSalt } = createPasswordHash(newPassword);
 
       if (isPostgresEnabled()) {

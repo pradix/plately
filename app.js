@@ -1904,6 +1904,7 @@ bindEvent(document.getElementById("resetEmailForm"), "submit", async (e) => {
       box.value = val ? val[val.length - 1] : "";
       box.classList.toggle("otp-box--filled", box.value !== "");
       if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
+      if (box.value && i === boxes.length - 1) document.getElementById("resetOtpSubmitBtn")?.click();
     });
 
     box.addEventListener("keydown", (e) => {
