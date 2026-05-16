@@ -24,6 +24,16 @@ const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
 const gzipAsync = promisify(zlib.gzip);
 
+// Embed the app icon as base64 so email clients don't block it as an external image
+const _EMAIL_ICON_B64 = (() => {
+  try {
+    return fs.readFileSync(path.join(__dirname, "assets/icon-192.png")).toString("base64");
+  } catch { return ""; }
+})();
+const _EMAIL_ICON_SRC = _EMAIL_ICON_B64
+  ? `data:image/png;base64,${_EMAIL_ICON_B64}`
+  : "https://plately.nl/assets/icon-192.png";
+
 function buildOtpEmailHtml({ heading, intro, code, outro }) {
   return `<!DOCTYPE html>
 <html lang="nl">
@@ -38,7 +48,7 @@ function buildOtpEmailHtml({ heading, intro, code, outro }) {
           <table cellpadding="0" cellspacing="0">
             <tr>
               <td style="vertical-align:middle">
-                <img src="https://plately.nl/assets/icon-192.png" alt="Plately" width="44" height="44"
+                <img src="${_EMAIL_ICON_SRC}" alt="Plately" width="44" height="44"
                      style="display:block;border-radius:12px;border:0" />
               </td>
               <td style="padding-left:10px;vertical-align:middle">
@@ -17019,6 +17029,17 @@ const server = http.createServer(async (request, response) => {
           void recordEvent("auth_register", user.id, { method: "otp" });
         } else {
           void recordEvent("auth_login", user.id, { method: "otp" });
+          // Restore client state if the server account has no recipes yet
+          const clientRecipes = Array.isArray(body.currentState?.importedRecipes) ? body.currentState.importedRecipes : [];
+          const serverState = buildAppStateFromUser(user);
+          if (!serverState.importedRecipes.length && clientRecipes.length) {
+            const restored = sanitizeUserStatePayload(body.currentState, buildDefaultUserData(user.id));
+            const updated = await pool.query(
+              `UPDATE plately_users SET app_state = $2::jsonb, profile = $3::jsonb, updated_at = NOW() WHERE id = $1 RETURNING *`,
+              [user.id, JSON.stringify(restored), JSON.stringify(restored.profile)]
+            );
+            user = updated.rows[0];
+          }
         }
         const token = await createAuthSession(response, user.id);
         sendJson(response, 200, {
@@ -17042,6 +17063,14 @@ const server = http.createServer(async (request, response) => {
           );
           db.users[userId] = user;
           await persistDatabase();
+        } else {
+          // Restore client state if the existing JSON db account has no recipes yet
+          const existingUser = db.users[userId];
+          const clientRecipes = Array.isArray(body.currentState?.importedRecipes) ? body.currentState.importedRecipes : [];
+          if (!(Array.isArray(existingUser.importedRecipes) && existingUser.importedRecipes.length) && clientRecipes.length) {
+            db.users[userId] = sanitizeUserStatePayload(body.currentState, existingUser);
+            await persistDatabase();
+          }
         }
         const user = db.users[userId];
         const token = await createDevAuthSession(response, userId, email);

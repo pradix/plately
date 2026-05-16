@@ -14178,7 +14178,7 @@ bindEvent(document.getElementById("submitOtpButton"), "click", async () => {
         email: _authOtpEmail,
         code,
         name,
-        currentState: _authOtpIsNewUser ? buildPersistedAppState() : undefined,
+        currentState: buildPersistedAppState(),
       }),
     });
     completeAuthSessionFromPayload(payload, { treatAsNewUser: _authOtpIsNewUser });
