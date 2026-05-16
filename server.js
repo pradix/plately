@@ -17250,6 +17250,47 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/auth/profile-photo" && request.method === "POST") {
+      const authUser = await getAuthenticatedUser(request).catch(() => null)
+        || await getDevAuthenticatedUser(request).catch(() => null);
+      if (!authUser) throw new HttpError(401, "Niet ingelogd.");
+
+      const body = await readRequestBody(request);
+      const rawPhoto = String(body.photo || "");
+
+      if (!rawPhoto.startsWith("data:image/jpeg;base64,") && !rawPhoto.startsWith("data:image/png;base64,")) {
+        throw new HttpError(400, "Alleen JPEG of PNG afbeeldingen zijn toegestaan.");
+      }
+      const base64Part = rawPhoto.split(",")[1] || "";
+      const byteLength = Math.ceil(base64Part.length * 0.75);
+      if (byteLength > 2 * 1024 * 1024) {
+        throw new HttpError(400, "Afbeelding mag maximaal 2MB zijn.");
+      }
+
+      if (isPostgresEnabled()) {
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        const existing = await pool.query(`SELECT profile FROM plately_users WHERE id = $1 LIMIT 1`, [authUser.id]);
+        if (!existing.rows[0]) throw new HttpError(404, "Gebruiker niet gevonden.");
+        const currentProfile = existing.rows[0].profile || {};
+        const updatedProfile = { ...currentProfile, photo: rawPhoto };
+        await pool.query(
+          `UPDATE plately_users SET profile = $2::jsonb, updated_at = NOW() WHERE id = $1`,
+          [authUser.id, JSON.stringify(updatedProfile)]
+        );
+      } else {
+        const db = await loadDatabase();
+        const user = db.users[authUser.id];
+        if (!user) throw new HttpError(404, "Gebruiker niet gevonden.");
+        if (!user.profile) user.profile = {};
+        user.profile.photo = rawPhoto;
+        await persistDatabase();
+      }
+
+      sendJson(response, 200, { ok: true, photoUrl: rawPhoto });
+      return;
+    }
+
     if (requestUrl.pathname === "/api/auth/request-password-reset" && request.method === "POST") {
       const body = await readRequestBody(request);
       const email = String(body.email || "").trim().toLowerCase();

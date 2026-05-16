@@ -12150,21 +12150,27 @@ bindEvent(document.getElementById("profileSubAvatarDisplay"), "click", () => {
   document.getElementById("profileAvatarFileInput")?.click();
 });
 
-// File chosen → resize + store
+// File chosen → resize + store + upload to server
 bindEvent(document.getElementById("profileAvatarFileInput"), "change", async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
   try {
-    const dataUrl = await resizeImageToDataUrl(file, 320);
+    const dataUrl = await resizeImageToDataUrl(file, 400);
     state.profile.photo = dataUrl;
     renderAvatars();
     syncRemovePhotoBtn();
     schedulePersistAppState();
+    if (state.auth.authenticated) {
+      fetchJson(`${state.apiBase}/api/auth/profile-photo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photo: dataUrl }),
+      }).catch(() => {});
+    }
     showToast("Foto bijgewerkt.");
   } catch {
     showToast("Foto laden mislukt.");
   }
-  // Reset so same file can be picked again
   e.target.value = "";
 });
 
