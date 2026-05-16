@@ -4401,15 +4401,23 @@
       try {
         const res = await fetch("/api/admin/ah-token-fetch", { method: "POST", ...adminFetchInit() });
         const d = await res.json();
-        if (!d.ok) throw new Error(d.error || "Mislukt");
+        if (!d.ok) {
+          btn.textContent = "✗ Mislukt";
+          const detail = [d.error, d.detail ? `Detail: ${d.detail}` : null, d.proxyUrl ? `Proxy: ${d.proxyUrl}` : null, d.proxySecretSet === false ? "⚠️ AH_API_PROXY_SECRET niet ingesteld" : null].filter(Boolean).join(" · ");
+          if (meta) meta.style.color = "#ef4444";
+          if (meta) meta.textContent = detail;
+          return;
+        }
         btn.textContent = "✓ Gelukt";
-        if (meta) meta.textContent = `Token: ${d.tokenPreview} · Verloopt: ${new Date(d.expiresAt).toLocaleString("nl-NL")}`;
+        if (meta) meta.style.color = "";
+        if (meta) meta.textContent = `Token: ${d.tokenPreview} · Verloopt: ${new Date(d.expiresAt).toLocaleString("nl-NL")} · Via: ${d.proxyUrl}`;
         await loadAhTokenStatus();
       } catch (e) {
         btn.textContent = "✗ Mislukt";
+        if (meta) meta.style.color = "#ef4444";
         if (meta) meta.textContent = "Fout: " + e.message;
       } finally {
-        setTimeout(() => { btn.disabled = false; btn.textContent = "⬇ Token ophalen"; }, 3000);
+        setTimeout(() => { btn.disabled = false; btn.textContent = "⬇ Token ophalen"; }, 4000);
       }
     });
 

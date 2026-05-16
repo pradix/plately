@@ -18821,15 +18821,45 @@ const server = http.createServer(async (request, response) => {
     // Protected by AH_TOKEN_REFRESH_SECRET env var (shared secret in X-Plately-Key header).
     if (requestUrl.pathname === "/api/admin/ah-token-fetch" && request.method === "POST") {
       await requireAdmin(request);
+      const proxyUrl = String(process.env.AH_API_PROXY || "").trim();
+      const proxySecret = String(process.env.AH_API_PROXY_SECRET || "").trim();
+      const ahBase = proxyUrl || "https://api.ah.nl";
+      const ahHeaders = proxySecret ? { "x-plately-secret": proxySecret } : {};
       try {
-        const token = await fetchAHAnonymousToken();
+        const ahRes = await fetch(`${ahBase}/mobile-auth/v1/auth/token/anonymous`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...ahHeaders },
+          body: JSON.stringify({ clientId: "appie" }),
+          signal: AbortSignal.timeout(10000),
+        });
+        const rawBody = await ahRes.text();
+        if (!ahRes.ok) {
+          sendJson(response, 502, {
+            ok: false,
+            error: `AH returned HTTP ${ahRes.status}`,
+            detail: rawBody.slice(0, 300),
+            proxyUrl: ahBase,
+            proxySecretSet: Boolean(proxySecret),
+          });
+          return;
+        }
+        let data;
+        try { data = JSON.parse(rawBody); } catch { data = {}; }
+        const token = data.access_token || "";
+        if (!token) {
+          sendJson(response, 502, { ok: false, error: "access_token ontbreekt in respons", detail: rawBody.slice(0, 300) });
+          return;
+        }
+        ahTokenCache = { token, expiresAt: Date.now() + (Number(data.expires_in) || 604800) * 1000 };
+        console.log(`[AH] Token opgehaald via admin (eerste 12: ${token.slice(0, 12)}…)`);
         sendJson(response, 200, {
           ok: true,
-          tokenPreview: token ? token.slice(0, 12) + "…" : null,
-          expiresAt: ahTokenCache.expiresAt ? new Date(ahTokenCache.expiresAt).toISOString() : null,
+          tokenPreview: token.slice(0, 12) + "…",
+          expiresAt: new Date(ahTokenCache.expiresAt).toISOString(),
+          proxyUrl: ahBase,
         });
       } catch (err) {
-        sendJson(response, 502, { ok: false, error: err?.message || "Token ophalen mislukt." });
+        sendJson(response, 502, { ok: false, error: err?.message || "Fetch mislukt", proxyUrl: ahBase, proxySecretSet: Boolean(proxySecret) });
       }
       return;
     }
