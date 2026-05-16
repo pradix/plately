@@ -103,7 +103,7 @@ function buildWelcomeEmailHtml({ name }) {
               <a href="https://plately.nl" style="display:inline-block;background:#8da485;color:#fff;text-decoration:none;border-radius:14px;padding:14px 28px;font-size:15px;font-weight:600">Open Plately</a>
             </td></tr>
           </table>
-          <p style="margin:0;font-size:13px;color:#999;line-height:1.6">Vragen of opmerkingen? Stuur ons een mail via <a href="mailto:support@plately.nl" style="color:#5a7a5e;text-decoration:none">support@plately.nl</a>.</p>
+          <p style="margin:0;font-size:13px;color:#999;line-height:1.6">Vragen of opmerkingen? Stuur ons een mail via <a href="mailto:hallo@plately.nl" style="color:#5a7a5e;text-decoration:none">hallo@plately.nl</a>.</p>
         </td></tr>
         <tr><td align="center" style="padding-top:24px">
           <p style="margin:0;font-size:12px;color:#aaa;line-height:1.6">
@@ -15969,10 +15969,10 @@ const server = http.createServer(async (request, response) => {
         <p>Je gegevens worden bewaard zolang je account actief is. Na verwijdering van je account worden alle gekoppelde gegevens binnen 30 dagen verwijderd.</p>
 
         <h2>6. Jouw rechten</h2>
-        <p>Je hebt het recht om je gegevens in te zien, te corrigeren of te laten verwijderen. Stuur een verzoek naar <a href="mailto:support@plately.nl">support@plately.nl</a>.</p>
+        <p>Je hebt het recht om je gegevens in te zien, te corrigeren of te laten verwijderen. Stuur een verzoek naar <a href="mailto:hallo@plately.nl">hallo@plately.nl</a>.</p>
 
         <h2>7. Contact</h2>
-        <p>Vragen over dit privacybeleid? Mail naar <a href="mailto:support@plately.nl">support@plately.nl</a>.</p>
+        <p>Vragen over dit privacybeleid? Mail naar <a href="mailto:hallo@plately.nl">hallo@plately.nl</a>.</p>
       `);
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", ...HTTP_HEADERS });
       response.end(html);
@@ -15995,7 +15995,7 @@ const server = http.createServer(async (request, response) => {
         </ol>
 
         <h2>Optie 2 — Via e-mail</h2>
-        <p>Stuur een e-mail naar <a href="mailto:support@plately.nl">support@plately.nl</a> met als onderwerp <em>"Account verwijderen"</em> en vermeld het e-mailadres van je account. We verwerken je verzoek binnen 5 werkdagen.</p>
+        <p>Stuur een e-mail naar <a href="mailto:hallo@plately.nl">hallo@plately.nl</a> met als onderwerp <em>"Account verwijderen"</em> en vermeld het e-mailadres van je account. We verwerken je verzoek binnen 5 werkdagen.</p>
 
         <h2>Wat wordt verwijderd</h2>
         <ul>
@@ -16031,7 +16031,7 @@ const server = http.createServer(async (request, response) => {
         </ul>
 
         <h2>3. Account</h2>
-        <p>Als je een account aanmaakt, ben je verantwoordelijk voor de beveiliging van je inloggegevens. Meld ongeautoriseerd gebruik zo snel mogelijk via <a href="mailto:support@plately.nl">support@plately.nl</a>.</p>
+        <p>Als je een account aanmaakt, ben je verantwoordelijk voor de beveiliging van je inloggegevens. Meld ongeautoriseerd gebruik zo snel mogelijk via <a href="mailto:hallo@plately.nl">hallo@plately.nl</a>.</p>
 
         <h2>4. Intellectueel eigendom</h2>
         <p>De app en de bijbehorende technologie zijn eigendom van Plately. Recepten die je importeert blijven eigendom van de oorspronkelijke makers. Plately claimt geen eigendom over door jou opgeslagen inhoud.</p>
@@ -16049,7 +16049,7 @@ const server = http.createServer(async (request, response) => {
         <p>Op deze voorwaarden is Nederlands recht van toepassing. Geschillen worden voorgelegd aan de bevoegde rechter in Nederland.</p>
 
         <h2>9. Contact</h2>
-        <p>Vragen over deze voorwaarden? Mail naar <a href="mailto:support@plately.nl">support@plately.nl</a>.</p>
+        <p>Vragen over deze voorwaarden? Mail naar <a href="mailto:hallo@plately.nl">hallo@plately.nl</a>.</p>
 
         <p style="margin-top:2rem;color:#888;font-size:.9rem;">Plately · <a href="/privacy-policy">Privacybeleid</a> · <a href="/data-deletion">Gegevens verwijderen</a></p>
       `);
@@ -17056,7 +17056,7 @@ const server = http.createServer(async (request, response) => {
         let user = result.rows[0];
         if (user) {
           const existingProfile = typeof user.profile === "object" ? user.profile : JSON.parse(user.profile || "{}");
-          if (existingProfile.active === false) throw new HttpError(403, "Dit account is gedeactiveerd. Neem contact op met support@plately.nl.");
+          if (existingProfile.active === false) throw new HttpError(403, "Dit account is gedeactiveerd. Neem contact op met hallo@plately.nl.");
         }
 
         if (!user) {
@@ -17105,7 +17105,7 @@ const server = http.createServer(async (request, response) => {
           ([_, u]) => String(u.email || "").toLowerCase() === email
         )?.[0];
         if (userId && db.users[userId]?.active === false) {
-          throw new HttpError(403, "Dit account is gedeactiveerd. Neem contact op met support@plately.nl.");
+          throw new HttpError(403, "Dit account is gedeactiveerd. Neem contact op met hallo@plately.nl.");
         }
         if (!userId) {
           userId = generateId("user");

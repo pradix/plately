@@ -12060,7 +12060,7 @@ Uw toelichting:
 ——
 Verstuurd vanuit de Plately-webapp (${typeof window !== "undefined" ? window.location?.origin || "" : ""})`
       );
-      window.location.href = `mailto:support@plately.nl?subject=${subject}&body=${body}`;
+      window.location.href = `mailto:hallo@plately.nl?subject=${subject}&body=${body}`;
       showToast("Bedankt! Je e-mailprogramma wordt geopend.");
     },
   });
