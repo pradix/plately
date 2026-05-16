@@ -12072,7 +12072,7 @@ body {
   width: calc(100% - 32px);
   max-width: 420px;
   margin: 0;
-  padding: 8px 6px;
+  padding: 6px;
   border-radius: 28px;
   border-top: none;
   background: #fff;
@@ -12081,6 +12081,7 @@ body {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
   z-index: 80;
+  overflow: hidden;
 }
 
 .nav-item {
@@ -16758,24 +16759,21 @@ body {
 
 .nav-item::before { content: none; }
 
-/* Pill indicator behind icon — grows in on active */
+/* Compact pill indicator behind icon only */
 .nav-icon-wrap {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* pill grows via padding so it stays centered at any screen width */
-  padding: 5px 14px;
-  min-width: 44px;
-  max-width: 72px;
-  height: 30px;
+  width: 52px;
+  height: 28px;
   border-radius: 999px;
   transition: background 200ms ease;
-  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .nav-item--active .nav-icon-wrap {
-  background: rgba(95, 127, 88, 0.14);
+  background: rgba(95, 127, 88, 0.13);
 }
 
 .nav-item--active {
