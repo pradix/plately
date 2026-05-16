@@ -45,17 +45,8 @@ function buildOtpEmailHtml({ heading, intro, code, outro }) {
 
         <!-- Logo header -->
         <tr><td align="center" style="padding-bottom:24px">
-          <table cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="vertical-align:middle">
-                <img src="${_EMAIL_ICON_SRC}" alt="Plately" width="44" height="44"
-                     style="display:block;border-radius:12px;border:0" />
-              </td>
-              <td style="padding-left:10px;vertical-align:middle">
-                <span style="font-size:22px;font-weight:700;color:#2d2d2d;letter-spacing:-0.5px">Plately</span>
-              </td>
-            </tr>
-          </table>
+          <img src="${_EMAIL_ICON_SRC}" alt="Plately" width="44" height="44"
+               style="display:block;border-radius:12px;border:0" />
         </td></tr>
 
         <!-- Card -->
