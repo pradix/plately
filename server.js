@@ -24,6 +24,60 @@ const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
 const gzipAsync = promisify(zlib.gzip);
 
+function buildOtpEmailHtml({ heading, intro, code, outro }) {
+  return `<!DOCTYPE html>
+<html lang="nl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0ebe3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0ebe3;padding:40px 16px">
+    <tr><td align="center">
+      <table width="100%" style="max-width:480px" cellpadding="0" cellspacing="0">
+
+        <!-- Logo header -->
+        <tr><td align="center" style="padding-bottom:24px">
+          <table cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background:#5a7a5e;border-radius:14px;padding:10px 14px;vertical-align:middle">
+                <span style="font-size:20px;line-height:1">🍃</span>
+              </td>
+              <td style="padding-left:10px;vertical-align:middle">
+                <span style="font-size:22px;font-weight:700;color:#2d2d2d;letter-spacing:-0.5px">Plately</span>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <!-- Card -->
+        <tr><td style="background:#ffffff;border-radius:20px;padding:36px 36px 28px;box-shadow:0 2px 16px rgba(0,0,0,0.06)">
+
+          <h1 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#1a1a1a;line-height:1.3">${heading}</h1>
+          <p style="margin:0 0 28px;font-size:15px;color:#666;line-height:1.6">${intro}</p>
+
+          <!-- Code box -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px">
+            <tr><td align="center" style="background:#f5f0ea;border-radius:14px;padding:24px 16px">
+              <span style="font-size:38px;font-weight:800;letter-spacing:12px;color:#1a1a1a;font-variant-numeric:tabular-nums">${code}</span>
+            </td></tr>
+          </table>
+
+          <p style="margin:0;font-size:13px;color:#999;line-height:1.6">${outro}</p>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td align="center" style="padding-top:24px">
+          <p style="margin:0;font-size:12px;color:#aaa;line-height:1.6">
+            © ${new Date().getFullYear()} Plately &nbsp;·&nbsp;
+            <a href="https://plately.nl" style="color:#5a7a5e;text-decoration:none">plately.nl</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 // Lazy-loaded nodemailer (only when email is needed)
 let _nodemailer = null;
 function getNodemailer() {
@@ -16866,15 +16920,12 @@ const server = http.createServer(async (request, response) => {
         await sendEmail({
           to: email,
           subject: `${otpCode} — jouw Plately inlogcode`,
-          html: `
-            <div style="font-family:sans-serif;max-width:420px;margin:0 auto;padding:32px 24px">
-              <img src="https://plately.app/assets/plately.png" alt="Plately" style="height:36px;margin-bottom:24px" />
-              <h2 style="margin:0 0 8px;font-size:20px">${isNewUser ? "Welkom bij Plately!" : "Jouw inlogcode"}</h2>
-              <p style="margin:0 0 24px;color:#555">Gebruik de onderstaande code om ${isNewUser ? "je account aan te maken" : "in te loggen"}. De code is 10 minuten geldig.</p>
-              <div style="background:#f5f0ea;border-radius:12px;padding:24px;text-align:center;letter-spacing:8px;font-size:36px;font-weight:700;color:#1a1a1a">${otpCode}</div>
-              <p style="margin:24px 0 0;color:#888;font-size:13px">Heb je dit niet aangevraagd? Dan kun je deze e-mail negeren.</p>
-            </div>
-          `,
+          html: buildOtpEmailHtml({
+            heading: isNewUser ? "Welkom bij Plately! 🎉" : "Jouw inlogcode",
+            intro: `Gebruik de onderstaande code om ${isNewUser ? "je account aan te maken" : "in te loggen"}. De code is <strong>10 minuten</strong> geldig.`,
+            code: otpCode,
+            outro: "Heb je dit niet aangevraagd? Dan kun je deze e-mail veilig negeren.",
+          }),
         });
       } catch (err) {
         console.error("❌ Login OTP e-mail mislukt:", err?.message || err);
@@ -17102,16 +17153,13 @@ const server = http.createServer(async (request, response) => {
       try {
         await sendEmail({
           to: email,
-          subject: `${otpCode} — jouw Plately inlogcode`,
-          html: `
-            <div style="font-family:sans-serif;max-width:420px;margin:0 auto;padding:32px 24px">
-              <img src="https://plately.app/assets/plately.png" alt="Plately" style="height:36px;margin-bottom:24px" />
-              <h2 style="margin:0 0 8px;font-size:20px">Wachtwoord vergeten?</h2>
-              <p style="margin:0 0 24px;color:#555">Gebruik de onderstaande code om je wachtwoord opnieuw in te stellen. De code is 15 minuten geldig.</p>
-              <div style="background:#f5f0ea;border-radius:12px;padding:24px;text-align:center;letter-spacing:8px;font-size:36px;font-weight:700;color:#1a1a1a">${otpCode}</div>
-              <p style="margin:24px 0 0;color:#888;font-size:13px">Heb je dit niet aangevraagd? Dan kun je deze e-mail negeren.</p>
-            </div>
-          `,
+          subject: `${otpCode} — Plately wachtwoord resetten`,
+          html: buildOtpEmailHtml({
+            heading: "Wachtwoord vergeten?",
+            intro: "Gebruik de onderstaande code om je wachtwoord opnieuw in te stellen. De code is <strong>15 minuten</strong> geldig.",
+            code: otpCode,
+            outro: "Heb je dit niet aangevraagd? Dan kun je deze e-mail veilig negeren.",
+          }),
         });
       } catch (err) {
         console.error("❌ E-mail verzenden mislukt:", err?.message || err);
