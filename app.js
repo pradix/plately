@@ -6226,6 +6226,16 @@ function renderRecipeGrid() {
   recipeGrid.innerHTML = gridHtml;
   wireRecipeCardImageFallbacks(recipeGrid);
 
+  recipeGrid.querySelectorAll("button.recent-card[data-recipe-id]").forEach((card) => {
+    const recipeId = card.dataset.recipeId;
+    const recipe = recipeId ? getRecipeById(recipeId) : null;
+    if (recipe?.image) {
+      const prefetch = () => { new Image().src = recipe.image; };
+      card.addEventListener("mouseover", prefetch, { once: true, passive: true });
+      card.addEventListener("touchstart", prefetch, { once: true, passive: true });
+    }
+  });
+
   // Bind the add recipe card click
   const addRecipeCardBtn = document.getElementById("addRecipeCard");
   if (addRecipeCardBtn) {

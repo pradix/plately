@@ -4,7 +4,7 @@
 // Previous SW versions caused stale auth state.
 
 // Update this string whenever you want to invalidate caches.
-self.__PLATELY_SW_VERSION__ = "1.0.20.52";
+self.__PLATELY_SW_VERSION__ = "1.0.20.53";
 const CACHE_VERSION = self.__PLATELY_SW_VERSION__;
 const STATIC_CACHE = `plately-static-${CACHE_VERSION}`;
 const HTML_CACHE = `plately-html-${CACHE_VERSION}`;
@@ -15,6 +15,7 @@ const APP_SHELL = [
   `/styles.css?v=${self.__PLATELY_SW_VERSION__}`,
   "/assets/plately.png",
   "/assets/icon-192.png",
+  "/offline.html",
 ];
 
 self.addEventListener("install", (event) => {
@@ -86,7 +87,10 @@ self.addEventListener("fetch", (event) => {
       } catch {
         // fall back to cached shell below
       }
-      return cached || Response.error();
+      if (cached) return cached;
+      const offlineCache = await caches.open(STATIC_CACHE);
+      const offlinePage = await offlineCache.match("/offline.html");
+      return offlinePage || Response.error();
     }
 
     const fetchAndUpdate = (async () => {
