@@ -1649,12 +1649,11 @@ function updateAuthUI() {
   if (adminBtn) adminBtn.style.display = "none";
   if (adminLeadDivider) adminLeadDivider.style.display = "none";
 
-  if (!state.auth.enabled) {
-    accountTitle.textContent = "Account volgt zodra Postgres is gekoppeld";
-    accountCopy.textContent =
-      "De app werkt nu als gast. Voeg straks DATABASE_URL toe om inloggen en accounts met online opslag te activeren.";
-    openRegisterButton.classList.add("hidden");
-    openLoginButton.classList.add("hidden");
+  if (!state.auth.enabled && !state.auth.authenticated) {
+    accountTitle.textContent = "Account voor Plately";
+    accountCopy.textContent = "Maak een account aan of log in om recepten en kookboeken online te bewaren.";
+    openRegisterButton.classList.remove("hidden");
+    openLoginButton.classList.remove("hidden");
     logoutButton.classList.add("hidden");
     return;
   }
