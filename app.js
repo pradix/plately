@@ -10653,6 +10653,8 @@ function completeAuthSessionFromPayload(payload, { treatAsNewUser } = {}) {
 
   const hasPublicIntent = Boolean(getPublicRecipeIntent()?.recipe);
   if (treatAsNewUser) {
+    // Always start new users from home so no leftover guest view (e.g. grocery) bleeds through.
+    switchView("home", { skipImportReviewLeaveGuard: true });
     if (hasPublicIntent) {
       closeAuthModal();
       showToast("Welkom! We zetten je recept klaar.");
