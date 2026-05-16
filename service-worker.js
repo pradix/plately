@@ -4,7 +4,7 @@
 // Previous SW versions caused stale auth state.
 
 // Update this string whenever you want to invalidate caches.
-self.__PLATELY_SW_VERSION__ = "1.0.20.49";
+self.__PLATELY_SW_VERSION__ = "1.0.20.50";
 const CACHE_VERSION = self.__PLATELY_SW_VERSION__;
 const STATIC_CACHE = `plately-static-${CACHE_VERSION}`;
 const HTML_CACHE = `plately-html-${CACHE_VERSION}`;

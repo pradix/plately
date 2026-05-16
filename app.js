@@ -955,9 +955,7 @@ function applyTranslations() {
     const isRegister = (authModalOpen.dataset.authMode || "") === "register";
     syncAuthModeToggleButtons();
     const submitBtn = document.getElementById("submitAuthButton");
-    if (submitBtn) {
-      submitBtn.textContent = isRegister ? t("auth.submitRegister") : t("auth.submit");
-    }
+    if (submitBtn) submitBtn.textContent = "Code sturen";
     const kicker = document.getElementById("authKicker");
     if (kicker) {
       kicker.textContent = isRegister ? t("auth.registerTitle") : t("auth.loginTitle");
@@ -1728,11 +1726,12 @@ function openAuthModal(mode = "login") {
   authModal.dataset.authMode = mode;
   // debug removed
 
-  // Leave password-reset view when (re)opening the modal or switching mode
+  // Leave password-reset / OTP step when (re)opening the modal or switching mode
   const mainAuthForm = document.getElementById("authForm");
   const resetForm = document.getElementById("passwordResetForm");
   if (mainAuthForm) mainAuthForm.style.display = "";
   if (resetForm) resetForm.classList.add("hidden");
+  showAuthStep1();
 
   // Title and subtitle (i18n — keys in translations.json)
   if (authKicker) authKicker.textContent = isRegister ? t("auth.registerTitle") : t("auth.loginTitle");
@@ -1757,17 +1756,9 @@ function openAuthModal(mode = "login") {
   // Show/hide name field
   const nameField = document.getElementById("authNameField");
   if (nameField) nameField.style.display = isRegister ? "" : "none";
-  // Password autocomplete hint
-  if (authPassword instanceof HTMLInputElement) {
-    authPassword.setAttribute("autocomplete", isRegister ? "new-password" : "current-password");
-  }
-
-  // Show/hide forgot password button (only for login, not register)
-  const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
-  if (forgotPasswordBtn) forgotPasswordBtn.style.display = isRegister ? "none" : "";
 
   // Submit button text
-  if (submitAuthButton) submitAuthButton.textContent = isRegister ? t("auth.submitRegister") : t("auth.submit");
+  if (submitAuthButton) submitAuthButton.textContent = "Code sturen";
 
   // Clear feedback
   if (authFeedback) authFeedback.textContent = "";
@@ -14045,41 +14036,182 @@ document.querySelectorAll(".auth-mode-tab[data-tab]").forEach((tab) => {
 
 // Instagram link button (opens in new tab — handled by anchor href)
 
+// OTP login state
+let _authOtpEmail = "";
+let _authOtpIsNewUser = false;
+
+function showAuthStep2(email, isNewUser) {
+  _authOtpEmail = email;
+  _authOtpIsNewUser = isNewUser;
+  const step1 = document.getElementById("authStep1");
+  const step2 = document.getElementById("authStep2");
+  const subtitle = document.getElementById("authOtpSubtitle");
+  const submitOtp = document.getElementById("submitOtpButton");
+  if (step1) step1.classList.add("hidden");
+  if (step2) step2.classList.remove("hidden");
+  if (subtitle) subtitle.textContent = `We hebben een 6-cijferige code verstuurd naar ${email}.`;
+  if (submitOtp) submitOtp.textContent = isNewUser ? "Account aanmaken" : "Inloggen";
+  const firstBox = document.querySelector("#authOtpBoxes .otp-box");
+  if (firstBox) setTimeout(() => firstBox.focus(), 80);
+  scrollAuthModalToTop();
+}
+
+function showAuthStep1() {
+  _authOtpEmail = "";
+  _authOtpIsNewUser = false;
+  const step1 = document.getElementById("authStep1");
+  const step2 = document.getElementById("authStep2");
+  if (step1) step1.classList.remove("hidden");
+  if (step2) step2.classList.add("hidden");
+  const fb = document.getElementById("authOtpFeedback");
+  if (fb) fb.textContent = "";
+  // Clear OTP boxes
+  document.querySelectorAll("#authOtpBoxes .otp-box").forEach((b) => {
+    b.value = "";
+    b.classList.remove("otp-box--filled", "otp-box--error");
+  });
+  scrollAuthModalToTop();
+}
+
 bindEvent(authForm, "submit", async (event) => {
   event.preventDefault();
   const email = authEmail.value.trim();
-  const password = authPassword.value;
-
-  // Registration requires name + email (verplicht)
   const nameInput = document.getElementById("authName");
   const name = (nameInput?.value || "").trim();
-  if (state.auth.mode === "register") {
-    if (!name) {
-      showToast("Voer je naam in.");
-      nameInput?.focus?.();
-      return;
-    }
-    if (!email) {
-      showToast("Voer je e-mailadres in.");
-      authEmail?.focus?.();
-      return;
-    }
-    state.profile.name = name;
-    if (!state.profile.email) state.profile.email = email;
+  const fb = document.getElementById("authFeedback");
+
+  if (state.auth.mode === "register" && !name) {
+    showToast("Voer je naam in.");
+    nameInput?.focus?.();
+    return;
+  }
+  if (!email) {
+    showToast("Voer je e-mailadres in.");
+    authEmail?.focus?.();
+    return;
   }
 
-  submitAuthButton.disabled = true;
-  submitAuthButton.textContent = state.auth.mode === "register" ? t("auth.submitRegisterPending") : t("auth.submitPending");
-  if (authFeedback) authFeedback.textContent = "";
+  const submitBtn = document.getElementById("submitAuthButton");
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Code wordt verstuurd..."; }
+  if (fb) fb.textContent = "";
 
   try {
-    await submitAuth(state.auth.mode, email, password, state.auth.mode === "register" ? { name } : {});
+    const data = await fetchJson(`${state.apiBase}/api/auth/request-login-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name }),
+    });
+    if (data.ok) {
+      if (state.auth.mode === "register") {
+        state.profile.name = name;
+        if (!state.profile.email) state.profile.email = email;
+      }
+      showAuthStep2(email, !!data.isNewUser);
+    } else {
+      if (fb) fb.textContent = data.error || "Er is iets fout gegaan.";
+    }
   } catch (error) {
-    if (authFeedback) authFeedback.textContent = error.message;
+    if (fb) fb.textContent = error.message || "Verbindingsfout. Probeer opnieuw.";
   } finally {
-    submitAuthButton.disabled = false;
-    submitAuthButton.textContent = state.auth.mode === "register" ? t("auth.submitRegister") : t("auth.submit");
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Code sturen"; }
   }
+});
+
+// Wire OTP boxes for auth modal
+(function wireAuthOtpBoxes() {
+  const container = document.getElementById("authOtpBoxes");
+  if (!container) return;
+  const boxes = Array.from(container.querySelectorAll(".otp-box"));
+
+  boxes.forEach((box, i) => {
+    box.addEventListener("input", () => {
+      const val = box.value.replace(/\D/g, "");
+      box.value = val ? val[val.length - 1] : "";
+      box.classList.toggle("otp-box--filled", box.value !== "");
+      if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
+      // Auto-submit when last box filled
+      if (box.value && i === boxes.length - 1) {
+        document.getElementById("submitOtpButton")?.click();
+      }
+    });
+    box.addEventListener("keydown", (e) => {
+      if (e.key === "Backspace" && !box.value && i > 0) {
+        boxes[i - 1].value = "";
+        boxes[i - 1].classList.remove("otp-box--filled");
+        boxes[i - 1].focus();
+      }
+    });
+    box.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const pasted = (e.clipboardData || window.clipboardData).getData("text").replace(/\D/g, "");
+      pasted.split("").forEach((ch, idx) => {
+        if (boxes[i + idx]) { boxes[i + idx].value = ch; boxes[i + idx].classList.add("otp-box--filled"); }
+      });
+      const next = boxes[Math.min(i + pasted.length, boxes.length - 1)];
+      if (next) next.focus();
+    });
+  });
+})();
+
+bindEvent(document.getElementById("submitOtpButton"), "click", async () => {
+  const boxes = Array.from(document.querySelectorAll("#authOtpBoxes .otp-box"));
+  const code = boxes.map((b) => b.value).join("");
+  const feedback = document.getElementById("authOtpFeedback");
+  const submitBtn = document.getElementById("submitOtpButton");
+  const nameInput = document.getElementById("authName");
+  const name = (nameInput?.value || "").trim() || state.profile.name || "";
+
+  if (code.length < 6) {
+    if (feedback) { feedback.style.color = "#ef4444"; feedback.textContent = "Voer alle 6 cijfers in."; }
+    return;
+  }
+
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Bezig..."; }
+  if (feedback) feedback.textContent = "";
+
+  try {
+    const payload = await fetchJson(`${state.apiBase}/api/auth/verify-login-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: _authOtpEmail,
+        code,
+        name,
+        currentState: _authOtpIsNewUser ? buildPersistedAppState() : undefined,
+      }),
+    });
+    completeAuthSessionFromPayload(payload, { treatAsNewUser: _authOtpIsNewUser });
+    showAuthStep1();
+  } catch (error) {
+    boxes.forEach((b) => b.classList.add("otp-box--error"));
+    setTimeout(() => boxes.forEach((b) => b.classList.remove("otp-box--error")), 400);
+    if (feedback) { feedback.style.color = "#ef4444"; feedback.textContent = error.message || "Onjuiste code."; }
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = _authOtpIsNewUser ? "Account aanmaken" : "Inloggen"; }
+  }
+});
+
+bindEvent(document.getElementById("authResendOtpBtn"), "click", async () => {
+  const btn = document.getElementById("authResendOtpBtn");
+  const feedback = document.getElementById("authOtpFeedback");
+  if (btn) { btn.disabled = true; btn.textContent = "Verstuurd..."; }
+  try {
+    const nameInput = document.getElementById("authName");
+    const name = (nameInput?.value || "").trim() || state.profile.name || "";
+    await fetchJson(`${state.apiBase}/api/auth/request-login-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: _authOtpEmail, name }),
+    });
+    if (feedback) { feedback.style.color = "#22c55e"; feedback.textContent = "Nieuwe code verstuurd!"; }
+  } catch {
+    if (feedback) { feedback.style.color = "#ef4444"; feedback.textContent = "Versturen mislukt."; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Opnieuw versturen"; }
+  }
+});
+
+bindEvent(document.getElementById("authOtpBackBtn"), "click", () => {
+  showAuthStep1();
 });
 
 bindEvent(document.getElementById("appleSignInBtn"), "click", async () => {

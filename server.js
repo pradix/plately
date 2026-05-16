@@ -16831,6 +16831,144 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/auth/request-login-otp" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const email = sanitizeEmail(body.email);
+      const name = String(body.name || "").trim();
+
+      if (!isValidEmail(email)) {
+        throw new HttpError(400, "Voer een geldig e-mailadres in.");
+      }
+
+      // Rate-limit: max 1 OTP per 60 seconds
+      if (!global.loginOtps) global.loginOtps = {};
+      const existing = global.loginOtps[email];
+      if (existing && Date.now() < new Date(existing.expiresAt).getTime() - 9 * 60 * 1000) {
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      let isNewUser = false;
+      if (isPostgresEnabled()) {
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        const result = await pool.query(`SELECT id FROM plately_users WHERE email = $1 LIMIT 1`, [email]);
+        isNewUser = result.rows.length === 0;
+      } else {
+        const db = await loadDatabase();
+        isNewUser = !Object.values(db.users || {}).some((u) => String(u.email || "").toLowerCase() === email);
+      }
+
+      const otpCode = String(Math.floor(100000 + crypto.randomInt(900000)));
+      global.loginOtps[email] = { code: otpCode, expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), name, attempts: 0 };
+
+      try {
+        await sendEmail({
+          to: email,
+          subject: `${otpCode} — jouw Plately inlogcode`,
+          html: `
+            <div style="font-family:sans-serif;max-width:420px;margin:0 auto;padding:32px 24px">
+              <img src="https://plately.app/assets/plately.png" alt="Plately" style="height:36px;margin-bottom:24px" />
+              <h2 style="margin:0 0 8px;font-size:20px">${isNewUser ? "Welkom bij Plately!" : "Jouw inlogcode"}</h2>
+              <p style="margin:0 0 24px;color:#555">Gebruik de onderstaande code om ${isNewUser ? "je account aan te maken" : "in te loggen"}. De code is 10 minuten geldig.</p>
+              <div style="background:#f5f0ea;border-radius:12px;padding:24px;text-align:center;letter-spacing:8px;font-size:36px;font-weight:700;color:#1a1a1a">${otpCode}</div>
+              <p style="margin:24px 0 0;color:#888;font-size:13px">Heb je dit niet aangevraagd? Dan kun je deze e-mail negeren.</p>
+            </div>
+          `,
+        });
+      } catch (err) {
+        console.error("❌ Login OTP e-mail mislukt:", err?.message || err);
+      }
+
+      sendJson(response, 200, { ok: true, isNewUser });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/auth/verify-login-otp" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const email = sanitizeEmail(body.email);
+      const code = String(body.code || "").trim();
+      const name = String(body.name || "").trim();
+
+      if (!isValidEmail(email) || !code) {
+        throw new HttpError(400, "Verplichte velden ontbreken.");
+      }
+
+      if (!global.loginOtps) global.loginOtps = {};
+      const record = global.loginOtps[email];
+
+      if (!record) throw new HttpError(400, "Geen actieve code. Vraag een nieuwe aan.");
+      if (new Date() > new Date(record.expiresAt)) {
+        delete global.loginOtps[email];
+        throw new HttpError(400, "Code is verlopen. Vraag een nieuwe aan.");
+      }
+      record.attempts = (record.attempts || 0) + 1;
+      if (record.attempts > 5) {
+        delete global.loginOtps[email];
+        throw new HttpError(400, "Te veel pogingen. Vraag een nieuwe code aan.");
+      }
+      if (record.code !== code) {
+        throw new HttpError(400, `Onjuiste code. Nog ${6 - record.attempts} poging${6 - record.attempts === 1 ? "" : "en"}.`);
+      }
+      const storedName = record.name || name;
+      delete global.loginOtps[email];
+
+      if (isPostgresEnabled()) {
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        let result = await pool.query(`SELECT * FROM plately_users WHERE email = $1 LIMIT 1`, [email]);
+        let user = result.rows[0];
+        if (!user) {
+          // Create passwordless user
+          const userId = generateId("user");
+          const appState = sanitizeUserStatePayload(
+            { profile: { name: storedName, email }, ...(body.currentState || {}) },
+            buildDefaultUserData(userId)
+          );
+          const inserted = await pool.query(
+            `INSERT INTO plately_users (id, email, password_hash, password_salt, profile, app_state)
+             VALUES ($1, $2, NULL, NULL, $3::jsonb, $4::jsonb) RETURNING *`,
+            [userId, email, JSON.stringify(appState.profile), JSON.stringify(appState)]
+          );
+          user = inserted.rows[0];
+          void recordEvent("auth_register", user.id, { method: "otp" });
+        } else {
+          void recordEvent("auth_login", user.id, { method: "otp" });
+        }
+        const token = await createAuthSession(response, user.id);
+        sendJson(response, 200, {
+          ok: true,
+          user: buildAppStateFromUser(user),
+          auth: { enabled: true, authenticated: true, email: user.email, token },
+        });
+        return;
+      } else {
+        const db = await loadDatabase();
+        let userId = Object.entries(db.users || {}).find(
+          ([_, u]) => String(u.email || "").toLowerCase() === email
+        )?.[0];
+        if (!userId) {
+          userId = generateId("user");
+          let user = buildDefaultUserData(userId);
+          user.email = email;
+          user = sanitizeUserStatePayload(
+            { profile: { name: storedName, email }, ...(body.currentState || {}) },
+            user
+          );
+          db.users[userId] = user;
+          await persistDatabase();
+        }
+        const user = db.users[userId];
+        const token = await createDevAuthSession(response, userId, email);
+        sendJson(response, 200, {
+          ok: true,
+          user: { ...user, authenticated: true, email },
+          auth: { enabled: false, authenticated: true, email, token },
+        });
+        return;
+      }
+    }
+
     if (requestUrl.pathname === "/api/auth/logout" && request.method === "POST") {
       if (isPostgresEnabled()) {
         await clearAuthSession(request, response);
