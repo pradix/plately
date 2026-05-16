@@ -399,6 +399,9 @@ const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "";
 
 let webPushModule = null;
 
+const importErrors = [];
+const IMPORT_ERRORS_MAX = 100;
+
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -17701,6 +17704,8 @@ const server = http.createServer(async (request, response) => {
             httpStatus: statusCode,
             error: sanitizeText(rawMessage).slice(0, 500),
           });
+          importErrors.unshift({ url: cleanUrl, error: sanitizeText(rawMessage).slice(0, 500), userId: authUser?.id || null, timestamp: new Date().toISOString() });
+          if (importErrors.length > IMPORT_ERRORS_MAX) importErrors.length = IMPORT_ERRORS_MAX;
           console.log(
             JSON.stringify({
               evt: "plately_import_failed",
@@ -18759,7 +18764,7 @@ const server = http.createServer(async (request, response) => {
       try {
         await requireAdmin(request);
         if (!isPostgresEnabled()) {
-          return sendJson(response, 200, { ok: true, rows: [], recent: [], postgresEnabled: false });
+          return sendJson(response, 200, { ok: true, rows: [], recent: importErrors, postgresEnabled: false });
         }
         await ensurePostgresSchema();
         const pool = await getPostgresPool();
@@ -20528,6 +20533,27 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (/^\/api\/admin\/channels\/([^/]+)\/toggle$/.test(requestUrl.pathname) && request.method === "POST") {
+      try {
+        await requireAdmin(request);
+        const channelId = sanitizeText(decodeURIComponent(requestUrl.pathname.split("/")[4] || ""));
+        if (!channelId) return sendJson(response, 400, { ok: false, error: "channelId required" });
+
+        const body = await readRequestBody(request);
+        const channelKind = SEED_CHANNELS.some((ch) => ch.id === channelId) ? "seed" : "custom";
+        const st = await getChannelEnabledState();
+        const currentEnabled = channelKind === "seed" ? (st.seed[channelId] ?? Boolean(SEED_CHANNEL_DEFAULTS[channelId])) : (st.custom[channelId] ?? true);
+        const nextEnabled = body.enabled !== undefined ? Boolean(body.enabled) : !currentEnabled;
+        if (channelKind === "seed") st.seed[channelId] = nextEnabled;
+        else st.custom[channelId] = nextEnabled;
+        await setChannelEnabledState(st);
+        return sendJson(response, 200, { ok: true, channelId, channelKind, enabled: nextEnabled });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/channels/:channelId/toggle:", error.message);
+        return sendJson(response, error.statusCode || 500, { ok: false, error: error.message });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/channel-enabled" && request.method === "POST") {
       console.log("🔧 /api/admin/channel-enabled called");
       try {
@@ -20855,6 +20881,48 @@ const server = http.createServer(async (request, response) => {
       } catch (error) {
         console.error("❌ Error in /api/admin/channel-test/import:", error.message);
         return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/channel-stats" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        const channelMap = new Map();
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const result = await pool.query("SELECT app_state FROM plately_users");
+          for (const row of result.rows) {
+            const appState = typeof row.app_state === "object" ? row.app_state : JSON.parse(row.app_state || "{}");
+            for (const recipe of Array.isArray(appState.importedRecipes) ? appState.importedRecipes : []) {
+              let domain = "";
+              try { domain = new URL(recipe.sourceUrl || "").hostname.replace(/^www\./, ""); } catch { domain = "onbekend"; }
+              if (!domain) domain = "onbekend";
+              channelMap.set(domain, (channelMap.get(domain) || 0) + 1);
+            }
+          }
+        } else {
+          const db = await loadDatabase();
+          for (const user of Object.values(db.users || {})) {
+            for (const recipe of Array.isArray(user.importedRecipes) ? user.importedRecipes : []) {
+              let domain = "";
+              try { domain = new URL(recipe.sourceUrl || "").hostname.replace(/^www\./, ""); } catch { domain = "onbekend"; }
+              if (!domain) domain = "onbekend";
+              channelMap.set(domain, (channelMap.get(domain) || 0) + 1);
+            }
+          }
+        }
+
+        const total = Array.from(channelMap.values()).reduce((a, b) => a + b, 0) || 1;
+        const channels = Array.from(channelMap.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(([domain, count]) => ({ domain, count, percentage: Math.round((count / total) * 1000) / 10 }));
+
+        return sendJson(response, 200, { ok: true, channels, total });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/channel-stats:", error.message);
+        return sendJson(response, error.statusCode || 500, { ok: false, error: error.message });
       }
     }
 
