@@ -17900,6 +17900,146 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/admin/diagnose" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        const projectDataFile = path.join(ROOT_DIR, "data", "plately-db.json");
+        const currentDataFile = DATA_FILE;
+
+        let projectDb = null, currentDb = null;
+        try { projectDb = JSON.parse(await fsp.readFile(projectDataFile, "utf8")); } catch {}
+        try { currentDb = JSON.parse(await fsp.readFile(currentDataFile, "utf8")); } catch {}
+
+        const countUsers = (db) => db ? Object.keys(db.users || {}).length : null;
+        const countUsersWithEmail = (db) => db
+          ? Object.values(db.users || {}).filter(u => u.email).length : null;
+        const countUsersWithRecipes = (db) => db
+          ? Object.values(db.users || {}).filter(u => (u.importedRecipes || []).length > 0).length : null;
+
+        let postgresUsers = null;
+        if (isPostgresEnabled()) {
+          try {
+            await ensurePostgresSchema();
+            const pool = await getPostgresPool();
+            const r = await pool.query("SELECT id, email, app_state FROM plately_users");
+            postgresUsers = r.rows.map(u => ({
+              id: u.id,
+              email: u.email,
+              recipes: Array.isArray(u.app_state?.importedRecipes) ? u.app_state.importedRecipes.length : 0,
+            }));
+          } catch (e) { postgresUsers = { error: e.message }; }
+        }
+
+        sendJson(response, 200, {
+          ok: true,
+          postgresEnabled: isPostgresEnabled(),
+          dataDir: DATA_DIR,
+          dataFile: currentDataFile,
+          projectDataFile,
+          sameFile: currentDataFile === projectDataFile,
+          currentDb: {
+            exists: currentDb !== null,
+            totalUsers: countUsers(currentDb),
+            usersWithEmail: countUsersWithEmail(currentDb),
+            usersWithRecipes: countUsersWithRecipes(currentDb),
+          },
+          projectDb: currentDataFile !== projectDataFile ? {
+            exists: projectDb !== null,
+            totalUsers: countUsers(projectDb),
+            usersWithEmail: countUsersWithEmail(projectDb),
+            usersWithRecipes: countUsersWithRecipes(projectDb),
+            users: projectDb ? Object.values(projectDb.users || {})
+              .filter(u => u.email)
+              .map(u => ({ email: u.email, name: u.profile?.name || "", recipes: (u.importedRecipes || []).length }))
+              : [],
+          } : null,
+          postgresUsers,
+        });
+      } catch (e) {
+        sendJson(response, 500, { ok: false, error: e.message });
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/restore-users" && request.method === "POST") {
+      try {
+        await requireAdmin(request);
+
+        // Determine the source JSON db — prefer project data dir if different from current
+        const projectDataFile = path.join(ROOT_DIR, "data", "plately-db.json");
+        const sourceFile = DATA_FILE !== projectDataFile && await fsp.access(projectDataFile).then(() => true).catch(() => false)
+          ? projectDataFile
+          : DATA_FILE;
+
+        const raw = await fsp.readFile(sourceFile, "utf8").catch(() => null);
+        if (!raw) { sendJson(response, 404, { ok: false, error: `Geen data gevonden in ${sourceFile}` }); return; }
+        const sourceDb = JSON.parse(raw);
+        const sourceUsers = Object.values(sourceDb.users || {}).filter(u => u.email && (u.importedRecipes || []).length > 0);
+
+        if (!sourceUsers.length) { sendJson(response, 200, { ok: true, message: "Geen gebruikers met recepten gevonden om te herstellen.", sourceFile }); return; }
+
+        const results = [];
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          for (const u of sourceUsers) {
+            const email = sanitizeEmail(u.email);
+            const appState = sanitizeUserStatePayload(u, u);
+            try {
+              const existing = await pool.query("SELECT id FROM plately_users WHERE email = $1 LIMIT 1", [email]);
+              if (existing.rows[0]) {
+                // Update existing user's app_state if they have fewer recipes
+                const cur = await pool.query("SELECT app_state FROM plately_users WHERE id = $1", [existing.rows[0].id]);
+                const curRecipes = Array.isArray(cur.rows[0]?.app_state?.importedRecipes) ? cur.rows[0].app_state.importedRecipes.length : 0;
+                if (curRecipes < (appState.importedRecipes || []).length) {
+                  await pool.query(
+                    "UPDATE plately_users SET app_state = $2::jsonb, profile = $3::jsonb, updated_at = NOW() WHERE id = $1",
+                    [existing.rows[0].id, JSON.stringify(appState), JSON.stringify(appState.profile)]
+                  );
+                  results.push({ email, action: "updated", recipes: appState.importedRecipes.length });
+                } else {
+                  results.push({ email, action: "skipped (already has data)", recipes: curRecipes });
+                }
+              } else {
+                const userId = u.id || generateId("user");
+                await pool.query(
+                  "INSERT INTO plately_users (id, email, password_hash, password_salt, profile, app_state) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb) ON CONFLICT (email) DO NOTHING",
+                  [userId, email, u.password_hash || null, u.password_salt || null, JSON.stringify(appState.profile), JSON.stringify(appState)]
+                );
+                results.push({ email, action: "inserted", recipes: (appState.importedRecipes || []).length });
+              }
+            } catch (e) {
+              results.push({ email, action: "error", error: e.message });
+            }
+          }
+        } else {
+          // JSON db mode: copy to current DATA_FILE
+          const destDb = currentDb || { users: {}, sessions: {}, authSessions: {} };
+          let restored = 0;
+          for (const u of sourceUsers) {
+            const email = sanitizeEmail(u.email);
+            const existing = Object.values(destDb.users || {}).find(x => String(x.email || "").toLowerCase() === email);
+            if (!existing || !(existing.importedRecipes || []).length) {
+              destDb.users[u.id] = u;
+              restored++;
+              results.push({ email, action: "restored", recipes: (u.importedRecipes || []).length });
+            } else {
+              results.push({ email, action: "skipped", recipes: (existing.importedRecipes || []).length });
+            }
+          }
+          if (restored > 0) {
+            await fsp.writeFile(DATA_FILE, JSON.stringify(destDb), "utf8");
+          }
+        }
+
+        sendJson(response, 200, { ok: true, sourceFile, results });
+      } catch (e) {
+        sendJson(response, 500, { ok: false, error: e.message });
+      }
+      return;
+    }
+
     if (requestUrl.pathname === "/api/admin/overview" && request.method === "GET") {
       console.log("🧾 /api/admin/overview called");
       try {
