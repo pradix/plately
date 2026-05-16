@@ -16945,7 +16945,7 @@ const server = http.createServer(async (request, response) => {
         userExists = result.rows.length > 0;
       } else {
         const db = await loadDatabase();
-        userExists = Object.values(db.users).some((u) => u.email.toLowerCase() === email);
+        userExists = Object.values(db.users).some((u) => String(u.email || "").toLowerCase() === email);
       }
 
       if (!userExists) {
