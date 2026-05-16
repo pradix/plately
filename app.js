@@ -12316,6 +12316,18 @@ bindEvent(logoutButton, "click", () => {
     showToast("Uitloggen lukte niet.");
   });
 });
+
+bindEvent(document.getElementById("deleteAccountButton"), "click", async () => {
+  if (!confirm("Weet je zeker dat je je account wilt verwijderen? Al je recepten en gegevens worden permanent gewist.")) return;
+  try {
+    await fetchJson(`${state.apiBase}/api/auth/account`, { method: "DELETE" });
+    await logoutAccount();
+    showToast("Je account is verwijderd.");
+  } catch (error) {
+    showToast("Account verwijderen lukte niet. Probeer het opnieuw.");
+    console.error("Delete account error:", error);
+  }
+});
 bindEvent(shareProfileButton, "click", async () => {
   const profileUrl = window.location.href;
   if (navigator.share) {

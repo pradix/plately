@@ -80,6 +80,44 @@ function buildOtpEmailHtml({ heading, intro, code, outro }) {
 </html>`;
 }
 
+function buildWelcomeEmailHtml({ name }) {
+  const greeting = name ? `Hoi ${name},` : "Hoi,";
+  return `<!DOCTYPE html>
+<html lang="nl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0ebe3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0ebe3;padding:40px 16px">
+    <tr><td align="center">
+      <table width="100%" style="max-width:480px" cellpadding="0" cellspacing="0">
+        <tr><td align="center" style="padding-bottom:24px">
+          <img src="${_EMAIL_ICON_SRC}" alt="Plately" width="44" height="44"
+               style="display:block;border-radius:12px;border:0" />
+        </td></tr>
+        <tr><td style="background:#ffffff;border-radius:20px;padding:36px 36px 28px;box-shadow:0 2px 16px rgba(0,0,0,0.06)">
+          <h1 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#1a1a1a;line-height:1.3">Welkom bij Plately! 🎉</h1>
+          <p style="margin:0 0 16px;font-size:15px;color:#444;line-height:1.6">${greeting}</p>
+          <p style="margin:0 0 16px;font-size:15px;color:#444;line-height:1.6">Fijn dat je er bent! Met Plately bewaar je al je favoriete recepten op één plek en zet je ze eenvoudig om in een boodschappenlijst.</p>
+          <p style="margin:0 0 28px;font-size:15px;color:#444;line-height:1.6">Importeer je eerste recept via een link en ontdek hoe makkelijk koken kan zijn.</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px">
+            <tr><td align="center">
+              <a href="https://plately.nl" style="display:inline-block;background:#8da485;color:#fff;text-decoration:none;border-radius:14px;padding:14px 28px;font-size:15px;font-weight:600">Open Plately</a>
+            </td></tr>
+          </table>
+          <p style="margin:0;font-size:13px;color:#999;line-height:1.6">Vragen of opmerkingen? Stuur ons een mail via <a href="mailto:support@plately.nl" style="color:#5a7a5e;text-decoration:none">support@plately.nl</a>.</p>
+        </td></tr>
+        <tr><td align="center" style="padding-top:24px">
+          <p style="margin:0;font-size:12px;color:#aaa;line-height:1.6">
+            © ${new Date().getFullYear()} Plately &nbsp;·&nbsp;
+            <a href="https://plately.nl" style="color:#5a7a5e;text-decoration:none">plately.nl</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 // Lazy-loaded nodemailer (only when email is needed)
 let _nodemailer = null;
 function getNodemailer() {
@@ -17019,6 +17057,11 @@ const server = http.createServer(async (request, response) => {
           );
           user = inserted.rows[0];
           void recordEvent("auth_register", user.id, { method: "otp" });
+          void sendEmail({
+            to: email,
+            subject: "Welkom bij Plately! 🎉",
+            html: buildWelcomeEmailHtml({ name: storedName }),
+          }).catch((err) => console.error("❌ Welkomstmail mislukt:", err?.message || err));
         } else {
           void recordEvent("auth_login", user.id, { method: "otp" });
           // Restore client state if the server account has no recipes yet
@@ -17055,6 +17098,11 @@ const server = http.createServer(async (request, response) => {
           );
           db.users[userId] = user;
           await persistDatabase();
+          void sendEmail({
+            to: email,
+            subject: "Welkom bij Plately! 🎉",
+            html: buildWelcomeEmailHtml({ name: storedName }),
+          }).catch((err) => console.error("❌ Welkomstmail mislukt:", err?.message || err));
         } else {
           // Restore client state if the existing JSON db account has no recipes yet
           const existingUser = db.users[userId];
@@ -17095,6 +17143,33 @@ const server = http.createServer(async (request, response) => {
           email: "",
         },
       });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/auth/account" && request.method === "DELETE") {
+      let authUser = await getAuthenticatedUser(request).catch(() => null);
+      if (!authUser) authUser = await getDevAuthenticatedUser(request).catch(() => null);
+      if (!authUser) throw new HttpError(401, "Niet ingelogd.");
+
+      if (isPostgresEnabled()) {
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        await pool.query("DELETE FROM plately_auth_sessions WHERE user_id = $1", [authUser.id]);
+        await pool.query("DELETE FROM plately_users WHERE id = $1", [authUser.id]);
+      } else {
+        const db = await loadDatabase();
+        if (db.users?.[authUser.id]) delete db.users[authUser.id];
+        if (db.authSessions) {
+          for (const token of Object.keys(db.authSessions)) {
+            if (db.authSessions[token]?.userId === authUser.id) delete db.authSessions[token];
+          }
+        }
+        await persistDatabase();
+      }
+
+      await clearAuthSession(request, response).catch(() => {});
+      await clearDevAuthSession(request, response).catch(() => {});
+      sendJson(response, 200, { ok: true });
       return;
     }
 
