@@ -96,7 +96,7 @@ function getNodemailer() {
   return _nodemailer;
 }
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, text }) {
   const host = process.env.SMTP_HOST;
   const port = parseInt(process.env.SMTP_PORT || "587", 10);
   const user = process.env.SMTP_USER;
@@ -127,7 +127,7 @@ async function sendEmail({ to, subject, html }) {
     secure: port === 465,
     auth: { user, pass },
   });
-  await transporter.sendMail({ from, to, subject, html });
+  await transporter.sendMail({ from, to, subject, html, ...(text ? { text } : {}) });
 }
 
 const ROOT_DIR = __dirname;
@@ -16960,6 +16960,7 @@ const server = http.createServer(async (request, response) => {
         await sendEmail({
           to: email,
           subject: `${otpCode} — jouw Plately inlogcode`,
+          text: `Jouw Plately inlogcode: ${otpCode}\n\nDeze code is 10 minuten geldig.\nHeb je dit niet aangevraagd? Dan kun je deze e-mail veilig negeren.`,
           html: buildOtpEmailHtml({
             heading: isNewUser ? "Welkom bij Plately! 🎉" : "Jouw inlogcode",
             intro: `Gebruik de onderstaande code om ${isNewUser ? "je account aan te maken" : "in te loggen"}. De code is <strong>10 minuten</strong> geldig.`,
@@ -17219,6 +17220,7 @@ const server = http.createServer(async (request, response) => {
         await sendEmail({
           to: email,
           subject: `${otpCode} — Plately wachtwoord resetten`,
+          text: `Jouw Plately herstelcode: ${otpCode}\n\nDeze code is 15 minuten geldig.\nHeb je dit niet aangevraagd? Dan kun je deze e-mail veilig negeren.`,
           html: buildOtpEmailHtml({
             heading: "Wachtwoord vergeten?",
             intro: "Gebruik de onderstaande code om je wachtwoord opnieuw in te stellen. De code is <strong>15 minuten</strong> geldig.",
