@@ -489,8 +489,9 @@ function isAllowedImageProxyUrl(rawUrl) {
     if (ALLOW_HOSTS.has(host)) return true;
     // Allow subdomains of static.ah.nl (defensive; usually not needed)
     if (host.endsWith(".static.ah.nl")) return true;
-    // Jumbo product images
+    // Jumbo product images (CDN domeinen)
     if (host === "assets.jumbo.com" || host.endsWith(".assets.jumbo.com")) return true;
+    if (host.endsWith(".cloud.jumbo.com") || host === "cloud.jumbo.com") return true;
     // Serper / Google SERP thumbnails voor kanaalzoek
     if (host.endsWith(".googleusercontent.com") || host.endsWith(".gstatic.com")) return true;
     return false;
@@ -10929,28 +10930,25 @@ function _jumboFindProductsInObj(obj, depth, results) {
 }
 
 async function findJumboProduct(ingredient) {
-  // Strategie 0: Jumbo interne catalog API (JSON — snel en betrouwbaarder dan HTML scrapen)
+  // Strategie 0: Jumbo mobiele API — zelfde endpoint als de Jumbo-app gebruikt
   try {
-    const apiUrl = `https://www.jumbo.com/api/catalog/products?q=${encodeURIComponent(ingredient)}&size=5&from=0`;
-    const apiResp = await fetch(apiUrl, {
+    const mobileUrl = `https://mobileapi.jumbo.com/v17/search?q=${encodeURIComponent(ingredient)}&offset=0&limit=5`;
+    const mobileResp = await fetch(mobileUrl, {
       headers: {
-        ...FETCH_HEADERS,
+        "user-agent": "Jumbo/7.6.2 (Android)",
         accept: "application/json",
         "accept-language": "nl-NL,nl;q=0.9",
-        referer: "https://www.jumbo.com/",
       },
       signal: AbortSignal.timeout(8000),
     });
-    if (apiResp.ok) {
-      const data = await apiResp.json();
-      // Structuur: { products: { data: [ { product: { data: { id, title, prices, imageInfo } } } ] } }
-      const hits = data?.products?.data || data?.data || [];
-      for (const hit of hits) {
-        const p = hit?.product?.data || hit?.data || hit;
+    if (mobileResp.ok) {
+      const data = await mobileResp.json();
+      const hits = data?.products?.data || [];
+      for (const p of hits) {
         if (!p) continue;
         const id = String(p.id || "");
         const name = sanitizeText(p.title || "");
-        if (/^\d{4,8}[A-Z]{2,5}$/.test(id) && name.length > 2 && !NON_FOOD_INGREDIENT_PATTERN.test(name)) {
+        if (id.length >= 4 && name.length > 2 && !NON_FOOD_INGREDIENT_PATTERN.test(name)) {
           return {
             sku: id,
             name,
@@ -10962,7 +10960,7 @@ async function findJumboProduct(ingredient) {
     }
   } catch { /* val door naar HTML-scraping */ }
 
-  // Strategie 1-4: HTML scrapen als API mislukt
+  // Strategie 1-4: HTML scrapen als mobiele API mislukt
   const searchUrl = `https://www.jumbo.com/producten/?searchType=keyword&searchTerms=${encodeURIComponent(ingredient)}`;
   try {
     const response = await fetch(searchUrl, {

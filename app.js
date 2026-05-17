@@ -2370,9 +2370,18 @@ function getBasketHandoffUrl(preview) {
     return "https://www.ah.nl/mijnlijst/";
   }
   if (preview.store === "jumbo") {
-    // Jumbo basket URL format: /mandje/?add=[{"sku":"...","quantity":1}]
-    if (preview.directUrl) return preview.directUrl;
-    return preview.fallbackUrl || "https://www.jumbo.com/mandje/";
+    // Bouw URL dynamisch van geselecteerde producten (zoals AH), zodat wisselen ook werkt
+    const items = (preview.items || [])
+      .map((item) => {
+        const choice = item.choices?.[item.selectedChoiceIndex || 0];
+        const sku = choice?.productId || choice?.sku || "";
+        return sku ? { sku, quantity: 1 } : null;
+      })
+      .filter(Boolean);
+    if (items.length) {
+      return `https://www.jumbo.com/mandje/?add=${encodeURIComponent(JSON.stringify(items))}`;
+    }
+    return preview.directUrl || preview.fallbackUrl || "https://www.jumbo.com/mandje/";
   }
   const storeConfig = getStoreConfig(preview.store);
   return (
