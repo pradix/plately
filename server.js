@@ -10898,22 +10898,84 @@ function _parseJumboProduct(p) {
   return { sku, name, price, imageUrl };
 }
 
+/** Strip " of [alternatief]" uit ingredientnaam: "gember of laos" → "gember". */
+function _stripJumboIngredientAlternatives(raw) {
+  return raw
+    .replace(/\s+of\s+\S+(\s+\S+){0,2}$/i, "")  // "gember of laos", "peterselie of basilicum"
+    .replace(/\s*\([^)]*\)/g, "")                 // "(optioneel)", "(vers)"
+    .trim();
+}
+
+/** Eenvoudige relevantie-score voor Jumbo-producten (lager = beter). */
+function _scoreJumboProduct(productName, searchBase) {
+  const title = productName.toLowerCase();
+  const base = searchBase.toLowerCase();
+  let score = 0;
+
+  // Token overlap bonus
+  const titleTokens = new Set(title.split(/\W+/).filter(w => w.length > 1));
+  const baseTokens = base.split(/\W+/).filter(w => w.length > 1);
+  const overlap = baseTokens.filter(t => titleTokens.has(t)).length;
+  score -= overlap * 18;
+
+  // Phrase hit bonus
+  if (title.includes(base)) score -= 20;
+
+  // Geen enkele token overlap → sterke penalty
+  if (overlap === 0 && baseTokens.length >= 2) score += 60;
+
+  // Drank-penalty: product bevat volume-aanduiding of drank-woorden, ingredient is geen drank
+  const isIngredientDrink = /\b(sap|drank|limonade|siroop|frisdrank|bier|wijn|thee|koffie|smoothie)\b/i.test(base);
+  if (!isIngredientDrink) {
+    if (/\b\d+\s*(?:ml|cl|liter|l)\b/i.test(title)) score += 80;
+    if (/\b(energydrank|frisdrank|sportdrank|vitamine?\s*drink|limonade|siroop|karvan|appelsap|sinaasappelsap|smoothie|milkshake|chocomel|drinkpak)\b/i.test(title)) score += 100;
+    // "smaak" = smaakvariant van iets anders (bv. "Sinaasappel & Gember Smaak")
+    if (/\bsmaak\b/i.test(title) && !/\bsmaak(?:vol|maker)\b/i.test(title)) score += 90;
+    if (/\b(refresh|zero sugar|zero cal|light\b|sport\b)\b/i.test(title)) score += 60;
+  }
+
+  // Snoep-penalty
+  const isIngredientSweet = /\b(chocolade|cacao|suiker|stroop|honing|snoep|drop|koek)\b/i.test(base);
+  if (!isIngredientSweet) {
+    if (/\b(drop|snoep(?:goed)?|lolly|gummy|haribo|marshmallow|winegum)\b/i.test(title)) score += 150;
+  }
+
+  // Niet-eten penalty
+  if (NON_FOOD_INGREDIENT_PATTERN.test(title)) score += 400;
+
+  return score;
+}
+
+function _normalizeJumboSearchTerm(ingredient) {
+  const stripped = _stripJumboIngredientAlternatives(ingredient);
+  return (normalizeIngredientForSearch(stripped) || stripped).trim();
+}
+
 async function findJumboProducts(ingredient, limit = 12) {
   try {
+    const searchTerm = _normalizeJumboSearchTerm(ingredient);
+    if (!searchTerm || searchTerm.length < 2) return [];
+    const fetchLimit = Math.min(48, limit * 3);
     const resp = await fetch("https://www.jumbo.com/api/graphql", {
       method: "POST",
       headers: JUMBO_GQL_HEADERS,
       body: JSON.stringify({
         query: JUMBO_SEARCH_QUERY,
-        variables: { input: { searchTerms: ingredient, limit, offSet: 0, searchType: "keyword" } },
+        variables: { input: { searchTerms: searchTerm, limit: fetchLimit, offSet: 0, searchType: "keyword" } },
       }),
       signal: AbortSignal.timeout(10000),
     });
     if (!resp.ok) return [];
     const data = await resp.json();
-    return (data?.data?.searchProducts?.products || [])
+    const raw = (data?.data?.searchProducts?.products || [])
       .map(_parseJumboProduct)
       .filter(Boolean);
+    // Score en sorteer; filter harde mismatches weg als er betere opties zijn
+    const scored = raw.map(p => ({ p, score: _scoreJumboProduct(p.name, searchTerm) }));
+    scored.sort((a, b) => a.score - b.score);
+    const good = scored.filter(s => s.score < 120);
+    const final = (good.length >= 2 ? good : scored).slice(0, limit);
+    return final.map(s => s.p);
   } catch { return []; }
 }
 
