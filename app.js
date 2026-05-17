@@ -9172,7 +9172,7 @@ function addRecipeToGrocery(recipe) {
   schedulePersistAppState();
   if (added > 0) {
     showGrocerySplash();
-    fetchGroceryPhotos().finally(() => hideGrocerySplash());
+    Promise.resolve(fetchGroceryPhotos()).finally(() => hideGrocerySplash());
   }
   if (added || merged) {
     const gScreen = document.getElementById("groceryScreen");
@@ -11443,7 +11443,7 @@ function hideAHBasketSplash() {
       splash.classList.remove("ah-basket-splash--leaving");
       splash.setAttribute("aria-hidden", "true");
     }, 300);
-  }, 800);
+  }, 1500);
 }
 
 function hideImportSplash() {
