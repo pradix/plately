@@ -3947,8 +3947,18 @@ button.ingredient-item {
   align-items: center;
   justify-content: center;
   padding: 6px 10px;
-  width: auto;
   border-radius: 10px;
+}
+/* hogere specificiteit om width/overflow van .store-cta__logo te overschrijven */
+.store-cta__logo.store-cta__logo--jumbo-pill {
+  width: auto;
+  height: auto;
+  overflow: visible;
+  border-radius: 10px;
+}
+.store-cta__logo.store-cta__logo--jumbo-pill svg {
+  width: auto;
+  height: 28px;
 }
 .store-cta__jumbo-wordmark {
   width: 52px;
