@@ -717,13 +717,13 @@ function isPantryFiller(name) {
 const NON_FOOD_INGREDIENT_PATTERN =
   /\b(keukenpapier|bakpapier|sat[ée]prikkers?|cocktailprikkers?|aluminiumfolie|folie|servetten?|touw|spiesen?|prikker|tandpasta|tandgel|tandenborstel|mondspoeling|floss|shampoo|conditioner|douchegel|bodylotion|bodywash|handlotion|handcrème|zeep|vloeibare\s+zeep|wasmiddel|vaatwasmiddel|afwasmiddel|schoonmaakmiddel|allesreiniger|wc-reiniger|toiletblok|deodorant|anti-transpirant|parfum|eau\s+de|aftershave|scheerschuim|scheermesje?|scheergel|mascara|make-?up|foundation|lipstick|lippenstift|nagellak|zonnebrand|sunscreen|moisturizer|dagcrème|nachtcrème|toiletpapier|wc-papier|tissues?|wegwerpluier|maandverband|tampon|batterij(?:en)?|gloeilamp(?:en)?|spaarlamp|led-lamp|vuilniszak(?:ken)?|afvalzak|handdoek(?:en)?|washandje?|spons|sponzen|schuurspons|dweil|stofdoek)\b/i;
 
-/** Keukengerei dat soms als “ingredient” uit recepttekst komt — hoort niet in de boodschappenlijst-import. */
+/** Keukengerei dat soms als "ingredient" uit recepttekst komt — hoort niet in de boodschappenlijst-import. */
 const KITCHEN_TOOL_INGREDIENT_RE =
   /\b(?:mes(?:sen)?|schilmes(?:je)?|broodmes|fileermes|koksmes|(?:kinder)?koksmes|vleesmes|hakmes|pan(?:netje)?|pannen|steelpan(?:netje)?|sauspan|koekenpan|wok|braadpan|grillpan(?:nen?)?|(?:grill|grilles)[\s-]*pan(?:nen?)?|(?:oven|bak)[\s-]*(?:schaal(?:en)?|bakplaat(?:en)?|vorm(?:en)?)|ovenschaal(?:en)?|ovenschotel(?:s)?|bakvorm(?:en)?|cakevorm(?:en)?|muffinvorm(?:en)?|springvorm(?:en)?|taartvorm(?:en)?|pizzasteen|pollepel(?:s)?|houten\s+lepel|eetlepel|dessertlepel|soeplepel|spatel(?:s)?|tang(?:en)?|pincet(?:ten)?|mengkom(?:men)?|slakom(?:men)?|kom(?:men?|metje)?|kommetje|schaal(?:tje)?|bak(?:je)?(?:\s+(?:koud|warm|heet|ijskoud)\s+water)?|zeef(?:jes)?|vergiet(?:en)?|puntzeef|keukenzeef|snijplank(?:en)?|hakplank(?:en)?|rasp(?:en)?|mandoline|staafmixer|(?:hand|keuken)?mixer|keukenmachine|blender|foodprocessor|knoflookpers|knoflook\s*[-–]\s*pers|garlic\s+press|siliconen(?:e)?\s*bakmat|bakmat(?:ten)?|bakpapier|pastabord(?:en)?|servies|bestek|bord(?:en)?|vleesthermometer|suikerthermometer|thermometer|deegroller(?:s)?|taartrooster(?:s)?|koelrek(?:ken)?|ovenrooster(?:s)?|theedoek(?:en)?|ovenwant(?:en)?|ovenhandschoen(?:en)?|bamboematje|bamboeplank|dunschiller(?:s)?|aardappelschiller|groenteschiller|kan(?:nen)?(?:\s+(?:koud|warm|heet)\s+water)?|kruik(?:en)?|bakje\s+(?:koud|warm|heet|ijskoud)?\s*water|kom(?:metje)?\s+(?:koud|warm|heet|ijskoud)\s*water|huishoudfolie|aluminiumfolie|plasticfolie|weegschaal|keukenweegschaal|deegschraper(?:s)?|bankstrijker|vijzel|stamper)\b/i;
 
 /**
  * AH-zoekresultaten worden consistenter bij enkelvoud (tomaten/aubergines/courgettes → singular).
- * Alleen veilige lemma’s — geen blinde `-en`/`-s`-strip (anders “gehakt”, “bouillon”, … ).
+ * Alleen veilige lemma’s — geen blinde `-en`/`-s`-strip (anders "gehakt", "bouillon", … ).
  */
 function singularizeDutchIngredientPhraseForSearch(phrase) {
   let s = sanitizeText(String(phrase || "").toLowerCase()).replace(/\s+/g, " ").trim();
@@ -777,34 +777,34 @@ function singularizeDutchIngredientPhraseForSearch(phrase) {
 // ── Ingredient search normalisation ──────────────────────────────────────────
 // Strips quantities, descriptors and maps variants to the best AH search term.
 function normalizeIngredientForSearch(raw) {
-  let t = (raw || “”).toLowerCase().trim();
+  let t = (raw || "").toLowerCase().trim();
 
-  // Typo's / OCR: “kom kommer”, “kom kommmer” → komkommer (AH catalogue uses one word).
+  // Typo's / OCR: "kom kommer", "kom kommmer" → komkommer (AH catalogue uses one word).
   if (/\bkom\s+kom+m?ers?\b/i.test(t)) {
-    t = t.replace(/\bkom\s+kom+m?ers?\b/gi, “komkommers”);
+    t = t.replace(/\bkom\s+kom+m?ers?\b/gi, "komkommers");
   } else if (/\bkom\s+kom+m?er\b/i.test(t)) {
-    t = t.replace(/\bkom\s+kom+m?er\b/gi, “komkommer”);
+    t = t.replace(/\bkom\s+kom+m?er\b/gi, "komkommer");
   }
 
-  // 0. Strip leading Dutch article / vague quantity words (“een”, “half”, “paar”, “wat”, “enkele”)
-  t = t.replace(/^(?:een\s+|één\s+|'n\s+|wat\s+|paar\s+|enkele\s+|halve?\s+|half\s+een\s+)/, “”).trim();
+  // 0. Strip leading Dutch article / vague quantity words ("een", "half", "paar", "wat", "enkele")
+  t = t.replace(/^(?:een\s+|één\s+|'n\s+|wat\s+|paar\s+|enkele\s+|halve?\s+|half\s+een\s+)/, "").trim();
 
   // 0b. Strip leading vague measure words that add no search value.
-  //     “handjevol peterselie” → “peterselie”
-  //     “scheut olijfolie” → “olijfolie”
-  //     “snufje zout” → “zout” (but then normalizes to “keukenzout” below)
-  t = t.replace(/^(?:handjevol|handje|handjes|scheut(?:je)?|scheutje|snuf(?:je)?|klontje|klont|druppel(?:tje)?|stukje|stukken?|takje|takjes|blaadje|blaadjes|bosje|bosjes)\s+/, “”).trim();
+  //     "handjevol peterselie" → "peterselie"
+  //     "scheut olijfolie" → "olijfolie"
+  //     "snufje zout" → "zout" (but then normalizes to "keukenzout" below)
+  t = t.replace(/^(?:handjevol|handje|handjes|scheut(?:je)?|scheutje|snuf(?:je)?|klontje|klont|druppel(?:tje)?|stukje|stukken?|takje|takjes|blaadje|blaadjes|bosje|bosjes)\s+/, "").trim();
 
-  // 0c. Strip container/packaging words + optional “van” (“blik tomaten”, “pot pesto”, “pakje vanillesuiker”)
-  t = t.replace(/^(?:blik(?:je)?\s+(?:van\s+)?|pot(?:je)?\s+(?:van\s+)?|pakje\s+(?:van\s+)?|zakje\s+(?:van\s+)?|fles(?:je)?\s+(?:van\s+)?|tube\s+(?:van\s+)?|doosje\s+(?:van\s+)?|beker(?:tje)?\s+(?:van\s+)?)/, “”).trim();
+  // 0c. Strip container/packaging words + optional "van" ("blik tomaten", "pot pesto", "pakje vanillesuiker")
+  t = t.replace(/^(?:blik(?:je)?\s+(?:van\s+)?|pot(?:je)?\s+(?:van\s+)?|pakje\s+(?:van\s+)?|zakje\s+(?:van\s+)?|fles(?:je)?\s+(?:van\s+)?|tube\s+(?:van\s+)?|doosje\s+(?:van\s+)?|beker(?:tje)?\s+(?:van\s+)?)/, "").trim();
 
   // 0d. High-impact container+ingredient mappings (before generic normalization).
-  if (/^(?:blik|pot|pak)\s+tomaten?/.test(t)) return “tomaten gepeld”;
-  if (/^(?:blik|pot)\s+kokosmelk/.test(t)) return “kokosmelk”;
-  if (/^(?:blik|pot)\s+kikkererwten/.test(t)) return “kikkererwten”;
-  if (/^(?:blik|pot)\s+kidneybonen/.test(t)) return “kidneybonen”;
-  if (/^(?:blik|pot)\s+linzen/.test(t)) return “linzen”;
-  if (/^(?:blik|pot)\s+mais/.test(t)) return “maïs”;
+  if (/^(?:blik|pot|pak)\s+tomaten?/.test(t)) return "tomaten gepeld";
+  if (/^(?:blik|pot)\s+kokosmelk/.test(t)) return "kokosmelk";
+  if (/^(?:blik|pot)\s+kikkererwten/.test(t)) return "kikkererwten";
+  if (/^(?:blik|pot)\s+kidneybonen/.test(t)) return "kidneybonen";
+  if (/^(?:blik|pot)\s+linzen/.test(t)) return "linzen";
+  if (/^(?:blik|pot)\s+mais/.test(t)) return "maïs";
 
   // 1. Strip leading numeric quantity + optional unit
   t = t.replace(
@@ -969,7 +969,7 @@ const CHANNEL_SEARCH_SERPER_FALLBACK_IDS = new Set(["ch-ah", "ch-mj", "ch-ek"]);
 const SEARCH_WP_REST_FIRST_IDS = new Set(["ch-mj", "ch-ek"]);
 
 /**
- * Miljuschka/Eef (seed) + admin “nieuw kanaal” / user custom (ch-preview-*, ch-custom-*): zelfde Cloudflare-probleem.
+ * Miljuschka/Eef (seed) + admin "nieuw kanaal" / user custom (ch-preview-*, ch-custom-*): zelfde Cloudflare-probleem.
  * Zonder Serper (`SERPER_API_KEY`) geeft de server vaak 0 resultaten terwijl de site in de browser wel treffers heeft.
  */
 function channelIdUsesSerperFallback(channelId) {
@@ -981,7 +981,7 @@ function channelIdUsesSerperFallback(channelId) {
 
 /**
  * Kanalen waar zoekresultaten uit de eigen site-index komen; titels herhalen het zoekwoord niet altijd
- * (bv. query „surinaamse” → „Klassieke roti zelf maken”).
+ * (bv. query „surinaamse" → „Klassieke roti zelf maken").
  * Miljuschka / Eef: vaak Serper Google `site:` hits — titel/snippet komen van Google, geen strikte woordmatch.
  */
 const CHANNEL_SEARCH_TRUST_SITE_INDEXER_IDS = new Set(["ch-ah", "ch-clf", "ch-mj", "ch-ek"]);
@@ -1013,7 +1013,7 @@ function loadStaticJsonArray(relPath, fallback = []) {
 
 // These are used for admin SEO backfills so public recipe pages are seeded from real search intent.
 // Shared with the client via static asset for consistency.
-// The NL keyword JSON is curated for dish/cuisine-style queries (not diet macros or “vrije” filters).
+// The NL keyword JSON is curated for dish/cuisine-style queries (not diet macros or "vrije" filters).
 const SEO_RECIPE_BACKFILL_KEYWORDS = loadStaticJsonArray("assets/seo-recipe-keywords.nl.json", [
   "Pasta",
   "Kip",
@@ -3356,7 +3356,7 @@ function mapEnglishIngredientPhraseForNlStore(phrase) {
     ["powdered sugar", "poedersuiker"],
   ]);
   if (exact.has(s)) return exact.get(s);
-  // Alleen hele begintermen (geen losse substring → vermijdt “lime & cilantro”-verkeerde hits).
+  // Alleen hele begintermen (geen losse substring → vermijdt "lime & cilantro"-verkeerde hits).
   const prefixPairs = [
     ["coriander leaves", "koriander"],
     ["fresh coriander", "koriander"],
@@ -4111,7 +4111,7 @@ function stripSocialUiArtifacts(text) {
 
     // If social UI lines were removed above, a scraped prefix might become the new first line.
     // Strip it here as well so the remaining caption starts cleanly.
-    line = line.replace(scrapedPrefixPattern, "").replace(/^["“”]+|["“”]+$/g, "").trim();
+    line = line.replace(scrapedPrefixPattern, "").replace(/^["""]+|["""]+$/g, "").trim();
     if (!line) {
       continue;
     }
@@ -4154,7 +4154,7 @@ function stripSocialNoise(text) {
   // 'username on April 26, 2026: "caption..."'
   out = out
     .replace(/^\s*(?:[-•]\s*)?[\p{L}\p{N}._-]+\s+on\s+[A-Za-z]+\s+\d{1,2},\s+\d{4}\s*:\s*/iu, "")
-    .replace(/^["“”]+|["“”]+$/g, "");
+    .replace(/^["""]+|["""]+$/g, "");
 
   // If caption contains multiple quantity tokens in a row, it's often an ingredient run.
   // Turn "voor 1 tosti 1 ui 2 plakken brood ..." into newline-separated items.
@@ -5561,16 +5561,16 @@ function isBenignOrEmptyUrlSearch(search) {
 /** Miljuschka / EEF: Cloudflare blokkeert datacenter-requests; gebruik Reader als eerste fetch niet lukt. */
 const JINA_READER_RECIPE_HOST_ALLOWLIST = new Set(["miljuschka.nl", "eefkooktzo.nl", "culy.nl"]);
 
-/** 422 voor Miljuschka / Eef: Jina CF-/403 of kale 403-HTML — per site, niet “Miljuschka én Eef”. */
+/** 422 voor Miljuschka / Eef: Jina CF-/403 of kale 403-HTML — per site, niet "Miljuschka én Eef". */
 function importBlockedReaderAllowlistMessage(hostname) {
   const h = String(hostname || "").toLowerCase().replace(/^www\./, "");
   if (h === "eefkooktzo.nl") {
-    return "Eef Kookt Zo geeft onze servers (en Jina Reader) hier geen recepttekst door — dit komt vaak door een beveiligingslaag tegen bots. Open het recept via “Bekijk” in je browser, of probeer later opnieuw.";
+    return "Eef Kookt Zo geeft onze servers (en Jina Reader) hier geen recepttekst door — dit komt vaak door een beveiligingslaag tegen bots. Open het recept via 'Bekijk' in je browser, of probeer later opnieuw.";
   }
   if (h === "miljuschka.nl") {
-    return "Miljuschka geeft onze servers (en Jina Reader) hier geen recepttekst door — dit komt vaak door een beveiligingslaag tegen bots. Open het recept via “Bekijk” in je browser, of probeer later opnieuw.";
+    return "Miljuschka geeft onze servers (en Jina Reader) hier geen recepttekst door — dit komt vaak door een beveiligingslaag tegen bots. Open het recept via 'Bekijk' in je browser, of probeer later opnieuw.";
   }
-  return "Deze site laat automatisch importeren vaak niet toe. Open het recept via “Bekijk” of probeer later opnieuw.";
+  return "Deze site laat automatisch importeren vaak niet toe. Open het recept via 'Bekijk' of probeer later opnieuw.";
 }
 
 function hostMatchesReaderAllowlist(hostname) {
@@ -9526,6 +9526,28 @@ function parseAHProduct(product) {
   const betterLifeStars = getBetterLifeStars(product);
   if (betterLifeStars === 1) canonical.push("beter leven 1 ster");
 
+  // Extraheer AH taxonomie/categorie — veldnamen variëren per API-versie.
+  // AH stuurt typisch: product.taxonomies[0].name, product.mainCategory.name of product.category.name
+  const extractTaxonomyName = (p) => {
+    // Probeer meerdere bekende veldnamen.
+    const candidates = [
+      p?.taxonomyName,
+      p?.mainCategory?.name,
+      p?.category?.name,
+      Array.isArray(p?.taxonomies) && p.taxonomies[0]?.name,
+      Array.isArray(p?.taxonomy) && p.taxonomy[0]?.name,
+      p?.categoryName,
+      p?.segment?.name,
+      p?.mainSegment?.name,
+      p?.segmentName,
+    ];
+    for (const c of candidates) {
+      if (typeof c === "string" && c.trim()) return c.trim().toLowerCase();
+    }
+    return null;
+  };
+  const taxonomyName = extractTaxonomyName(product);
+
   return {
     id: numericId,
     name: sanitizeText(product.title),
@@ -9535,6 +9557,7 @@ function parseAHProduct(product) {
     labels: [...new Set([...labels.map((l) => sanitizeText(l)).filter(Boolean), ...canonical])],
     isBonus,
     promotionLabel,
+    taxonomyName,
     matchMeta:
       product && typeof product === "object" && product._platelyMatchMeta && typeof product._platelyMatchMeta === "object"
         ? product._platelyMatchMeta
@@ -10368,7 +10391,7 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
           score -= 10;
           adjustments.push({ kind: "bonus", label: "Vers (per stuk / los)", delta: -10 });
         }
-        // Whole courgette ≠ spiralen/noedels-vervangers (AH catalog heeft veel “spaghetti”).
+        // Whole courgette ≠ spiralen/noedels-vervangers (AH catalog heeft veel "spaghetti").
         if (/\bcourgu?ettes?\b/.test(baseLower) &&
           /\b(?:courgetti|courgette\s*[~-–]\s*spaghetti|vegetable\s+noodles|veg(?:gie)?(?:\s*|-)?(?:pasta|noodles?))\b/i.test(title)) {
           score += 55;
@@ -10427,9 +10450,81 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       return detail;
     };
 
-    // Harde score-drempel: producten met score > SCORE_HARD_REJECT worden uitgesloten
-    // zodra er voldoende goede alternatieven zijn. Voorkomt dat duidelijk irrelevante
-    // producten (hoge penalty) toch verschijnen als AH weinig resultaten teruggeeft.
+    // ── AH CATEGORIE-FILTER ──────────────────────────────────────────────────
+    // AH stuurt per product een taxonomie/categorie mee (bv. "vlees, kip & vis",
+    // "groente & fruit", "zuivel, eieren & boter"). Als die beschikbaar is én
+    // duidelijk buiten de verwachte categorie van het ingrediënt valt, krijgt
+    // het product een extra penalty. Geen harde reject — ontbrekende categoriedata
+    // laat het product gewoon door.
+
+    // Extraheer de ruwe taxonomienaam uit een AH product-object.
+    const getRawTaxonomy = (p) => {
+      const candidates = [
+        p?.taxonomyName,
+        p?.mainCategory?.name,
+        p?.category?.name,
+        Array.isArray(p?.taxonomies) && p.taxonomies[0]?.name,
+        Array.isArray(p?.taxonomy) && p.taxonomy[0]?.name,
+        p?.categoryName,
+        p?.segment?.name,
+        p?.mainSegment?.name,
+        p?.segmentName,
+      ];
+      for (const c of candidates) {
+        if (typeof c === "string" && c.trim()) return c.trim().toLowerCase();
+      }
+      return null;
+    };
+
+    // Definieer welke AH-categorieën VERWACHT worden voor dit type ingrediënt.
+    // Lege array = geen categorie-eis (penalty nooit van toepassing).
+    const getExpectedCategoryFragments = () => {
+      if (isMeatOrFishQuery) return ["vlees", "kip", "vis", "zeevruchten", "diepvries", "schaaldier", "gevogelte", "salami", "worst", "vleeswaren"];
+      if (isFruitQuery)      return ["groente", "fruit", "diepvries", "aardappel", "noten", "biologisch"];
+      if (isBroadFreshVegQuery || isPlainFreshVegIngredient) return ["groente", "fruit", "diepvries", "aardappel", "biologisch"];
+      if (isEggQuery)        return ["zuivel", "eieren", "boter", "biologisch"];
+      if (isNutOrSeedQuery)  return ["noten", "zaden", "pitten", "gezond", "biologisch", "diepvries", "groente"];
+      if (isPlainMilkQuery)  return ["zuivel", "melk", "biologisch"];
+      return [];
+    };
+
+    // Categorieën die NOOIT kloppen voor voedingsingrediënten — ongeacht ingrediënttype.
+    const NEVER_FOOD_CATEGORIES = [
+      "huisdier", "dierenvoeding", "diervoer", "hond", "kat", "vogel", "vis voer",
+      "verzorging", "beauty", "cosmetica", "schoonheid", "haarverzorging",
+      "schoonmaakmiddel", "wasmiddel", "huishoud", "keukenrol", "papier",
+      "baby verzorging", "luier",
+    ];
+
+    const CATEGORY_MISMATCH_PENALTY = 130;
+    const NEVER_FOOD_PENALTY = 400;
+
+    const getCategoryPenalty = (p) => {
+      const tax = getRawTaxonomy(p);
+      if (!tax) return 0; // geen data → geen penalty
+
+      // Altijd-fout categorieën (diervoer, cosmetica, etc.)
+      if (NEVER_FOOD_CATEGORIES.some((f) => tax.includes(f))) return NEVER_FOOD_PENALTY;
+
+      // Ingrediënt-specifieke categorie-check
+      const expected = getExpectedCategoryFragments();
+      if (!expected.length) return 0;
+      const matches = expected.some((f) => tax.includes(f));
+      return matches ? 0 : CATEGORY_MISMATCH_PENALTY;
+    };
+
+    const scoreCache2 = new Map();
+    const getTotalScore = (p) => {
+      const key = String(p?.title || "") + "|" + (getRawTaxonomy(p) || "");
+      if (scoreCache2.has(key)) return scoreCache2.get(key);
+      const titleScore = getDetailedScore(p.title || "").score;
+      const catPenalty = getCategoryPenalty(p);
+      const total = titleScore + catPenalty;
+      scoreCache2.set(key, total);
+      return total;
+    };
+
+    // Harde score-drempel (titel + categorie gecombineerd).
     const SCORE_HARD_REJECT = 160;
     const MIN_GOOD_RESULTS = 2;
 
@@ -10438,9 +10533,9 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       .filter((p) => ingredientMatchesAnyProductTerm(matchTerms, sanitizeText(p.title)))
       .filter((p) => (wantsToastLike ? true : !/\bmelbatoast\b/i.test(String(p?.title || ""))))
       .sort((a, b) => {
-        const sa = getDetailedScore(a.title || "");
-        const sb = getDetailedScore(b.title || "");
-        if (sa.score !== sb.score) return sa.score - sb.score;
+        const sa = getTotalScore(a);
+        const sb = getTotalScore(b);
+        if (sa !== sb) return sa - sb;
         const pa = a.currentPrice ?? a.priceBeforeBonus ?? 9999;
         const pb = b.currentPrice ?? b.priceBeforeBonus ?? 9999;
         if (pa !== pb) return pa - pb;
@@ -10451,7 +10546,7 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       });
 
     // Pas harde drempel toe: filter hoog-scorende producten weg als er goede alternatieven zijn.
-    const goodOnes = sorted.filter((p) => getDetailedScore(p.title || "").score <= SCORE_HARD_REJECT);
+    const goodOnes = sorted.filter((p) => getTotalScore(p) <= SCORE_HARD_REJECT);
     const products = (goodOnes.length >= MIN_GOOD_RESULTS ? goodOnes : sorted).slice(0, count);
 
     // Attach match metadata for "Waarom?" explanations.
@@ -10460,6 +10555,9 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         const detail = getDetailedScore(p?.title || "");
         p._platelyMatchMeta = {
           score: Number.isFinite(detail?.score) ? detail.score : null,
+          totalScore: getTotalScore(p),
+          categoryPenalty: getCategoryPenalty(p),
+          taxonomyName: getRawTaxonomy(p),
           matchedTokens: Array.isArray(detail?.matchedTokens) ? detail.matchedTokens : [],
           appliedPenalties: Array.isArray(detail?.appliedPenalties) ? detail.appliedPenalties : [],
           appliedBonuses: Array.isArray(detail?.appliedBonuses) ? detail.appliedBonuses : [],
@@ -12254,7 +12352,7 @@ function titleQueryScore(title, query) {
 
   // Strict whole-word hits
   let hits = escWords.filter((ew, i) => new RegExp(`\\b${ew}\\b`, "i").test(t)).length;
-  // Dutch compounds: „pastasaus”, „pastarecept” voor querywoord „pasta”
+  // Dutch compounds: „pastasaus", „pastarecept" voor querywoord „pasta"
   if (hits / words.length < 0.5) {
     const prefixHits = escWords.filter((ew) => new RegExp(`\\b${ew}`, "i").test(t)).length;
     hits = Math.max(hits, prefixHits);
@@ -14398,7 +14496,7 @@ async function searchChannelRecipes(query, allowedChannels = null, options = {})
   // ch-mj / ch-ek + custom/preview channels may need Serper; give their Google round-trip time to land.
   const allowNeedsSerperSlack =
     !allow || [...allow].some((id) => channelIdUsesSerperFallback(id));
-  // Few channels selected: extra “variety” waits add latency without much benefit.
+  // Few channels selected: extra "variety" waits add latency without much benefit.
   const tightMode = Boolean(allow && allow.size > 0 && allow.size <= 4);
   // First slice: keep snappy, but Serper + some store APIs often need 3–6s in multi-channel mode.
   const GLOBAL_DEADLINE_MS = singleChannelMode
