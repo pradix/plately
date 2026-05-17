@@ -3958,9 +3958,6 @@ function switchView(view, opts = {}) {
 
   const prevView = state.view;
   state.view = view;
-  if (view === "grocery" && getGroceryPhotoRefreshItems().length) {
-    groceryScreen?.classList.add("grocery--preparing");
-  }
   homeScreen.classList.toggle("screen--active", view === "home");
   detailScreen.classList.toggle("screen--active", view === "detail");
   groceryScreen.classList.toggle("screen--active", view === "grocery");
@@ -7425,35 +7422,17 @@ function groceryItemNeedsPhotoRefresh(item) {
   return Boolean(item && !item.checked && (!item.imageUrl || String(item.imageUrl).startsWith("/api/image-proxy")));
 }
 
-function getGroceryPhotoRefreshItems(limit = 20) {
-  return state.groceryItems
-    .filter((item) => groceryItemNeedsPhotoRefresh(item))
-    .slice(0, limit);
-}
-
-function preloadGroceryImage(url) {
-  const src = normalizeChannelThumbnailUrl(url);
-  if (!src) return Promise.resolve();
-  return new Promise((resolve) => {
-    const img = new Image();
-    const done = () => resolve();
-    const timer = setTimeout(done, 1600);
-    img.onload = () => { clearTimeout(timer); done(); };
-    img.onerror = () => { clearTimeout(timer); done(); };
-    img.src = src;
-  });
-}
-
 async function fetchGroceryPhotos() {
   if (_groceryPhotoFetchInFlight) return _groceryPhotoFetchInFlight;
 
-  const itemsWithoutPhoto = getGroceryPhotoRefreshItems()
+  const itemsWithoutPhoto = state.groceryItems
+    .filter((item) => groceryItemNeedsPhotoRefresh(item))
     .slice(0, 20);
   if (!itemsWithoutPhoto.length) return;
 
   const screen = document.getElementById("groceryScreen");
   if (state.view === "grocery") {
-    screen?.classList.add("grocery--loading", "grocery--preparing");
+    screen?.classList.add("grocery--loading");
   }
 
   _groceryPhotoFetchInFlight = (async () => {
@@ -7469,18 +7448,13 @@ async function fetchGroceryPhotos() {
       const data = await resp.json();
       const photos = data.photos || {};
       let changed = false;
-      const preloadUrls = [];
       for (const [groceryId, url] of Object.entries(photos)) {
         if (!url) continue;
         const item = state.groceryItems.find((i) => i.id === groceryId);
         if (item && groceryItemNeedsPhotoRefresh(item)) {
           item.imageUrl = url;
-          preloadUrls.push(url);
           changed = true;
         }
-      }
-      if (preloadUrls.length) {
-        await Promise.allSettled(preloadUrls.map(preloadGroceryImage));
       }
       if (changed) {
         schedulePersistAppState();
@@ -7491,7 +7465,7 @@ async function fetchGroceryPhotos() {
     } catch {
       // silently ignore
     } finally {
-      screen?.classList.remove("grocery--loading", "grocery--preparing");
+      screen?.classList.remove("grocery--loading");
       _groceryPhotoFetchInFlight = null;
     }
   })();
