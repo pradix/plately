@@ -5542,59 +5542,43 @@ function renderRecentImports() {
   const grid = document.getElementById("recentImportsGrid");
   if (!heading || !grid) return;
 
-  // Only show recipes the user actually saved (newest first)
-  const imported = getSavedImportedRecipes().slice(0, 4);
+  const all = getSavedImportedRecipes();
+  if (!all.length) {
+    heading.classList.add("hidden");
+    grid.innerHTML = "";
+    return;
+  }
 
   heading.classList.remove("hidden");
 
-  // Recipe cards + fill remaining slots with an "add" card (up to 4 total)
-  const cards = imported.map((recipe) => {
-    const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
-    return `
-    <button class="recent-card" type="button" data-recipe-id="${escapeHtml(recipe.id)}">
-      <img class="recent-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title)}" loading="lazy" decoding="async" draggable="false" />
-      ${faviconUrl ? `<span class="recent-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" decoding="async" /></span>` : ""}
-      <div class="recent-card__body">
-        <p class="recent-card__title">${escapeHtml(recipe.title)}</p>
-        <p class="recent-card__meta">${escapeHtml(recipe.time || "")}</p>
-      </div>
-    </button>
-  `;
-  });
-
-  // Add a + import card in the empty slots
-  const slotsLeft = Math.max(0, 4 - imported.length);
-  for (let i = 0; i < Math.min(slotsLeft, imported.length === 0 ? 1 : 1); i++) {
-    cards.push(`
-      <button class="recent-card recent-card--add" type="button" id="recentAddButton">
-        <div class="recent-card__add-icon">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-        </div>
-        <div class="recent-card__body">
-          <p class="recent-card__title">Recept toevoegen</p>
-          <p class="recent-card__meta">Importeer via link</p>
-        </div>
-      </button>
-    `);
-  }
+  // Pick a random recipe — different index each render
+  const recipe = all[Math.floor(Math.random() * all.length)];
+  const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
+  const meta = [recipe.time, recipe.servings ? `${recipe.servings} personen` : ""].filter(Boolean).join(" · ");
 
   perfMeasure("renderRecentImports", () => {
-    grid.innerHTML = cards.join("");
+    grid.innerHTML = `
+      <button class="today-recipe-card" type="button" data-recipe-id="${escapeHtml(recipe.id)}">
+        <div class="today-recipe-card__img-wrap">
+          <img class="today-recipe-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title)}" loading="lazy" decoding="async" draggable="false" />
+          ${faviconUrl ? `<span class="today-recipe-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" decoding="async" /></span>` : ""}
+        </div>
+        <div class="today-recipe-card__body">
+          <p class="today-recipe-card__title">${escapeHtml(recipe.title)}</p>
+          ${meta ? `<p class="today-recipe-card__meta">${escapeHtml(meta)}</p>` : ""}
+        </div>
+        <span class="today-recipe-card__arrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </span>
+      </button>
+    `;
   });
   wireRecipeCardImageFallbacks(grid);
 
-  // Bind once: event delegation prevents per-render listener churn.
   if (!grid.dataset.bound) {
     grid.dataset.bound = "1";
     grid.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const add = target.closest("#recentAddButton");
-      if (add) {
-        document.getElementById("openImportButton")?.click();
-        return;
-      }
-      const card = target.closest(".recent-card[data-recipe-id]");
+      const card = event.target instanceof Element ? event.target.closest(".today-recipe-card[data-recipe-id]") : null;
       if (!(card instanceof HTMLElement)) return;
       const id = card.dataset.recipeId;
       if (!id) return;

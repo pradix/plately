@@ -9,7 +9,7 @@
       name="description"
       content="Plately is een webapp om recepten van Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.21.33" />
+    <meta name="plately-build" content="1.0.21.34" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -38,9 +38,9 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="preload" href="styles.css?v=1.0.21.33" as="style" />
-    <link rel="preload" href="app.js?v=1.0.21.33" as="script" />
-    <link rel="stylesheet" href="styles.css?v=1.0.21.33" />
+    <link rel="preload" href="styles.css?v=1.0.21.34" as="style" />
+    <link rel="preload" href="app.js?v=1.0.21.34" as="script" />
+    <link rel="stylesheet" href="styles.css?v=1.0.21.34" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -159,12 +159,11 @@
             </form>
           </section>
 
-          <!-- Recentelijk toegevoegd -->
+          <!-- Wat eten we vandaag -->
           <section class="section-heading hidden" id="recentImportsHeading">
-            <h2>Recentelijk</h2>
-            <button type="button" class="ghost-link" id="viewAllImportsButton">Bekijk alles</button>
+            <h2>Wat eten we vandaag?</h2>
           </section>
-          <div class="recent-imports-grid" id="recentImportsGrid"></div>
+          <div id="recentImportsGrid"></div>
 
           <div id="homeConceptsBanner" class="home-concepts-banner hidden" role="status" aria-live="polite"></div>
           <section class="section-heading hidden" id="homeConceptsHeading">
@@ -2651,6 +2650,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=1.0.21.33" defer></script>
+    <script src="app.js?v=1.0.21.34" defer></script>
   </body>
 </html>
