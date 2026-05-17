@@ -3902,9 +3902,15 @@ button.ingredient-item {
   padding: 0;
 }
 
+.grocery-order__stores {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .store-cta {
   width: 100%;
-  height: 96px;
+  height: 80px;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -3923,6 +3929,18 @@ button.ingredient-item {
   background: #0aa2e6;
   color: #fff;
 }
+.store-cta--jumbo-pill {
+  background: #fdc500;
+  color: #1a1200;
+  box-shadow: 0 14px 28px rgba(226,0,26,0.18);
+}
+.store-cta--jumbo-pill:hover { box-shadow: 0 16px 32px rgba(226,0,26,0.24); }
+.store-cta__arrow--dark {
+  background: rgba(0,0,0,0.10);
+  color: #1a1200;
+}
+.store-cta--jumbo-pill .store-cta__name { color: #1a1200; }
+.store-cta--jumbo-pill .store-cta__dest { color: rgba(26,18,0,0.72); }
 
 .store-cta__logo {
   width: 62px;
@@ -18530,7 +18548,17 @@ body {
   background: linear-gradient(160deg, #0071c2 0%, #005fa3 60%, #004e8a 100%);
   gap: 20px;
   padding: 0 32px 48px;
+  transition: background 0.2s;
 }
+.ah-basket-splash[data-store="jumbo"] {
+  background: linear-gradient(160deg, #fdc500 0%, #f0b400 60%, #e0a800 100%);
+}
+.ah-basket-splash[data-store="jumbo"] .ah-basket-splash__title { color: #1a1200; }
+.ah-basket-splash[data-store="jumbo"] .ah-basket-splash__counter { color: rgba(26,18,0,0.65); }
+.ah-basket-splash[data-store="jumbo"] .ah-basket-splash__item-name { color: rgba(26,18,0,0.5); }
+.ah-basket-splash[data-store="jumbo"] .ah-basket-splash__progress-bar { background: rgba(0,0,0,0.12); }
+.ah-basket-splash[data-store="jumbo"] .ah-basket-splash__progress-fill { background: #E2001A; }
+.ah-basket-splash[data-store="jumbo"] .ah-basket-splash__title--done { color: #E2001A; }
 .ah-basket-splash.hidden { display: none; }
 
 .ah-basket-splash__logo {

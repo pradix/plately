@@ -1159,6 +1159,8 @@ const copyGroceryListButton = document.getElementById("copyGroceryListButton");
 const clearGroceryToolbarButton = document.getElementById("clearGroceryToolbarButton");
 const orderAHButton = document.getElementById("orderAHButton");
 const orderAHItemCount = document.getElementById("orderAHItemCount");
+const orderJumboButton = document.getElementById("orderJumboButton");
+const orderJumboItemCount = document.getElementById("orderJumboItemCount");
 const storeAssistant = document.getElementById("storeAssistant");
 const storeAssistantKicker = document.getElementById("storeAssistantKicker");
 const storeAssistantTitle = document.getElementById("storeAssistantTitle");
@@ -7142,9 +7144,9 @@ function renderGroceryGroups(options = {}) {
       pill.classList.toggle("is-active", pill.dataset.grocerySort === (state.grocerySort || "default"));
     });
   }
-  if (orderAHItemCount) {
-    orderAHItemCount.textContent = `Zet ${uncheckedCount} producten klaar`;
-  }
+  const storeCountLabel = `Zet ${uncheckedCount} klaar`;
+  if (orderAHItemCount) orderAHItemCount.textContent = storeCountLabel;
+  if (orderJumboItemCount) orderJumboItemCount.textContent = storeCountLabel;
   renderNavBadge();
   renderGrocerySummary();
 
@@ -9422,7 +9424,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
 
   const storeConfig = getStoreConfig(storeSlug);
   const storeName = storeConfig.label;
-  const button = orderAHButton;
+  const button = storeSlug === "jumbo" ? orderJumboButton : orderAHButton;
   if (!button) {
     showToast(`De knop voor ${storeName} ontbreekt nog.`);
     return;
@@ -9436,9 +9438,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
     destLabel.textContent = storeConfig.loadingLabel;
   }
 
-  if (storeSlug === "albert-heijn") {
-    showAHBasketSplash(activeItems);
-  }
+  showAHBasketSplash(activeItems, storeSlug);
 
   try {
     const payload = await fetchJson(`${state.apiBase}/api/store-basket`, {
@@ -11452,7 +11452,7 @@ let _ahBasketTotal = 0;
 let _ahBasketCurrent = 0;
 let _ahBasketItemNames = [];
 
-function showAHBasketSplash(items) {
+function showAHBasketSplash(items, store = "albert-heijn") {
   const splash = document.getElementById("ahBasketSplash");
   if (!splash) return;
   if (_ahBasketSplashLeaveTimer) { clearTimeout(_ahBasketSplashLeaveTimer); _ahBasketSplashLeaveTimer = null; }
@@ -11462,10 +11462,15 @@ function showAHBasketSplash(items) {
   _ahBasketCurrent = 0;
   _ahBasketItemNames = items.map((i) => i.title || "").filter(Boolean);
 
+  // Theme the splash for the active store
+  splash.dataset.store = store;
+
   const fill = document.getElementById("ahBasketProgressFill");
   const counter = document.getElementById("ahBasketCounter");
+  const title = document.getElementById("ahBasketTitle");
   if (fill) fill.style.width = "0%";
   if (counter) counter.textContent = `0 van ${_ahBasketTotal} producten`;
+  if (title) { title.textContent = "Producten klaarleggen"; title.classList.remove("ah-basket-splash__title--done"); }
 
   splash.classList.remove("hidden", "ah-basket-splash--leaving");
   splash.setAttribute("aria-hidden", "false");
@@ -12024,6 +12029,7 @@ bindEvent(clearGroceryToolbarButton, "click", () => {
 });
 bindEvent(closeImportSecondaryButton, "click", () => closeModal());
 bindEvent(orderAHButton, "click", () => openStoreBasket("albert-heijn"));
+bindEvent(orderJumboButton, "click", () => openStoreBasket("jumbo"));
 bindEvent(kookstandButton, "click", () => {
   const recipe = getSelectedRecipe();
   if (recipe) openKookstand(recipe.id);

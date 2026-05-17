@@ -9,7 +9,7 @@
       name="description"
       content="Plately is een webapp om recepten van Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.21.41" />
+    <meta name="plately-build" content="1.0.21.42" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -38,9 +38,9 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="preload" href="styles.css?v=1.0.21.41" as="style" />
-    <link rel="preload" href="app.js?v=1.0.21.41" as="script" />
-    <link rel="stylesheet" href="styles.css?v=1.0.21.41" />
+    <link rel="preload" href="styles.css?v=1.0.21.42" as="style" />
+    <link rel="preload" href="app.js?v=1.0.21.42" as="script" />
+    <link rel="stylesheet" href="styles.css?v=1.0.21.42" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -544,22 +544,37 @@
             </button>
           </div>
 
-          <!-- AH order CTA pill — shown when items exist -->
+          <!-- Store order CTAs — shown when items exist -->
           <div class="grocery-order hidden" id="groceryOrder">
-            <button class="store-cta store-cta--ah-pill" id="orderAHButton" type="button">
-              <span class="store-cta__logo store-cta__logo--ah-pill">
-                <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-label="Albert Heijn" role="img" style="width:44px;height:44px">
-                  <path d="M28,8 Q8,10 6,30 L6,155 Q6,192 43,192 L157,192 Q194,192 194,155 L194,78 Q194,56 178,42 L112,8 Q96,-1 80,4 Z" fill="#00AEEF"/>
-                  <path d="M55,130 Q35,130 35,108 L35,88 Q35,66 55,66 Q70,66 76,78 L76,68 L90,68 L90,130 L76,130 L76,120 Q70,132 55,130 Z M57,118 Q72,118 76,104 L76,92 Q72,78 57,78 Q47,78 47,88 L47,108 Q47,118 57,118 Z" fill="#ffffff"/>
-                  <path d="M100,50 L114,50 L114,80 Q120,66 136,66 Q155,66 155,86 L155,130 L141,130 L141,90 Q141,78 132,78 Q121,78 114,90 L114,130 L100,130 Z" fill="#ffffff"/>
-                </svg>
-              </span>
-              <span class="store-cta__text">
-                <span class="store-cta__name">Zet in AH mandje</span>
-                <span class="store-cta__dest" id="orderAHItemCount">Zet 0 producten klaar</span>
-              </span>
-              <span class="store-cta__arrow" aria-hidden="true">›</span>
-            </button>
+            <div class="grocery-order__stores">
+              <button class="store-cta store-cta--ah-pill" id="orderAHButton" type="button" aria-label="Zet boodschappen in AH mandje">
+                <span class="store-cta__logo store-cta__logo--ah-pill">
+                  <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-label="Albert Heijn" role="img" style="width:40px;height:40px">
+                    <path d="M28,8 Q8,10 6,30 L6,155 Q6,192 43,192 L157,192 Q194,192 194,155 L194,78 Q194,56 178,42 L112,8 Q96,-1 80,4 Z" fill="#00AEEF"/>
+                    <path d="M55,130 Q35,130 35,108 L35,88 Q35,66 55,66 Q70,66 76,78 L76,68 L90,68 L90,130 L76,130 L76,120 Q70,132 55,130 Z M57,118 Q72,118 76,104 L76,92 Q72,78 57,78 Q47,78 47,88 L47,108 Q47,118 57,118 Z" fill="#ffffff"/>
+                    <path d="M100,50 L114,50 L114,80 Q120,66 136,66 Q155,66 155,86 L155,130 L141,130 L141,90 Q141,78 132,78 Q121,78 114,90 L114,130 L100,130 Z" fill="#ffffff"/>
+                  </svg>
+                </span>
+                <span class="store-cta__text">
+                  <span class="store-cta__name">Albert Heijn</span>
+                  <span class="store-cta__dest" id="orderAHItemCount">Zet 0 klaar</span>
+                </span>
+                <span class="store-cta__arrow" aria-hidden="true">›</span>
+              </button>
+              <button class="store-cta store-cta--jumbo-pill" id="orderJumboButton" type="button" aria-label="Zet boodschappen in Jumbo mandje">
+                <span class="store-cta__logo store-cta__logo--jumbo-pill">
+                  <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-label="Jumbo" role="img" style="width:40px;height:40px">
+                    <rect x="8" y="8" width="184" height="184" rx="28" fill="#E2001A"/>
+                    <text x="100" y="152" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-size="126" font-weight="900" fill="#FDC500">J</text>
+                  </svg>
+                </span>
+                <span class="store-cta__text">
+                  <span class="store-cta__name">Jumbo</span>
+                  <span class="store-cta__dest" id="orderJumboItemCount">Zet 0 klaar</span>
+                </span>
+                <span class="store-cta__arrow store-cta__arrow--dark" aria-hidden="true">›</span>
+              </button>
+            </div>
           </div>
 
           <!-- Grocery items list -->
@@ -2655,6 +2670,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=1.0.21.41" defer></script>
+    <script src="app.js?v=1.0.21.42" defer></script>
   </body>
 </html>
