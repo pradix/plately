@@ -10862,31 +10862,19 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) 
   return merged.slice(0, maxCount);
 }
 
-// ── Jumbo product search via Open Food Facts ──────────────────────────────────
-// Jumbo heeft geen publieke API. Open Food Facts is vrij toegankelijk,
-// heeft Nederlandse supermarktproducten en productafbeeldingen.
+// ── Jumbo product search ────────────────────────────────────────────────────────
+// Jumbo heeft geen publieke API (mobiele API dood, website blokkeert scraping).
+// We gebruiken de AH-API voor productafbeeldingen als generieke voedselreferentie.
 
 async function findJumboProduct(ingredient) {
   try {
-    const searchUrl =
-      `https://world.openfoodfacts.org/cgi/search.pl` +
-      `?search_terms=${encodeURIComponent(ingredient)}` +
-      `&search_simple=1&action=process&json=1&lc=nl&cc=nl&page_size=8&fields=product_name,product_name_nl,image_small_url,image_url,brands`;
-    const resp = await fetch(searchUrl, {
-      headers: {
-        "user-agent": "Plately/1.0 (plately.nl)",
-        accept: "application/json",
-      },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const products = Array.isArray(data?.products) ? data.products : [];
-    for (const p of products) {
-      const name = sanitizeText(p.product_name_nl || p.product_name || "");
-      if (name.length < 3 || NON_FOOD_INGREDIENT_PATTERN.test(name)) continue;
-      const imageUrl = sanitizeText(p.image_small_url || p.image_url || "");
-      return { sku: null, name, price: "", imageUrl };
+    const products = await findAHProducts(ingredient, 3);
+    const best = products.find((p) => p.imageUrl);
+    if (best) {
+      const cleanName = sanitizeText(best.name || ingredient)
+        .replace(/^AH\s+/i, "")
+        .replace(/^Albert Heijn\s+/i, "");
+      return { sku: null, name: cleanName || sanitizeText(ingredient), price: "", imageUrl: best.imageUrl };
     }
   } catch { /* geen resultaat */ }
   return null;
