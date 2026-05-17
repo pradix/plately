@@ -10888,31 +10888,38 @@ const JUMBO_SEARCH_QUERY = `
   }
 `;
 
-async function findJumboProduct(ingredient) {
+function _parseJumboProduct(p) {
+  const sku = sanitizeText(p.sku || "");
+  const name = sanitizeText(p.title || "").replace(/^Jumbo\s+/i, "");
+  if (!sku || name.length < 2 || NON_FOOD_INGREDIENT_PATTERN.test(name)) return null;
+  const cents = Number(p.price?.price);
+  const price = Number.isFinite(cents) && cents > 0 ? `€${(cents / 100).toFixed(2).replace(".", ",")}` : "";
+  const imageUrl = sanitizeText(p.image || "");
+  return { sku, name, price, imageUrl };
+}
+
+async function findJumboProducts(ingredient, limit = 12) {
   try {
     const resp = await fetch("https://www.jumbo.com/api/graphql", {
       method: "POST",
       headers: JUMBO_GQL_HEADERS,
       body: JSON.stringify({
         query: JUMBO_SEARCH_QUERY,
-        variables: { input: { searchTerms: ingredient, limit: 5, offSet: 0, searchType: "keyword" } },
+        variables: { input: { searchTerms: ingredient, limit, offSet: 0, searchType: "keyword" } },
       }),
       signal: AbortSignal.timeout(10000),
     });
-    if (!resp.ok) return null;
+    if (!resp.ok) return [];
     const data = await resp.json();
-    const products = data?.data?.searchProducts?.products || [];
-    for (const p of products) {
-      const sku = sanitizeText(p.sku || "");
-      const name = sanitizeText(p.title || "").replace(/^Jumbo\s+/i, "");
-      if (!sku || name.length < 2 || NON_FOOD_INGREDIENT_PATTERN.test(name)) continue;
-      const cents = Number(p.price?.price);
-      const price = Number.isFinite(cents) && cents > 0 ? `€${(cents / 100).toFixed(2).replace(".", ",")}` : "";
-      const imageUrl = sanitizeText(p.image || "");
-      return { sku, name, price, imageUrl };
-    }
-  } catch { /* geen resultaat */ }
-  return null;
+    return (data?.data?.searchProducts?.products || [])
+      .map(_parseJumboProduct)
+      .filter(Boolean);
+  } catch { return []; }
+}
+
+async function findJumboProduct(ingredient) {
+  const products = await findJumboProducts(ingredient, 5);
+  return products[0] || null;
 }
 
 async function searchProductsForStore(store, ingredientNames) {
@@ -15802,6 +15809,19 @@ async function buildStoreBasket(body) {
         return { ingredient: ingredientName, product: picked, products: ordered, quantity: estimateAhHandoffQuantity(item, picked) };
       })
     ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
+  } else if (store === "jumbo") {
+    searchResults = await Promise.all(
+      items.map(async (item) => {
+        const rawName = sanitizeText(item.title || "");
+        const ingredientName = canonicalizeIngredientForStoreSearch(rawName);
+        if (!ingredientName) return { ingredient: ingredientName, product: null, products: [] };
+        if (KITCHEN_TOOL_INGREDIENT_RE.test(rawName) || NON_FOOD_INGREDIENT_PATTERN.test(rawName) || isPantryFiller(rawName)) {
+          return { ingredient: ingredientName, product: null, products: [], skipped: true };
+        }
+        const products = await findJumboProducts(ingredientName, 12);
+        return { ingredient: ingredientName, product: products[0] || null, products };
+      })
+    ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
   } else {
     const raw = await searchProductsForStore(
       store,
@@ -15818,13 +15838,13 @@ async function buildStoreBasket(body) {
 
     let choices;
 
-    if (store === "albert-heijn" && result.products.length) {
-      const ahChoices = result.products
+    if ((store === "albert-heijn" || store === "jumbo") && result.products.length) {
+      const storeChoices = result.products
         .map((product, i) =>
           buildMatchedChoiceFromProduct(store, item, product, i === 0 ? "Meest voordelig" : "Alternatief")
         )
         .filter(Boolean);
-      choices = ahChoices.length ? ahChoices : buildStoreProductChoices(store, item);
+      choices = storeChoices.length ? storeChoices : buildStoreProductChoices(store, item);
     } else {
       const directChoice = result.product ? buildMatchedChoiceFromProduct(store, item, result.product) : null;
       const fallbackChoices = buildStoreProductChoices(store, item);
@@ -15833,9 +15853,7 @@ async function buildStoreBasket(body) {
         : fallbackChoices;
     }
 
-    // AH gets a larger alternatives pool so the Wissel sheet can show more
-    // products and allow chip-based filtering without starving the list.
-    const choicesCap = store === "albert-heijn" ? 30 : 3;
+    const choicesCap = store === "albert-heijn" ? 30 : store === "jumbo" ? 12 : 3;
 
     return {
       id: `basket-item-${index}`,
@@ -15912,6 +15930,26 @@ async function researchAHChoices(body) {
     ingredientTitle,
     choices,
   };
+}
+
+async function researchJumboChoices(body) {
+  const rawTitle = sanitizeText(body.ingredientTitle || body.title || "");
+  const ingredientTitle = canonicalizeIngredientForStoreSearch(rawTitle);
+  if (!ingredientTitle) throw new HttpError(400, "Geen ingrediënt opgegeven.");
+
+  const exclude = new Set(
+    (Array.isArray(body.excludeProductIds) ? body.excludeProductIds : [])
+      .map((id) => sanitizeText(id)).filter(Boolean)
+  );
+
+  const products = await findJumboProducts(ingredientTitle, 16);
+  const filtered = products.filter((p) => !exclude.has(p.sku));
+  const item = { title: ingredientTitle, amount: sanitizeText(body.amount || "1 verpakking") };
+  const choices = filtered
+    .map((product, i) => buildMatchedChoiceFromProduct("jumbo", item, product, i === 0 ? "Meest voordelig" : "Alternatief"))
+    .filter(Boolean);
+
+  return { ingredientTitle, choices };
 }
 
 async function readRequestBody(request) {
@@ -18477,6 +18515,13 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/ah-research" && request.method === "POST") {
       const body = await readRequestBody(request);
       const result = await researchAHChoices(body);
+      sendJson(response, 200, { ok: true, ...result });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/jumbo-research" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const result = await researchJumboChoices(body);
       sendJson(response, 200, { ok: true, ...result });
       return;
     }

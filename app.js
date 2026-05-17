@@ -2870,24 +2870,29 @@ function renderBasketPreview() {
 
 async function researchBasketItem(itemIndex, { excludeCurrent = true } = {}) {
   const preview = state.basketPreview;
-  if (!preview || preview.store !== "albert-heijn") return;
+  if (!preview || (preview.store !== "albert-heijn" && preview.store !== "jumbo")) return;
   const item = preview.items?.[itemIndex];
   if (!item) return;
   const currentChoice = item.choices?.[item.selectedChoiceIndex || 0];
   const exclude = [];
   if (excludeCurrent && currentChoice?.productId) exclude.push(currentChoice.productId);
+
+  const isJumbo = preview.store === "jumbo";
+  const endpoint = isJumbo ? "/api/jumbo-research" : "/api/ah-research";
   try {
-    const payload = await fetchJson(`${state.apiBase}/api/ah-research`, {
+    const payload = await fetchJson(`${state.apiBase}${endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ingredientTitle: item.ingredientTitle,
         amount: item.ingredientAmount,
-        bio: Boolean(state.basketFilter?.bio),
-        beterLeven1: Boolean(state.basketFilter?.beterLeven1),
-        vegetarisch: Boolean(state.basketFilter?.vegetarisch),
-        vegan: Boolean(state.basketFilter?.vegan),
-        plantaardig: Boolean(state.basketFilter?.plantaardig),
+        ...(!isJumbo && {
+          bio: Boolean(state.basketFilter?.bio),
+          beterLeven1: Boolean(state.basketFilter?.beterLeven1),
+          vegetarisch: Boolean(state.basketFilter?.vegetarisch),
+          vegan: Boolean(state.basketFilter?.vegan),
+          plantaardig: Boolean(state.basketFilter?.plantaardig),
+        }),
         excludeProductIds: exclude,
       }),
     });
