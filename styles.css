@@ -14751,7 +14751,7 @@ body {
   margin-top: 4px;
   font-size: 0.78rem;
   font-weight: 600;
-  color: #E2001A;
+  color: #1a1200;
   text-decoration: none;
 }
 
@@ -18593,8 +18593,8 @@ body {
 .ah-basket-splash[data-store="jumbo"] .ah-basket-splash__counter { color: rgba(26,18,0,0.65); }
 .ah-basket-splash[data-store="jumbo"] .ah-basket-splash__item-name { color: rgba(26,18,0,0.5); }
 .ah-basket-splash[data-store="jumbo"] .ah-basket-splash__progress-bar { background: rgba(0,0,0,0.12); }
-.ah-basket-splash[data-store="jumbo"] .ah-basket-splash__progress-fill { background: #E2001A; }
-.ah-basket-splash[data-store="jumbo"] .ah-basket-splash__title--done { color: #E2001A; }
+.ah-basket-splash[data-store="jumbo"] .ah-basket-splash__progress-fill { background: #1a1200; }
+.ah-basket-splash[data-store="jumbo"] .ah-basket-splash__title--done { color: #1a1200; }
 .ah-basket-splash.hidden { display: none; }
 
 .ah-basket-splash__logo {
