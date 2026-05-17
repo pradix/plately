@@ -11403,10 +11403,8 @@ function showAHBasketSplash(items) {
 
   const fill = document.getElementById("ahBasketProgressFill");
   const counter = document.getElementById("ahBasketCounter");
-  const itemName = document.getElementById("ahBasketItemName");
   if (fill) fill.style.width = "0%";
   if (counter) counter.textContent = `0 van ${_ahBasketTotal} producten`;
-  if (itemName) itemName.textContent = _ahBasketItemNames[0] || "Zoeken…";
 
   splash.classList.remove("hidden", "ah-basket-splash--leaving");
   splash.setAttribute("aria-hidden", "false");
@@ -11424,13 +11422,9 @@ function showAHBasketSplash(items) {
 function _updateAHBasketProgress(current, total) {
   const fill = document.getElementById("ahBasketProgressFill");
   const counter = document.getElementById("ahBasketCounter");
-  const itemName = document.getElementById("ahBasketItemName");
   const pct = total > 0 ? Math.round((current / total) * 100) : 0;
   if (fill) fill.style.width = `${pct}%`;
   if (counter) counter.textContent = `${current} van ${total} producten`;
-  if (itemName && _ahBasketItemNames[current - 1]) {
-    itemName.textContent = _ahBasketItemNames[current - 1];
-  }
 }
 
 function hideAHBasketSplash() {
