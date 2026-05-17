@@ -1884,6 +1884,7 @@ async function ensurePostgresSchema() {
 async function getGlobalSettings() {
   if (isPostgresEnabled()) {
     await ensurePostgresSchema();
+    const pool = await getPostgresPool();
     const res = await pool.query(`SELECT value FROM plately_settings WHERE key = 'global' LIMIT 1`);
     if (res.rows.length > 0) return res.rows[0].value || {};
     return {};
@@ -1895,6 +1896,7 @@ async function getGlobalSettings() {
 async function setGlobalSettings(settings) {
   if (isPostgresEnabled()) {
     await ensurePostgresSchema();
+    const pool = await getPostgresPool();
     await pool.query(
       `INSERT INTO plately_settings (key, value, updated_at) VALUES ('global', $1::jsonb, NOW())
        ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
