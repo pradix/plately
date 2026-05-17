@@ -777,14 +777,34 @@ function singularizeDutchIngredientPhraseForSearch(phrase) {
 // ── Ingredient search normalisation ──────────────────────────────────────────
 // Strips quantities, descriptors and maps variants to the best AH search term.
 function normalizeIngredientForSearch(raw) {
-  let t = (raw || "").toLowerCase().trim();
+  let t = (raw || “”).toLowerCase().trim();
 
   // Typo's / OCR: “kom kommer”, “kom kommmer” → komkommer (AH catalogue uses one word).
   if (/\bkom\s+kom+m?ers?\b/i.test(t)) {
-    t = t.replace(/\bkom\s+kom+m?ers?\b/gi, "komkommers");
+    t = t.replace(/\bkom\s+kom+m?ers?\b/gi, “komkommers”);
   } else if (/\bkom\s+kom+m?er\b/i.test(t)) {
-    t = t.replace(/\bkom\s+kom+m?er\b/gi, "komkommer");
+    t = t.replace(/\bkom\s+kom+m?er\b/gi, “komkommer”);
   }
+
+  // 0. Strip leading Dutch article / vague quantity words (“een”, “half”, “paar”, “wat”, “enkele”)
+  t = t.replace(/^(?:een\s+|één\s+|'n\s+|wat\s+|paar\s+|enkele\s+|halve?\s+|half\s+een\s+)/, “”).trim();
+
+  // 0b. Strip leading vague measure words that add no search value.
+  //     “handjevol peterselie” → “peterselie”
+  //     “scheut olijfolie” → “olijfolie”
+  //     “snufje zout” → “zout” (but then normalizes to “keukenzout” below)
+  t = t.replace(/^(?:handjevol|handje|handjes|scheut(?:je)?|scheutje|snuf(?:je)?|klontje|klont|druppel(?:tje)?|stukje|stukken?|takje|takjes|blaadje|blaadjes|bosje|bosjes)\s+/, “”).trim();
+
+  // 0c. Strip container/packaging words + optional “van” (“blik tomaten”, “pot pesto”, “pakje vanillesuiker”)
+  t = t.replace(/^(?:blik(?:je)?\s+(?:van\s+)?|pot(?:je)?\s+(?:van\s+)?|pakje\s+(?:van\s+)?|zakje\s+(?:van\s+)?|fles(?:je)?\s+(?:van\s+)?|tube\s+(?:van\s+)?|doosje\s+(?:van\s+)?|beker(?:tje)?\s+(?:van\s+)?)/, “”).trim();
+
+  // 0d. High-impact container+ingredient mappings (before generic normalization).
+  if (/^(?:blik|pot|pak)\s+tomaten?/.test(t)) return “tomaten gepeld”;
+  if (/^(?:blik|pot)\s+kokosmelk/.test(t)) return “kokosmelk”;
+  if (/^(?:blik|pot)\s+kikkererwten/.test(t)) return “kikkererwten”;
+  if (/^(?:blik|pot)\s+kidneybonen/.test(t)) return “kidneybonen”;
+  if (/^(?:blik|pot)\s+linzen/.test(t)) return “linzen”;
+  if (/^(?:blik|pot)\s+mais/.test(t)) return “maïs”;
 
   // 1. Strip leading numeric quantity + optional unit
   t = t.replace(
@@ -835,6 +855,36 @@ function normalizeIngredientForSearch(raw) {
 
   // Bechamel / witte saus (typo's + varianten)
   if (/\bbechamelsaus\b|\bbechamel\b|becahamelsaus|becahamel/i.test(t)) return "bechamelsaus";
+
+  // 3b. Passata / gezeefde tomaten
+  if (/\bpassata\b/.test(t) || /\bgezeefde\s+tomaten?\b/.test(t) || /\bgepureerde\s+tomaten?\b/.test(t)) return "passata";
+
+  // 3c. Kokosmelk / kokosroom
+  if (/\bkokosmelk\b/.test(t)) return "kokosmelk";
+  if (/\bkokosroom\b/.test(t)) return "kokosroom";
+  if (/\bkokoswater\b/.test(t)) return "kokoswater";
+
+  // 3d. Peulvruchten (blik/droog) — canonieke enkelvoudige zoekterm
+  if (/\bkikkererwten?\b/.test(t)) return "kikkererwten";
+  if (/\bkidneybonen?\b/.test(t)) return "kidneybonen";
+  if (/\bcannellinibonen?\b/.test(t)) return "cannellinibonen";
+  if (/\bchakka\b|\bchickpeas?\b/.test(t)) return "kikkererwten";
+  if (/\b(rode|groene|beluga)\s+linzen?\b/.test(t)) return t; // behoud kleur
+  if (/\blinzen?\b/.test(t)) return "linzen";
+  if (/\bsojabonen?\b/.test(t)) return "sojabonen";
+  if (/\bedamame\b/.test(t)) return "edamame";
+
+  // 3e. Tahini / tahin
+  if (/\btahini?\b/.test(t)) return "tahini";
+
+  // 3f. Notenboter
+  if (/\bpindakaas\b/.test(t)) return "pindakaas";
+  if (/\bamandelpasta\b|\bamandelboter\b/.test(t)) return "amandelboter";
+
+  // 3g. Vis (blik/vers canoniek)
+  if (/\btonijn\b.*\bblik\b|\bblik\b.*\btonijn\b/.test(t)) return "tonijn op water";
+  if (/\bzalm\b.*\bblik\b|\bblik\b.*\bzalm\b/.test(t)) return "zalm blik";
+  if (/\bharing\b/.test(t) && !/\bmozart|chocolade/.test(t)) return "haring";
 
   // 4. Rice
   if (/\b(basmati|jasmijn|jasmine|zilvervlies|bruine|volkoren)\s*rijst/.test(t)) return "rijst";
@@ -9924,10 +9974,21 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
           score += 70;
           adjustments.push({ kind: "penalty", label: "Fruit verwerkt (sap/jam/cake/chips — vers gevraagd)", delta: 70 });
         }
+        // Knijpfruit / babyfood / fruitpap: nooit een vers-fruit product.
+        if (/\b(knijpfruit|knijpzakje|fruitmoes|fruitpap|babyvoeding|babyhapje|baby\s*fruit)\b/i.test(title)) {
+          score += 120;
+          adjustments.push({ kind: "penalty", label: "Knijpfruit/babyfood ≠ vers fruit", delta: 120 });
+        }
         if (/\b(per\s+stuk|los\b|vers(?:e)?\b|stuks?|biologisch)\b/i.test(title)) {
           score -= 10;
           adjustments.push({ kind: "bonus", label: "Vers fruit (stuk/los)", delta: -10 });
         }
+      }
+
+      // 5b. Universeel: knijpfruit/babyfood is nooit een basisingrediënt (ook buiten fruitquery).
+      if (/\b(knijpfruit|knijpzakje|babyvoeding|babyhapje|baby\s*maaltijd)\b/i.test(title)) {
+        score += 100;
+        adjustments.push({ kind: "penalty", label: "Knijpfruit/babyfood (nooit basisingrediënt)", delta: 100 });
       }
 
       // 6. Vlees & vis: penalizeer snacks met vleessmaak en sterk verwerkte producten.
@@ -10366,16 +10427,19 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       return detail;
     };
 
-    const products = (data.products || [])
+    // Harde score-drempel: producten met score > SCORE_HARD_REJECT worden uitgesloten
+    // zodra er voldoende goede alternatieven zijn. Voorkomt dat duidelijk irrelevante
+    // producten (hoge penalty) toch verschijnen als AH weinig resultaten teruggeeft.
+    const SCORE_HARD_REJECT = 160;
+    const MIN_GOOD_RESULTS = 2;
+
+    const sorted = (data.products || [])
       .filter((p) => !NON_FOOD_INGREDIENT_PATTERN.test(sanitizeText(p.title)))
       .filter((p) => ingredientMatchesAnyProductTerm(matchTerms, sanitizeText(p.title)))
-      // Guardrail: avoid melbatoast unless explicitly asked for toast/crackers.
       .filter((p) => (wantsToastLike ? true : !/\bmelbatoast\b/i.test(String(p?.title || ""))))
       .sort((a, b) => {
         const sa = getDetailedScore(a.title || "");
         const sb = getDetailedScore(b.title || "");
-        // Relevantiescore is leidend (lager = beter match).
-        // Prijs is tiebreaker binnen dezelfde score-band zodat goedkopere varianten vooraan staan.
         if (sa.score !== sb.score) return sa.score - sb.score;
         const pa = a.currentPrice ?? a.priceBeforeBonus ?? 9999;
         const pb = b.currentPrice ?? b.priceBeforeBonus ?? 9999;
@@ -10384,8 +10448,11 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         const bb = b.isBonus || b.isBonusPrice ? 1 : 0;
         if (ba !== bb) return bb - ba;
         return 0;
-      })
-      .slice(0, count);
+      });
+
+    // Pas harde drempel toe: filter hoog-scorende producten weg als er goede alternatieven zijn.
+    const goodOnes = sorted.filter((p) => getDetailedScore(p.title || "").score <= SCORE_HARD_REJECT);
+    const products = (goodOnes.length >= MIN_GOOD_RESULTS ? goodOnes : sorted).slice(0, count);
 
     // Attach match metadata for "Waarom?" explanations.
     for (const p of products) {
