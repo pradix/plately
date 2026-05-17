@@ -9375,6 +9375,10 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
     destLabel.textContent = storeConfig.loadingLabel;
   }
 
+  if (storeSlug === "albert-heijn") {
+    showAHBasketSplash(activeItems);
+  }
+
   try {
     const payload = await fetchJson(`${state.apiBase}/api/store-basket`, {
       method: "POST",
@@ -9397,6 +9401,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
       throw new Error("Geen producten gevonden");
     }
 
+    hideAHBasketSplash();
     state.basketPreview = {
       ...payload,
       store: storeSlug,
@@ -9439,6 +9444,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
       // ignore
     }
   } catch (err) {
+    hideAHBasketSplash();
     if (!navigator.onLine) {
       showToast(`Geen internet. ${storeName} kan niet laden.`, {
         variant: "error",
@@ -11349,26 +11355,100 @@ function showImportSplash(url) {
 
 let _grocerySplashTimer = null;
 let _grocerySplashLeaveTimer = null;
+let _grocerySplashShownAt = 0;
+const GROCERY_SPLASH_MIN_MS = 3500;
 
 function showGrocerySplash() {
   const splash = document.getElementById("grocerySplash");
   if (!splash) return;
   if (_grocerySplashLeaveTimer) { clearTimeout(_grocerySplashLeaveTimer); _grocerySplashLeaveTimer = null; }
+  _grocerySplashShownAt = Date.now();
   splash.classList.remove("hidden", "grocery-splash--leaving");
   splash.setAttribute("aria-hidden", "false");
 }
 
 function hideGrocerySplash() {
-  const splash = document.getElementById("grocerySplash");
-  if (!splash) return;
-  splash.classList.add("grocery-splash--leaving");
+  const elapsed = _grocerySplashShownAt ? Date.now() - _grocerySplashShownAt : GROCERY_SPLASH_MIN_MS;
+  const remaining = Math.max(0, GROCERY_SPLASH_MIN_MS - elapsed);
   if (_grocerySplashLeaveTimer) clearTimeout(_grocerySplashLeaveTimer);
   _grocerySplashLeaveTimer = setTimeout(() => {
-    _grocerySplashLeaveTimer = null;
-    splash.classList.add("hidden");
-    splash.classList.remove("grocery-splash--leaving");
-    splash.setAttribute("aria-hidden", "true");
-  }, 300);
+    const splash = document.getElementById("grocerySplash");
+    if (!splash) return;
+    splash.classList.add("grocery-splash--leaving");
+    _grocerySplashLeaveTimer = setTimeout(() => {
+      _grocerySplashLeaveTimer = null;
+      splash.classList.add("hidden");
+      splash.classList.remove("grocery-splash--leaving");
+      splash.setAttribute("aria-hidden", "true");
+    }, 300);
+  }, remaining);
+}
+
+/* ── AH basket progress splash ─────────────────────────────────────────── */
+let _ahBasketSplashInterval = null;
+let _ahBasketSplashLeaveTimer = null;
+let _ahBasketTotal = 0;
+let _ahBasketCurrent = 0;
+let _ahBasketItemNames = [];
+
+function showAHBasketSplash(items) {
+  const splash = document.getElementById("ahBasketSplash");
+  if (!splash) return;
+  if (_ahBasketSplashLeaveTimer) { clearTimeout(_ahBasketSplashLeaveTimer); _ahBasketSplashLeaveTimer = null; }
+  if (_ahBasketSplashInterval) { clearInterval(_ahBasketSplashInterval); _ahBasketSplashInterval = null; }
+
+  _ahBasketTotal = items.length;
+  _ahBasketCurrent = 0;
+  _ahBasketItemNames = items.map((i) => i.title || "").filter(Boolean);
+
+  const fill = document.getElementById("ahBasketProgressFill");
+  const counter = document.getElementById("ahBasketCounter");
+  const itemName = document.getElementById("ahBasketItemName");
+  if (fill) fill.style.width = "0%";
+  if (counter) counter.textContent = `0 van ${_ahBasketTotal} producten`;
+  if (itemName) itemName.textContent = _ahBasketItemNames[0] || "Zoeken…";
+
+  splash.classList.remove("hidden", "ah-basket-splash--leaving");
+  splash.setAttribute("aria-hidden", "false");
+
+  // Animate counter — pace at ~350ms per item, cap at 90% until API returns
+  const msPerItem = Math.min(400, Math.max(150, 3000 / _ahBasketTotal));
+  _ahBasketSplashInterval = setInterval(() => {
+    const cap = Math.floor(_ahBasketTotal * 0.9);
+    if (_ahBasketCurrent >= cap) return;
+    _ahBasketCurrent++;
+    _updateAHBasketProgress(_ahBasketCurrent, _ahBasketTotal);
+  }, msPerItem);
+}
+
+function _updateAHBasketProgress(current, total) {
+  const fill = document.getElementById("ahBasketProgressFill");
+  const counter = document.getElementById("ahBasketCounter");
+  const itemName = document.getElementById("ahBasketItemName");
+  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+  if (fill) fill.style.width = `${pct}%`;
+  if (counter) counter.textContent = `${current} van ${total} producten`;
+  if (itemName && _ahBasketItemNames[current - 1]) {
+    itemName.textContent = _ahBasketItemNames[current - 1];
+  }
+}
+
+function hideAHBasketSplash() {
+  if (_ahBasketSplashInterval) { clearInterval(_ahBasketSplashInterval); _ahBasketSplashInterval = null; }
+  // Snap to 100%
+  _updateAHBasketProgress(_ahBasketTotal, _ahBasketTotal);
+  if (_ahBasketSplashLeaveTimer) clearTimeout(_ahBasketSplashLeaveTimer);
+  _ahBasketSplashLeaveTimer = setTimeout(() => {
+    const splash = document.getElementById("ahBasketSplash");
+    if (!splash) return;
+    splash.classList.add("ah-basket-splash--leaving");
+    _ahBasketSplashLeaveTimer = setTimeout(() => {
+      _ahBasketSplashLeaveTimer = null;
+      splash.classList.add("hidden");
+      splash.classList.remove("ah-basket-splash--leaving");
+      splash.setAttribute("aria-hidden", "true");
+    }, 300);
+  }, 500);
 }
 
 function hideImportSplash() {
