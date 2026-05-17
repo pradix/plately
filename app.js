@@ -6395,12 +6395,12 @@ function renderDetailRecipe(resetServings = false) {
             aria-pressed="${checked ? "true" : "false"}"
           >
             <span class="recipe-check" aria-hidden="true"></span>
-            <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
-            <span class="ingredient-name">${escapeHtml(ingredient.name)}</span>
             <span class="ingredient-image-wrapper" aria-hidden="true">
               <img class="ingredient-image" src="" alt="" loading="lazy" />
               <span class="ingredient-image-fallback" aria-hidden="true">${getIngredientVisualMarkup(ingredient.name)}</span>
             </span>
+            <span class="ingredient-name">${escapeHtml(ingredient.name)}</span>
+            <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
           </button>
         </li>
       `;
@@ -7411,12 +7411,15 @@ function debouncedFetchGroceryPhotos() {
   _groceryPhotoFetchTimer = setTimeout(() => {
     _groceryPhotoFetchTimer = null;
     fetchGroceryPhotos();
-  }, 1500);
+  }, 300);
 }
 
 async function fetchGroceryPhotos() {
+  // Haal ook foto's opnieuw op die van de server kwamen maar nu mogelijk verouderd zijn.
+  // (bv. verkeerde foto door oude scoring — wordt herkend aan /api/image-proxy prefix)
+  const needsRefresh = (item) => !item.imageUrl || item.imageUrl.startsWith("/api/image-proxy");
   const itemsWithoutPhoto = state.groceryItems
-    .filter((item) => !item.imageUrl && !item.checked)
+    .filter((item) => needsRefresh(item) && !item.checked)
     .slice(0, 20);
   if (!itemsWithoutPhoto.length) return;
   document.getElementById("groceryScreen")?.classList.add("grocery--loading");
@@ -7435,7 +7438,7 @@ async function fetchGroceryPhotos() {
     for (const [groceryId, url] of Object.entries(photos)) {
       if (!url) continue;
       const item = state.groceryItems.find((i) => i.id === groceryId);
-      if (item && !item.imageUrl) {
+      if (item && needsRefresh(item)) {
         item.imageUrl = url;
         changed = true;
       }
@@ -7501,8 +7504,9 @@ async function fetchIngredientPhotos() {
   const recipe = getSelectedRecipe();
   if (!recipe) return;
 
+  const needsPhotoRefresh = (item) => !item.imageUrl || item.imageUrl.startsWith("/api/image-proxy");
   const ingredientsWithoutPhoto = recipe.ingredients
-    .filter((item) => !item.imageUrl)
+    .filter((item) => needsPhotoRefresh(item))
     .slice(0, 20);
   if (!ingredientsWithoutPhoto.length) return;
 
@@ -7538,7 +7542,7 @@ async function fetchIngredientPhotos() {
       let url = photos[item.searchTerms[0]] || photos[item.searchTerms[1]] || null;
       if (url) {
         const ingredient = recipe.ingredients.find((i) => i.name === item.id);
-        if (ingredient && !ingredient.imageUrl) {
+        if (ingredient && needsPhotoRefresh(ingredient)) {
           ingredient.imageUrl = url;
           changed = true;
         }
@@ -15820,3 +15824,27 @@ if (installAppBackdrop) {
 window.addEventListener("appinstalled", () => {
   console.log("✅ Plately installed successfully!");
 });
+
+// Keep bottom nav visible when virtual keyboard opens.
+// On iOS the visual viewport shrinks but the layout viewport stays fixed,
+// so position:fixed elements end up below the fold. We pin the nav to
+// the visual viewport bottom instead.
+(function initBottomNavKeyboardFix() {
+  const nav = document.querySelector(".bottom-nav");
+  if (!nav || !window.visualViewport) return;
+
+  function onViewportResize() {
+    const vv = window.visualViewport;
+    // Gap between the visual viewport bottom and the layout viewport bottom
+    const offsetFromBottom = window.innerHeight - (vv.offsetTop + vv.height);
+    if (offsetFromBottom > 60) {
+      // Keyboard is open: lift the nav so it stays visible
+      nav.style.bottom = offsetFromBottom + "px";
+    } else {
+      nav.style.bottom = "";
+    }
+  }
+
+  window.visualViewport.addEventListener("resize", onViewportResize, { passive: true });
+  window.visualViewport.addEventListener("scroll", onViewportResize, { passive: true });
+}());

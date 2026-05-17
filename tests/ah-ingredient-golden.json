@@ -93,5 +93,29 @@
     "matchAnyTerms": { "raw": "pakje lasagne bladen", "base": "lasagne bladen" },
     "title": "AH Lasagne bladen",
     "match": true
-  }
+  },
+  { "id": "ei-losse", "matchAnyTerms": { "raw": "ei", "base": "ei" }, "title": "AH Scharrel eieren M", "match": true },
+  { "id": "ei-biologisch", "matchAnyTerms": { "raw": "ei", "base": "ei" }, "title": "AH Biologisch scharrel eieren", "match": true },
+  { "id": "ei-not-kinderei", "matchAnyTerms": { "raw": "ei", "base": "ei" }, "title": "Kinderei chocolade", "match": false },
+  { "id": "ei-not-kinder-standalone", "matchAnyTerms": { "raw": "ei", "base": "ei" }, "title": "Kinder ei chocolade", "match": false },
+  { "id": "ei-not-kinder-surprise", "matchAnyTerms": { "raw": "ei", "base": "ei" }, "title": "Kinder Surprise chocolade", "match": false },
+  { "id": "ei-not-eiersalade", "ingredient": "ei", "title": "AH Eiersalade", "match": false },
+  { "id": "ei-not-chocolade-ei", "ingredient": "ei", "title": "Paas chocolade-ei", "match": false },
+  { "id": "eieren-not-kinderei", "matchAnyTerms": { "raw": "eieren", "base": "eieren" }, "title": "Kinderei maxi", "match": false },
+
+  { "id": "appel-not-appelmoes", "ingredient": "appel", "title": "AH Appelmoes", "match": false },
+  { "id": "appel-not-appelsap", "ingredient": "appel", "title": "AH Appelsap 1L", "match": false },
+  { "id": "appel-fresh", "ingredient": "appel", "title": "AH Appel Elstar", "match": true },
+  { "id": "banaan-not-chips", "ingredient": "banaan", "title": "AH Bananachips naturel", "match": false },
+  { "id": "banaan-not-smaak", "ingredient": "banaan", "title": "Kauwgom bananasmaak", "match": false },
+  { "id": "munt-not-muntthee", "ingredient": "munt", "title": "Pickwick Munt thee", "match": false },
+  { "id": "munt-not-pepermunt", "ingredient": "munt", "title": "Mentos Pepermunt", "match": false },
+  { "id": "limoen-not-sap", "ingredient": "limoen", "title": "AH Limoensap", "match": false },
+  { "id": "limoen-not-siroop", "ingredient": "limoen", "title": "Roosvicee limoen siroop", "match": false },
+  { "id": "mango-not-sap", "ingredient": "mango", "title": "Innocent Mangosap 0.75L", "match": false },
+  { "id": "aardbei-not-jam", "ingredient": "aardbei", "title": "AH Aardbeijam", "match": false },
+  { "id": "sinaasappel-not-juice", "ingredient": "sinaasappel", "title": "AH Sinaasappelsap vers geperst", "match": false },
+  { "id": "kaas-not-fondue", "ingredient": "kaas", "title": "AH Kaasfondue gourmet", "match": false },
+  { "id": "yoghurt-not-frozen", "ingredient": "yoghurt", "title": "AH Frozen yoghurt aardbei", "match": false },
+  { "id": "vis-not-visolie", "ingredient": "vis", "title": "Davitamon Visolie capsules", "match": false }
 ]

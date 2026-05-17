@@ -14,7 +14,8 @@ fi
 
 # Splits op punten en bump het laatste getal
 IFS='.' read -ra PARTS <<< "$CURRENT"
-PARTS[-1]=$(( ${PARTS[-1]} + 1 ))
+LAST=$(( ${PARTS[${#PARTS[@]}-1]} + 1 ))
+PARTS[${#PARTS[@]}-1]=$LAST
 NEW=$(IFS='.'; echo "${PARTS[*]}")
 
 echo "==> Versie: $CURRENT → $NEW"

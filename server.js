@@ -569,6 +569,20 @@ async function proxyImage(requestUrl, response) {
     sendJson(response, 400, { ok: false, error: "Invalid image url." });
     return;
   }
+
+  // Serve from in-memory cache when available — AH CDN URLs are immutable.
+  const cached = _imageProxyCache.get(raw);
+  if (cached && Date.now() < cached.expiresAt) {
+    response.writeHead(200, {
+      ...HTTP_HEADERS,
+      "Content-Type": cached.contentType,
+      "Cache-Control": "public, max-age=604800, immutable",
+      "X-Cache": "HIT",
+    });
+    response.end(cached.buffer);
+    return;
+  }
+
   try {
     let parsedHost = "";
     try { parsedHost = new URL(raw).hostname.toLowerCase(); } catch {}
@@ -619,10 +633,17 @@ async function proxyImage(requestUrl, response) {
       buffer = Buffer.from(await upstream.arrayBuffer());
     }
 
+    // Store in server-side cache before responding.
+    if (buffer && buffer.length >= 200) {
+      if (_imageProxyCache.size >= IMAGE_PROXY_CACHE_MAX) {
+        _imageProxyCache.delete(_imageProxyCache.keys().next().value);
+      }
+      _imageProxyCache.set(raw, { buffer, contentType, expiresAt: Date.now() + IMAGE_PROXY_CACHE_TTL });
+    }
+
     response.writeHead(200, {
       ...HTTP_HEADERS,
       "Content-Type": contentType,
-      // Cache proxied images aggressively; they're immutable URLs on the CDN.
       "Cache-Control": "public, max-age=604800, immutable",
     });
     response.end(buffer);
@@ -683,12 +704,22 @@ const INSTRUCTION_START_PATTERN =
   /^(mix|add|bake|cook|toast|top|serve|blend|heat|roast|whisk|slice|spread|bak|voeg|snij|snijd|halveer|serveer|kook|maak|meng|verhit|roer|leg|dek|bestrooi|giet|laat|verwarm|doe|gooi|strooi|breng|schenk|haal|verwijder|pel|marineer|kruid|klop|stamp|prak|pureer|grill|oven|stir|fry|airfry|season|drizzle|combine|wash|was|dry|droog|scheur|cut|place|zet|wip|blus)\b/i;
 const INGREDIENT_WORD_PATTERN =
   /\b(avocado|tomaat|ui|knoflook|kaas|kip|pasta|olie|citroen|koriander|sla|paprika|room|ei|eieren|melk|honing|boter|brood|rijst|zalm|champignon|courgette|spinazie|yoghurt|bloem|suiker|bouillon|peper|zout|salt|pepper|cheese|garlic|onion|egg|rice|bread|flour|butter|cream|lemon|lime|chicken|beef|pork|salmon|shrimp|tomato|potato|beans|lentils|tofu|mushroom|parsley|basil|oregano|cumin|mayonnaise|mayo|sauce|aubergine|bloemkool|broccoli|wortel|selderij|komkommer|paprika|rode|groene|gele|pimiento|rode|witte|bloemkool|bleekselderij|rucola|andijvie|radicchio|witlof|aardappel|zoete|bataat|zwam|eekhoorntjesbrood|ostermossel|inktvis|kabeljauw|schol|tong|forel|baars|paling|gerookt|geraspte|gesneden|fijngehakt|mager|vol|volle|magere|halfvolle|verse|bevroren|ingevroren|gezouten|gerookt|gegrild|gebakken|gekookt|gekookte|instantnoodles|noodles|spaghetti|fettuccini|penne|rigatoni|lasagna|lasagne|macaroni|ravioli|tortellini|risotto|couscous|bulgur|quinoa|haver|muesli|granola|meel|maïzena|bloem|tapioca|polenta|linzen|kikkererwten|snijbonen|tuinbonen|doperwten|erwten|linzen|rode|groene|bruine|onderslagerbonen|abrikoos|aardbei|blauwe|bosbes|framboze|braam|kers|kiwi|mango|papaja|ananas|banaan|appel|peer|druif|watermeloen|meloen|sinaasappel|grapefruit|limoen|augurkje|olijf|kappertjes|ansjovis|tomatenpuree|tomatensaus|rode|witte|balsamico|appelazijn|rijstazijn|honing|stroop|melasse|rietsuiker|bruinsuiker|vanille|vanille-essence|kaneel|kruidnagel|muskaat|gemberpoeder|mosterd|worcestershiresaus|tabasco|pittig|mild|warm|heet|chilisaus|sojasaus|tamari|teriyaki|ketjap|pindakaas|tahini|hummus|avocado-olie|sesam-olie|walnoot-olie|pompoenpitolie|arachideolie|zonnebloemolie|maïsolie|slaaolie|boter|margarine|kokosboter|reuzel|schmaltz|ansjovis|kappertjes|olijven|onderzetjes|augurken|zuurkoolsla|rode|witte|gemarineerde|geconserveerde|vers|gedroogd|gerookt|ingelegd|gekonfijt|gegrild|geroosterd|gebakken|gekookt|ruw|zacht|stevig|kruimig|stijf|luchtig|schuimig|romig|glad|ruw|klonterig|dun|dik|stroperig|schoon|kleurrijk|smakelijk|gezond|voedzaam|lekker)\b/i;
+// "Ingrediënten" die nooit in een boodschappenlijst horen: water, keukengerei, etc.
+// Water is een special geval: "water" / "heet water" / "koud water" hoef je niet te kopen,
+// maar "bruiswater", "kokoswater", "mineraalwater" wel.
+const WATER_FILLER_RE = /^(?:(?:heet|koud|lauw|kokend|warm|koud)\s+)?water$/i;
+
+function isPantryFiller(name) {
+  const n = String(name || "").trim();
+  return WATER_FILLER_RE.test(n);
+}
+
 const NON_FOOD_INGREDIENT_PATTERN =
   /\b(keukenpapier|bakpapier|sat[ée]prikkers?|cocktailprikkers?|aluminiumfolie|folie|servetten?|touw|spiesen?|prikker|tandpasta|tandgel|tandenborstel|mondspoeling|floss|shampoo|conditioner|douchegel|bodylotion|bodywash|handlotion|handcrème|zeep|vloeibare\s+zeep|wasmiddel|vaatwasmiddel|afwasmiddel|schoonmaakmiddel|allesreiniger|wc-reiniger|toiletblok|deodorant|anti-transpirant|parfum|eau\s+de|aftershave|scheerschuim|scheermesje?|scheergel|mascara|make-?up|foundation|lipstick|lippenstift|nagellak|zonnebrand|sunscreen|moisturizer|dagcrème|nachtcrème|toiletpapier|wc-papier|tissues?|wegwerpluier|maandverband|tampon|batterij(?:en)?|gloeilamp(?:en)?|spaarlamp|led-lamp|vuilniszak(?:ken)?|afvalzak|handdoek(?:en)?|washandje?|spons|sponzen|schuurspons|dweil|stofdoek)\b/i;
 
 /** Keukengerei dat soms als “ingredient” uit recepttekst komt — hoort niet in de boodschappenlijst-import. */
 const KITCHEN_TOOL_INGREDIENT_RE =
-  /\b(?:knoflookpers|knoflook\s+[~-–]?\s*pers|garlic\s+press|(?:grill|grilles)[\s~-–]*pan(?:nen?)?|grillpan(?:nen?)?|(?:oven|bak)[\s~-–]+(?:schaal(?:en)?|bakplaat(?:en)?)|(?:oven|bak)schaal(?:en)?|ovenschalen?|ovenschotels?|siliconen(?:e)?\s*bakmat|staafmixer|(?:hand|keuken)?mixer)\b/i;
+  /\b(?:mes(?:sen)?|schilmes(?:je)?|broodmes|fileermes|koksmes|(?:kinder)?koksmes|vleesmes|hakmes|pan(?:netje)?|pannen|steelpan(?:netje)?|sauspan|koekenpan|wok|braadpan|grillpan(?:nen?)?|(?:grill|grilles)[\s-]*pan(?:nen?)?|(?:oven|bak)[\s-]*(?:schaal(?:en)?|bakplaat(?:en)?|vorm(?:en)?)|ovenschaal(?:en)?|ovenschotel(?:s)?|bakvorm(?:en)?|cakevorm(?:en)?|muffinvorm(?:en)?|springvorm(?:en)?|taartvorm(?:en)?|pizzasteen|pollepel(?:s)?|houten\s+lepel|eetlepel|dessertlepel|soeplepel|spatel(?:s)?|tang(?:en)?|pincet(?:ten)?|mengkom(?:men)?|slakom(?:men)?|kom(?:men?|metje)?|kommetje|schaal(?:tje)?|bak(?:je)?(?:\s+(?:koud|warm|heet|ijskoud)\s+water)?|zeef(?:jes)?|vergiet(?:en)?|puntzeef|keukenzeef|snijplank(?:en)?|hakplank(?:en)?|rasp(?:en)?|mandoline|staafmixer|(?:hand|keuken)?mixer|keukenmachine|blender|foodprocessor|knoflookpers|knoflook\s*[-–]\s*pers|garlic\s+press|siliconen(?:e)?\s*bakmat|bakmat(?:ten)?|bakpapier|pastabord(?:en)?|servies|bestek|bord(?:en)?|vleesthermometer|suikerthermometer|thermometer|deegroller(?:s)?|taartrooster(?:s)?|koelrek(?:ken)?|ovenrooster(?:s)?|theedoek(?:en)?|ovenwant(?:en)?|ovenhandschoen(?:en)?|bamboematje|bamboeplank|dunschiller(?:s)?|aardappelschiller|groenteschiller|kan(?:nen)?(?:\s+(?:koud|warm|heet)\s+water)?|kruik(?:en)?|bakje\s+(?:koud|warm|heet|ijskoud)?\s*water|kom(?:metje)?\s+(?:koud|warm|heet|ijskoud)\s*water|huishoudfolie|aluminiumfolie|plasticfolie|weegschaal|keukenweegschaal|deegschraper(?:s)?|bankstrijker|vijzel|stamper)\b/i;
 
 /**
  * AH-zoekresultaten worden consistenter bij enkelvoud (tomaten/aubergines/courgettes → singular).
@@ -5177,7 +5208,7 @@ function parseIngredientLine(line) {
 function uniqueByName(items) {
   const seen = new Set();
   return items.filter((item) => {
-    if (!item?.name || NON_FOOD_INGREDIENT_PATTERN.test(item.name) || KITCHEN_TOOL_INGREDIENT_RE.test(item.name)) {
+    if (!item?.name || NON_FOOD_INGREDIENT_PATTERN.test(item.name) || KITCHEN_TOOL_INGREDIENT_RE.test(item.name) || isPantryFiller(item.name)) {
       return false;
     }
     const key = `${item.quantity}|${item.unit}|${item.name}`.toLowerCase();
@@ -9115,7 +9146,54 @@ if (AH_API_BASE !== "https://api.ah.nl") {
   console.log(`[AH] Proxy actief: ${AH_API_BASE} (api + www)`);
 }
 
-let ahTokenCache = { token: "", expiresAt: 0 };
+// Schrijft één sleutel-waarde-paar naar de .env file naast server.js.
+// Overschrijft een bestaande regel met dezelfde sleutel; voegt toe als nieuw.
+function persistEnvKey(key, value) {
+  const envPath = path.join(__dirname, ".env");
+  try {
+    let lines = [];
+    try { lines = fs.readFileSync(envPath, "utf8").split("\n"); } catch { /* nieuw bestand */ }
+    const prefix = `${key}=`;
+    const newLine = `${key}=${value}`;
+    const idx = lines.findIndex((l) => l.startsWith(prefix));
+    if (idx >= 0) lines[idx] = newLine; else lines.push(newLine);
+    fs.writeFileSync(envPath, lines.join("\n"), "utf8");
+    console.log(`[env] ${key} opgeslagen in .env (${envPath})`);
+  } catch (err) {
+    console.warn(`[env] Kon ${key} niet naar .env schrijven: ${err?.message}`);
+  }
+}
+
+// Fallback: sla het AH-token op in DATA_DIR als JSON — altijd schrijfbaar.
+const AH_TOKEN_FILE = () => path.join(DATA_DIR, "ah_token.json");
+
+function persistAHToken(token, expiresAt) {
+  persistEnvKey("AH_ANONYMOUS_TOKEN", token);
+  try {
+    fs.writeFileSync(AH_TOKEN_FILE(), JSON.stringify({ token, expiresAt }), "utf8");
+  } catch (err) {
+    console.warn(`[AH] Kon token niet naar DATA_DIR schrijven: ${err?.message}`);
+  }
+}
+
+function loadPersistedAHToken() {
+  // Lees uit .env (al geladen in process.env) of uit DATA_DIR JSON als fallback.
+  const envToken = String(process.env.AH_ANONYMOUS_TOKEN || "").trim();
+  if (envToken) return { token: envToken, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 };
+  try {
+    const raw = fs.readFileSync(AH_TOKEN_FILE(), "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed?.token && parsed.expiresAt > Date.now()) return parsed;
+    if (parsed?.token) return { token: parsed.token, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 };
+  } catch { /* bestand bestaat nog niet */ }
+  return null;
+}
+
+// Pre-vul cache vanuit env-var of DATA_DIR zodat admin panel token toont na pm2 restart.
+const _persistedToken = loadPersistedAHToken();
+let ahTokenCache = _persistedToken
+  ? { token: _persistedToken.token, expiresAt: _persistedToken.expiresAt }
+  : { token: "", expiresAt: 0 };
 
 // Vernieuw het AH-token automatisch elke 6 dagen als er geen statisch token of proxy is ingesteld.
 // Met CF Worker (AH_API_PROXY) haalt de worker zelf tokens op; dit is dan alleen een fallback.
@@ -9153,6 +9231,50 @@ const _ahSearchCache = new Map();
 const AH_SEARCH_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 uur
 const AH_SEARCH_CACHE_MAX = 600;
 
+// Aparte cache voor ingrediënt-foto lookups (grocery-photos endpoint).
+// Slaat alleen de imageUrl op, niet de volledige productenlijst.
+const _photoCache = new Map();
+const PHOTO_CACHE_TTL = 48 * 60 * 60 * 1000; // 48 uur
+const PHOTO_CACHE_MAX = 1000;
+
+function _getPhotoCache(key) {
+  const entry = _photoCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() > entry.expiresAt) { _photoCache.delete(key); return undefined; }
+  return entry.imageUrl; // kan ook "" zijn (geen foto gevonden)
+}
+function _setPhotoCache(key, imageUrl) {
+  if (_photoCache.size >= PHOTO_CACHE_MAX) _photoCache.delete(_photoCache.keys().next().value);
+  _photoCache.set(key, { imageUrl, expiresAt: Date.now() + PHOTO_CACHE_TTL });
+}
+
+// In-memory cache voor geproxyde afbeeldingen — voorkomt herhaalde fetches naar AH CDN.
+const _imageProxyCache = new Map();
+const IMAGE_PROXY_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 dagen
+const IMAGE_PROXY_CACHE_MAX = 400;
+
+// Concurrency limiter: voorkomt te veel gelijktijdige AH API-aanroepen (flood bij grote boodschappenlijsten).
+const _ahConcurrencyLimit = 8;
+let _ahActiveRequests = 0;
+const _ahQueue = [];
+function _ahAcquire() {
+  return new Promise((resolve) => {
+    if (_ahActiveRequests < _ahConcurrencyLimit) {
+      _ahActiveRequests++;
+      resolve();
+    } else {
+      _ahQueue.push(resolve);
+    }
+  });
+}
+function _ahRelease() {
+  if (_ahQueue.length > 0) {
+    _ahQueue.shift()();
+  } else {
+    _ahActiveRequests--;
+  }
+}
+
 function _getAHSearchCache(key) {
   const entry = _ahSearchCache.get(key);
   if (!entry) return null;
@@ -9172,7 +9294,13 @@ async function fetchAHAnonymousToken() {
   // Zet AH_ANONYMOUS_TOKEN als env var (geldig ~7 dagen).
   // Vernieuwen: voer lokaal uit: node scripts/refresh-ah-token.js
   const staticToken = String(process.env.AH_ANONYMOUS_TOKEN || "").trim();
-  if (staticToken) return staticToken;
+  if (staticToken) {
+    // Populate ahTokenCache zodat admin panel het token ziet na een pm2 restart.
+    if (!ahTokenCache.token || ahTokenCache.token !== staticToken) {
+      ahTokenCache = { token: staticToken, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 };
+    }
+    return staticToken;
+  }
 
   if (ahTokenCache.token && Date.now() < ahTokenCache.expiresAt - 60_000) {
     return ahTokenCache.token;
@@ -9192,6 +9320,9 @@ async function fetchAHAnonymousToken() {
     token: data.access_token,
     expiresAt: Date.now() + (Number(data.expires_in) || 3600) * 1000,
   };
+  // Persist zodat token een pm2-restart overleeft — ook bij auto-refresh.
+  process.env.AH_ANONYMOUS_TOKEN = ahTokenCache.token;
+  persistAHToken(ahTokenCache.token, ahTokenCache.expiresAt);
   return ahTokenCache.token;
 }
 
@@ -9526,7 +9657,12 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
   const cached = _getAHSearchCache(cacheKey);
   if (cached) return cached.slice(0, count);
 
+  await _ahAcquire();
   try {
+    // Double-check cache after acquiring slot (another request may have filled it).
+    const cachedNow = _getAHSearchCache(cacheKey);
+    if (cachedNow) { _ahRelease(); return cachedNow.slice(0, count); }
+
     let token;
     try {
       token = await fetchAHAnonymousToken();
@@ -9536,8 +9672,10 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       const webResults = await _fetchAHSearchViaFirecrawlWeb(searchTerm);
       if (webResults !== null) {
         if (webResults.length > 0) _setAHSearchCache(cacheKey, webResults);
+        _ahRelease();
         return webResults.slice(0, count);
       }
+      _ahRelease();
       return [];
     }
     const searchUrl =
@@ -9559,8 +9697,10 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       const fallback = await _fetchAHSearchViaFirecrawl(searchUrl, token, searchTerm);
       if (fallback !== null) {
         if (fallback.length > 0) _setAHSearchCache(cacheKey, fallback);
+        _ahRelease();
         return fallback.slice(0, count);
       }
+      _ahRelease();
       return [];
     }
 
@@ -9622,6 +9762,30 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       baseLower === "ui" ||
       baseLower === "uien" ||
       /^(rode|gele|witte|zilver|biologisch(?:e)?)\s+ui(en)?$/i.test(baseLower);
+
+    // Fruit: zoekterm is een stuk fruit dat vers/heel gekocht wordt.
+    const isFruitQuery =
+      /^(?:biologisch\s+)?(?:\d+\s+)?(?:verse?\s+)?(appel(?:s|tje|tjes)?|peer(?:en)?|banaan|bananen|mango(?:'?s)?|aardbei(?:en)?|bosbes(?:sen)?|frambozen?|bramen?|druif|druiven|kersen?|pruimen?|sinaasappel(?:s)?|mandarijn(?:en)?|clementine(?:s)?|grapefruit|watermeloen|meloenen?|ananas|kiwi(?:'?s)?|vijg(?:en)?|abrikoos|abrikozen|perzik(?:en)?|papaja|passievrucht|granaatappel|lychee|feijoa|nectarine(?:s)?)$/.test(baseLower);
+
+    // Vlees/vis: zoekterm is een stuk vlees of vis.
+    const isMeatOrFishQuery =
+      /^(?:biologisch\s+)?(?:verse?\s+)?(?:\d+\s+g?\s*)?(kip(?:filet|poot|vleugel|dij|borst|stuk)?|kippenborst|kippendij|heel\s+kipje?|kip\b|rund(?:vlees|gehakt|filet|entrecote|ossenhaas|biefstuk)?|rundergehakt|biefstuk|entrecote|ossenhaas|varken(?:s(?:vlees|haas|filet|carbonade)?)?|half(?:om)?half\s+gehakt|gehakt\b|lam(?:vlees|bout|karbonades?|filet)?|lamsvlees|zalm(?:filet|moot)?|kabeljauw(?:filet)?|tonijn|tilapia|forel(?:filet)?|garnalen|mosselen|inktvis|heilbot|pangasius|haring|makreel|snoekbaars|spek\b|bacon\b|kalkoen(?:filet)?|eend(?:enborst)?)$/.test(baseLower);
+
+    // Noten/zaden: zoekterm is een los noot- of zaadproduct.
+    const isNutOrSeedQuery =
+      /^(?:biologisch\s+)?(?:gemalen\s+|geroosterde?\s+|ongezouten\s+|gehakte?\s+)?(amandelen?|walnoten?|cashewnoten?|hazelnoten?|paranoten?|pinda(?:'?s)?|pecannoten?|pistachenoten?|macadamianoten?|pijnboompitten?|pompoenpitten?|zonnebloempitten?|sesamzaad|lijnzaad|chiazaad|maanzaad|hennepzaad)$/.test(baseLower);
+
+    // Groente (breed): zoekterm is een verse groente die heel gekocht wordt.
+    const isBroadFreshVegQuery =
+      /^(?:biologisch\s+)?(?:verse?\s+)?(?:\d+\s+)?(wortel(?:s|tjes)?|wortelen|broccoli|bloemkool|spruitjes?|spitskool|savooikool|rode\s+kool|witte\s+kool|boerenkool|prei(?:en)?|selderij|knolselderij|venkel|asperges?|sperziebonen?|snijbonen?|peultjes?|sugarsnaps?|broccolini|romanesco|bataat|zoete\s+aardappel(?:s)?|aardappel(?:en|tjes)?|rapen?|pastina(?:ak|ken)?|radijs(?:jes)?|koolrabi|raapsteel(?:tjes)?|spinazie|andijvie|witlof|rucola|veldsla|ijsbergsla|sla\b|snijsla|kropsla|mais(?:kolf(?:ven)?)?|maiskolf|champignon(?:s)?|portobello|oesterzwam(?:men)?|shiitake(?:s)?)$/.test(baseLower);
+
+    // Is het ingredient zelf een zoet/dessert-product? Dan snoep-penalty niet toepassen.
+    const isIngredientSweetOrDessertLike =
+      /\b(chocolade|cacao|suiker|stroop|karamel|honing|kandij|vanillesuiker|snoep|drop|koek(?:je)?|gebak|bonbon|marshmallow|ijs\b|dessert)\b/i.test(baseLower);
+
+    // Is het ingredient zelf een drank? Dan drank-penalty niet toepassen.
+    const isIngredientDrinkLike =
+      /\b(sap|drank|limonade|siroop|frisdrank|bier|wijn|wijn|thee|koffie|smoothie|cocktail)\b/i.test(baseLower);
 
     const ingredientTokens = tokenizeForMatch(baseLower);
     const produceSynonymTokens = [];
@@ -9711,6 +9875,101 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         score += 60;
         adjustments.push({ kind: "penalty", label: "Geen token-overlap", delta: 60 });
       }
+
+      // ── UNIVERSELE CATEGORIE-FILTERS ────────────────────────────────────────
+      // 1. Cosmetica, persoonlijke verzorging, schoonmaak, diervoeding: altijd irrelevant.
+      //    Inclusief bekende diervoer-merken (Sheba, Whiskas, Felix, Purina, etc.).
+      if (/\b(shampoo|conditioner|haarmasker|haarverf|haarspray|bodylotion|body\s*lotion|bodywash|body\s*wash|douchegel|douche\s*gel|deodorant|tandpasta|scheerschuim|scheergel|aftershave|zonnebrand|lippenstift|mascara|foundation|concealer|nagellak|parfum|eau\s*de|wasmiddel|afwasmiddel|vaatwasmiddel|vaatwastabletten?|schoonmaakmiddel|allesreiniger|wc[-\s]?blok|spoelmiddel|droogmiddel|huishoudfolie|keukenpapier|vuilniszak|maandverband|tampon|luier|pampers?|kattenvoer|hondenvoer|dierenvoer|diervoeder|vlooienband|anti[-\s]?vlo|insectenspray|muggenspray|ongediertebestrijding)\b/i.test(title) ||
+          /\b(sheba|whiskas|felix\b|purina|royal\s*canin|pedigree|cesar\b|friskies|iams\b|eukanuba|bozita|animonda|concept\s*for\s*life|hills\b|hill's|advance\b|proplan|pro\s*plan|applaws|forthglade|lily'?s\s*kitchen|naturediet|harringtons|canagan|acana|orijen|ziwi|taste\s*of\s*the\s*wild)\b/i.test(title)) {
+        score += 400;
+        adjustments.push({ kind: "penalty", label: "Niet-voedsel (cosmetica/schoonmaak/diervoer/merk)", delta: 400 });
+      }
+
+      // 2. Snoep & confiserie: bijna altijd irrelevant voor basisingrediënten.
+      if (!isIngredientSweetOrDessertLike) {
+        if (/\b(kinder\s*(?:verrassing|surprise|bueno|schoko|country|pingui|paradiso|joy|maxi)?|surprise[-\s]?ei|haribo|m&m(?:'?s)?|skittles|smarties|winegum(?:s)?|fruitella|mentos|chupa[-\s]?chups|tic[-\s]?tac|tictac|lolly|lollies|gummy|gummies|jelly\s*beans|snoepmix|snoepzak|snoepgoed|marshmallow|zachte\s+drop|zoute\s+drop|dubbel\s+zout\s+drop|drop(?:jes)?|pepermunt(?:jes)?|pepermuntbal(?:len)?|choco\s*krispies|choco\s*pops|chocoballs)\b/i.test(title)) {
+          score += 180;
+          adjustments.push({ kind: "penalty", label: "Snoep/candy-product (niet dit ingredient)", delta: 180 });
+        }
+      }
+
+      // 3. Dranken: irrelevant als ingredient zelf geen drank is.
+      //    Inclusief "vitamin drink", "energie drink", standalone "drink" als producttype.
+      if (!isIngredientDrinkLike) {
+        if (/\b(energydrank|energy\s*drink|sportdrank|vitamine?\s*drink|vitamin\s*water|vitaminwater|frisdrank\b|cola\b|fanta\b|sprite\b|7up\b|icetea|ice\s*tea|bier\b|pilsner|lager|ale\b|wijn\b|rosé|champagne|prosecco|cava|jenever|vodka|rum\b|whisky|gin\b|likeur|cocktail|smoothie(?:\s+drink)?|milkshake\b|chocolademelk\b|chocomel\b|drinkpak|aquarius|powerade|gatorade|AA\s*drink|nalu\b|monster\b|red\s*bull)\b/i.test(title) ||
+            /\bdrink\b/i.test(title) && /\b(0%|light|zero|sport|vitamine?|energie|boost|refresh|red\s*fruit|lemon|orange|berry|tropical)\b/i.test(title)) {
+          score += 120;
+          adjustments.push({ kind: "penalty", label: "Drank-product (ingredient is geen drank)", delta: 120 });
+        }
+      }
+
+      // 4. Kant-en-klaar maaltijden: voor basisingrediënten meestal irrelevant.
+      //    (Tenzij het ingredient zelf 'maaltijd/schotel' bevat.)
+      if (!/\b(maaltijd|schotel|gerecht|kant.en.klaar|ready\s*meal)\b/i.test(baseLower)) {
+        if (/\b(kant[-\s]?en[-\s]?klaar|kant-en-klaar|oven[-\s]?schotel|maaltijdpakket|meal\s*kit|hello\s*fresh|marley\s*spoon|picnic\s*maaltijd|diepvries\s*maaltijd|diepvriesmaaltijd)\b/i.test(title)) {
+          score += 75;
+          adjustments.push({ kind: "penalty", label: "Kant-en-klaar maaltijd (basisingredient gevraagd)", delta: 75 });
+        }
+      }
+
+      // Helper: matcht ook samengestelde Nederlandse woorden (bv. "wortelsoep", "appelsap").
+      // Geeft true als `term` voorkomt als zelfstandig woord of als deel van een samenstelling.
+      const containsCompound = (term) => new RegExp(`(?:^|\\s|-)${term}|${term}(?:\\s|-|$)`, "i").test(title);
+      const PROCESSED_SUFFIXES_RE = /(?:sap|soep|saus|puree|moes|taart|cake|chips|snack|sticks?|vlokken|jam|stroop|limonade|siroop|drank|gedroogd|ijs|sorbet|bouillon|spread|pesto|kroket|nugget|paté|koek|gebak|compote|chutney|confiture|marmelade|conserven?|blik|pot\b|vlokken)/i;
+
+      // 5. Fruit: penalizeer verwerkte versies (sap, jam, taart, ijs, chips) als vers fruit gevraagd.
+      if (isFruitQuery) {
+        // Controleer ook samengestelde woorden zoals "appelsap", "appeltaart", "appelflap"
+        if (PROCESSED_SUFFIXES_RE.test(title) || /(?:sap|moes|taart|flap|gebak|cake|ijs|stroop|jam|smoothie|nectar|frisdrank|siroop|vlokken|gedroogd|chips|snack|compote|chutney|confiture|marmelade)\b/i.test(title)) {
+          score += 70;
+          adjustments.push({ kind: "penalty", label: "Fruit verwerkt (sap/jam/cake/chips — vers gevraagd)", delta: 70 });
+        }
+        if (/\b(per\s+stuk|los\b|vers(?:e)?\b|stuks?|biologisch)\b/i.test(title)) {
+          score -= 10;
+          adjustments.push({ kind: "bonus", label: "Vers fruit (stuk/los)", delta: -10 });
+        }
+      }
+
+      // 6. Vlees & vis: penalizeer snacks met vleessmaak en sterk verwerkte producten.
+      if (isMeatOrFishQuery) {
+        if (/(?:chips|crisps|snack|crackers?|smaak\b)/i.test(title) && !/\b(filet|haas|dij|borst|bout|vers|biologisch|scharrel)\b/i.test(title)) {
+          score += 90;
+          adjustments.push({ kind: "penalty", label: "Vlees/vis als smaak in snack", delta: 90 });
+        }
+        // Compound-aware: "kippennuggets", "zalmkroket", "kip kroket" etc.
+        if (/(?:paté|kroket|bitterballen?|frikandel|nuggets?|shoarma|doner|gyros|saucijs|hotdog|slavink|loempia|pizza\b|taco\b|burrito)/i.test(title) && !/(?:kroket|nugget|shoarma|paté)/i.test(baseLower)) {
+          score += 70;
+          adjustments.push({ kind: "penalty", label: "Sterk verwerkt vlees/vis product", delta: 70 });
+        }
+        // Soepblokje / bouillonblokje: niet het vlees zelf
+        if (/(?:soep|bouillon)(?:blokje|tablet|poeder|mix|zakje|pot\b)?/i.test(title) && !/\bsoep\b/i.test(baseLower)) {
+          score += 65;
+          adjustments.push({ kind: "penalty", label: "Soep/bouillon i.p.v. puur vlees/vis", delta: 65 });
+        }
+      }
+
+      // 7. Noten/zaden: penalizeer koek/chocolade/repen/brownies met noot als smaak.
+      if (isNutOrSeedQuery) {
+        if (/(?:koek(?:je)?|chocolade|reep|bar\b|mueslibar|granola\s*bar|ontbijtkoek|cake\b|brownie|bonbon|praline|truffel|hazelnootpasta|notenpasta)/i.test(title) && !/\b(pindakaas|notenpasta|hazelnootpasta)\b/i.test(baseLower)) {
+          score += 65;
+          adjustments.push({ kind: "penalty", label: "Noot als smaak in koek/reep/brownie", delta: 65 });
+        }
+        if (/\b(ongezouten|geroosterd|naturel|los\b|zak\b)\b/i.test(title)) {
+          score -= 10;
+          adjustments.push({ kind: "bonus", label: "Los noot/zaad product", delta: -10 });
+        }
+      }
+
+      // 8. Verse groente (breed): penalizeer verwerkte producten — ook samengestelde woorden.
+      //    Diepvries groente is WEL ok (zelfde ingredient, alleen bevroren).
+      if (isBroadFreshVegQuery || isPlainFreshVegIngredient) {
+        const isJustFrozen = /\bdiepvries\b/i.test(title) && !/(?:soep|saus|puree|chips|snack|mix\b|schotel|maaltijd)/i.test(title);
+        if (!isJustFrozen && (PROCESSED_SUFFIXES_RE.test(title) || /(?:soep|saus|puree|moes|chips|snack|sticks?|blik\b|gedroogd|bouillon|pesto|spread|dip\b|hummus|conserven?|op\s+zuur)\b/i.test(title))) {
+          score += 65;
+          adjustments.push({ kind: "penalty", label: "Groente verwerkt (soep/saus/blik/snack)", delta: 65 });
+        }
+      }
+      // ── EINDE UNIVERSELE FILTERS ─────────────────────────────────────────────
 
       // Cheese equivalents: if ingredient is parmesan-like, accept Italian names too.
       if (cheeseEquivTokens.length) {
@@ -9805,15 +10064,20 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         }
       }
 
-      // Eggs: avoid salad/bakery/candy results when searching for eggs.
+      // Eggs: avoid salad/bakery/candy/confectionery results when searching for eggs.
       if (isEggQuery) {
-        if (/\b(eiersalade|eierkoek|eierkoeken|paasei|paaseieren|chocolade)\b/.test(title)) {
-          score += 90;
-          adjustments.push({ kind: "penalty", label: "Ei ≠ salade/koek/chocolade", delta: 90 });
+        // Hard penalty: confectionery, candy, kinder-products, chocolate eggs, cosmetics, easter
+        if (/\b(kinder|kinderverrassing|surprise|verrassing|chocolade|choco|eiersalade|eierkoek|eierkoeken|paasei|paaseieren|marsepein|fondant|drop|snoep|snoepje|lolly|tic\s*tac|tictac|jelly|gummy|gummies|haribo|m&m|m&ms|skittles|smarties|cosmet|crème|creme|serum|masker|bodyscrub|shampoo)\b/.test(title)) {
+          score += 120;
+          adjustments.push({ kind: "penalty", label: "Ei ≠ snoep/kinder/chocolade/cosmetica", delta: 120 });
         }
-        if (/\b(eieren|ei)\b/.test(title)) {
-          score -= 16;
-          adjustments.push({ kind: "bonus", label: "Ei in titel", delta: -16 });
+        // Bonus: actual eggs in title
+        if (/\b(eieren|scharreleieren|biologische\s+eieren|vrije-uitloopeieren|kooi(?:vrij)?eieren)\b/.test(title)) {
+          score -= 25;
+          adjustments.push({ kind: "bonus", label: "Ei-product in titel", delta: -25 });
+        } else if (/\bei\b/.test(title)) {
+          score -= 10;
+          adjustments.push({ kind: "bonus", label: "Ei in titel", delta: -10 });
         }
       }
 
@@ -10110,10 +10374,12 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       .sort((a, b) => {
         const sa = getDetailedScore(a.title || "");
         const sb = getDetailedScore(b.title || "");
+        // Relevantiescore is leidend (lager = beter match).
+        // Prijs is tiebreaker binnen dezelfde score-band zodat goedkopere varianten vooraan staan.
+        if (sa.score !== sb.score) return sa.score - sb.score;
         const pa = a.currentPrice ?? a.priceBeforeBonus ?? 9999;
         const pb = b.currentPrice ?? b.priceBeforeBonus ?? 9999;
         if (pa !== pb) return pa - pb;
-        if (sa.score !== sb.score) return sa.score - sb.score;
         const ba = a.isBonus || a.isBonusPrice ? 1 : 0;
         const bb = b.isBonus || b.isBonusPrice ? 1 : 0;
         if (ba !== bb) return bb - ba;
@@ -10140,8 +10406,10 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
 
     const parsed = products.map(parseAHProduct);
     if (parsed.length > 0) _setAHSearchCache(cacheKey, parsed);
+    _ahRelease();
     return parsed;
   } catch (err) {
+    _ahRelease();
     console.warn(`[AH] findAHProducts fout voor "${searchTerm}": ${err?.message || err}`);
     return [];
   }
@@ -10165,22 +10433,26 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) 
   const variants = [];
   // Always pull a plain-base search so we never end up with an empty result.
   variants.push({ tag: null, query: base, count: BASE_COUNT });
-  // If the user already toggled bio in the basket, also pull a biologisch-boosted base set.
-  if (prefs?.bio) variants.push({ tag: "biologisch", query: `biologisch ${base}`, count: BASE_COUNT });
+  // AH huismerk levert goedkope basisvarianten die door de gewone zoekopdracht soms gemist worden.
+  variants.push({ tag: "huismerk", query: `AH ${base}`, count: LABEL_COUNT });
 
-  // Always pull label-specific alternatives so we can categorize them.
-  variants.push(
-    { tag: "biologisch", query: `biologisch ${base}`, count: LABEL_COUNT },
-    { tag: "beter leven 1 ster", query: `beter leven 1 ster ${base}`, count: LABEL_COUNT },
-    // Broader query to ensure we still retrieve Beter Leven items even when "1 ster"
-    // isn't matched in AH's search index. Star-level is then inferred from metadata.
-    { tag: null, query: `beter leven ${base}`, count: Math.max(LABEL_COUNT, 10) },
-    { tag: "vegetarisch", query: `vegetarisch ${base}`, count: LABEL_COUNT },
-    { tag: "vegan", query: `vegan ${base}`, count: LABEL_COUNT },
-    { tag: "plantaardig", query: `plantaardig ${base}`, count: LABEL_COUNT },
-    // AH huismerk levert goedkope basisvarianten die door de gewone zoekopdracht soms gemist worden.
-    { tag: "huismerk", query: `AH ${base}`, count: LABEL_COUNT }
-  );
+  // Alleen label-varianten ophalen als de bijbehorende voorkeur actief is.
+  // Dit voorkomt 6+ onnodige AH API-aanroepen per ingrediënt wanneer geen filters zijn ingesteld.
+  if (prefs?.bio) {
+    variants.push({ tag: "biologisch", query: `biologisch ${base}`, count: BASE_COUNT });
+  } else {
+    // Altijd 1 bio-query zodat de Wissel-sheet bio-opties kan tonen.
+    variants.push({ tag: "biologisch", query: `biologisch ${base}`, count: LABEL_COUNT });
+  }
+  if (prefs?.beterLeven1) {
+    variants.push({ tag: "beter leven 1 ster", query: `beter leven 1 ster ${base}`, count: BASE_COUNT });
+    variants.push({ tag: null, query: `beter leven ${base}`, count: Math.max(LABEL_COUNT, 10) });
+  } else {
+    variants.push({ tag: "beter leven 1 ster", query: `beter leven 1 ster ${base}`, count: LABEL_COUNT });
+  }
+  if (prefs?.vegetarisch) variants.push({ tag: "vegetarisch", query: `vegetarisch ${base}`, count: BASE_COUNT });
+  if (prefs?.vegan) variants.push({ tag: "vegan", query: `vegan ${base}`, count: BASE_COUNT });
+  if (prefs?.plantaardig) variants.push({ tag: "plantaardig", query: `plantaardig ${base}`, count: BASE_COUNT });
 
   const matchSeed = sanitizeText(rawBase || base || ingredient || "");
 
@@ -15151,6 +15423,12 @@ async function buildStoreBasket(body) {
         const ingredientName = canonicalizeIngredientForStoreSearch(rawName);
         if (!ingredientName) return { ingredient: ingredientName, product: null, products: [] };
 
+        // Sla keukengerei, non-food en water over — deze horen niet in een boodschappenmandje.
+        if (KITCHEN_TOOL_INGREDIENT_RE.test(rawName) || KITCHEN_TOOL_INGREDIENT_RE.test(ingredientName) ||
+            NON_FOOD_INGREDIENT_PATTERN.test(rawName) || isPantryFiller(rawName)) {
+          return { ingredient: ingredientName, product: null, products: [], skipped: true };
+        }
+
         // Fetch a wider, label-tagged set of alternatives so the AH "Wissel"
         // sheet can group by Meest voordelig / Bio / Beter Leven / etc.
         let products = await findAHAlternativesGrouped(ingredientName, preferences, 30);
@@ -15186,6 +15464,10 @@ async function buildStoreBasket(body) {
 
   const matchedItems = items.map((item, index) => {
     const result = searchResults[index] || { product: null, products: [] };
+
+    // Skip keukengerei dat toch de filter is doorgekomen.
+    if (result.skipped) return null;
+
     let choices;
 
     if (store === "albert-heijn" && result.products.length) {
@@ -15237,7 +15519,7 @@ async function buildStoreBasket(body) {
       foundResults.length
         ? "Plately heeft echte winkelmatches gevonden. Controleer eventueel per ingrediënt en ga daarna door."
         : "Plately heeft nog niet voor elk ingrediënt een exacte winkelmatch gevonden. Controleer per ingrediënt en open daarna de winkel.",
-    items: matchedItems,
+    items: matchedItems.filter(Boolean),
   };
 }
 
@@ -17611,25 +17893,45 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/grocery-photos" && request.method === "POST") {
       const body = await readRequestBody(request);
       const items = Array.isArray(body.items) ? body.items.slice(0, 20) : [];
-      const photoResults = await Promise.allSettled(
-        items.map(async (item) => {
-          const rawTitle = sanitizeText(item.title || "");
-          const searchTitle = canonicalizeIngredientForStoreSearch(rawTitle) || rawTitle;
-          let parsed = await findAHAlternativesGrouped(searchTitle, {}, 16);
-          if (!parsed.length) parsed = await findAHProducts(searchTitle, 12);
-          const best = selectAhProductForGroceryHandoff(parsed, {});
-          return { id: item.id, imageUrl: best?.imageUrl || parsed[0]?.imageUrl || "" };
-        })
-      );
       const photos = {};
-      for (const result of photoResults) {
-        if (result.status === "fulfilled" && result.value.imageUrl) {
-          const raw = result.value.imageUrl;
-          photos[result.value.id] = isAllowedImageProxyUrl(raw)
-            ? `/api/image-proxy?url=${encodeURIComponent(raw)}`
-            : raw;
+
+      // Parallel fetch met max 5 gelijktijdige AH-requests (AH rate limiter heeft 8 slots).
+      // Items die al in cache zitten worden direct opgelost, zonder netwerk.
+      const PHOTO_CONCURRENCY = 5;
+      const fetchOne = async (item) => {
+        const rawTitle = sanitizeText(item.title || "");
+        // Sla keukengerei en non-food direct over — geen foto nodig.
+        if (KITCHEN_TOOL_INGREDIENT_RE.test(rawTitle) || NON_FOOD_INGREDIENT_PATTERN.test(rawTitle) || isPantryFiller(rawTitle)) {
+          return [item.id, ""];
+        }
+        const searchTitle = canonicalizeIngredientForStoreSearch(rawTitle) || rawTitle;
+        const cacheKey = searchTitle.toLowerCase();
+        let imageUrl = _getPhotoCache(cacheKey);
+        if (imageUrl === undefined) {
+          try {
+            const parsed = await findAHProducts(searchTitle, 6);
+            const best = parsed.find((p) => p.imageUrl) || null;
+            imageUrl = best?.imageUrl || "";
+          } catch {
+            imageUrl = "";
+          }
+          _setPhotoCache(cacheKey, imageUrl);
+        }
+        const url = imageUrl && isAllowedImageProxyUrl(imageUrl)
+          ? `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`
+          : imageUrl || "";
+        return [item.id, url];
+      };
+
+      // Verwerk in batches van PHOTO_CONCURRENCY parallel.
+      for (let i = 0; i < items.length; i += PHOTO_CONCURRENCY) {
+        const batch = items.slice(i, i + PHOTO_CONCURRENCY);
+        const results = await Promise.all(batch.map(fetchOne));
+        for (const [id, url] of results) {
+          if (url) photos[id] = url;
         }
       }
+
       sendJson(response, 200, { ok: true, photos });
       return;
     }
@@ -18851,12 +19153,15 @@ const server = http.createServer(async (request, response) => {
           return;
         }
         ahTokenCache = { token, expiresAt: Date.now() + (Number(data.expires_in) || 604800) * 1000 };
-        console.log(`[AH] Token opgehaald via admin (eerste 12: ${token.slice(0, 12)}…)`);
+        process.env.AH_ANONYMOUS_TOKEN = token;
+        persistAHToken(token, ahTokenCache.expiresAt);
+        console.log(`[AH] Token opgehaald via admin en opgeslagen in .env + DATA_DIR (eerste 12: ${token.slice(0, 12)}…)`);
         sendJson(response, 200, {
           ok: true,
           tokenPreview: token.slice(0, 12) + "…",
           expiresAt: new Date(ahTokenCache.expiresAt).toISOString(),
           proxyUrl: ahBase,
+          persisted: true,
         });
       } catch (err) {
         sendJson(response, 502, { ok: false, error: err?.message || "Fetch mislukt", proxyUrl: ahBase, proxySecretSet: Boolean(proxySecret) });
@@ -18866,13 +19171,29 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === "/api/admin/ah-token-status" && request.method === "GET") {
       await requireAdmin(request);
+      const staticToken = String(process.env.AH_ANONYMOUS_TOKEN || "").trim();
+      // Als cache leeg is maar env-var wel aanwezig, vul cache alsnog (race bij startup).
+      if (!ahTokenCache.token && staticToken) {
+        ahTokenCache = { token: staticToken, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 };
+      }
+      // Als beide leeg zijn, probeer nog eens uit DATA_DIR JSON.
+      if (!ahTokenCache.token) {
+        const fromFile = loadPersistedAHToken();
+        if (fromFile?.token) {
+          ahTokenCache = { token: fromFile.token, expiresAt: fromFile.expiresAt };
+          process.env.AH_ANONYMOUS_TOKEN = fromFile.token;
+        }
+      }
+      // Laatste fallback: haal actief een nieuw token op als alles leeg is (max ~5s).
+      if (!ahTokenCache.token) {
+        try { await fetchAHAnonymousToken(); } catch {}
+      }
       const hasToken = Boolean(ahTokenCache.token);
       const expiresAt = ahTokenCache.expiresAt || 0;
-      const staticToken = String(process.env.AH_ANONYMOUS_TOKEN || "").trim();
       sendJson(response, 200, {
         ok: true,
         hasToken,
-        source: staticToken ? "env" : "dynamic",
+        source: staticToken ? "env" : ahTokenCache.token ? "file" : "none",
         tokenPreview: hasToken ? ahTokenCache.token.slice(0, 12) + "…" : null,
         expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
         expiresInMs: expiresAt ? Math.max(0, expiresAt - Date.now()) : 0,
@@ -18895,10 +19216,11 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 400, { ok: false, error: "Geen geldig token opgegeven." });
         return;
       }
-      // Update in-memory cache (expires_in from AH is ~604800s = 7 days)
       ahTokenCache = { token, expiresAt: Date.now() + 6 * 24 * 60 * 60 * 1000 };
-      console.log(`[AH] Token bijgewerkt via /api/admin/ah-token-refresh (eerste 12 chars: ${token.slice(0, 12)}…)`);
-      sendJson(response, 200, { ok: true, message: "AH token bijgewerkt." });
+      process.env.AH_ANONYMOUS_TOKEN = token;
+      persistAHToken(token, ahTokenCache.expiresAt);
+      console.log(`[AH] Token bijgewerkt via /api/admin/ah-token-refresh en opgeslagen in .env + DATA_DIR (eerste 12: ${token.slice(0, 12)}…)`);
+      sendJson(response, 200, { ok: true, message: "AH token bijgewerkt en persistent opgeslagen." });
       return;
     }
 

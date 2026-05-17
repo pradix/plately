@@ -883,6 +883,41 @@
       "createdAt": "2026-05-05T21:11:54.003Z",
       "updatedAt": "2026-05-05T21:11:54.003Z",
       "email": "test@plately.local"
+    },
+    "user-fa4c8cc7-26c7-4f1e-b9df-bddc2e456d94": {
+      "id": "user-fa4c8cc7-26c7-4f1e-b9df-bddc2e456d94",
+      "profile": {
+        "name": "",
+        "handle": "",
+        "favoriteSupermarket": "ah",
+        "gender": "",
+        "birthDate": ""
+      },
+      "importedRecipes": [],
+      "cookbooks": [
+        {
+          "id": "cb-1bd0bdc7-6a79-446c-b63a-96c72b9e3631",
+          "name": "❤️ Favorieten",
+          "recipeIds": []
+        }
+      ],
+      "selectedCookbookId": "cb-1bd0bdc7-6a79-446c-b63a-96c72b9e3631",
+      "onboardingSeenAt": "",
+      "mealPlan": {
+        "maandag": null,
+        "dinsdag": null,
+        "woensdag": null,
+        "donderdag": null,
+        "vrijdag": null,
+        "zaterdag": null,
+        "zondag": null
+      },
+      "groceryItems": [],
+      "recipeProgress": {},
+      "featuredRecipeId": "",
+      "selectedRecipeId": "",
+      "createdAt": "2026-05-15T16:28:32.070Z",
+      "updatedAt": "2026-05-15T16:28:32.070Z"
     }
   },
   "sessions": {
@@ -904,7 +939,8 @@
     "e9153d1066cda22cba757fc5c7233f1b8e97ffe4dee6da3f": "user-3023a61a-9800-458f-b8ce-2999ac12f361",
     "20b3a541cc94d14afea418a3e69090348022ef7dc9ce0805": "user-302d18b0-1ead-4338-8e4d-1f861698ee4d",
     "7f777b75255df76cec217fb720ce789f4a7b6a6ec97ec715": "user-a01c5846-f665-497a-a098-9d6329d65fd2",
-    "4bab924e6d9547845137955f3cbe91d189becdac0c48e8b2": "user-0cbdcdeb-9462-4f1b-9eec-9f63922a3646"
+    "4bab924e6d9547845137955f3cbe91d189becdac0c48e8b2": "user-0cbdcdeb-9462-4f1b-9eec-9f63922a3646",
+    "bb1c70b0e4d984f3958c592637fdf62abbda734910ccd1f6": "user-fa4c8cc7-26c7-4f1e-b9df-bddc2e456d94"
   },
   "authSessions": {
     "06ef960ba8cefba3329bb5e5fcb585fe276b720f286a32e6": {
@@ -927,5 +963,8 @@
       "userId": "user-53d8f38f-19cb-4aa1-9229-b75f4e410b87",
       "email": "test@plately.local"
     }
-  }
+  },
+  "pushSubscriptions": [],
+  "announcements": [],
+  "shareLinks": {}
 }
