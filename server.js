@@ -10927,7 +10927,40 @@ function _jumboFindProductsInObj(obj, depth, results) {
 }
 
 async function findJumboProduct(ingredient) {
-  // Correcte Jumbo product zoek-URL (productpagina, niet /zoeken/)
+  // Strategie 0: Jumbo interne catalog API (JSON — snel en betrouwbaarder dan HTML scrapen)
+  try {
+    const apiUrl = `https://www.jumbo.com/api/catalog/products?q=${encodeURIComponent(ingredient)}&size=5&from=0`;
+    const apiResp = await fetch(apiUrl, {
+      headers: {
+        ...FETCH_HEADERS,
+        accept: "application/json",
+        "accept-language": "nl-NL,nl;q=0.9",
+        referer: "https://www.jumbo.com/",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (apiResp.ok) {
+      const data = await apiResp.json();
+      // Structuur: { products: { data: [ { product: { data: { id, title, prices, imageInfo } } } ] } }
+      const hits = data?.products?.data || data?.data || [];
+      for (const hit of hits) {
+        const p = hit?.product?.data || hit?.data || hit;
+        if (!p) continue;
+        const id = String(p.id || "");
+        const name = sanitizeText(p.title || "");
+        if (/^\d{4,8}[A-Z]{2,5}$/.test(id) && name.length > 2 && !NON_FOOD_INGREDIENT_PATTERN.test(name)) {
+          return {
+            sku: id,
+            name,
+            price: _jumboFormatPrice(p.prices),
+            imageUrl: _jumboExtractImageUrl(p),
+          };
+        }
+      }
+    }
+  } catch { /* val door naar HTML-scraping */ }
+
+  // Strategie 1-4: HTML scrapen als API mislukt
   const searchUrl = `https://www.jumbo.com/producten/?searchType=keyword&searchTerms=${encodeURIComponent(ingredient)}`;
   try {
     const response = await fetch(searchUrl, {
@@ -18347,25 +18380,29 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/grocery-photos" && request.method === "POST") {
       const body = await readRequestBody(request);
       const items = Array.isArray(body.items) ? body.items.slice(0, 20) : [];
+      const store = body.store === "jumbo" ? "jumbo" : "ah";
       const photos = {};
 
-      // Parallel fetch met max 5 gelijktijdige AH-requests (AH rate limiter heeft 8 slots).
-      // Items die al in cache zitten worden direct opgelost, zonder netwerk.
-      const PHOTO_CONCURRENCY = 5;
+      // Parallel fetch — max 5 gelijktijdig (rate limiter).
+      const PHOTO_CONCURRENCY = store === "jumbo" ? 3 : 5;
       const fetchOne = async (item) => {
         const rawTitle = sanitizeText(item.title || "");
-        // Sla keukengerei en non-food direct over — geen foto nodig.
         if (KITCHEN_TOOL_INGREDIENT_RE.test(rawTitle) || NON_FOOD_INGREDIENT_PATTERN.test(rawTitle) || isPantryFiller(rawTitle)) {
           return [item.id, ""];
         }
         const searchTitle = canonicalizeIngredientForStoreSearch(rawTitle) || rawTitle;
-        const cacheKey = searchTitle.toLowerCase();
+        const cacheKey = `${store}:${searchTitle.toLowerCase()}`;
         let imageUrl = _getPhotoCache(cacheKey);
         if (imageUrl === undefined) {
           try {
-            const parsed = await findAHProducts(searchTitle, 6);
-            const best = parsed.find((p) => p.imageUrl) || null;
-            imageUrl = best?.imageUrl || "";
+            if (store === "jumbo") {
+              const product = await findJumboProduct(searchTitle);
+              imageUrl = product?.imageUrl || "";
+            } else {
+              const parsed = await findAHProducts(searchTitle, 6);
+              const best = parsed.find((p) => p.imageUrl) || null;
+              imageUrl = best?.imageUrl || "";
+            }
           } catch {
             imageUrl = "";
           }

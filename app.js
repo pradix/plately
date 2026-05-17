@@ -7492,6 +7492,7 @@ async function fetchGroceryPhotos() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          store: state.profile.favoriteSupermarket || "ah",
           items: itemsWithoutPhoto.map((item) => ({ id: item.id, title: item.title })),
         }),
       });
