@@ -18241,6 +18241,14 @@ body {
   border-color: #3a5c37;
   color: #fff;
 }
+.grocery-sort-pill--share {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: #25a244;
+  border-color: rgba(37,162,68,0.2);
+}
 
 /* ── Nav avatar icon-wrap: no pill background, just ring ── */
 .nav-icon-wrap--avatar {

@@ -20957,6 +20957,54 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/bulk-import-recipe" && request.method === "POST") {
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const email = sanitizeEmail(String(body.email || "").trim());
+        const url = String(body.url || "").trim();
+        if (!email || !url.startsWith("http")) {
+          return sendJson(response, 400, { ok: false, error: "email en url zijn verplicht" });
+        }
+
+        // Import the recipe
+        const recipe = await importRecipe(url, "", "");
+        if (!recipe || !recipe.title) {
+          return sendJson(response, 422, { ok: false, error: "Kon geen recept importeren van deze URL" });
+        }
+        const sanitized = sanitizeRecipeForStorage(recipe);
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const existing = await pool.query("SELECT id, app_state FROM plately_users WHERE email = $1 LIMIT 1", [email]);
+          if (!existing.rows[0]) return sendJson(response, 404, { ok: false, error: `Gebruiker niet gevonden: ${email}` });
+          const userId = existing.rows[0].id;
+          const appState = existing.rows[0].app_state || {};
+          const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+          const alreadyExists = recipes.some((r) => r.id === sanitized.id || r.sourceUrl === sanitized.sourceUrl);
+          if (!alreadyExists) recipes.unshift(sanitized);
+          const updated = { ...appState, importedRecipes: recipes };
+          await pool.query("UPDATE plately_users SET app_state = $2::jsonb, updated_at = NOW() WHERE id = $1", [userId, JSON.stringify(updated)]);
+        } else {
+          const rawDb = await fsp.readFile(DATA_FILE, "utf8").catch(() => "{}");
+          const db = JSON.parse(rawDb);
+          const user = Object.values(db.users || {}).find((u) => sanitizeEmail(u.email || "") === email);
+          if (!user) return sendJson(response, 404, { ok: false, error: `Gebruiker niet gevonden: ${email}` });
+          const recipes = Array.isArray(user.importedRecipes) ? user.importedRecipes : [];
+          const alreadyExists = recipes.some((r) => r.id === sanitized.id || r.sourceUrl === sanitized.sourceUrl);
+          if (!alreadyExists) { recipes.unshift(sanitized); user.importedRecipes = recipes; }
+          await fsp.writeFile(DATA_FILE, JSON.stringify(db), "utf8");
+        }
+
+        console.log(`✅ Admin bulk-import: ${sanitized.title} → ${email}`);
+        return sendJson(response, 200, { ok: true, title: sanitized.title, id: sanitized.id });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/bulk-import-recipe:", error.message);
+        return sendJson(response, 500, { ok: false, error: error.message });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/pending-channels" && request.method === "GET") {
       console.log("⏳ /api/admin/pending-channels called");
 

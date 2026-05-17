@@ -3748,16 +3748,32 @@ async function loadHomeSeoRecipeKeywordsOnce() {
 
 function pickHomeQuickChips(count, rng) {
   const extra = Array.isArray(homeSeoRecipeKeywordPool) ? homeSeoRecipeKeywordPool : [];
-  const n = Math.max(0, Math.min(count, HOME_QUICK_CHIP_DISH_POOL.length + HOME_QUICK_CHIP_GENERAL_POOL.length + extra.length));
+
+  // Personalized: add titles from user's saved recipes as chip suggestions
+  const personal = getSavedImportedRecipes()
+    .map((r) => (r.title || "").trim())
+    .filter((t) => t.length > 2 && t.length <= 32)
+    .slice(0, 12);
+
+  const n = Math.max(0, Math.min(count, HOME_QUICK_CHIP_DISH_POOL.length + HOME_QUICK_CHIP_GENERAL_POOL.length + extra.length + personal.length));
   if (n === 0) return [];
 
-  const dishPick = pickUniqueRandom(HOME_QUICK_CHIP_DISH_POOL, 1, rng)[0];
-  const remainingCount = Math.max(0, n - 1);
-  const combined = [...HOME_QUICK_CHIP_DISH_POOL, ...HOME_QUICK_CHIP_GENERAL_POOL, ...extra].filter((x) => x !== dishPick);
-  const rest = pickUniqueRandom(combined, remainingCount, rng);
+  // Always try to include 1 personal recipe chip if user has recipes
+  let picks = [];
+  if (personal.length) {
+    const personalPick = pickUniqueRandom(personal, 1, rng)[0];
+    picks.push(personalPick);
+  }
 
-  // Preserve randomness of display order.
-  return pickUniqueRandom([dishPick, ...rest], n, rng);
+  const dishPick = pickUniqueRandom(HOME_QUICK_CHIP_DISH_POOL, 1, rng)[0];
+  picks.push(dishPick);
+
+  const remaining = Math.max(0, n - picks.length);
+  const combined = [...HOME_QUICK_CHIP_DISH_POOL, ...HOME_QUICK_CHIP_GENERAL_POOL, ...extra]
+    .filter((x) => !picks.includes(x));
+  const rest = pickUniqueRandom(combined, remaining, rng);
+
+  return pickUniqueRandom([...picks, ...rest], n, rng);
 }
 
 // ── Focus-state helpers (recent searches, recent viewed recipes, intent chips) ─
@@ -5552,7 +5568,10 @@ function renderRecentImports() {
   heading.classList.remove("hidden");
 
   // Pick 1 random recipe — different each render
-  const recipe = all[Math.floor(Math.random() * all.length)];
+  // Same recipe all day — changes at midnight
+  const d = new Date();
+  const dateSeed = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  const recipe = all[dateSeed % all.length];
   const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
   const meta = [recipe.time, recipe.servings ? `${recipe.servings} personen` : ""].filter(Boolean).join(" · ");
 
@@ -6013,6 +6032,30 @@ function renderCookbookFilterBar() {
     .join("");
 }
 
+function getSeason() {
+  const m = new Date().getMonth() + 1;
+  if (m >= 3 && m <= 5) return "lente";
+  if (m >= 6 && m <= 8) return "zomer";
+  if (m >= 9 && m <= 11) return "herfst";
+  return "winter";
+}
+
+const SEASONAL_KEYWORDS = {
+  lente:  ["asperge", "aardbei", "rabarber", "spinazie", "rucola", "radijs", "erwten", "lente-ui", "bospeen"],
+  zomer:  ["courgette", "aubergine", "paprika", "tomaat", "bbq", "gazpacho", "komkommer", "watermeloen", "mais", "maïs", "gegrild"],
+  herfst: ["pompoen", "paddenstoel", "peer", "appel", "walnoot", "kastanje", "pastinaak", "spruitjes", "rode kool", "knolselderij"],
+  winter: ["stamppot", "snert", "erwtensoep", "hutspot", "hachee", "boerenkool", "knolselderij", "rode kool", "witlof", "zuurkool"],
+};
+
+function isSeasonalRecipe(recipe) {
+  const keywords = SEASONAL_KEYWORDS[getSeason()] || [];
+  const text = [
+    recipe.title || "",
+    ...(recipe.ingredients || []).map((i) => i.name || ""),
+  ].join(" ").toLowerCase();
+  return keywords.some((kw) => text.includes(kw));
+}
+
 function renderRecipeGrid() {
   // Keep skeleton while session is still loading.
   if (!state.session.ready) return;
@@ -6035,6 +6078,11 @@ function renderRecipeGrid() {
     const imported = getSavedImportedRecipes();
     const seeds = COOKBOOK_SHOWCASE_IDS.map((id) => getRecipeById(id)).filter(Boolean);
     recipes = imported.length ? [...imported, ...seeds] : [];
+    // Boost seasonal recipes to the top (stable sort)
+    recipes = [
+      ...recipes.filter(isSeasonalRecipe),
+      ...recipes.filter((r) => !isSeasonalRecipe(r)),
+    ];
   } else {
     recipes = getVisibleRecipes();
   }
@@ -9012,6 +9060,35 @@ async function shareSelectedRecipe() {
   openShareCard(recipe);
 }
 
+function shareGroceryList() {
+  const items = (state.groceryItems || []).filter((i) => !i.checked);
+  if (!items.length) { showToast("Je lijst is leeg."); return; }
+
+  // Group by recipe title for readability
+  const grouped = new Map();
+  for (const item of items) {
+    const key = item.recipeTitle || "Overig";
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(item);
+  }
+
+  const lines = [];
+  for (const [title, group] of grouped) {
+    if (grouped.size > 1) lines.push(`\n*${title}*`);
+    for (const item of group) {
+      lines.push(`• ${item.amount ? item.amount + " " : ""}${item.title}`);
+    }
+  }
+
+  const text = `📋 Mijn boodschappenlijst (Plately):\n${lines.join("\n")}`;
+
+  if (navigator.share) {
+    navigator.share({ title: "Boodschappenlijst", text }).catch(() => {});
+  } else {
+    window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank", "noopener");
+  }
+}
+
 bindEvent(document.getElementById("shareCardClose"), "click", closeShareCard);
 
 bindEvent(document.getElementById("shareCardCopyLink"), "click", async () => {
@@ -11749,6 +11826,7 @@ bindEvent(document.getElementById("viewAllCookbooksBtn"), "click", () => {
 });
 // Grocery sort pills
 bindEvent(document.getElementById("grocerySortBar"), "click", (e) => {
+  if (e.target.closest("#groceryShareBtn")) { shareGroceryList(); return; }
   const pill = e.target.closest("[data-grocery-sort]");
   if (!pill) return;
   state.grocerySort = pill.dataset.grocerySort || "default";

@@ -746,6 +746,7 @@
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="notifications">Notificaties</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Kanaal test</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="logs">Logs</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk import</button>
       </div>
     </nav>
 
@@ -1433,6 +1434,38 @@
         </div>
       </div>
 
+      <!-- ── Bulk import tab ── -->
+      <div class="admin-tab-section" id="adminTabBulkImport" data-tab="bulk-import">
+        <div class="section">
+          <div class="section-header">
+            <h2>📥 Bulk recepten importeren</h2>
+            <div class="muted">Plak meerdere URLs (één per regel) om recepten in bulk toe te voegen aan een gebruiker.</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Gebruiker e-mail</label>
+              <input type="email" id="bulkImportEmail" placeholder="gebruiker@voorbeeld.nl"
+                style="width:100%;max-width:400px;padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:#fff;font-size:13px;font-family:var(--font)" />
+            </div>
+
+            <div>
+              <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">URLs (één per regel)</label>
+              <textarea id="bulkImportUrls" rows="10" placeholder="https://www.allerhande.nl/recept/...&#10;https://www.instagram.com/p/...&#10;https://www.example.com/recept"
+                style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:#fff;font-size:12px;font-family:monospace;resize:vertical;line-height:1.6"></textarea>
+            </div>
+
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button class="btn btn-primary" type="button" onclick="startBulkImport()" id="bulkImportStartBtn">▶ Start import</button>
+              <button class="btn" type="button" onclick="document.getElementById('bulkImportLog').innerHTML='';document.getElementById('bulkImportUrls').value=''">Wissen</button>
+              <span id="bulkImportStatus" style="font-size:12px;color:var(--muted)"></span>
+            </div>
+
+            <div id="bulkImportLog" style="font-size:11px;font-family:monospace;background:#111;color:#adffa8;border-radius:10px;padding:14px;min-height:120px;max-height:400px;overflow-y:auto;line-height:1.7;white-space:pre-wrap;display:none"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="admin-tab-section" id="adminTabActivity" data-tab="activity">
         <div class="section" id="activitySection">
           <div class="section-header">
@@ -1728,6 +1761,56 @@
       selectedUserIds = new Set(filtered.map((u) => u.id));
       renderUsers();
       updateSelectionUi();
+    }
+
+    async function startBulkImport() {
+      const email = document.getElementById("bulkImportEmail").value.trim();
+      const raw = document.getElementById("bulkImportUrls").value.trim();
+      const log = document.getElementById("bulkImportLog");
+      const status = document.getElementById("bulkImportStatus");
+      const btn = document.getElementById("bulkImportStartBtn");
+
+      if (!email) { alert("Vul een gebruikers e-mail in."); return; }
+      const urls = raw.split("\n").map(u => u.trim()).filter(u => u.startsWith("http"));
+      if (!urls.length) { alert("Geen geldige URLs gevonden."); return; }
+
+      log.style.display = "block";
+      log.textContent = "";
+      btn.disabled = true;
+
+      const addLog = (msg) => { log.textContent += msg + "\n"; log.scrollTop = log.scrollHeight; };
+      addLog(`🚀 Start bulk import voor ${email}: ${urls.length} URL(s)\n`);
+
+      let success = 0, failed = 0;
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+        status.textContent = `Bezig: ${i + 1}/${urls.length}`;
+        addLog(`[${i + 1}/${urls.length}] Importeren: ${url}`);
+        try {
+          const res = await fetch("/api/admin/bulk-import-recipe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+            body: JSON.stringify({ email, url }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            addLog(`  ✅ ${data.title || "Opgeslagen"}`);
+            success++;
+          } else {
+            addLog(`  ❌ Mislukt: ${data.error || res.status}`);
+            failed++;
+          }
+        } catch (err) {
+          addLog(`  ❌ Fout: ${err.message}`);
+          failed++;
+        }
+        // Small delay to avoid hammering the server
+        if (i < urls.length - 1) await new Promise(r => setTimeout(r, 800));
+      }
+
+      addLog(`\n✅ Klaar — ${success} gelukt, ${failed} mislukt`);
+      status.textContent = `Klaar: ${success}/${urls.length} gelukt`;
+      btn.disabled = false;
     }
 
     async function bulkDeleteSelected() {
