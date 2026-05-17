@@ -14741,7 +14741,8 @@ body {
 }
 
 .basket-sheet__cta:active { opacity: 0.85; }
-.basket-sheet__cta--jumbo { background: #E2001A; }
+.basket-sheet__cta--jumbo { background: #fdc500; color: #1a1200; }
+.basket-sheet__cta--jumbo:hover { background: #f0b800; }
 .basket-sheet__cta--jumbo:active { opacity: 0.85; }
 .basket-product__jumbo-link {
   display: inline-block;

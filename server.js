@@ -10867,8 +10867,9 @@ function _jumboFindProductsInObj(obj, depth, results) {
 }
 
 async function findJumboProduct(ingredient) {
+  // Correcte Jumbo product zoek-URL (productpagina, niet /zoeken/)
+  const searchUrl = `https://www.jumbo.com/producten/?searchType=keyword&searchTerms=${encodeURIComponent(ingredient)}`;
   try {
-    const searchUrl = `https://www.jumbo.com/zoeken/?searchTerms=${encodeURIComponent(ingredient)}`;
     const response = await fetch(searchUrl, {
       headers: {
         ...FETCH_HEADERS,
@@ -10881,11 +10882,10 @@ async function findJumboProduct(ingredient) {
       signal: AbortSignal.timeout(14000),
       redirect: "follow",
     });
-
     if (!response.ok) return null;
     const html = await response.text();
 
-    // ── Strategy 1: __NEXT_DATA__ (Next.js server-side data injection) ──────
+    // Strategie 1: __NEXT_DATA__ JSON (Next.js SSR — betrouwbaarst)
     const nextDataRaw = html.match(/<script\s+id=["']__NEXT_DATA__["'][^>]*>([\s\S]+?)<\/script>/i)?.[1];
     if (nextDataRaw) {
       try {
@@ -10893,34 +10893,12 @@ async function findJumboProduct(ingredient) {
         const products = [];
         _jumboFindProductsInObj(data, 0, products);
         for (const p of products) {
-          if (!NON_FOOD_INGREDIENT_PATTERN.test(p.name)) {
-            return p;
-          }
+          if (!NON_FOOD_INGREDIENT_PATTERN.test(p.name)) return p;
         }
       } catch { /* malformed JSON */ }
     }
 
-    // ── Strategy 2: JSON-LD Product schema ───────────────────────────────────
-    for (const m of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
-      try {
-        const ld = JSON.parse((m[1] || "").trim());
-        const items = Array.isArray(ld) ? ld : [ld];
-        for (const item of items) {
-          const types = [].concat(item?.["@type"] || []);
-          if (types.some((t) => String(t).toLowerCase() === "product")) {
-            const sku = sanitizeText(item.sku || item.productID || item.identifier || "");
-            const name = sanitizeText(item.name || "");
-            if (sku && name && !NON_FOOD_INGREDIENT_PATTERN.test(name)) {
-              const imgUrl = item.image ? String(Array.isArray(item.image) ? item.image[0] : item.image) : "";
-              return { sku, name, price: String(item.offers?.price || ""), imageUrl: imgUrl };
-            }
-          }
-        }
-      } catch { /* skip */ }
-    }
-
-    // ── Strategy 3: product URLs in HTML ─────────────────────────────────────
-    // Jumbo product URLs: /producten/<slug>-<SKU>/
+    // Strategie 2: product-URLs in HTML (/producten/<slug>-<SKU>/)
     const urlSkuRe = /\/producten\/([a-z0-9][a-z0-9-]{2,80})-(\d{4,8}[A-Z]{2,5})\//g;
     let urlMatch;
     while ((urlMatch = urlSkuRe.exec(html)) !== null) {
@@ -10928,12 +10906,12 @@ async function findJumboProduct(ingredient) {
       const name = sanitizeText(urlMatch[1].replace(/-/g, " "));
       if (name.length > 2 && !NON_FOOD_INGREDIENT_PATTERN.test(name)) {
         const nearby = html.slice(Math.max(0, urlMatch.index - 600), urlMatch.index + 600);
-        const imgM = nearby.match(/https?:\/\/[^"'\s]*assets\.jumbo\.com[^"'\s]*\.(?:jpg|jpeg|png|webp|gif)[^"'\s]*/i);
+        const imgM = nearby.match(/https?:\/\/[^"'\s]*assets\.jumbo\.com[^"'\s]*\.(?:jpg|jpeg|png|webp)[^"'\s]*/i);
         return { sku, name, price: "", imageUrl: imgM ? imgM[0] : "" };
       }
     }
 
-    // ── Strategy 4: loose JSON id+title patterns ──────────────────────────────
+    // Strategie 3: losse JSON id+title patronen
     const idMatch = html.match(/"id"\s*:\s*"(\d{4,8}[A-Z]{2,5})"[^}]{0,200}"title"\s*:\s*"([^"]{3,80})"/);
     if (idMatch) {
       const name = sanitizeText(idMatch[2]);
@@ -10979,13 +10957,9 @@ function buildAHDirectAddUrl(results) {
 
 function buildJumboDirectAddUrl(results) {
   const found = results.filter((r) => r.product?.sku);
-  if (found.length) {
-    // Build the direct cart-add URL when SKUs are available
-    const items = found.map((r) => ({ sku: r.product.sku, quantity: 1 }));
-    return `https://www.jumbo.com/mandje/?add=${encodeURIComponent(JSON.stringify(items))}`;
-  }
-
-  return "https://www.jumbo.com/mandje/";
+  if (!found.length) return "";
+  const items = found.map((r) => ({ sku: r.product.sku, quantity: 1 }));
+  return `https://www.jumbo.com/mandje/?add=${encodeURIComponent(JSON.stringify(items))}`;
 }
 
 function parseAhBasketPriceEuro(value) {
