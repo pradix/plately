@@ -10817,76 +10817,132 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) 
   return merged.slice(0, maxCount);
 }
 
+// ── Jumbo product search helpers ─────────────────────────────────────────────
+
+function _jumboFormatPrice(pricesObj) {
+  try {
+    const amount = pricesObj?.price?.amount ?? pricesObj?.priceBeforeBonus?.amount;
+    if (!amount) return "";
+    return `€${(amount / 100).toFixed(2).replace(".", ",")}`;
+  } catch {
+    return "";
+  }
+}
+
+function _jumboExtractImageUrl(productObj) {
+  try {
+    const views = productObj?.imageInfo?.primaryView;
+    if (Array.isArray(views) && views.length > 0) return String(views[0]?.url || "");
+    const img = productObj?.imageUrl || productObj?.image || "";
+    return String(img);
+  } catch {
+    return "";
+  }
+}
+
+// Recursively search a Next.js data object for Jumbo product records.
+function _jumboFindProductsInObj(obj, depth, results) {
+  if (depth > 12 || !obj || typeof obj !== "object") return;
+  if (results.length >= 8) return;
+
+  // Looks like a single product: has id matching Jumbo SKU pattern + a title
+  if (typeof obj.id === "string" && /^\d{4,8}[A-Z]{2,5}$/.test(obj.id) && typeof obj.title === "string") {
+    const name = sanitizeText(obj.title);
+    if (name.length > 2) {
+      results.push({
+        sku: obj.id,
+        name,
+        price: _jumboFormatPrice(obj.prices),
+        imageUrl: _jumboExtractImageUrl(obj),
+      });
+      return;
+    }
+  }
+
+  const vals = Array.isArray(obj) ? obj : Object.values(obj);
+  for (const v of vals) {
+    if (results.length >= 8) break;
+    if (v && typeof v === "object") _jumboFindProductsInObj(v, depth + 1, results);
+  }
+}
+
 async function findJumboProduct(ingredient) {
-  // Jumbo's public product search API is no longer available.
-  // We parse their search results page for structured product data (JSON-LD or embedded JSON).
   try {
     const searchUrl = `https://www.jumbo.com/zoeken/?searchTerms=${encodeURIComponent(ingredient)}`;
     const response = await fetch(searchUrl, {
       headers: {
         ...FETCH_HEADERS,
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "nl-NL,nl;q=0.9",
         "sec-fetch-dest": "document",
         "sec-fetch-mode": "navigate",
         "sec-fetch-site": "none",
       },
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(14000),
       redirect: "follow",
     });
 
-    if (!response.ok) {
-      return null;
-    }
-
+    if (!response.ok) return null;
     const html = await response.text();
 
-    // Strategy 1: product URLs in the HTML (most reliable)
-    // Jumbo product URLs: /producten/<slug>-<SKU>/ where SKU = digits + uppercase letters
+    // ── Strategy 1: __NEXT_DATA__ (Next.js server-side data injection) ──────
+    const nextDataRaw = html.match(/<script\s+id=["']__NEXT_DATA__["'][^>]*>([\s\S]+?)<\/script>/i)?.[1];
+    if (nextDataRaw) {
+      try {
+        const data = JSON.parse(nextDataRaw);
+        const products = [];
+        _jumboFindProductsInObj(data, 0, products);
+        for (const p of products) {
+          if (!NON_FOOD_INGREDIENT_PATTERN.test(p.name)) {
+            return p;
+          }
+        }
+      } catch { /* malformed JSON */ }
+    }
+
+    // ── Strategy 2: JSON-LD Product schema ───────────────────────────────────
+    for (const m of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+      try {
+        const ld = JSON.parse((m[1] || "").trim());
+        const items = Array.isArray(ld) ? ld : [ld];
+        for (const item of items) {
+          const types = [].concat(item?.["@type"] || []);
+          if (types.some((t) => String(t).toLowerCase() === "product")) {
+            const sku = sanitizeText(item.sku || item.productID || item.identifier || "");
+            const name = sanitizeText(item.name || "");
+            if (sku && name && !NON_FOOD_INGREDIENT_PATTERN.test(name)) {
+              const imgUrl = item.image ? String(Array.isArray(item.image) ? item.image[0] : item.image) : "";
+              return { sku, name, price: String(item.offers?.price || ""), imageUrl: imgUrl };
+            }
+          }
+        }
+      } catch { /* skip */ }
+    }
+
+    // ── Strategy 3: product URLs in HTML ─────────────────────────────────────
+    // Jumbo product URLs: /producten/<slug>-<SKU>/
     const urlSkuRe = /\/producten\/([a-z0-9][a-z0-9-]{2,80})-(\d{4,8}[A-Z]{2,5})\//g;
     let urlMatch;
     while ((urlMatch = urlSkuRe.exec(html)) !== null) {
       const sku = urlMatch[2];
-      const slug = urlMatch[1];
-      const name = sanitizeText(slug.replace(/-/g, " "));
+      const name = sanitizeText(urlMatch[1].replace(/-/g, " "));
       if (name.length > 2 && !NON_FOOD_INGREDIENT_PATTERN.test(name)) {
-        // Try to find a product image near this URL in the HTML
-        const pos = urlMatch.index;
-        const nearby = html.slice(Math.max(0, pos - 800), pos + 800);
-        const imgMatch = nearby.match(/https?:\/\/[^"'\s]*(?:assets\.jumbo\.com|jumbo\.com\/images)[^"'\s]*\.(?:jpg|jpeg|png|webp)[^"'\s]*/i);
-        const imageUrl = imgMatch ? imgMatch[0] : "";
-        return { sku, name, price: "", imageUrl };
+        const nearby = html.slice(Math.max(0, urlMatch.index - 600), urlMatch.index + 600);
+        const imgM = nearby.match(/https?:\/\/[^"'\s]*assets\.jumbo\.com[^"'\s]*\.(?:jpg|jpeg|png|webp|gif)[^"'\s]*/i);
+        return { sku, name, price: "", imageUrl: imgM ? imgM[0] : "" };
       }
     }
 
-    // Strategy 2: JSON fields — id then title within 200 chars
+    // ── Strategy 4: loose JSON id+title patterns ──────────────────────────────
     const idMatch = html.match(/"id"\s*:\s*"(\d{4,8}[A-Z]{2,5})"[^}]{0,200}"title"\s*:\s*"([^"]{3,80})"/);
     if (idMatch) {
       const name = sanitizeText(idMatch[2]);
-      if (!NON_FOOD_INGREDIENT_PATTERN.test(name)) {
-        return { sku: idMatch[1], name, price: "" };
-      }
+      if (!NON_FOOD_INGREDIENT_PATTERN.test(name)) return { sku: idMatch[1], name, price: "", imageUrl: "" };
     }
-
-    // Strategy 3: reversed key order
-    const reversed = html.match(/"title"\s*:\s*"([^"]{3,80})"[^}]{0,200}"id"\s*:\s*"(\d{4,8}[A-Z]{2,5})"/);
-    if (reversed) {
-      const name = sanitizeText(reversed[1]);
-      if (!NON_FOOD_INGREDIENT_PATTERN.test(name)) {
-        return { sku: reversed[2], name, price: "" };
-      }
-    }
-
-    // Strategy 4: sku field
-    const skuMatch = html.match(/"sku"\s*:\s*"(\d{4,8}[A-Z]{2,5})"/);
-    if (skuMatch) {
-      const nearTitle = html.slice(Math.max(0, html.indexOf(skuMatch[0]) - 300), html.indexOf(skuMatch[0]) + 300);
-      const titleNear = nearTitle.match(/"(?:title|name|displayName)"\s*:\s*"([^"]{3,80})"/);
-      if (titleNear) {
-        const name = sanitizeText(titleNear[1]);
-        if (!NON_FOOD_INGREDIENT_PATTERN.test(name)) {
-          return { sku: skuMatch[1], name, price: "" };
-        }
-      }
+    const revMatch = html.match(/"title"\s*:\s*"([^"]{3,80})"[^}]{0,200}"id"\s*:\s*"(\d{4,8}[A-Z]{2,5})"/);
+    if (revMatch) {
+      const name = sanitizeText(revMatch[1]);
+      if (!NON_FOOD_INGREDIENT_PATTERN.test(name)) return { sku: revMatch[2], name, price: "", imageUrl: "" };
     }
 
     return null;
