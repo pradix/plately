@@ -747,6 +747,7 @@
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Kanaal test</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="logs">Logs</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk import</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="supermarkets">Supermarkten</button>
       </div>
     </nav>
 
@@ -1663,6 +1664,21 @@
 
           <h3 class="subhead">Recente events (laatste 220)</h3>
           <div id="actRecent" style="overflow:auto;max-height:640px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)"></div>
+        </div>
+      </div>
+
+      <div class="admin-tab-section" id="adminTabSupermarkets" data-tab="supermarkets">
+        <div class="section">
+          <div class="section-header">
+            <h2>Supermarkten</h2>
+            <div class="muted">Activeer of deactiveer supermarkten in de app. Actieve supermarkten zijn beschikbaar in account-instellingen en onboarding.</div>
+          </div>
+          <div id="supermarketsSettingsPanel" style="max-width:480px">
+            <p class="muted" id="supermarketsLoadStatus" style="font-size:13px;margin:0 0 16px">Laden…</p>
+            <div id="supermarketsList" style="display:flex;flex-direction:column;gap:10px;margin:0 0 20px"></div>
+            <button class="btn" type="button" id="supermarketsSaveBtn">Opslaan</button>
+            <span id="supermarketsSaveStatus" style="margin-left:12px;font-size:13px;color:var(--muted)"></span>
+          </div>
         </div>
       </div>
     </div>
@@ -5870,6 +5886,70 @@
     initAnalyticsControls();
     refreshAll();
     loadChannelCatalog();
+    initSupermarketsTab();
+
+    // ── Supermarkten tab ─────────────────────────────────────────────────────
+    const ALL_SUPERMARKETS = [
+      { id: "ah",        name: "Albert Heijn" },
+      { id: "jumbo",     name: "Jumbo" },
+      { id: "picnic",    name: "Picnic" },
+      { id: "vomar",     name: "Vomar" },
+      { id: "dirk",      name: "Dirk" },
+      { id: "lidl",      name: "Lidl" },
+      { id: "aldi",      name: "Aldi" },
+      { id: "coop",      name: "Coop" },
+      { id: "hoogvliet", name: "Hoogvliet" },
+    ];
+
+    async function initSupermarketsTab() {
+      const statusEl = document.getElementById("supermarketsLoadStatus");
+      const listEl = document.getElementById("supermarketsList");
+      const saveBtn = document.getElementById("supermarketsSaveBtn");
+      const saveStatus = document.getElementById("supermarketsSaveStatus");
+
+      try {
+        const res = await fetch("/api/admin/supermarkets", { credentials: "include" });
+        const data = await res.json();
+        const enabled = new Set(Array.isArray(data.enabled) ? data.enabled : ["ah"]);
+        statusEl.style.display = "none";
+        listEl.innerHTML = ALL_SUPERMARKETS.map((sm) => `
+          <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--panel);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:14px">
+            <input type="checkbox" data-sm-id="${sm.id}" ${enabled.has(sm.id) ? "checked" : ""} style="width:16px;height:16px;cursor:pointer" />
+            <span style="font-weight:${enabled.has(sm.id) ? "600" : "400"}">${sm.name}</span>
+          </label>
+        `).join("");
+        listEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+          cb.addEventListener("change", () => {
+            const label = cb.closest("label");
+            label.querySelector("span").style.fontWeight = cb.checked ? "600" : "400";
+          });
+        });
+      } catch (err) {
+        statusEl.textContent = "Kon instellingen niet laden.";
+      }
+
+      saveBtn?.addEventListener("click", async () => {
+        const enabled = Array.from(listEl.querySelectorAll("input[type=checkbox]:checked")).map((cb) => cb.dataset.smId);
+        saveStatus.textContent = "Opslaan…";
+        try {
+          const res = await fetch("/api/admin/supermarkets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ enabled }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            saveStatus.textContent = "Opgeslagen!";
+            setTimeout(() => { saveStatus.textContent = ""; }, 3000);
+          } else {
+            saveStatus.textContent = "Fout bij opslaan.";
+          }
+        } catch {
+          saveStatus.textContent = "Fout bij opslaan.";
+        }
+      });
+    }
 
   </script>
 </body>

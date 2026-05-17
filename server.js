@@ -1602,6 +1602,9 @@ function createEmptyDatabase() {
     pushSubscriptions: [],
     announcements: [],
     shareLinks: {}, // token -> { payload, createdAt }
+    globalSettings: {
+      enabledSupermarkets: ["ah"],
+    },
   };
 }
 
@@ -1865,10 +1868,45 @@ async function ensurePostgresSchema() {
       `);
       await pool.query(`ALTER TABLE plately_users ALTER COLUMN password_hash DROP NOT NULL;`);
       await pool.query(`ALTER TABLE plately_users ALTER COLUMN password_salt DROP NOT NULL;`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS plately_settings (
+          key TEXT PRIMARY KEY,
+          value JSONB NOT NULL DEFAULT '{}'::jsonb,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
     })();
   }
 
   await postgresReadyPromise;
+}
+
+async function getGlobalSettings() {
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const res = await pool.query(`SELECT value FROM plately_settings WHERE key = 'global' LIMIT 1`);
+    if (res.rows.length > 0) return res.rows[0].value || {};
+    return {};
+  }
+  const db = await readDatabase();
+  return db.globalSettings || {};
+}
+
+async function setGlobalSettings(settings) {
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    await pool.query(
+      `INSERT INTO plately_settings (key, value, updated_at) VALUES ('global', $1::jsonb, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
+      [JSON.stringify(settings)]
+    );
+    return;
+  }
+  await databaseWriteQueue;
+  const db = await readDatabase();
+  db.globalSettings = settings;
+  databaseCache = db;
+  await persistDatabase();
 }
 
 function buildSeedSearchUrlFromTemplate(template, query) {
@@ -3824,7 +3862,7 @@ function buildGenericChoices(store, ingredientTitle, amount) {
 
   return [
     createStoreChoice(store, {
-      title: `${prefix} ${clean}`,
+      title: clean,
       subtitle: amount || "1 verpakking",
       price: store === "albert-heijn" ? "€2,69" : "€2,49",
       badge: "Beste match",
@@ -3833,7 +3871,7 @@ function buildGenericChoices(store, ingredientTitle, amount) {
       url: buildStoreChoiceUrl(store, { title: `${prefix} ${clean}`, searchTerm: `${prefix} ${clean}` }),
     }),
     createStoreChoice(store, {
-      title: `${bioPrefix} ${clean}`,
+      title: `Biologisch ${clean}`,
       subtitle: amount || "1 verpakking",
       price: store === "albert-heijn" ? "€2,99" : "€2,79",
       badge: "Biologisch",
@@ -3851,9 +3889,11 @@ function buildStoreProductChoices(store, item) {
   const prefix = getStoreBrandPrefix(store);
   const bioPrefix = getStoreBioPrefix(store);
 
+  // Strip the store brand prefix from display titles (keep it only in searchTerm).
+  const stripPrefix = (title) => title.replace(new RegExp(`^(${prefix}|${bioPrefix})\\s+`, "i"), "");
   const choiceSet = (primary, alternative) => [
-    createStoreChoice(store, { ...primary, badge: primary.badge || "Beste match" }),
-    createStoreChoice(store, { ...alternative, badge: alternative.badge || "Alternatief" }),
+    createStoreChoice(store, { ...primary, title: stripPrefix(primary.title), badge: primary.badge || "Beste match" }),
+    createStoreChoice(store, { ...alternative, title: stripPrefix(alternative.title), badge: alternative.badge || "Alternatief" }),
   ];
 
   if (/avocado/.test(value)) {
@@ -10831,10 +10871,30 @@ function _jumboFormatPrice(pricesObj) {
 
 function _jumboExtractImageUrl(productObj) {
   try {
+    // primaryView array (most common in Jumbo Next.js data)
     const views = productObj?.imageInfo?.primaryView;
-    if (Array.isArray(views) && views.length > 0) return String(views[0]?.url || "");
-    const img = productObj?.imageUrl || productObj?.image || "";
-    return String(img);
+    if (Array.isArray(views) && views.length > 0) {
+      const url = String(views[0]?.url || views[0]?.src || "");
+      if (url) return url;
+    }
+    // alternateView fallback
+    const alt = productObj?.imageInfo?.alternateView;
+    if (Array.isArray(alt) && alt.length > 0) {
+      const url = String(alt[0]?.url || alt[0]?.src || "");
+      if (url) return url;
+    }
+    // Flat imageUrl / image / src / thumbnail fields
+    for (const key of ["imageUrl", "image", "src", "thumbnail", "imageSmallUrl", "imageLargeUrl"]) {
+      const val = productObj?.[key];
+      if (typeof val === "string" && val.startsWith("http")) return val;
+    }
+    // Nested images array
+    const imgs = productObj?.images;
+    if (Array.isArray(imgs) && imgs.length > 0) {
+      const url = String(imgs[0]?.url || imgs[0]?.src || imgs[0] || "");
+      if (url.startsWith("http")) return url;
+    }
+    return "";
   } catch {
     return "";
   }
@@ -10900,27 +10960,37 @@ async function findJumboProduct(ingredient) {
 
     // Strategie 2: product-URLs in HTML (/producten/<slug>-<SKU>/)
     const urlSkuRe = /\/producten\/([a-z0-9][a-z0-9-]{2,80})-(\d{4,8}[A-Z]{2,5})\//g;
+    const imgUrlRe = /https?:\/\/[^"'\s\\]*assets\.jumbo\.com[^"'\s\\]*\.(?:jpg|jpeg|png|webp)(?:[^"'\s\\]*)?/gi;
     let urlMatch;
     while ((urlMatch = urlSkuRe.exec(html)) !== null) {
       const sku = urlMatch[2];
       const name = sanitizeText(urlMatch[1].replace(/-/g, " "));
       if (name.length > 2 && !NON_FOOD_INGREDIENT_PATTERN.test(name)) {
-        const nearby = html.slice(Math.max(0, urlMatch.index - 600), urlMatch.index + 600);
-        const imgM = nearby.match(/https?:\/\/[^"'\s]*assets\.jumbo\.com[^"'\s]*\.(?:jpg|jpeg|png|webp)[^"'\s]*/i);
+        // Search wider window (1200 chars) for image URL near this product
+        const nearby = html.slice(Math.max(0, urlMatch.index - 1200), urlMatch.index + 1200);
+        const imgM = nearby.match(imgUrlRe);
         return { sku, name, price: "", imageUrl: imgM ? imgM[0] : "" };
       }
     }
 
-    // Strategie 3: losse JSON id+title patronen
-    const idMatch = html.match(/"id"\s*:\s*"(\d{4,8}[A-Z]{2,5})"[^}]{0,200}"title"\s*:\s*"([^"]{3,80})"/);
+    // Strategie 3: losse JSON id+title patronen (ook afbeelding proberen)
+    const idMatch = html.match(/"id"\s*:\s*"(\d{4,8}[A-Z]{2,5})"[^}]{0,400}"title"\s*:\s*"([^"]{3,80})"/);
     if (idMatch) {
       const name = sanitizeText(idMatch[2]);
-      if (!NON_FOOD_INGREDIENT_PATTERN.test(name)) return { sku: idMatch[1], name, price: "", imageUrl: "" };
+      if (!NON_FOOD_INGREDIENT_PATTERN.test(name)) {
+        const nearby = html.slice(Math.max(0, idMatch.index - 400), idMatch.index + 800);
+        const imgM = nearby.match(imgUrlRe);
+        return { sku: idMatch[1], name, price: "", imageUrl: imgM ? imgM[0] : "" };
+      }
     }
-    const revMatch = html.match(/"title"\s*:\s*"([^"]{3,80})"[^}]{0,200}"id"\s*:\s*"(\d{4,8}[A-Z]{2,5})"/);
+    const revMatch = html.match(/"title"\s*:\s*"([^"]{3,80})"[^}]{0,400}"id"\s*:\s*"(\d{4,8}[A-Z]{2,5})"/);
     if (revMatch) {
       const name = sanitizeText(revMatch[1]);
-      if (!NON_FOOD_INGREDIENT_PATTERN.test(name)) return { sku: revMatch[2], name, price: "", imageUrl: "" };
+      if (!NON_FOOD_INGREDIENT_PATTERN.test(name)) {
+        const nearby = html.slice(Math.max(0, revMatch.index - 400), revMatch.index + 800);
+        const imgM = nearby.match(imgUrlRe);
+        return { sku: revMatch[2], name, price: "", imageUrl: imgM ? imgM[0] : "" };
+      }
     }
 
     return null;
@@ -16537,6 +16607,17 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/supermarkets" && request.method === "GET") {
+      try {
+        const settings = await getGlobalSettings();
+        const enabled = Array.isArray(settings.enabledSupermarkets) ? settings.enabledSupermarkets : ["ah"];
+        sendJson(response, 200, { enabled });
+      } catch (err) {
+        sendJson(response, 200, { enabled: ["ah"] });
+      }
+      return;
+    }
+
     if (requestUrl.pathname === "/api/deploy-info" && request.method === "GET") {
       sendJson(response, 200, buildPlatelyDeployInfoPayload());
       return;
@@ -17234,6 +17315,28 @@ const server = http.createServer(async (request, response) => {
         }
       }
       sendJson(response, 200, { ok: true, sent, failed, matched: subs.length });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/supermarkets" && request.method === "GET") {
+      await requireAdmin(request);
+      const settings = await getGlobalSettings();
+      const enabled = Array.isArray(settings.enabledSupermarkets) ? settings.enabledSupermarkets : ["ah"];
+      sendJson(response, 200, { enabled });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/supermarkets" && request.method === "POST") {
+      await requireAdmin(request);
+      const body = await readRequestBody(request);
+      const { enabled } = body;
+      if (!Array.isArray(enabled) || !enabled.every((id) => typeof id === "string")) {
+        throw new HttpError(400, "enabled moet een array van strings zijn");
+      }
+      const settings = await getGlobalSettings();
+      settings.enabledSupermarkets = enabled;
+      await setGlobalSettings(settings);
+      sendJson(response, 200, { ok: true, enabled });
       return;
     }
 

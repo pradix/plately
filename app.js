@@ -703,6 +703,7 @@ const state = {
     pending: null, // { id?, title?, body?, url? }
     unseen: false,
   },
+  enabledSupermarkets: ["ah"], // populated from /api/supermarkets at boot
 };
 
 const PLATELY_CLIENT_ANON_KEY = "plately-client-anon-v1";
@@ -1231,7 +1232,6 @@ const servingsDown = document.getElementById("servingsDown");
 const servingsUp = document.getElementById("servingsUp");
 const servingsInput = document.getElementById("servingsInput");
 const servingsPresets = document.getElementById("servingsPresets");
-const detailSendToAhButton = document.getElementById("detailSendToAhButton");
 const authModal = document.getElementById("authModal");
 const authKicker = document.getElementById("authKicker");
 const authTitle = document.getElementById("authTitle");
@@ -10273,6 +10273,17 @@ async function refreshBackendStatus() {
   }
 }
 
+async function fetchEnabledSupermarkets() {
+  try {
+    const payload = await fetchJson(`${state.apiBase}/api/supermarkets`);
+    if (Array.isArray(payload?.enabled)) {
+      state.enabledSupermarkets = payload.enabled;
+    }
+  } catch {
+    // Fall back to default (ah only) when unavailable.
+  }
+}
+
 let persistTimeoutId = 0;
 
 async function persistAppState() {
@@ -10675,6 +10686,7 @@ async function bootstrapSession() {
     finishAppBoot();
     refreshAppleSignInConfig().catch(() => {});
     refreshBackendStatus();
+    fetchEnabledSupermarkets().catch(() => {});
     refreshFeaturePushState().catch(() => {});
 
     // Handle announce deep links (/?announce=... or /?new=1)
@@ -12635,15 +12647,6 @@ bindEvent(servingsPresets, "click", (e) => {
   applyServingsChange(Number(btn.dataset.servings));
 });
 
-// Direct naar supermarkt vanuit recept-detail (gebruik favoriete winkel)
-bindEvent(detailSendToAhButton, "click", async () => {
-  const recipe = getSelectedRecipe();
-  if (!recipe) return;
-  addRecipeToGrocery(recipe);
-  renderGroceryGroups();
-  const slug = (state.profile.favoriteSupermarket || "ah") === "jumbo" ? "jumbo" : "albert-heijn";
-  await openStoreBasket(slug);
-});
 
 bindEvent(searchInput, "input", (event) => {
   // Debounced channel search — short pause after typing to batch requests
@@ -13420,7 +13423,8 @@ function renderSupermarketSettings() {
   list.innerHTML = SUPERMARKETS.map((sm) => {
     const faviconUrl = getSupermarketIconUrl(sm);
     const isSelected = supermarketDraft === sm.id;
-    const supportedBadge = sm.supported
+    const isEnabled = state.enabledSupermarkets.includes(sm.id);
+    const supportedBadge = isEnabled
       ? ""
       : `<span class="onboarding-supermarket-item__badge">Binnenkort</span>`;
     return `
@@ -13453,11 +13457,17 @@ bindEvent(document.getElementById("goToSupermarketBtn"), "click", () => {
 bindEvent(document.getElementById("profileSubSupermarketBack"), "click", () => closeProfileSubPanel("profileSubSupermarket"));
 
 bindEvent(document.getElementById("profileSubSupermarketSave"), "click", () => {
+  const prev = state.profile.favoriteSupermarket || "ah";
   state.profile.favoriteSupermarket = supermarketDraft || "ah";
   schedulePersistAppState();
   renderProfileSummary();
   closeProfileSubPanel("profileSubSupermarket");
   showToast("Voorkeur opgeslagen.");
+  if (prev !== state.profile.favoriteSupermarket) {
+    // Clear cached basket so the next open re-matches with the new store
+    state.basketPreview = null;
+    renderGroceryGroups();
+  }
 });
 
 // Weergave/thema UI is removed for now.
@@ -15801,7 +15811,8 @@ function renderOnboardingSupermarkets() {
   list.innerHTML = SUPERMARKETS.map((sm) => {
     const faviconUrl = getSupermarketIconUrl(sm);
     const isSelected = onboardingData.supermarket === sm.id;
-    const supportedBadge = sm.supported
+    const isEnabled = state.enabledSupermarkets.includes(sm.id);
+    const supportedBadge = isEnabled
       ? ""
       : `<span class="onboarding-supermarket-item__badge">Binnenkort</span>`;
     return `
@@ -16065,26 +16076,26 @@ window.addEventListener("appinstalled", () => {
   console.log("✅ Plately installed successfully!");
 });
 
-// Keep bottom nav visible when virtual keyboard opens.
-// On iOS the visual viewport shrinks but the layout viewport stays fixed,
-// so position:fixed elements end up below the fold. We pin the nav to
-// the visual viewport bottom instead.
+// Keep bottom nav visible when virtual keyboard opens (Android Chrome).
+// On Android, window.innerHeight stays constant while vv.height shrinks with the keyboard.
+// On iOS the layout viewport already handles this — no JS needed there.
 (function initBottomNavKeyboardFix() {
   const nav = document.querySelector(".bottom-nav");
   if (!nav || !window.visualViewport) return;
 
   function onViewportResize() {
     const vv = window.visualViewport;
-    // Gap between the visual viewport bottom and the layout viewport bottom
-    const offsetFromBottom = window.innerHeight - (vv.offsetTop + vv.height);
-    if (offsetFromBottom > 60) {
-      // Keyboard is open: lift the nav so it stays visible
-      nav.style.bottom = offsetFromBottom + "px";
+    // Keyboard height = layout viewport height minus visual viewport height (Android only).
+    // On iOS these are equal so keyboardHeight ≈ 0 and we never override the CSS.
+    const keyboardHeight = Math.max(0, window.innerHeight - vv.height);
+    if (keyboardHeight > 150) {
+      nav.style.bottom = keyboardHeight + "px";
     } else {
       nav.style.bottom = "";
     }
   }
 
+  // Only listen to resize — scroll events don't indicate keyboard changes and
+  // caused false positives (nav jumping mid-screen) during page scroll.
   window.visualViewport.addEventListener("resize", onViewportResize, { passive: true });
-  window.visualViewport.addEventListener("scroll", onViewportResize, { passive: true });
 }());
