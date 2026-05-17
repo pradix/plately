@@ -5542,7 +5542,7 @@ function renderRecentImports() {
   const grid = document.getElementById("recentImportsGrid");
   if (!heading || !grid) return;
 
-  const all = getSavedImportedRecipes();
+  const all = (state.recipes || []).filter((r) => r && r.id && r.title);
   if (!all.length) {
     heading.classList.add("hidden");
     grid.innerHTML = "";
@@ -5551,13 +5551,18 @@ function renderRecentImports() {
 
   heading.classList.remove("hidden");
 
-  // Pick a random recipe — different index each render
-  const recipe = all[Math.floor(Math.random() * all.length)];
-  const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
-  const meta = [recipe.time, recipe.servings ? `${recipe.servings} personen` : ""].filter(Boolean).join(" · ");
+  // Pick 3 random recipes without duplicates
+  const pool = all.slice();
+  const picks = [];
+  while (picks.length < 3 && pool.length) {
+    const idx = Math.floor(Math.random() * pool.length);
+    picks.push(pool.splice(idx, 1)[0]);
+  }
 
-  perfMeasure("renderRecentImports", () => {
-    grid.innerHTML = `
+  const cardHtml = (recipe) => {
+    const faviconUrl = getSourceIconUrl(recipe.sourceUrl || "");
+    const meta = [recipe.time, recipe.servings ? `${recipe.servings} personen` : ""].filter(Boolean).join(" · ");
+    return `
       <button class="today-recipe-card" type="button" data-recipe-id="${escapeHtml(recipe.id)}">
         <div class="today-recipe-card__img-wrap">
           <img class="today-recipe-card__img" src="${escapeHtml(recipe.image || "assets/hero-burger.svg")}" alt="${escapeHtml(recipe.title)}" loading="lazy" decoding="async" draggable="false" />
@@ -5570,8 +5575,11 @@ function renderRecentImports() {
         <span class="today-recipe-card__arrow" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
         </span>
-      </button>
-    `;
+      </button>`;
+  };
+
+  perfMeasure("renderRecentImports", () => {
+    grid.innerHTML = picks.map(cardHtml).join("");
   });
   wireRecipeCardImageFallbacks(grid);
 

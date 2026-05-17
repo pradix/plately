@@ -1004,6 +1004,7 @@ img {
   font-family: var(--font-body);
   font-weight: 800;
   letter-spacing: -0.01em;
+  color: #1a1a18;
 }
 
 .ghost-link, .section-note {
@@ -2136,7 +2137,7 @@ img {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 11px 2px;
+  padding: 11px 12px 11px 2px;
   background: transparent;
   border-radius: 0;
   box-shadow: none;
@@ -4009,7 +4010,11 @@ button.ingredient-item {
 #recentImportsGrid {
   padding-inline: var(--space-7);
   margin: 0 0 var(--space-12);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
+#recentImportsHeading h2 { color: #1a1a18; }
 .today-recipe-card {
   display: flex;
   align-items: center;
@@ -4070,7 +4075,7 @@ button.ingredient-item {
 .today-recipe-card__title {
   font-size: 0.97rem;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: #1a1a18;
   line-height: 1.35;
   margin: 0 0 4px;
   display: -webkit-box;
