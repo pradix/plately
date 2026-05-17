@@ -11488,15 +11488,26 @@ function showAHBasketSplash(items) {
 function _updateAHBasketProgress(current, total) {
   const fill = document.getElementById("ahBasketProgressFill");
   const counter = document.getElementById("ahBasketCounter");
+  const itemName = document.getElementById("ahBasketItemName");
   const pct = total > 0 ? Math.round((current / total) * 100) : 0;
   if (fill) fill.style.width = `${pct}%`;
   if (counter) counter.textContent = `${current} van ${total} producten`;
+  if (itemName && current > 0 && current <= _ahBasketItemNames.length) {
+    itemName.textContent = _ahBasketItemNames[current - 1];
+  }
 }
 
 function hideAHBasketSplash() {
   if (_ahBasketSplashInterval) { clearInterval(_ahBasketSplashInterval); _ahBasketSplashInterval = null; }
-  // Snap to 100%
+  // Snap to 100% and show done state
   _updateAHBasketProgress(_ahBasketTotal, _ahBasketTotal);
+  const title = document.getElementById("ahBasketTitle");
+  const itemName = document.getElementById("ahBasketItemName");
+  if (title) {
+    title.textContent = `✓ Alle ${_ahBasketTotal} ingrediënten toegevoegd!`;
+    title.classList.add("ah-basket-splash__title--done");
+  }
+  if (itemName) itemName.textContent = "";
   if (_ahBasketSplashLeaveTimer) clearTimeout(_ahBasketSplashLeaveTimer);
   _ahBasketSplashLeaveTimer = setTimeout(() => {
     const splash = document.getElementById("ahBasketSplash");
@@ -11507,8 +11518,13 @@ function hideAHBasketSplash() {
       splash.classList.add("hidden");
       splash.classList.remove("ah-basket-splash--leaving");
       splash.setAttribute("aria-hidden", "true");
+      // Reset for next use
+      if (title) {
+        title.textContent = "Producten klaarleggen";
+        title.classList.remove("ah-basket-splash__title--done");
+      }
     }, 300);
-  }, 1500);
+  }, 2000);
 }
 
 function hideImportSplash() {

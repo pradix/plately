@@ -18639,6 +18639,21 @@ body {
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
+.ah-basket-splash__item-name {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.55);
+  text-align: center;
+  margin: 4px 0 0;
+  height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  font-style: italic;
+}
+.ah-basket-splash__title--done {
+  color: #7fffa8;
+}
 .ah-basket-splash--leaving {
   animation: grocerySplashLeave 0.3s ease-in forwards;
 }
