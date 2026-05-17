@@ -9722,8 +9722,10 @@ async function findAHProduct(ingredient) {
 
 // Returns up to `count` product matches from AH for a single ingredient
 async function findAHProducts(ingredient, count = 12, queryOverride = null) {
-  const baseTerm = normalizeIngredientForSearch(ingredient) || ingredient;
-  const searchTerm = queryOverride || baseTerm;
+  const baseTerm = (normalizeIngredientForSearch(ingredient) || ingredient || "").trim();
+  const searchTerm = (queryOverride || baseTerm).trim();
+  // AH API vereist minimaal 2 tekens — kortere termen leveren "pattern mismatch" errors op.
+  if (searchTerm.length < 2) return [];
   const searchSize = Math.min(72, Math.max(count * 3, 24));
   const cacheKey = `${searchTerm}:${searchSize}`;
 
