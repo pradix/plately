@@ -794,7 +794,7 @@ function normalizeIngredientForSearch(raw) {
   //     "scheut olijfolie" → "olijfolie"
   //     "snufje zout" → "zout" (but then normalizes to "keukenzout" below)
   //     Langere variant altijd voor kortere in alternatie (takjes vóór takje, anders blijft "s" over).
-  t = t.replace(/^(?:handjevol|handjes?|scheutjes?|scheuts?|snufjes?|snufs?|klontje|klont|druppeltjes?|druppels?|stukjes?|stukken?|takjes?|blaadjes?|bladen?|bladeren|bosjes?|teentjes?|teentje)\s+/, "").trim();
+  t = t.replace(/^(?:handjevol|handjes?|scheutjes?|scheuts?|snufjes?|snufs?|klontje|klont|druppeltjes?|druppels?|stukjes?|stukken?|takjes?|blaadjes?|bladen?|bladeren|bosjes?|teentjes?|teentje|stengels?|plakjes?|blokjes?|reepjes?)\s+/, "").trim();
 
   // 0c. Strip container/packaging words + optional "van" ("blik tomaten", "pot pesto", "pakje vanillesuiker")
   t = t.replace(/^(?:blik(?:je)?\s+(?:van\s+)?|pot(?:je)?\s+(?:van\s+)?|pakje\s+(?:van\s+)?|zakje\s+(?:van\s+)?|fles(?:je)?\s+(?:van\s+)?|tube\s+(?:van\s+)?|doosje\s+(?:van\s+)?|beker(?:tje)?\s+(?:van\s+)?)/, "").trim();
@@ -4953,6 +4953,119 @@ function normalizeIngredientObject(ingredient) {
     quantity: sanitizeText(String(ingredient.quantity || defaults.quantity || "")),
     unit: sanitizeText(String(ingredient.unit || defaults.unit || "")).toLowerCase(),
     name: normalizedName,
+  };
+}
+
+const INGREDIENT_UNIT_REMAINDER_REPAIRS = [
+  { units: ["blaadje", "blaadjes", "blad"], canonicalUnit: "blaadje", fragments: ["s"] },
+  { units: ["teentje", "teentjes", "teen"], canonicalUnit: "teen", fragments: ["s", "tjes", "tje"] },
+  { units: ["stengel", "stengels"], canonicalUnit: "stengel", fragments: ["s"] },
+  { units: ["plakje", "plakjes"], canonicalUnit: "plakje", fragments: ["s"] },
+  { units: ["blokje", "blokjes"], canonicalUnit: "blokje", fragments: ["s"] },
+  { units: ["reepje", "reepjes"], canonicalUnit: "reepje", fragments: ["s"] },
+  { units: ["bosje", "bosjes"], canonicalUnit: "bosje", fragments: ["s"] },
+  { units: ["takje", "takjes"], canonicalUnit: "takje", fragments: ["s"] },
+];
+
+function repairIngredientUnitRemainder(ingredient) {
+  if (!ingredient || typeof ingredient !== "object") return { ingredient, changed: false, reason: "" };
+
+  const quantity = sanitizeText(ingredient.quantity || "");
+  const unit = sanitizeText(ingredient.unit || "").toLowerCase();
+  const name = sanitizeText(ingredient.name || "");
+  if (!name || !unit) return { ingredient, changed: false, reason: "" };
+
+  const repair = INGREDIENT_UNIT_REMAINDER_REPAIRS.find((item) => item.units.includes(unit));
+  if (!repair) return { ingredient, changed: false, reason: "" };
+
+  let nextName = name;
+  let reason = "";
+  for (const fragment of repair.fragments) {
+    const re = new RegExp(`^${escapeRegex(fragment)}(?:\\s+|$)`, "i");
+    if (!re.test(nextName)) continue;
+    nextName = sanitizeText(nextName.replace(re, ""));
+    reason = `unit_remainder_${fragment}`;
+    break;
+  }
+
+  if (!nextName) return { ingredient, changed: false, reason: "" };
+
+  const next = {
+    ...ingredient,
+    quantity,
+    unit: repair.canonicalUnit,
+    name: cleanupIngredientName(nextName),
+  };
+  const changed =
+    reason ||
+    next.unit !== unit ||
+    next.name !== name ||
+    next.quantity !== sanitizeText(ingredient.quantity || "");
+
+  return { ingredient: next, changed: Boolean(changed), reason: reason || "unit_canonicalized" };
+}
+
+function repairRecipeIngredientUnitRemainders(recipe) {
+  if (!recipe || typeof recipe !== "object" || !Array.isArray(recipe.ingredients)) {
+    return { recipe, changed: false, repairs: [] };
+  }
+
+  const repairs = [];
+  const nextIngredients = recipe.ingredients.map((ingredient, index) => {
+    const before = {
+      quantity: sanitizeText(ingredient?.quantity || ""),
+      unit: sanitizeText(ingredient?.unit || ""),
+      name: sanitizeText(ingredient?.name || ""),
+    };
+    const result = repairIngredientUnitRemainder(ingredient);
+    if (result.changed) {
+      repairs.push({ index, before, after: result.ingredient, reason: result.reason });
+    }
+    return result.ingredient;
+  });
+
+  if (!repairs.length) return { recipe, changed: false, repairs };
+  return {
+    recipe: sanitizeRecipeForStorage({ ...recipe, ingredients: normalizeIngredientList(nextIngredients) }),
+    changed: true,
+    repairs,
+  };
+}
+
+function repairIngredientUnitRemaindersForUser(user) {
+  const appState = buildAppStateFromUser(user);
+  const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+  const nextRecipes = [];
+  const sampleRepairs = [];
+  let repairedRecipes = 0;
+  let repairedIngredients = 0;
+
+  for (const recipe of recipes) {
+    const result = repairRecipeIngredientUnitRemainders(recipe);
+    nextRecipes.push(result.recipe);
+    if (!result.changed) continue;
+
+    repairedRecipes += 1;
+    repairedIngredients += result.repairs.length;
+    if (sampleRepairs.length < 40) {
+      sampleRepairs.push({
+        id: sanitizeText(recipe?.id || ""),
+        title: sanitizeText(recipe?.title || "Recept"),
+        repairs: result.repairs.slice(0, 8),
+      });
+    }
+  }
+
+  if (!repairedRecipes) {
+    return { changed: false, nextState: appState, repairedRecipes, repairedIngredients, sampleRepairs };
+  }
+
+  return {
+    changed: true,
+    nextState: { ...appState, importedRecipes: nextRecipes },
+    repairedRecipes,
+    repairedIngredients,
+    sampleRepairs,
   };
 }
 
@@ -19158,6 +19271,63 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/repair-ingredient-units" && request.method === "POST") {
+      console.log("🛠️ /api/admin/repair-ingredient-units called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const dryRun = body?.dryRun !== false;
+        let usersScanned = 0;
+        let usersChanged = 0;
+        let repairedRecipes = 0;
+        let repairedIngredients = 0;
+        const sampleRepairs = [];
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const res = await pool.query(`SELECT * FROM plately_users`);
+          for (const row of res.rows || []) {
+            usersScanned += 1;
+            const result = repairIngredientUnitRemaindersForUser(row);
+            if (!result.changed) continue;
+            usersChanged += 1;
+            repairedRecipes += result.repairedRecipes;
+            repairedIngredients += result.repairedIngredients;
+            sampleRepairs.push(...result.sampleRepairs.slice(0, Math.max(0, 40 - sampleRepairs.length)));
+            if (!dryRun) await updateAuthenticatedUserState(row.id, result.nextState);
+          }
+        } else {
+          const db = await loadDatabase();
+          for (const user of Object.values(db.users || {})) {
+            usersScanned += 1;
+            const result = repairIngredientUnitRemaindersForUser(user);
+            if (!result.changed) continue;
+            usersChanged += 1;
+            repairedRecipes += result.repairedRecipes;
+            repairedIngredients += result.repairedIngredients;
+            sampleRepairs.push(...result.sampleRepairs.slice(0, Math.max(0, 40 - sampleRepairs.length)));
+            if (!dryRun) db.users[user.id] = sanitizeUserStatePayload(result.nextState, user);
+          }
+          if (!dryRun && usersChanged) await persistDatabase();
+        }
+
+        return sendJson(response, 200, {
+          ok: true,
+          dryRun,
+          usersScanned,
+          usersChanged,
+          repairedRecipes,
+          repairedIngredients,
+          sampleRepairs,
+        });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/repair-ingredient-units:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Ingrediënt-eenheden repareren mislukt." });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/import-quality" && request.method === "GET") {
       try {
         await requireAdmin(request);
@@ -21759,5 +21929,8 @@ module.exports = {
     isAhAllerhandeRecipeUrl,
     ahSeoBackfillResultMatchesQuery,
     urlLooksLikeRecipe,
+    parseIngredientLine,
+    repairIngredientUnitRemainder,
+    repairRecipeIngredientUnitRemainders,
   },
 };

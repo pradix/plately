@@ -13202,6 +13202,97 @@ body {
   vertical-align: middle;
 }
 
+.grocery-prepare-splash {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 100%;
+  padding: 28px 28px max(34px, env(safe-area-inset-bottom));
+  background: #fbfbf9;
+  color: #203d2d;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.grocery-screen {
+  position: relative;
+}
+
+.grocery--preparing .grocery-prepare-splash {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.grocery--preparing > :not(.grocery-prepare-splash) {
+  visibility: hidden;
+}
+
+.grocery-prepare-splash__art {
+  width: min(86vw, 390px);
+  aspect-ratio: 946 / 2048;
+  max-height: 58vh;
+  overflow: hidden;
+  border-radius: 0;
+}
+
+.grocery-prepare-splash__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.grocery-prepare-splash__bar {
+  width: min(76vw, 360px);
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #eee7df;
+}
+
+.grocery-prepare-splash__bar span {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: #5c7a62;
+  animation: groceryPrepareProgress 1.35s ease-in-out infinite;
+}
+
+.grocery-prepare-splash h2 {
+  margin: 0;
+  max-width: 360px;
+  text-align: center;
+  font-size: clamp(2.15rem, 10vw, 3.4rem);
+  line-height: 1.08;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.grocery-prepare-splash p {
+  margin: 0;
+  max-width: 360px;
+  text-align: center;
+  color: #829386;
+  font-size: 1.28rem;
+  line-height: 1.35;
+  font-weight: 650;
+}
+
+@keyframes groceryPrepareProgress {
+  0% { transform: translateX(-110%); }
+  55% { transform: translateX(70%); }
+  100% { transform: translateX(245%); }
+}
+
 /* ── Share card overlay ───────────────────────────────────────────────────── */
 @keyframes shareCardIn {
   from { opacity: 0; transform: scale(0.96) translateY(16px); }

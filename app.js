@@ -3958,6 +3958,9 @@ function switchView(view, opts = {}) {
 
   const prevView = state.view;
   state.view = view;
+  if (view === "grocery" && getGroceryPhotoRefreshItems().length) {
+    groceryScreen?.classList.add("grocery--preparing");
+  }
   homeScreen.classList.toggle("screen--active", view === "home");
   detailScreen.classList.toggle("screen--active", view === "detail");
   groceryScreen.classList.toggle("screen--active", view === "grocery");
@@ -4005,7 +4008,7 @@ function switchView(view, opts = {}) {
 
   // When entering grocery screen, kick off a photo fetch for items that don't have one yet
   if (view === "grocery") {
-    debouncedFetchGroceryPhotos();
+    fetchGroceryPhotos();
   }
 
   // When opening import screen: offer to paste clipboard URL via a chip (not auto-paste).
@@ -4154,7 +4157,7 @@ function formatUnitForQuantity(unit, quantity) {
 function parseIngredientInput(value) {
   const cleanValue = String(value || "").trim();
   const match = cleanValue.match(
-    /^(\d+(?:[.,]\d+)?)\s*(gr|gram|grammen|grams|g|kg|kilogram|kilogrammen|kilo|mg|ml|milliliter|milliliters|cl|dl|l|liter|liters|el|eetlepels?|tl|theelepels?|tbsp|tsp|cup|cups|oz|lb|stuks?|stuk(?:ken)?|krop|kroppen|bosje|bosjes|zakje|zakjes|pot(?:je|jes)?|blik(?:je|jes)?|snuf(?:je|jes)?|teen|teentjes|plak(?:je|jes)?|handje(?:s)?|scheut(?:je)?|bakje|bakjes|pak(?:ken)?|rol(?:len)?|verpakking(?:en)?|takje|takjes|blokje|blokjes|reepje|reepjes|schijfje|schijfjes)?\s*(.+)$/i
+    /^(\d+(?:[.,]\d+)?)\s*(gr|gram|grammen|grams|g|kg|kilogram|kilogrammen|kilo|mg|ml|milliliter|milliliters|cl|dl|l|liter|liters|el|eetlepels?|tl|theelepels?|tbsp|tsp|cup|cups|oz|lb|stuks?|stuk(?:ken)?|krop|kroppen|bosjes?|zakjes?|potjes?|blikjes?|snufjes?|teen|teentjes|plakjes?|handjes?|scheut(?:je)?|bakjes?|pak(?:ken)?|rol(?:len)?|verpakking(?:en)?|takjes?|blokjes?|reepjes?|schijfjes?)?\s*(.+)$/i
   );
   if (match) {
     // Normalize units to a canonical singular form (e.g. plakjes → plakje)
@@ -7089,7 +7092,7 @@ function getPantryOptionalSuggestionsForRecipe(recipe, existingKeySet) {
     .filter((p) => !existing.has(normalizeIngredientKey(p.title)));
 }
 
-function renderGroceryGroups() {
+function renderGroceryGroups(options = {}) {
   ensureGroceryListsInitialized();
   consolidateUncheckedGroceryDuplicates();
   persistGroceryItemsLocally();
@@ -7401,11 +7404,13 @@ function renderGroceryGroups() {
     });
   });
 
-  // Trigger AH photo fetch for items without photos; render placeholders first, then swap in real product images.
-  fetchGroceryPhotos();
+  if (!options.skipPhotoFetch) {
+    fetchGroceryPhotos();
+  }
 }
 
 let _groceryPhotoFetchTimer = null;
+let _groceryPhotoFetchInFlight = null;
 function debouncedFetchGroceryPhotos() {
   if (_groceryPhotoFetchTimer) clearTimeout(_groceryPhotoFetchTimer);
   _groceryPhotoFetchTimer = setTimeout(() => {
@@ -7414,46 +7419,84 @@ function debouncedFetchGroceryPhotos() {
   }, 300);
 }
 
-async function fetchGroceryPhotos() {
+function groceryItemNeedsPhotoRefresh(item) {
   // Haal ook foto's opnieuw op die van de server kwamen maar nu mogelijk verouderd zijn.
   // (bv. verkeerde foto door oude scoring — wordt herkend aan /api/image-proxy prefix)
-  const needsRefresh = (item) => !item.imageUrl || item.imageUrl.startsWith("/api/image-proxy");
-  const itemsWithoutPhoto = state.groceryItems
-    .filter((item) => needsRefresh(item) && !item.checked)
+  return Boolean(item && !item.checked && (!item.imageUrl || String(item.imageUrl).startsWith("/api/image-proxy")));
+}
+
+function getGroceryPhotoRefreshItems(limit = 20) {
+  return state.groceryItems
+    .filter((item) => groceryItemNeedsPhotoRefresh(item))
+    .slice(0, limit);
+}
+
+function preloadGroceryImage(url) {
+  const src = normalizeChannelThumbnailUrl(url);
+  if (!src) return Promise.resolve();
+  return new Promise((resolve) => {
+    const img = new Image();
+    const done = () => resolve();
+    const timer = setTimeout(done, 1600);
+    img.onload = () => { clearTimeout(timer); done(); };
+    img.onerror = () => { clearTimeout(timer); done(); };
+    img.src = src;
+  });
+}
+
+async function fetchGroceryPhotos() {
+  if (_groceryPhotoFetchInFlight) return _groceryPhotoFetchInFlight;
+
+  const itemsWithoutPhoto = getGroceryPhotoRefreshItems()
     .slice(0, 20);
   if (!itemsWithoutPhoto.length) return;
-  document.getElementById("groceryScreen")?.classList.add("grocery--loading");
-  try {
-    const resp = await fetch("/api/grocery-photos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: itemsWithoutPhoto.map((item) => ({ id: item.id, title: item.title })),
-      }),
-    });
-    if (!resp.ok) return;
-    const data = await resp.json();
-    const photos = data.photos || {};
-    let changed = false;
-    for (const [groceryId, url] of Object.entries(photos)) {
-      if (!url) continue;
-      const item = state.groceryItems.find((i) => i.id === groceryId);
-      if (item && needsRefresh(item)) {
-        item.imageUrl = url;
-        changed = true;
-      }
-    }
-    if (changed) {
-      schedulePersistAppState();
-    }
-    if (changed && state.view === "grocery") {
-      renderGroceryGroups();
-    }
-  } catch {
-    // silently ignore
-  } finally {
-    document.getElementById("groceryScreen")?.classList.remove("grocery--loading");
+
+  const screen = document.getElementById("groceryScreen");
+  if (state.view === "grocery") {
+    screen?.classList.add("grocery--loading", "grocery--preparing");
   }
+
+  _groceryPhotoFetchInFlight = (async () => {
+    try {
+      const resp = await fetch("/api/grocery-photos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: itemsWithoutPhoto.map((item) => ({ id: item.id, title: item.title })),
+        }),
+      });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const photos = data.photos || {};
+      let changed = false;
+      const preloadUrls = [];
+      for (const [groceryId, url] of Object.entries(photos)) {
+        if (!url) continue;
+        const item = state.groceryItems.find((i) => i.id === groceryId);
+        if (item && groceryItemNeedsPhotoRefresh(item)) {
+          item.imageUrl = url;
+          preloadUrls.push(url);
+          changed = true;
+        }
+      }
+      if (preloadUrls.length) {
+        await Promise.allSettled(preloadUrls.map(preloadGroceryImage));
+      }
+      if (changed) {
+        schedulePersistAppState();
+      }
+      if (changed && state.view === "grocery") {
+        renderGroceryGroups({ skipPhotoFetch: true });
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      screen?.classList.remove("grocery--loading", "grocery--preparing");
+      _groceryPhotoFetchInFlight = null;
+    }
+  })();
+
+  return _groceryPhotoFetchInFlight;
 }
 
 function singularizeIngredientName(name) {

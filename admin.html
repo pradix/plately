@@ -1318,6 +1318,18 @@
           </div>
           <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
             <div class="section-header" style="margin-bottom:8px">
+              <h3 style="margin:0;font-size:14px">Ingrediënt-eenheden herstellen</h3>
+              <div class="muted" style="font-size:12px">Herstelt restletters uit takjes, blaadjes, teentjes, bosjes, stengels, plakjes, blokjes en reepjes</div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+              <button type="button" class="btn btn-sm" onclick="repairIngredientUnits(true)">Dry-run</button>
+              <button type="button" class="btn btn-sm btn-primary" onclick="repairIngredientUnits(false)">Herstellen</button>
+            </div>
+            <div id="ingredientUnitRepairStatus" class="muted" style="font-size:12px;margin-bottom:8px">Loopt alle geïmporteerde recepten na en voorkomt namen zoals “s kaas” of “s koriander”.</div>
+            <pre id="ingredientUnitRepairOutput" class="mono" style="display:block;margin:0;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto">—</pre>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
+            <div class="section-header" style="margin-bottom:8px">
               <h3 style="margin:0;font-size:14px">SEO recepten opschonen</h3>
               <div class="muted" style="font-size:12px">Verwijdert slechte SEO-recepten: geen bron-URL, ongeldig recept of dubbele bron-URL</div>
             </div>
@@ -3281,6 +3293,42 @@
             usersChanged: data.usersChanged,
             removedRecipes: data.removedRecipes,
             sampleGroups: data.sampleGroups || [],
+          }, null, 2);
+        }
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "Fout: " + (error.message || String(error));
+        if (outEl) outEl.textContent = "—";
+      }
+    }
+
+    async function repairIngredientUnits(dryRun) {
+      const statusEl = document.getElementById("ingredientUnitRepairStatus");
+      const outEl = document.getElementById("ingredientUnitRepairOutput");
+      if (!dryRun) {
+        const ok = confirm("Alle geïmporteerde recepten nalopen en ingrediëntnamen zoals “s kaas” herstellen?");
+        if (!ok) return;
+      }
+      if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> ${dryRun ? "Dry-run" : "Herstellen"}…`;
+      if (outEl) outEl.textContent = "Bezig…";
+      try {
+        const response = await fetch("/api/admin/repair-ingredient-units", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dryRun: Boolean(dryRun) }),
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Herstellen mislukt");
+        if (statusEl) {
+          statusEl.textContent = `${dryRun ? "Dry-run" : "Klaar"}: ${data.repairedIngredients || 0} ingrediënten in ${data.repairedRecipes || 0} recepten hersteld bij ${data.usersChanged || 0}/${data.usersScanned || 0} users.`;
+        }
+        if (outEl) {
+          outEl.textContent = JSON.stringify({
+            dryRun: data.dryRun,
+            usersScanned: data.usersScanned,
+            usersChanged: data.usersChanged,
+            repairedRecipes: data.repairedRecipes,
+            repairedIngredients: data.repairedIngredients,
+            sampleRepairs: data.sampleRepairs || [],
           }, null, 2);
         }
       } catch (error) {
