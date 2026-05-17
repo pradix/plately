@@ -2795,7 +2795,6 @@ function renderBasketPreview() {
             ${WISSEL_SVG}
             Wissel
           </button>` : ""}
-          ${preview?.store === "jumbo" && choice.url ? `<a class="basket-product__jumbo-link" href="${escapeHtml(choice.url)}" target="_blank" rel="noreferrer noopener">Open op Jumbo →</a>` : ""}
         </div>
         <div class="basket-product__right">
           <button class="basket-product__delete" type="button" aria-label="Verwijder" data-basket-delete="${itemIndex}">
