@@ -2846,8 +2846,8 @@ function renderBasketPreview() {
     const isJumbo = preview?.store === "jumbo";
     ctaBtn.className = `basket-sheet__cta${isJumbo ? " basket-sheet__cta--jumbo" : ""}`;
     ctaBtn.innerHTML = isJumbo
-      ? `<svg viewBox="0 0 110 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:64px;height:20px;flex-shrink:0">
-          <text x="55" y="27" font-family="Arial Black,Arial,sans-serif" font-size="30" font-weight="900" font-style="italic" fill="#1a1200" text-anchor="middle" letter-spacing="1">JUMBO</text>
+      ? `<svg viewBox="0 0 130 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:72px;height:20px;flex-shrink:0" overflow="visible">
+          <text x="62" y="27" font-family="Arial Black,Arial,sans-serif" font-size="30" font-weight="900" font-style="italic" fill="#1a1200" text-anchor="middle" letter-spacing="1">JUMBO</text>
         </svg>
         mandje`
       : `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:28px;height:28px;flex-shrink:0">
