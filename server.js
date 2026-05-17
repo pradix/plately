@@ -492,8 +492,7 @@ function isAllowedImageProxyUrl(rawUrl) {
     // Jumbo product images (CDN domeinen)
     if (host === "assets.jumbo.com" || host.endsWith(".assets.jumbo.com")) return true;
     if (host.endsWith(".cloud.jumbo.com") || host === "cloud.jumbo.com") return true;
-    // Open Food Facts productafbeeldingen
-    if (host === "images.openfoodfacts.org" || host.endsWith(".openfoodfacts.org")) return true;
+    if (host === "www.jumbo.com") return true;
     // Serper / Google SERP thumbnails voor kanaalzoek
     if (host.endsWith(".googleusercontent.com") || host.endsWith(".gstatic.com")) return true;
     return false;
@@ -10862,19 +10861,55 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) 
   return merged.slice(0, maxCount);
 }
 
-// ── Jumbo product search ────────────────────────────────────────────────────────
-// Jumbo heeft geen publieke API (mobiele API dood, website blokkeert scraping).
-// We gebruiken de AH-API voor productafbeeldingen als generieke voedselreferentie.
+// ── Jumbo product search via GraphQL ─────────────────────────────────────────────
+// Jumbo's website gebruikt een Nuxt/Apollo GraphQL API op /api/graphql.
+
+const JUMBO_GQL_HEADERS = {
+  "content-type": "application/json",
+  "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+  accept: "application/json",
+  origin: "https://www.jumbo.com",
+  referer: "https://www.jumbo.com/producten/",
+  "x-source": "JUMBO_WEB",
+  "apollographql-client-name": "JUMBO_WEB",
+  "apollographql-client-version": "master-v32.8.0-web",
+};
+
+const JUMBO_SEARCH_QUERY = `
+  query SearchProducts($input: ProductSearchInput!) {
+    searchProducts(input: $input) {
+      products {
+        sku
+        title
+        image
+        price { price }
+      }
+    }
+  }
+`;
 
 async function findJumboProduct(ingredient) {
   try {
-    const products = await findAHProducts(ingredient, 3);
-    const best = products.find((p) => p.imageUrl);
-    if (best) {
-      const cleanName = sanitizeText(best.name || ingredient)
-        .replace(/^AH\s+/i, "")
-        .replace(/^Albert Heijn\s+/i, "");
-      return { sku: null, name: cleanName || sanitizeText(ingredient), price: "", imageUrl: best.imageUrl };
+    const resp = await fetch("https://www.jumbo.com/api/graphql", {
+      method: "POST",
+      headers: JUMBO_GQL_HEADERS,
+      body: JSON.stringify({
+        query: JUMBO_SEARCH_QUERY,
+        variables: { input: { searchTerms: ingredient, limit: 5, offSet: 0, searchType: "keyword" } },
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const products = data?.data?.searchProducts?.products || [];
+    for (const p of products) {
+      const sku = sanitizeText(p.sku || "");
+      const name = sanitizeText(p.title || "").replace(/^Jumbo\s+/i, "");
+      if (!sku || name.length < 2 || NON_FOOD_INGREDIENT_PATTERN.test(name)) continue;
+      const cents = Number(p.price?.price);
+      const price = Number.isFinite(cents) && cents > 0 ? `€${(cents / 100).toFixed(2).replace(".", ",")}` : "";
+      const imageUrl = sanitizeText(p.image || "");
+      return { sku, name, price, imageUrl };
     }
   } catch { /* geen resultaat */ }
   return null;
