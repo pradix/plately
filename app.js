@@ -7430,10 +7430,7 @@ async function fetchGroceryPhotos() {
     .slice(0, 20);
   if (!itemsWithoutPhoto.length) return;
 
-  const screen = document.getElementById("groceryScreen");
-  if (state.view === "grocery") {
-    screen?.classList.add("grocery--loading");
-  }
+  showGrocerySplash();
 
   _groceryPhotoFetchInFlight = (async () => {
     try {
@@ -7465,7 +7462,7 @@ async function fetchGroceryPhotos() {
     } catch {
       // silently ignore
     } finally {
-      screen?.classList.remove("grocery--loading");
+      hideGrocerySplash();
       _groceryPhotoFetchInFlight = null;
     }
   })();
@@ -11350,6 +11347,30 @@ function showImportSplash(url) {
   }, IMPORT_SPLASH_MAX_MS);
 }
 
+let _grocerySplashTimer = null;
+let _grocerySplashLeaveTimer = null;
+
+function showGrocerySplash() {
+  const splash = document.getElementById("grocerySplash");
+  if (!splash) return;
+  if (_grocerySplashLeaveTimer) { clearTimeout(_grocerySplashLeaveTimer); _grocerySplashLeaveTimer = null; }
+  splash.classList.remove("hidden", "grocery-splash--leaving");
+  splash.setAttribute("aria-hidden", "false");
+}
+
+function hideGrocerySplash() {
+  const splash = document.getElementById("grocerySplash");
+  if (!splash) return;
+  splash.classList.add("grocery-splash--leaving");
+  if (_grocerySplashLeaveTimer) clearTimeout(_grocerySplashLeaveTimer);
+  _grocerySplashLeaveTimer = setTimeout(() => {
+    _grocerySplashLeaveTimer = null;
+    splash.classList.add("hidden");
+    splash.classList.remove("grocery-splash--leaving");
+    splash.setAttribute("aria-hidden", "true");
+  }, 300);
+}
+
 function hideImportSplash() {
   // Garandeer minimum-zichtbaarheid: als import sneller klaar is dan
   // IMPORT_SPLASH_MIN_MS, sluiten we pas wanneer de timer alsnog verlopen is.
@@ -12276,16 +12297,31 @@ bindEvent(logoutButton, "click", () => {
   });
 });
 
-bindEvent(document.getElementById("deleteAccountButton"), "click", async () => {
-  if (!confirm("Weet je zeker dat je je account wilt verwijderen? Al je recepten en gegevens worden permanent gewist.")) return;
-  try {
-    await fetchJson(`${state.apiBase}/api/auth/account`, { method: "DELETE" });
-    await logoutAccount();
-    showToast("Je account is verwijderd.");
-  } catch (error) {
-    showToast("Account verwijderen lukte niet. Probeer het opnieuw.");
-    console.error("Delete account error:", error);
-  }
+bindEvent(document.getElementById("deleteAccountButton"), "click", () => {
+  showConfirm({
+    title: "Account verwijderen?",
+    subtitle: "Je verliest toegang tot je account. Je geïmporteerde recepten blijven bewaard.",
+    confirmLabel: "Ja, verwijder",
+    destructive: true,
+    onConfirm: () => {
+      showConfirm({
+        title: "Weet je het zeker?",
+        subtitle: "Dit kan niet ongedaan worden gemaakt. Je account wordt permanent verwijderd.",
+        confirmLabel: "Definitief verwijderen",
+        destructive: true,
+        onConfirm: async () => {
+          try {
+            await fetchJson(`${state.apiBase}/api/auth/account`, { method: "DELETE" });
+            await logoutAccount();
+            showToast("Je account is verwijderd.");
+          } catch (error) {
+            showToast("Account verwijderen lukte niet. Probeer het opnieuw.");
+            console.error("Delete account error:", error);
+          }
+        },
+      });
+    },
+  });
 });
 bindEvent(shareProfileButton, "click", async () => {
   const profileUrl = window.location.href;

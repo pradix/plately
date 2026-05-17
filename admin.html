@@ -983,6 +983,17 @@
         </div>
       </div>
 
+      <div class="section" id="ingredientFixSection" style="margin-top:16px">
+        <div class="section-header">
+          <h2>Ingrediënt-hoeveelheden herstellen</h2>
+        </div>
+        <p class="muted" style="font-size:13px;margin:0 0 12px">Zoekt alle recepten op die een 's' voor de ingredientnaam hebben staan door een parse-fout (bijv. "s tijm" i.p.v. "tijm"). Herstelt automatisch.</p>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-sm" id="fixIngredientUnitsBtn" type="button">🔧 Herstel ingrediënten</button>
+          <span id="fixIngredientUnitsStatus" class="muted" style="font-size:13px"></span>
+        </div>
+      </div>
+
       <div class="section" id="adminDeployWrap" style="margin-top:8px">
         <div class="section-header">
           <h2>Build &amp; deploy</h2>
@@ -4466,6 +4477,26 @@
         if (meta) meta.textContent = "Fout: " + e.message;
       } finally {
         setTimeout(() => { btn.disabled = false; btn.textContent = "⬇ Token ophalen"; }, 4000);
+      }
+    });
+
+    document.getElementById("fixIngredientUnitsBtn")?.addEventListener("click", async () => {
+      const btn = document.getElementById("fixIngredientUnitsBtn");
+      const status = document.getElementById("fixIngredientUnitsStatus");
+      if (!btn || !status) return;
+      btn.disabled = true;
+      btn.textContent = "⏳ Bezig...";
+      status.textContent = "";
+      try {
+        const resp = await fetch("/api/admin/fix-ingredient-units", adminFetchInit({ method: "POST" }));
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) throw new Error(data.error || "Onbekende fout");
+        status.textContent = `✅ ${data.fixedIngredients} ingrediënten hersteld bij ${data.fixedUsers} gebruikers (${data.scanned} gescand)`;
+        btn.textContent = "✓ Klaar";
+      } catch (e) {
+        status.textContent = "❌ " + e.message;
+        btn.textContent = "🔧 Herstel ingrediënten";
+        btn.disabled = false;
       }
     });
 

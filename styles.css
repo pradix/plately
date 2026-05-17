@@ -18314,3 +18314,123 @@ body {
 }
 .welcome-cta:active { transform: scale(0.97); }
 .welcome-cta--last { background: #e8542a; }
+
+/* ── Grocery splash screen ────────────────────────────────────────────── */
+.grocery-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.grocery-splash.hidden { display: none; }
+.grocery-splash__backdrop {
+  position: absolute;
+  inset: 0;
+  background: #f5f4f0;
+}
+.grocery-splash__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 0 24px 48px;
+  width: 100%;
+  max-width: 400px;
+}
+.grocery-splash__stage {
+  position: relative;
+  width: 280px;
+  height: 280px;
+}
+.grocery-splash__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(141,164,133,0.25);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+}
+.grocery-splash__ring--1 { width: 180px; height: 180px; }
+.grocery-splash__ring--2 { width: 260px; height: 260px; border-color: rgba(141,164,133,0.14); }
+
+/* Orbit tracks — same technique as import-splash */
+.grocery-splash__orbit-track {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 90px; height: 90px;
+  margin: -45px 0 0 -45px;
+  animation: importSplashOrbitSpin 5s linear infinite;
+  transform-origin: 50% 50%;
+}
+.grocery-splash__orbit-track--1 { animation-duration: 5.0s; animation-delay: 0s; }
+.grocery-splash__orbit-track--2 { animation-duration: 5.0s; animation-delay: -0.83s; }
+.grocery-splash__orbit-track--3 { animation-duration: 5.0s; animation-delay: -1.66s; }
+.grocery-splash__orbit-track--4 { animation-duration: 5.0s; animation-delay: -2.50s; }
+.grocery-splash__orbit-track--5 { animation-duration: 5.0s; animation-delay: -3.33s; }
+.grocery-splash__orbit-track--6 { animation-duration: 5.0s; animation-delay: -4.16s; }
+
+.grocery-splash__chip {
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%) translateY(-50%);
+  width: 52px; height: 52px;
+  background: #fff;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+  animation: importSplashOrbitSpin 5s linear infinite reverse;
+}
+.grocery-splash__chip--counter { animation-duration: 5.0s; }
+.grocery-splash__orbit-track--1 .grocery-splash__chip { animation-delay: 0s; }
+.grocery-splash__orbit-track--2 .grocery-splash__chip { animation-delay: 0.83s; }
+.grocery-splash__orbit-track--3 .grocery-splash__chip { animation-delay: 1.66s; }
+.grocery-splash__orbit-track--4 .grocery-splash__chip { animation-delay: 2.50s; }
+.grocery-splash__orbit-track--5 .grocery-splash__chip { animation-delay: 3.33s; }
+.grocery-splash__orbit-track--6 .grocery-splash__chip { animation-delay: 4.16s; }
+.grocery-splash__chip img { width: 30px; height: 30px; object-fit: contain; }
+
+.grocery-splash__icon {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 72px; height: 72px;
+  background: #edecea;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #4a7c59;
+}
+.grocery-splash__icon svg:first-child { width: 32px; height: 32px; }
+.grocery-splash__checkmark {
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 24px; height: 24px;
+  background: #4a7c59;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+}
+.grocery-splash__checkmark svg { width: 12px; height: 12px; }
+.grocery-splash__title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1a2e1a;
+  text-align: center;
+  line-height: 1.2;
+  margin: 0;
+}
+.grocery-splash__subtitle {
+  font-size: 0.95rem;
+  color: #6b7f6b;
+  text-align: center;
+  margin: 0;
+}
+/* Leave animation */
+.grocery-splash--leaving {
+  animation: grocerySplashLeave 0.28s ease-in forwards;
+}
+@keyframes grocerySplashLeave {
+  to { opacity: 0; transform: scale(0.97); }
+}

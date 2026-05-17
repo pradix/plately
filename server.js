@@ -19471,6 +19471,60 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/fix-ingredient-units" && request.method === "POST") {
+      await requireAdmin(request);
+      // Units that were often parsed incorrectly (singular form left, 's' prepended to ingredient name)
+      const BAD_UNIT_SINGULARS = new Set([
+        "takje","blaadje","bosje","zakje","blokje","reepje","stengel","plakje",
+        "teentje","handje","scheutje","snufje","bakje","rolletje",
+      ]);
+      if (!isPostgresEnabled()) {
+        sendJson(response, 200, { ok: true, fixed: 0, scanned: 0, note: "Alleen beschikbaar met PostgreSQL." });
+        return;
+      }
+      await ensurePostgresSchema();
+      const pool = await getPostgresPool();
+      const rows = await pool.query("SELECT id, app_state FROM plately_users WHERE app_state IS NOT NULL");
+      let scanned = 0;
+      let fixedUsers = 0;
+      let fixedIngredients = 0;
+      for (const row of rows.rows) {
+        let appState;
+        try { appState = typeof row.app_state === "string" ? JSON.parse(row.app_state) : row.app_state; } catch { continue; }
+        const recipes = Array.isArray(appState?.importedRecipes) ? appState.importedRecipes : [];
+        let changed = false;
+        for (const recipe of recipes) {
+          if (!Array.isArray(recipe?.ingredients)) continue;
+          for (const ing of recipe.ingredients) {
+            scanned++;
+            const unit = String(ing.unit || "").toLowerCase().trim();
+            const name = String(ing.name || "").trim();
+            // Fix: name starts with "s " and unit is a singular form (the 's' belonged to the unit plural)
+            if (BAD_UNIT_SINGULARS.has(unit) && /^s\s+\S/.test(name)) {
+              ing.name = name.replace(/^s\s+/, "");
+              fixedIngredients++;
+              changed = true;
+            }
+            // Fix: name starts with "s" (no space) and is short — unit ate the plural s
+            if (BAD_UNIT_SINGULARS.has(unit) && /^s[A-Za-z]/.test(name) && name.length <= 20) {
+              ing.name = name.slice(1);
+              fixedIngredients++;
+              changed = true;
+            }
+          }
+        }
+        if (changed) {
+          await pool.query(
+            "UPDATE plately_users SET app_state = $2::jsonb, updated_at = NOW() WHERE id = $1",
+            [row.id, JSON.stringify(appState)]
+          );
+          fixedUsers++;
+        }
+      }
+      sendJson(response, 200, { ok: true, scanned, fixedIngredients, fixedUsers });
+      return;
+    }
+
     // Endpoint to update the AH anonymous token from an external cron (Mac/CI).
     // Protected by AH_TOKEN_REFRESH_SECRET env var (shared secret in X-Plately-Key header).
     if (requestUrl.pathname === "/api/admin/ah-token-fetch" && request.method === "POST") {
