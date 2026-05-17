@@ -4085,13 +4085,13 @@ button.ingredient-item {
 }
 .today-recipe-card__meta {
   font-size: 0.8rem;
-  color: var(--color-text-secondary);
+  color: #1a1a18;
   margin: 0;
 }
 .today-recipe-card__arrow {
   flex-shrink: 0;
   padding-right: 14px;
-  color: var(--color-text-tertiary, #aaa);
+  color: #1a1a18;
 }
 .today-recipe-card__arrow svg { width: 20px; height: 20px; display: block; }
 
