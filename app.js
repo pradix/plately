@@ -11410,11 +11410,16 @@ function showAHBasketSplash(items) {
   splash.classList.remove("hidden", "ah-basket-splash--leaving");
   splash.setAttribute("aria-hidden", "false");
 
-  // Animate counter — pace at ~350ms per item, cap at 90% until API returns
-  const msPerItem = Math.min(400, Math.max(150, 3000 / _ahBasketTotal));
+  // Animate counter all the way to total — pace spread over ~3s
+  // If API returns first, hideAHBasketSplash snaps to N/N and clears this interval.
+  // If counter reaches N/N first, keep splash open until API returns.
+  const msPerItem = Math.min(400, Math.max(100, 3000 / _ahBasketTotal));
   _ahBasketSplashInterval = setInterval(() => {
-    const cap = Math.floor(_ahBasketTotal * 0.9);
-    if (_ahBasketCurrent >= cap) return;
+    if (_ahBasketCurrent >= _ahBasketTotal) {
+      clearInterval(_ahBasketSplashInterval);
+      _ahBasketSplashInterval = null;
+      return;
+    }
     _ahBasketCurrent++;
     _updateAHBasketProgress(_ahBasketCurrent, _ahBasketTotal);
   }, msPerItem);
