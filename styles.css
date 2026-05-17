@@ -3943,7 +3943,7 @@ button.ingredient-item {
 .store-cta--jumbo-pill .store-cta__dest { font-weight: 600; }
 .store-cta--jumbo-pill .store-cta__dest { color: rgba(26,18,0,0.72); }
 .store-cta__jumbo-badge {
-  background: #fdc500;
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -2846,9 +2846,12 @@ function renderBasketPreview() {
     const isJumbo = preview?.store === "jumbo";
     ctaBtn.className = `basket-sheet__cta${isJumbo ? " basket-sheet__cta--jumbo" : ""}`;
     ctaBtn.innerHTML = isJumbo
-      ? `<svg viewBox="0 0 130 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:72px;height:20px;flex-shrink:0" overflow="visible">
-          <text x="62" y="27" font-family="Arial Black,Arial,sans-serif" font-size="30" font-weight="900" font-style="italic" fill="#1a1200" text-anchor="middle" letter-spacing="1">JUMBO</text>
-        </svg>
+      ? `<span style="background:#fff;border-radius:6px;padding:3px 8px;flex-shrink:0;display:flex;align-items:center">
+          <svg viewBox="0 0 148 44" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:72px;height:22px;display:block" overflow="visible">
+            <text x="70" y="34" font-family="Arial Black,Arial,sans-serif" font-size="32" font-weight="900" font-style="italic" fill="#000" text-anchor="middle" letter-spacing="1">JUMBO</text>
+            <text x="67" y="31" font-family="Arial Black,Arial,sans-serif" font-size="32" font-weight="900" font-style="italic" fill="#FDC500" text-anchor="middle" letter-spacing="1">JUMBO</text>
+          </svg>
+        </span>
         mandje`
       : `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:28px;height:28px;flex-shrink:0">
           <path d="M28,8 Q8,10 6,30 L6,155 Q6,192 43,192 L157,192 Q194,192 194,155 L194,78 Q194,56 178,42 L112,8 Q96,-1 80,4 Z" fill="#fff" fill-opacity="0.3"/>
