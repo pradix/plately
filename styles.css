@@ -3939,14 +3939,16 @@ button.ingredient-item {
   background: rgba(0,0,0,0.10);
   color: #1a1200;
 }
-.store-cta--jumbo-pill .store-cta__name { color: #1a1200; }
+.store-cta--jumbo-pill .store-cta__name { display: none; }
 .store-cta--jumbo-pill .store-cta__dest { color: rgba(26,18,0,0.72); }
 .store-cta__logo--jumbo-pill {
   background: #fdc500;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px;
+  padding: 6px 10px;
+  width: auto;
+  border-radius: 10px;
 }
 .store-cta__jumbo-wordmark {
   width: 52px;

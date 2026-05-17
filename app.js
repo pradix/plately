@@ -7172,9 +7172,9 @@ function renderGroceryGroups(options = {}) {
       pill.classList.toggle("is-active", pill.dataset.grocerySort === (state.grocerySort || "default"));
     });
   }
-  const storeCountLabel = `Zet ${uncheckedCount} klaar`;
-  if (orderAHItemCount) orderAHItemCount.textContent = storeCountLabel;
-  if (orderJumboItemCount) orderJumboItemCount.textContent = storeCountLabel;
+  const preferredStoreForLabel = state.profile.favoriteSupermarket || "ah";
+  if (orderAHItemCount) orderAHItemCount.textContent = `Zet ${uncheckedCount} klaar in AH`;
+  if (orderJumboItemCount) orderJumboItemCount.textContent = `Zet ${uncheckedCount} klaar in Jumbo`;
   // Show only the preferred store button
   const preferredStore = state.profile.favoriteSupermarket || "ah";
   if (orderAHButton) orderAHButton.classList.toggle("hidden", preferredStore === "jumbo");
