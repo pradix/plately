@@ -9,7 +9,7 @@
       name="description"
       content="Plately is een webapp om recepten van Instagram en websites te bewaren, koken en organiseren."
     />
-    <meta name="plately-build" content="1.0.21.28" />
+    <meta name="plately-build" content="1.0.21.30" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -38,9 +38,9 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="preload" href="styles.css?v=1.0.21.28" as="style" />
-    <link rel="preload" href="app.js?v=1.0.21.28" as="script" />
-    <link rel="stylesheet" href="styles.css?v=1.0.21.28" />
+    <link rel="preload" href="styles.css?v=1.0.21.30" as="style" />
+    <link rel="preload" href="app.js?v=1.0.21.30" as="script" />
+    <link rel="stylesheet" href="styles.css?v=1.0.21.30" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -2074,24 +2074,16 @@
       <div class="grocery-splash__backdrop"></div>
       <div class="grocery-splash__card">
         <div class="grocery-splash__stage" aria-hidden="true">
-          <span class="grocery-splash__ring grocery-splash__ring--1"></span>
-          <span class="grocery-splash__ring grocery-splash__ring--2"></span>
-          <span class="grocery-splash__orbit-track grocery-splash__orbit-track--1"><span class="grocery-splash__chip"><img src="assets/ingredients/carrot.svg" alt=""></span></span>
-          <span class="grocery-splash__orbit-track grocery-splash__orbit-track--2"><span class="grocery-splash__chip"><img src="assets/ingredients/cheese.svg" alt=""></span></span>
-          <span class="grocery-splash__orbit-track grocery-splash__orbit-track--3"><span class="grocery-splash__chip"><img src="assets/ingredients/tomato.svg" alt=""></span></span>
-          <span class="grocery-splash__orbit-track grocery-splash__orbit-track--4"><span class="grocery-splash__chip"><img src="assets/ingredients/avocado.svg" alt=""></span></span>
-          <span class="grocery-splash__orbit-track grocery-splash__orbit-track--5"><span class="grocery-splash__chip"><img src="assets/ingredients/onion.svg" alt=""></span></span>
-          <span class="grocery-splash__orbit-track grocery-splash__orbit-track--6"><span class="grocery-splash__chip"><img src="assets/ingredients/egg.svg" alt=""></span></span>
-          <div class="grocery-splash__icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
-              <rect x="9" y="3" width="6" height="4" rx="1"/>
-              <line x1="9" y1="12" x2="15" y2="12"/>
-              <line x1="9" y1="16" x2="13" y2="16"/>
-            </svg>
-            <span class="grocery-splash__checkmark">
-              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg>
-            </span>
+          <span class="gs-drop gs-drop--1"><img src="assets/ingredients/carrot.svg" alt=""></span>
+          <span class="gs-drop gs-drop--2"><img src="assets/ingredients/tomato.svg" alt=""></span>
+          <span class="gs-drop gs-drop--3"><img src="assets/ingredients/cheese.svg" alt=""></span>
+          <span class="gs-drop gs-drop--4"><img src="assets/ingredients/onion.svg" alt=""></span>
+          <span class="gs-drop gs-drop--5"><img src="assets/ingredients/avocado.svg" alt=""></span>
+          <span class="gs-drop gs-drop--6"><img src="assets/ingredients/egg.svg" alt=""></span>
+          <span class="gs-drop gs-drop--7"><img src="assets/ingredients/chicken.svg" alt=""></span>
+          <span class="gs-drop gs-drop--8"><img src="assets/ingredients/pasta.svg" alt=""></span>
+          <div class="grocery-splash__basket">
+            <img src="assets/grocery.svg" alt="">
           </div>
         </div>
         <p class="grocery-splash__title">Boodschappen<br>matchen</p>
@@ -2101,15 +2093,18 @@
 
     <!-- AH basket progress splash -->
     <div class="ah-basket-splash hidden" id="ahBasketSplash" role="status" aria-live="polite" aria-hidden="true">
+      <div class="ah-basket-splash__logo" aria-hidden="true">
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M28,8 Q8,10 6,30 L6,155 Q6,192 43,192 L157,192 Q194,192 194,155 L194,78 Q194,56 178,42 L112,8 Q96,-1 80,4 Z" fill="#00AEEF"/><path d="M55,130 Q35,130 35,108 L35,88 Q35,66 55,66 Q70,66 76,78 L76,68 L90,68 L90,130 L76,130 L76,120 Q70,132 55,130 Z M57,118 Q72,118 76,104 L76,92 Q72,78 57,78 Q47,78 47,88 L47,108 Q47,118 57,118 Z" fill="#fff"/><path d="M100,50 L114,50 L114,80 Q120,66 136,66 Q155,66 155,86 L155,130 L141,130 L141,90 Q141,78 132,78 Q121,78 114,90 L114,130 L100,130 Z" fill="#fff"/></svg>
+      </div>
       <div class="ah-basket-splash__stage" aria-hidden="true">
-        <span class="ah-basket-splash__orbit-track ah-basket-splash__orbit-track--1"><span class="ah-basket-splash__chip"><img src="assets/ingredients/carrot.svg" alt=""></span></span>
-        <span class="ah-basket-splash__orbit-track ah-basket-splash__orbit-track--2"><span class="ah-basket-splash__chip"><img src="assets/ingredients/chicken.svg" alt=""></span></span>
-        <span class="ah-basket-splash__orbit-track ah-basket-splash__orbit-track--3"><span class="ah-basket-splash__chip"><img src="assets/ingredients/tomato.svg" alt=""></span></span>
-        <span class="ah-basket-splash__orbit-track ah-basket-splash__orbit-track--4"><span class="ah-basket-splash__chip"><img src="assets/ingredients/cheese.svg" alt=""></span></span>
-        <span class="ah-basket-splash__orbit-track ah-basket-splash__orbit-track--5"><span class="ah-basket-splash__chip"><img src="assets/ingredients/onion.svg" alt=""></span></span>
-        <span class="ah-basket-splash__orbit-track ah-basket-splash__orbit-track--6"><span class="ah-basket-splash__chip"><img src="assets/ingredients/avocado.svg" alt=""></span></span>
-        <div class="ah-basket-splash__center">
-          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M28,8 Q8,10 6,30 L6,155 Q6,192 43,192 L157,192 Q194,192 194,155 L194,78 Q194,56 178,42 L112,8 Q96,-1 80,4 Z" fill="#00AEEF"/><path d="M55,130 Q35,130 35,108 L35,88 Q35,66 55,66 Q70,66 76,78 L76,68 L90,68 L90,130 L76,130 L76,120 Q70,132 55,130 Z M57,118 Q72,118 76,104 L76,92 Q72,78 57,78 Q47,78 47,88 L47,108 Q47,118 57,118 Z" fill="#fff"/><path d="M100,50 L114,50 L114,80 Q120,66 136,66 Q155,66 155,86 L155,130 L141,130 L141,90 Q141,78 132,78 Q121,78 114,90 L114,130 L100,130 Z" fill="#fff"/></svg>
+        <span class="ah-drop ah-drop--1"><img src="assets/ingredients/carrot.svg" alt=""></span>
+        <span class="ah-drop ah-drop--2"><img src="assets/ingredients/chicken.svg" alt=""></span>
+        <span class="ah-drop ah-drop--3"><img src="assets/ingredients/tomato.svg" alt=""></span>
+        <span class="ah-drop ah-drop--4"><img src="assets/ingredients/cheese.svg" alt=""></span>
+        <span class="ah-drop ah-drop--5"><img src="assets/ingredients/onion.svg" alt=""></span>
+        <span class="ah-drop ah-drop--6"><img src="assets/ingredients/avocado.svg" alt=""></span>
+        <div class="ah-basket-splash__basket">
+          <img src="assets/grocery.svg" alt="">
         </div>
       </div>
       <p class="ah-basket-splash__title">Producten klaarleggen</p>
@@ -2654,6 +2649,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=1.0.21.28" defer></script>
+    <script src="app.js?v=1.0.21.30" defer></script>
   </body>
 </html>

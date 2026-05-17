@@ -7430,8 +7430,6 @@ async function fetchGroceryPhotos() {
     .slice(0, 20);
   if (!itemsWithoutPhoto.length) return;
 
-  showGrocerySplash();
-
   _groceryPhotoFetchInFlight = (async () => {
     try {
       const resp = await fetch("/api/grocery-photos", {
@@ -7462,7 +7460,6 @@ async function fetchGroceryPhotos() {
     } catch {
       // silently ignore
     } finally {
-      hideGrocerySplash();
       _groceryPhotoFetchInFlight = null;
     }
   })();
@@ -9173,6 +9170,10 @@ function addRecipeToGrocery(recipe) {
 
   renderGroceryGroups();
   schedulePersistAppState();
+  if (added > 0) {
+    showGrocerySplash();
+    fetchGroceryPhotos().finally(() => hideGrocerySplash());
+  }
   if (added || merged) {
     const gScreen = document.getElementById("groceryScreen");
     scrollToTopSoon([gScreen, groceryGroups].filter(Boolean));
@@ -9401,13 +9402,13 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
       throw new Error("Geen producten gevonden");
     }
 
-    hideAHBasketSplash();
     state.basketPreview = {
       ...payload,
       store: storeSlug,
       storeLabel: storeName,
     };
     openBasketModal(state.basketPreview);
+    hideAHBasketSplash();
     trackClientEvent("client_ah_basket_open", {
       store: storeSlug,
       itemCount: activeItems.length,
@@ -11442,7 +11443,7 @@ function hideAHBasketSplash() {
       splash.classList.remove("ah-basket-splash--leaving");
       splash.setAttribute("aria-hidden", "true");
     }, 300);
-  }, 500);
+  }, 800);
 }
 
 function hideImportSplash() {
