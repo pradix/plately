@@ -793,7 +793,8 @@ function normalizeIngredientForSearch(raw) {
   //     "handjevol peterselie" → "peterselie"
   //     "scheut olijfolie" → "olijfolie"
   //     "snufje zout" → "zout" (but then normalizes to "keukenzout" below)
-  t = t.replace(/^(?:handjevol|handje|handjes|scheut(?:je)?|scheutje|snuf(?:je)?|klontje|klont|druppel(?:tje)?|stukje|stukken?|takje|takjes|blaadje|blaadjes|bosje|bosjes)\s+/, "").trim();
+  //     Langere variant altijd voor kortere in alternatie (takjes vóór takje, anders blijft "s" over).
+  t = t.replace(/^(?:handjevol|handjes?|scheutjes?|scheuts?|snufjes?|snufs?|klontje|klont|druppeltjes?|druppels?|stukjes?|stukken?|takjes?|blaadjes?|bladen?|bladeren|bosjes?|teentjes?|teentje)\s+/, "").trim();
 
   // 0c. Strip container/packaging words + optional "van" ("blik tomaten", "pot pesto", "pakje vanillesuiker")
   t = t.replace(/^(?:blik(?:je)?\s+(?:van\s+)?|pot(?:je)?\s+(?:van\s+)?|pakje\s+(?:van\s+)?|zakje\s+(?:van\s+)?|fles(?:je)?\s+(?:van\s+)?|tube\s+(?:van\s+)?|doosje\s+(?:van\s+)?|beker(?:tje)?\s+(?:van\s+)?)/, "").trim();
@@ -942,7 +943,20 @@ function normalizeIngredientForSearch(raw) {
   return words.slice(0, 3).join(" ");
 }
 const UNIT_PATTERN =
-  "(?:x|g|gr|kg|mg|ml|l|cl|dl|el|tl|tbsp|tsp|cup|cups|oz|lb|stuks?|stuk(?:ken)?|krop|kroppen|bosje|bosjes|zakje|zakjes|pot(?:je|jes)?|blik(?:je|jes)?|liter|snuf(?:je|jes)?|snuif(?:je|jes)?|teen|teentje|teentjes|tenen|plak(?:je|jes)?|gram|grams|milliliter|eetlepel(?:s)?|theelepel(?:s)?|handje|handjes|scheut(?:je)?|bakje|bakjes|verpakking(?:en)?|pak(?:ken)?|rollen?|rol|bunch|clove|cloves|pinch|slices?|stengel|stengels|takje|takjes|blokje|blokjes|blaadje|blaadjes|blad|bladeren|reepje|reepjes|filet|filets)";
+  "(?:x|g|gr|kg|mg|ml|liter|milliliter|cl|dl|el|tl|tbsp|tsp|cup|cups|oz|lb|gram|grams" +
+  "|eetlepels?|theelepels?" +
+  "|stuks?|stukken?" +
+  "|kroppen|krop" +
+  "|bosjes?|zakjes?|bakjes?|blokjes?|reepjes?|blaadjes?|takjes?|stengels?|plakjes?" +
+  "|potjes?|blikjes?" +
+  "|snufjes?|snuifjes?" +
+  "|teentjes?|tenen|teen" +
+  "|handjes?" +
+  "|scheutjes?" +
+  "|bladeren|blad" +
+  "|verpakkingen?|pakketten?|pak" +
+  "|rollen?|rol" +
+  "|bunch|cloves?|pinch|slices?|filets?)";
 const QUANTITY_PATTERN = "(?:\\d+\\s+\\d+\\/\\d+|\\d+\\/\\d+|\\d+(?:[.,]\\d+)?)";
 const TIKTOK_CAPTION_FIELD_PATTERN = /(desc|description|caption|shareDesc|seoDesc|text|content)/i;
 const TIKTOK_TITLE_FIELD_PATTERN = /(title|shareTitle|seoTitle|recipeName|name)/i;
@@ -5213,28 +5227,29 @@ function parseIngredientLine(line) {
   }
 
   const verbalQuantityMatch = clean.match(
-    /^(een|één|halve|half|paar|scheut(?:je)?|handje|handjes|snuf(?:je)?|bosje|takje)\s+(.+)$/i
+    /^(een|één|halve|half|paar|scheutjes?|handjes?|snufjes?|bosjes?|takjes?|teentjes?|blaadjes?)\s+(.+)$/i
   );
   if (verbalQuantityMatch) {
     const token = verbalQuantityMatch[1].toLowerCase();
+    const tokenBase = token.replace(/s$/, ""); // "takjes" → "takje", "handjes" → "handje"
     return {
       quantity:
         token === "halve" || token === "half"
           ? "0.5"
           : token === "paar"
             ? "2"
-            : token === "handjes"
-              ? "2"
+            : /^handjes?$/.test(token)
+              ? token === "handjes" ? "2" : "1"
               : "1",
       unit:
-        token === "scheutje" ||
-        token === "handje" ||
-        token === "handjes" ||
-        token === "snufje" ||
-        token === "bosje" ||
-        token === "takje"
-          ? token
-          : "x",
+        /^scheutjes?$/.test(token) ? "scheutje" :
+        /^handjes?$/.test(token)   ? "handje"   :
+        /^snufjes?$/.test(token)   ? "snufje"   :
+        /^bosjes?$/.test(token)    ? "bosje"    :
+        /^takjes?$/.test(token)    ? "takje"    :
+        /^teentjes?$/.test(token)  ? "teen"     :
+        /^blaadjes?$/.test(token)  ? "blaadje"  :
+        "x",
       name: sanitizeText(verbalQuantityMatch[2]),
     };
   }
