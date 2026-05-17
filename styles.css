@@ -14728,6 +14728,16 @@ body {
 }
 
 .basket-sheet__cta:active { opacity: 0.85; }
+.basket-sheet__cta--jumbo { background: #E2001A; }
+.basket-sheet__cta--jumbo:active { opacity: 0.85; }
+.basket-product__jumbo-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #E2001A;
+  text-decoration: none;
+}
 
 /* Per-item "Wissel" link in the basket sheet rows */
 .basket-product__wissel {

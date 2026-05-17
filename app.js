@@ -2369,6 +2369,11 @@ function getBasketHandoffUrl(preview) {
     }
     return "https://www.ah.nl/mijnlijst/";
   }
+  if (preview.store === "jumbo") {
+    // Jumbo has no public deep-link to pre-fill a cart.
+    // Open the Jumbo mandje so the user can add the items shown in the modal.
+    return "https://www.jumbo.com/mandje/";
+  }
   const storeConfig = getStoreConfig(preview.store);
   return (
     preview.directUrl ||
@@ -2781,6 +2786,7 @@ function renderBasketPreview() {
             ${WISSEL_SVG}
             Wissel
           </button>` : ""}
+          ${preview?.store === "jumbo" && choice.url ? `<a class="basket-product__jumbo-link" href="${escapeHtml(choice.url)}" target="_blank" rel="noreferrer noopener">Open op Jumbo →</a>` : ""}
         </div>
         <div class="basket-product__right">
           <button class="basket-product__delete" type="button" aria-label="Verwijder" data-basket-delete="${itemIndex}">
@@ -2827,8 +2833,23 @@ function renderBasketPreview() {
   const totalEur = (totalCents / 100).toFixed(2).replace(".", ",");
   if (totalEl) totalEl.textContent = `€ ${totalEur}`;
 
-  // CTA button
+  // CTA button — label and style depend on store
   if (ctaBtn) {
+    const isJumbo = preview?.store === "jumbo";
+    ctaBtn.className = `basket-sheet__cta${isJumbo ? " basket-sheet__cta--jumbo" : ""}`;
+    ctaBtn.innerHTML = isJumbo
+      ? `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:26px;height:26px;flex-shrink:0">
+          <rect x="0" y="0" width="200" height="200" rx="28" fill="rgba(255,255,255,0.22)"/>
+          <path d="M 55,52 L 145,52" stroke="#FDC500" stroke-width="26" stroke-linecap="round"/>
+          <path d="M 110,52 L 110,148 Q 110,175 82,175 Q 58,175 58,152" stroke="#FDC500" stroke-width="26" stroke-linecap="round" fill="none"/>
+        </svg>
+        Open Jumbo mandje`
+      : `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:28px;height:28px;flex-shrink:0">
+          <path d="M28,8 Q8,10 6,30 L6,155 Q6,192 43,192 L157,192 Q194,192 194,155 L194,78 Q194,56 178,42 L112,8 Q96,-1 80,4 Z" fill="#fff" fill-opacity="0.3"/>
+          <path d="M55,130 Q35,130 35,108 L35,88 Q35,66 55,66 Q70,66 76,78 L76,68 L90,68 L90,130 L76,130 L76,120 Q70,132 55,130 Z M57,118 Q72,118 76,104 L76,92 Q72,78 57,78 Q47,78 47,88 L47,108 Q47,118 57,118 Z" fill="#ffffff"/>
+          <path d="M100,50 L114,50 L114,80 Q120,66 136,66 Q155,66 155,86 L155,130 L141,130 L141,90 Q141,78 132,78 Q121,78 114,90 L114,130 L100,130 Z" fill="#ffffff"/>
+        </svg>
+        Zet in AH mandje`;
     ctaBtn.onclick = () => {
       const url = getBasketHandoffUrl(preview);
       if (url) window.open(url, "_blank", "noreferrer");

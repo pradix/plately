@@ -10838,32 +10838,51 @@ async function findJumboProduct(ingredient) {
 
     const html = await response.text();
 
-    // The Jumbo website embeds product data as JSON in script tags or in the page's initial state.
-    // Typical pattern: {"id":"213178STK","title":"Jumbo Avocado...",...}
-    const idMatch = html.match(/"id"\s*:\s*"(\d+[A-Z]+\d*)"[^}]{0,120}"title"\s*:\s*"([^"]+)"/);
-    if (!idMatch) {
-      // Try reversed key order
-      const reversed = html.match(/"title"\s*:\s*"([^"]{3,60})"[^}]{0,120}"id"\s*:\s*"(\d+[A-Z]+\d*)"/);
-      if (!reversed) {
-        return null;
+    // Strategy 1: product URLs in the HTML (most reliable — not font-dependent)
+    // Jumbo product URLs: /producten/<slug>-<SKU>/ where SKU = digits + uppercase letters
+    const urlSkuRe = /\/producten\/([a-z0-9][a-z0-9-]{2,80})-(\d{4,8}[A-Z]{2,5})\//g;
+    let urlMatch;
+    while ((urlMatch = urlSkuRe.exec(html)) !== null) {
+      const sku = urlMatch[2];
+      const slug = urlMatch[1];
+      const name = sanitizeText(slug.replace(/-/g, " "));
+      if (name.length > 2 && !NON_FOOD_INGREDIENT_PATTERN.test(name)) {
+        return { sku, name, price: "" };
       }
+    }
+
+    // Strategy 2: JSON fields — id then title within 200 chars
+    const idMatch = html.match(/"id"\s*:\s*"(\d{4,8}[A-Z]{2,5})"[^}]{0,200}"title"\s*:\s*"([^"]{3,80})"/);
+    if (idMatch) {
+      const name = sanitizeText(idMatch[2]);
+      if (!NON_FOOD_INGREDIENT_PATTERN.test(name)) {
+        return { sku: idMatch[1], name, price: "" };
+      }
+    }
+
+    // Strategy 3: reversed key order
+    const reversed = html.match(/"title"\s*:\s*"([^"]{3,80})"[^}]{0,200}"id"\s*:\s*"(\d{4,8}[A-Z]{2,5})"/);
+    if (reversed) {
       const name = sanitizeText(reversed[1]);
-      if (NON_FOOD_INGREDIENT_PATTERN.test(name)) {
-        return null;
+      if (!NON_FOOD_INGREDIENT_PATTERN.test(name)) {
+        return { sku: reversed[2], name, price: "" };
       }
-      return { sku: reversed[2], name, price: "" };
     }
 
-    const name = sanitizeText(idMatch[2]);
-    if (NON_FOOD_INGREDIENT_PATTERN.test(name)) {
-      return null;
+    // Strategy 4: sku field
+    const skuMatch = html.match(/"sku"\s*:\s*"(\d{4,8}[A-Z]{2,5})"/);
+    if (skuMatch) {
+      const nearTitle = html.slice(Math.max(0, html.indexOf(skuMatch[0]) - 300), html.indexOf(skuMatch[0]) + 300);
+      const titleNear = nearTitle.match(/"(?:title|name|displayName)"\s*:\s*"([^"]{3,80})"/);
+      if (titleNear) {
+        const name = sanitizeText(titleNear[1]);
+        if (!NON_FOOD_INGREDIENT_PATTERN.test(name)) {
+          return { sku: skuMatch[1], name, price: "" };
+        }
+      }
     }
 
-    return {
-      sku: idMatch[1],
-      name,
-      price: "",
-    };
+    return null;
   } catch {
     return null;
   }
