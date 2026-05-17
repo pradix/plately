@@ -3941,6 +3941,19 @@ button.ingredient-item {
 }
 .store-cta--jumbo-pill .store-cta__name { color: #1a1200; }
 .store-cta--jumbo-pill .store-cta__dest { color: rgba(26,18,0,0.72); }
+.store-cta__logo--jumbo-pill {
+  background: #fdc500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+.store-cta__jumbo-wordmark {
+  width: 52px;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
 
 .store-cta__logo {
   width: 62px;
@@ -18559,6 +18572,16 @@ body {
   gap: 20px;
   padding: 0 32px 48px;
   transition: background 0.2s;
+}
+.ah-basket-splash__logo-jumbo { display: none; }
+.ah-basket-splash[data-store="jumbo"] .ah-basket-splash__logo-ah { display: none; }
+.ah-basket-splash[data-store="jumbo"] .ah-basket-splash__logo-jumbo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fdc500;
+  border-radius: 16px;
+  padding: 12px 20px;
 }
 .ah-basket-splash[data-store="jumbo"] {
   background: linear-gradient(160deg, #fdc500 0%, #f0b400 60%, #e0a800 100%);

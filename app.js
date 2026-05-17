@@ -7168,6 +7168,10 @@ function renderGroceryGroups(options = {}) {
   const storeCountLabel = `Zet ${uncheckedCount} klaar`;
   if (orderAHItemCount) orderAHItemCount.textContent = storeCountLabel;
   if (orderJumboItemCount) orderJumboItemCount.textContent = storeCountLabel;
+  // Show only the preferred store button
+  const preferredStore = state.profile.favoriteSupermarket || "ah";
+  if (orderAHButton) orderAHButton.classList.toggle("hidden", preferredStore === "jumbo");
+  if (orderJumboButton) orderJumboButton.classList.toggle("hidden", preferredStore !== "jumbo");
   renderNavBadge();
   renderGrocerySummary();
 
@@ -12633,13 +12637,14 @@ bindEvent(servingsPresets, "click", (e) => {
   applyServingsChange(Number(btn.dataset.servings));
 });
 
-// Direct AH vanuit recept-detail
+// Direct naar supermarkt vanuit recept-detail (gebruik favoriete winkel)
 bindEvent(detailSendToAhButton, "click", async () => {
   const recipe = getSelectedRecipe();
   if (!recipe) return;
   addRecipeToGrocery(recipe);
   renderGroceryGroups();
-  await openStoreBasket("albert-heijn");
+  const slug = (state.profile.favoriteSupermarket || "ah") === "jumbo" ? "jumbo" : "albert-heijn";
+  await openStoreBasket(slug);
 });
 
 bindEvent(searchInput, "input", (event) => {

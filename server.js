@@ -489,6 +489,8 @@ function isAllowedImageProxyUrl(rawUrl) {
     if (ALLOW_HOSTS.has(host)) return true;
     // Allow subdomains of static.ah.nl (defensive; usually not needed)
     if (host.endsWith(".static.ah.nl")) return true;
+    // Jumbo product images
+    if (host === "assets.jumbo.com" || host.endsWith(".assets.jumbo.com")) return true;
     // Serper / Google SERP thumbnails voor kanaalzoek
     if (host.endsWith(".googleusercontent.com") || host.endsWith(".gstatic.com")) return true;
     return false;
@@ -10838,7 +10840,7 @@ async function findJumboProduct(ingredient) {
 
     const html = await response.text();
 
-    // Strategy 1: product URLs in the HTML (most reliable — not font-dependent)
+    // Strategy 1: product URLs in the HTML (most reliable)
     // Jumbo product URLs: /producten/<slug>-<SKU>/ where SKU = digits + uppercase letters
     const urlSkuRe = /\/producten\/([a-z0-9][a-z0-9-]{2,80})-(\d{4,8}[A-Z]{2,5})\//g;
     let urlMatch;
@@ -10847,7 +10849,12 @@ async function findJumboProduct(ingredient) {
       const slug = urlMatch[1];
       const name = sanitizeText(slug.replace(/-/g, " "));
       if (name.length > 2 && !NON_FOOD_INGREDIENT_PATTERN.test(name)) {
-        return { sku, name, price: "" };
+        // Try to find a product image near this URL in the HTML
+        const pos = urlMatch.index;
+        const nearby = html.slice(Math.max(0, pos - 800), pos + 800);
+        const imgMatch = nearby.match(/https?:\/\/[^"'\s]*(?:assets\.jumbo\.com|jumbo\.com\/images)[^"'\s]*\.(?:jpg|jpeg|png|webp)[^"'\s]*/i);
+        const imageUrl = imgMatch ? imgMatch[0] : "";
+        return { sku, name, price: "", imageUrl };
       }
     }
 
