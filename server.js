@@ -678,8 +678,12 @@ async function proxyImage(requestUrl, response) {
   }
 
   // Serve from in-memory cache when available — AH CDN URLs are immutable.
-  const cached = _imageProxyCache.get(raw);
+  const _imgRaw = raw;
+  const cached = _imageProxyCache.get(_imgRaw);
   if (cached && Date.now() < cached.expiresAt) {
+    // LRU: ververs positie
+    _imageProxyCache.delete(_imgRaw);
+    _imageProxyCache.set(_imgRaw, cached);
     response.writeHead(200, {
       ...HTTP_HEADERS,
       "Content-Type": cached.contentType,
@@ -745,9 +749,10 @@ async function proxyImage(requestUrl, response) {
     // Store in server-side cache before responding.
     if (buffer && buffer.length >= 200) {
       if (_imageProxyCache.size >= IMAGE_PROXY_CACHE_MAX) {
+        // LRU eviction: oudste entry
         _imageProxyCache.delete(_imageProxyCache.keys().next().value);
       }
-      _imageProxyCache.set(raw, { buffer, contentType, expiresAt: Date.now() + IMAGE_PROXY_CACHE_TTL });
+      _imageProxyCache.set(_imgRaw, { buffer, contentType, expiresAt: Date.now() + IMAGE_PROXY_CACHE_TTL });
     }
 
     response.writeHead(200, {
@@ -873,6 +878,10 @@ function singularizeDutchIngredientPhraseForSearch(phrase) {
     ["pruimen", "pruim"],
     ["appels", "appel"],
     ["peren", "peer"],
+    ["spruitjes", "spruitje"],
+    ["asperges", "asperge"],
+    ["sperziebonen", "sperzieboon"],
+    ["preien", "prei"],
   ].sort((a, b) => b[0].length - a[0].length);
 
   for (const [plural, singular] of PLURAL_TO_SINGULAR) {
@@ -9509,6 +9518,7 @@ const CLIENT_INGEST_EVENT_TYPES = new Set([
   "client_navigation",
   "client_grocery_add",
   "client_ah_basket_open",
+  "client_basket_open",
   "client_kookstand",
   "client_cookbook_save",
   "client_import_success",
@@ -9611,22 +9621,25 @@ async function ingestClientEvents(request, bodyPayload) {
   const userId = authUser?.id ? sanitizeText(authUser.id) : null;
   const bodyAnon = sanitizeAnonId(body.anonId);
 
-  let accepted = 0;
-  for (const ev of eventsIn) {
-    const type = sanitizeText(ev?.type || "");
-    if (!CLIENT_INGEST_EVENT_TYPES.has(type)) continue;
-    const rawMeta = ev?.meta && typeof ev.meta === "object" ? ev.meta : {};
-    const meta = sanitizeClientIngestMeta(rawMeta);
-    const ts = Number(ev?.ts);
-    if (Number.isFinite(ts) && ts > 1e12 && ts < Date.now() + 60_000) {
-      meta.clientTs = Math.round(ts);
-    }
-    if (bodyAnon) meta.anonId = bodyAnon;
-    await recordEvent(type, userId, meta);
-    accepted += 1;
-  }
+  const now = Date.now();
+  const tasks = eventsIn
+    .map((ev) => {
+      const type = sanitizeText(ev?.type || "");
+      if (!CLIENT_INGEST_EVENT_TYPES.has(type)) return null;
+      const rawMeta = ev?.meta && typeof ev.meta === "object" ? ev.meta : {};
+      const meta = sanitizeClientIngestMeta(rawMeta);
+      const ts = Number(ev?.ts);
+      if (Number.isFinite(ts) && ts > 1e12 && ts < now + 60_000) {
+        meta.clientTs = Math.round(ts);
+      }
+      if (bodyAnon) meta.anonId = bodyAnon;
+      return { type, meta };
+    })
+    .filter(Boolean);
 
-  return { ok: true, accepted };
+  await Promise.all(tasks.map(({ type, meta }) => recordEvent(type, userId, meta)));
+
+  return { ok: true, accepted: tasks.length };
 }
 
 function normalizeSearchQuery(raw) {
@@ -9741,6 +9754,28 @@ let ahTokenCache = _persistedToken
   }
 }
 
+// In-memory cache voor Jumbo productzoekopdrachten — zelfde patroon als AH cache.
+const _jumboSearchCache = new Map();
+const JUMBO_SEARCH_CACHE_TTL = 12 * 60 * 60 * 1000; // 12 uur
+const JUMBO_SEARCH_CACHE_MAX = 300;
+
+function _getJumboSearchCache(key) {
+  const entry = _jumboSearchCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { _jumboSearchCache.delete(key); return null; }
+  // LRU: ververs positie
+  _jumboSearchCache.delete(key);
+  _jumboSearchCache.set(key, entry);
+  return entry.products;
+}
+
+function _setJumboSearchCache(key, products) {
+  if (_jumboSearchCache.size >= JUMBO_SEARCH_CACHE_MAX) {
+    _jumboSearchCache.delete(_jumboSearchCache.keys().next().value);
+  }
+  _jumboSearchCache.set(key, { products, expiresAt: Date.now() + JUMBO_SEARCH_CACHE_TTL });
+}
+
 // In-memory cache voor AH productzoekopdrachten — vermindert API-calls drastisch
 // en maakt de app bestand tegen tijdelijke rate-limits.
 const _ahSearchCache = new Map();
@@ -9757,6 +9792,9 @@ function _getPhotoCache(key) {
   const entry = _photoCache.get(key);
   if (!entry) return undefined;
   if (Date.now() > entry.expiresAt) { _photoCache.delete(key); return undefined; }
+  // LRU: ververs positie
+  _photoCache.delete(key);
+  _photoCache.set(key, entry);
   return entry.imageUrl; // kan ook "" zijn (geen foto gevonden)
 }
 function _setPhotoCache(key, imageUrl) {
@@ -9795,11 +9833,15 @@ function _getAHSearchCache(key) {
   const entry = _ahSearchCache.get(key);
   if (!entry) return null;
   if (Date.now() > entry.expiresAt) { _ahSearchCache.delete(key); return null; }
+  // LRU: ververs positie zodat meest recent gebruikte entries het langst blijven
+  _ahSearchCache.delete(key);
+  _ahSearchCache.set(key, entry);
   return entry.products;
 }
 
 function _setAHSearchCache(key, products) {
   if (_ahSearchCache.size >= AH_SEARCH_CACHE_MAX) {
+    // LRU eviction: verwijder de oudste (minst recent gebruikte) entry
     _ahSearchCache.delete(_ahSearchCache.keys().next().value);
   }
   _ahSearchCache.set(key, { products, expiresAt: Date.now() + AH_SEARCH_CACHE_TTL });
@@ -11484,6 +11526,12 @@ async function findJumboProducts(ingredient, limit = 12) {
   try {
     const searchTerm = _normalizeJumboSearchTerm(ingredient);
     if (!searchTerm || searchTerm.length < 2) return [];
+
+    // Controleer cache — slaat maximaal JUMBO_SEARCH_CACHE_MAX entries 12 uur op.
+    const cacheKey = `${searchTerm}|${limit}`;
+    const cached = _getJumboSearchCache(cacheKey);
+    if (cached) return cached;
+
     const fetchLimit = Math.min(48, limit * 3);
     const resp = await fetch("https://www.jumbo.com/api/graphql", {
       method: "POST",
@@ -11505,8 +11553,13 @@ async function findJumboProducts(ingredient, limit = 12) {
     const good = scored.filter(s => s.score < 100);
     const final = (good.length >= 2 ? good : scored).slice(0, limit);
     // Hecht score aan product zodat findJumboAlternativesGrouped hem kan gebruiken
-    return final.map(s => ({ ...s.p, matchMeta: { score: s.score } }));
-  } catch { return []; }
+    const result = final.map(s => ({ ...s.p, matchMeta: { score: s.score } }));
+    _setJumboSearchCache(cacheKey, result);
+    return result;
+  } catch (err) {
+    console.warn("[Jumbo] findJumboProducts fout:", err?.message || err);
+    return [];
+  }
 }
 
 async function findJumboProduct(ingredient) {
@@ -21705,6 +21758,7 @@ const server = http.createServer(async (request, response) => {
             (SELECT COUNT(*) FILTER (WHERE type = 'client_recipe_detail_view' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_recipe_detail_views,
             (SELECT COUNT(*) FILTER (WHERE type = 'client_kookstand' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_kookstand,
             (SELECT COUNT(*) FILTER (WHERE type = 'client_ah_basket_open' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_ah_basket_open,
+            (SELECT COUNT(*) FILTER (WHERE type = 'client_basket_open' AND meta->>'store' = 'jumbo' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_jumbo_basket_open,
             (SELECT COUNT(*) FILTER (WHERE type = 'client_grocery_add' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_grocery_add,
             (SELECT COUNT(*) FILTER (WHERE type = 'client_cookbook_save' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_cookbook_save,
             (SELECT COUNT(*) FILTER (WHERE type = 'client_import_review_saved' AND created_at >= NOW() - ($1::int * INTERVAL '1 day'))::int FROM plately_events) AS client_import_review_saved,
@@ -21800,6 +21854,7 @@ const server = http.createServer(async (request, response) => {
                 clientRecipeDetailViews: Number(ex.client_recipe_detail_views) || 0,
                 clientKookstand: Number(ex.client_kookstand) || 0,
                 clientAhBasketOpen: Number(ex.client_ah_basket_open) || 0,
+                clientJumboBasketOpen: Number(ex.client_jumbo_basket_open) || 0,
                 clientGroceryAdd: Number(ex.client_grocery_add) || 0,
                 clientCookbookSave: Number(ex.client_cookbook_save) || 0,
                 clientImportReviewSaved: Number(ex.client_import_review_saved) || 0,

@@ -712,6 +712,7 @@ const CLIENT_TRACK_ALLOWED = new Set([
   "client_navigation",
   "client_grocery_add",
   "client_ah_basket_open",
+  "client_basket_open",
   "client_kookstand",
   "client_cookbook_save",
   "client_import_success",
@@ -6422,7 +6423,9 @@ function renderDetailRecipe(resetServings = false) {
     reviewImportButton.setAttribute("title", reviewLabel);
   }
   if (detailIngredientCount) {
-    detailIngredientCount.textContent = `${recipe.ingredients.length} items`;
+    detailIngredientCount.textContent = recipe.ingredients.length === 1
+      ? "1 ingrediënt"
+      : `${recipe.ingredients.length} ingrediënten`;
   }
   if (detailAssist) {
     const linkedCookbooks = getCookbooksForRecipe(recipe.id);
@@ -9510,10 +9513,18 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
     };
     openBasketModal(state.basketPreview);
     hideAHBasketSplash();
-    trackClientEvent("client_ah_basket_open", {
+    // Per-store basket-open event (nieuw, uniform voor AH en Jumbo)
+    trackClientEvent("client_basket_open", {
       store: storeSlug,
       itemCount: activeItems.length,
     });
+    // Legacy AH event — blijft voor achterwaartse compatibiliteit met bestaande stats
+    if (storeSlug === "ah") {
+      trackClientEvent("client_ah_basket_open", {
+        store: storeSlug,
+        itemCount: activeItems.length,
+      });
+    }
     showToast(`Selectie klaar voor ${storeName}.`, { variant: "success" });
 
     // Optional push trigger (per-user) when basket is ready.
