@@ -5006,18 +5006,25 @@ function searchSavedRecipesForChannelQuery(query, limit = 12) {
     scored.push({ score, recipe, channel });
   }
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, Math.max(1, Number(limit) || 12)).map(({ recipe, channel }) => ({
-    url: `local:${recipe.id}`,
-    title: recipe.title || "Recept",
-    thumbnail: recipe.image || "",
-    channel: channel.name || "Plately",
-    channelId: channel.id || "plately-local",
-    description: recipe.description || "",
-    time: recipe.time || "",
-    sourceUrl: recipe.sourceUrl || "",
-    recipeId: recipe.id,
-    _source: "local",
-  }));
+  return scored.slice(0, Math.max(1, Number(limit) || 12)).map(({ recipe, channel }) => {
+    const rv = Number(recipe.ratingValue);
+    const rc = Number(recipe.ratingCount);
+    return {
+      url: `local:${recipe.id}`,
+      title: recipe.title || "Recept",
+      thumbnail: recipe.image || "",
+      channel: channel.name || "Plately",
+      channelId: channel.id || "plately-local",
+      description: recipe.description || "",
+      time: recipe.time || "",
+      sourceUrl: recipe.sourceUrl || "",
+      recipeId: recipe.id,
+      _source: "local",
+      ...(Number.isFinite(rv) && rv >= 1 && Number.isFinite(rc) && rc >= 1
+        ? { ratingValue: rv, ratingCount: rc, ...(recipe.ratingNormalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}) }
+        : {}),
+    };
+  });
 }
 
 function countActiveFollowedChannels() {
