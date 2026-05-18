@@ -5777,7 +5777,7 @@ button.ingredient-item {
 }
 
 .profile-subpanel__body {
-  padding: 8px 0 100px;
+  padding: 8px 0 16px;
 }
 
 /* ── Rich guide panels (import + installatie) ───────────────────────────── */
@@ -6018,8 +6018,10 @@ button.ingredient-item {
 
 .profile-subpanel__save-btn {
   display: block;
+  position: sticky;
+  bottom: 20px;
   width: calc(100% - 28px);
-  margin: 20px 14px 0;
+  margin: 16px 14px 20px;
   padding: 15px;
   background: #78936f;
   color: #fff;
@@ -6030,6 +6032,7 @@ button.ingredient-item {
   font-family: inherit;
   cursor: pointer;
   text-align: center;
+  z-index: 1;
 }
 
 .profile-subpanel__save-btn:active {
