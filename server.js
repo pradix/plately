@@ -16449,7 +16449,9 @@ const server = http.createServer(async (request, response) => {
         ? await findPublicSeoRecipeByToken(oldToken, origin)
         : await findPublicSeoRecipeByPath(raw, origin);
       if (!entry) {
-        sendJson(response, 404, { error: "Recept niet gevonden." });
+        // Redirect naar app shell — nooit JSON, anders toont de SW offline.html
+        response.writeHead(302, { Location: "/", ...HTTP_HEADERS });
+        response.end();
         return;
       }
       if (requestUrl.pathname !== entry.urlPath) {

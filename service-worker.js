@@ -4,7 +4,7 @@
 // Previous SW versions caused stale auth state.
 
 // Update this string whenever you want to invalidate caches.
-self.__PLATELY_SW_VERSION__ = "1.0.21.25";
+self.__PLATELY_SW_VERSION__ = "1.0.21.26";
 const CACHE_VERSION = self.__PLATELY_SW_VERSION__;
 const STATIC_CACHE = `plately-static-${CACHE_VERSION}`;
 const HTML_CACHE = `plately-html-${CACHE_VERSION}`;
@@ -88,8 +88,12 @@ self.addEventListener("fetch", (event) => {
         // fall back to cached shell below
       }
       if (cached) return cached;
-      const offlineCache = await caches.open(STATIC_CACHE);
-      const offlinePage = await offlineCache.match("/offline.html");
+      // Fall back to the cached app shell (index.html served at "/") so the
+      // SPA loads instead of showing a bare offline error screen.
+      const staticCache = await caches.open(STATIC_CACHE);
+      const shell = await staticCache.match("/");
+      if (shell) return shell;
+      const offlinePage = await staticCache.match("/offline.html");
       return offlinePage || Response.error();
     }
 
