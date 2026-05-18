@@ -2618,7 +2618,11 @@
       return { qs: qs.toString(), activityDays: d, compareDays: c };
     }
 
+    // Listeners één keer binden — flag voorkomt stapelen bij herhaald tab-switch
+    let _analyticsControlsInited = false;
     function initAnalyticsControls() {
+      if (_analyticsControlsInited) return;
+      _analyticsControlsInited = true;
       document.getElementById("actAnalyticsRefresh")?.addEventListener("click", () => loadAnalytics());
       document.getElementById("actDaysSelect")?.addEventListener("change", () => loadAnalytics());
       document.getElementById("actCompareSelect")?.addEventListener("change", () => loadAnalytics());
@@ -4194,55 +4198,43 @@
       }
     }
 
-    async function approveChannel(channelId, channelName) {
-      if (!confirm(`Weet je zeker dat je het kanaal "${escapeHtml(channelName)}" wilt goedkeuren?`)) {
-        return;
-      }
-
+    async function _channelAction(channelId, channelName, payload, successMsg) {
+      const btn = document.querySelector(`[onclick*="'${channelId}'"]`);
+      const origText = btn?.textContent;
+      if (btn) { btn.disabled = true; btn.textContent = "Bezig…"; }
       try {
         const response = await fetch("/api/admin/approve-channel", adminFetchInit({
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ channelId, status: "approved" })
+          body: JSON.stringify({ channelId, ...payload }),
+          signal: AbortSignal.timeout(10000),
         }));
-
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
         if (!response.ok || !data.ok) {
-          alert("Fout bij goedkeuren: " + (data.error || "Onbekende fout"));
+          alert("Fout: " + (data.error || "Onbekende fout"));
           return;
         }
-
-        alert("Kanaal goedgekeurd!");
-        loadPendingChannels();
+        alert(successMsg);
+        loadPendingChannels().catch((e) => {
+          console.warn("[Admin] Kanaallijst herladen mislukt:", e?.message);
+          alert("Goedgekeurd, maar de lijst kon niet herladen worden. Ververs de pagina.");
+        });
       } catch (error) {
-        alert("Fout: " + error.message);
+        alert(error?.name === "TimeoutError" ? "Verzoek duurde te lang (>10s). Probeer opnieuw." : "Fout: " + error.message);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = origText; }
       }
     }
 
+    async function approveChannel(channelId, channelName) {
+      if (!confirm(`Weet je zeker dat je het kanaal "${escapeHtml(channelName)}" wilt goedkeuren?`)) return;
+      await _channelAction(channelId, channelName, { status: "approved" }, "Kanaal goedgekeurd!");
+    }
+
     async function rejectChannel(channelId, channelName) {
-      if (!confirm(`Weet je zeker dat je het kanaal "${escapeHtml(channelName)}" wilt afwijzen?`)) {
-        return;
-      }
-
-      try {
-        const reason = prompt("Reden (optioneel):") || "";
-        const response = await fetch("/api/admin/approve-channel", adminFetchInit({
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ channelId, status: "rejected", reason })
-        }));
-
-        const data = await response.json();
-        if (!response.ok || !data.ok) {
-          alert("Fout bij afwijzen: " + (data.error || "Onbekende fout"));
-          return;
-        }
-
-        alert("Kanaal afgewezen!");
-        loadPendingChannels();
-      } catch (error) {
-        alert("Fout: " + error.message);
-      }
+      if (!confirm(`Weet je zeker dat je het kanaal "${escapeHtml(channelName)}" wilt afwijzen?`)) return;
+      const reason = prompt("Reden (optioneel):") || "";
+      await _channelAction(channelId, channelName, { status: "rejected", reason }, "Kanaal afgewezen!");
     }
 
     function renderUsers() {

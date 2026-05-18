@@ -732,6 +732,7 @@ const CLIENT_TRACK_ALLOWED = new Set([
   "client_import_review_saved",
   "client_recipe_deleted",
   "client_recipe_detail_view",
+  "client_storage_quota_exceeded",
 ]);
 const __clientEventQueue = [];
 let __clientEventFlushTimer = null;
@@ -2911,6 +2912,11 @@ async function researchBasketItem(itemIndex, { excludeCurrent = true } = {}) {
         excludeProductIds: exclude,
       }),
     });
+    // Hervalideer: gebruiker kan navigeren of basket sluiten terwijl fetch liep
+    const currentPreview = state.basketPreview;
+    const currentItem = currentPreview?.items?.[itemIndex];
+    if (!currentPreview || currentItem !== item) return; // stale, niets doen
+
     if (payload?.choices?.length) {
       item.choices = payload.choices;
       item.selectedChoiceIndex = 0;
@@ -3861,7 +3867,8 @@ function pushRecentSearch(query) {
     localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
   } catch (e) {
     if (e?.name === "QuotaExceededError") {
-      // Opslag vol: verwijder helft van recente zoekopdrachten en probeer opnieuw
+      // Atomisch: verwijder eerst de oude data voor de nieuwe setItem (voorkomt dat oude volle data blijft staan)
+      try { localStorage.removeItem(RECENT_SEARCHES_KEY); } catch {}
       try { localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next.slice(0, Math.ceil(next.length / 2)))); } catch {}
       showToast("Opslag bijna vol. Oudere zoekopdrachten zijn opgeruimd.", { variant: "info" });
     }
@@ -3887,6 +3894,7 @@ function pushRecentRecipeId(recipeId) {
     localStorage.setItem(RECENT_RECIPES_KEY, JSON.stringify(next));
   } catch (e) {
     if (e?.name === "QuotaExceededError") {
+      try { localStorage.removeItem(RECENT_RECIPES_KEY); } catch {}
       try { localStorage.setItem(RECENT_RECIPES_KEY, JSON.stringify(next.slice(0, Math.ceil(next.length / 2)))); } catch {}
     }
   }
@@ -5410,6 +5418,8 @@ async function searchChannels(query) {
     const cacheKey = getChannelSearchClientCacheKey({ query, channels, customChannelsParam });
     const cached = getCachedClientChannelSearch(cacheKey);
     if (cached && requestId === searchChannels._reqId) {
+      // Leeg de container eerst zodat er geen stale resultaten van een vorige query flitsen
+      if (channelSearchResults) channelSearchResults.innerHTML = "";
       renderChannelSearchResults(cached);
       return;
     }
@@ -10029,6 +10039,8 @@ function persistGroceryItemsLocally() {
       try { localStorage.removeItem("plately-grocery-ts"); } catch {}
       try { localStorage.setItem("plately-grocery-items", JSON.stringify(state.groceryItems)); } catch {}
       showToast("Lokale opslag bijna vol.", { variant: "info" });
+      // Rapporteer aan analytics zodat admins opslag-druk kunnen zien
+      trackClientEvent("client_storage_quota_exceeded", { context: "grocery" });
     }
   }
 }
@@ -10250,16 +10262,30 @@ async function fetchJson(url, options = {}) {
     ...options,
     headers,
   });
-  const payload = await response.json().catch(() => null);
+
+  let payload = null;
+  let jsonParseError = false;
+  try {
+    payload = await response.json();
+  } catch {
+    jsonParseError = true;
+  }
 
   if (!response.ok) {
+    // Als JSON parsen mislukte, val terug op HTTP statusText zodat de fout zichtbaar blijft
     const backendCode = payload?.error;
-    const backendMessage = payload?.message || payload?.error || "Importeren mislukt.";
-    const error = new Error(normalizeUiErrorMessage(backendMessage, backendCode));
+    const rawMessage = payload?.message || payload?.error
+      || (jsonParseError ? `Server fout (${response.status} ${response.statusText})` : "Importeren mislukt.");
+    const error = new Error(normalizeUiErrorMessage(rawMessage, backendCode));
     if (typeof backendCode === "string" && /^[a-z0-9_]+$/i.test(backendCode)) {
       error.code = backendCode;
     }
     throw error;
+  }
+
+  if (jsonParseError) {
+    // Succesvolle HTTP-status maar geen geldig JSON — gooi een duidelijke fout
+    throw new Error("Ongeldig antwoord van server. Probeer opnieuw.");
   }
 
   return payload;
@@ -15388,7 +15414,7 @@ function _obEnsureLayoutListeners() {
   window.addEventListener("resize", onResize, { passive: true });
   window.addEventListener("orientationchange", onResize, { passive: true });
   try {
-    window.visualViewport?.addEventListener?.("resize", onResize);
+    window.visualViewport?.addEventListener?.("resize", onResize, { passive: true });
   } catch {
     /* ignore */
   }

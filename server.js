@@ -2985,13 +2985,14 @@ async function requireAdmin(request) {
     authUser = await getDevAuthenticatedUser(request).catch(() => null);
   }
   const email = sanitizeText(authUser?.email || "");
-  if (!email) {
+  if (!email || typeof email !== "string" || email.length < 3) {
     throw new HttpError(
       403,
       "Geen geldige sessie voor admin. Log opnieuw in op dit domein en open het admin-paneel hier (zelfde origin). Gebruik fetch met credentials en/of Authorization zoals de hoofd-app."
     );
   }
-  if (email !== ADMIN_EMAIL) {
+  const adminEmailConfigured = typeof ADMIN_EMAIL === "string" && ADMIN_EMAIL.length >= 3;
+  if (!adminEmailConfigured || email !== ADMIN_EMAIL) {
     throw new HttpError(
       403,
       `Geen admin-rechten voor dit account (${email}). Alleen het beheerdersaccount (ADMIN_EMAIL) heeft toegang.`
@@ -9553,6 +9554,7 @@ const CLIENT_INGEST_EVENT_TYPES = new Set([
   "client_import_review_saved",
   "client_recipe_deleted",
   "client_recipe_detail_view",
+  "client_storage_quota_exceeded",
 ]);
 
 const clientIngestBudget = new Map();
@@ -18680,6 +18682,12 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
+      // Sla OTP-record atomisch op vóór de async DB-lookup en e-mail zodat gelijktijdige
+      // requests de rate-limit check passeren de bestaande entry zien en niet opnieuw sturen.
+      const otpCode = String(Math.floor(100000 + crypto.randomInt(900000)));
+      loginOtps[`login:${email}`] = { code: otpCode, expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), name, attempts: 0, isNewUser: false };
+      await saveOtps(loginOtps);
+
       let isNewUser = false;
       if (isPostgresEnabled()) {
         await ensurePostgresSchema();
@@ -18690,10 +18698,12 @@ const server = http.createServer(async (request, response) => {
         const db = await loadDatabase();
         isNewUser = !Object.values(db.users || {}).some((u) => String(u.email || "").toLowerCase() === email);
       }
-
-      const otpCode = String(Math.floor(100000 + crypto.randomInt(900000)));
-      loginOtps[`login:${email}`] = { code: otpCode, expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), name, attempts: 0, isNewUser };
-      await saveOtps(loginOtps);
+      // Werk isNewUser bij in het al opgeslagen record
+      const savedOtps2 = await loadOtps();
+      if (savedOtps2[`login:${email}`]?.code === otpCode) {
+        savedOtps2[`login:${email}`].isNewUser = isNewUser;
+        await saveOtps(savedOtps2);
+      }
 
       try {
         await sendEmail({
