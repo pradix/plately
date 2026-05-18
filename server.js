@@ -10301,6 +10301,10 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
     const isIngredientDrinkLike =
       /\b(sap|drank|limonade|siroop|frisdrank|bier|wijn|wijn|thee|koffie|smoothie|cocktail)\b/i.test(baseLower);
 
+    // Is het ingredient zelf al een samengesteld gerecht? Dan samengesteld-gerecht-penalty niet toepassen.
+    const isIngredientDishLike =
+      /\b(salade|maaltijd|schotel|gerecht|stoofpot|lasagne|ovenschotel|stamppot|curry|wok|nasi|bami|wrap|pizza|soep|noedels|noodles|ramen|spaghetti|pasta|penne|linguine|tagliatelle|frittata|omelet|quiche|rijstschotel|pastaschotel)\b/i.test(baseLower);
+
     const ingredientTokens = tokenizeForMatch(baseLower);
     const produceSynonymTokens = [];
     if (/\bcourgu?ettes?\b/.test(baseLower) || /\bcourgu?ettes?\b/.test(rawLower)) produceSynonymTokens.push("zucchini");
@@ -10451,8 +10455,8 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
 
       // 5b. Universeel: knijpfruit/babyfood is nooit een basisingrediënt (ook buiten fruitquery).
       if (/\b(knijpfruit|knijpzakje|babyvoeding|babyhapje|baby\s*maaltijd)\b/i.test(title)) {
-        score += 100;
-        adjustments.push({ kind: "penalty", label: "Knijpfruit/babyfood (nooit basisingrediënt)", delta: 100 });
+        score += 175;
+        adjustments.push({ kind: "penalty", label: "Knijpfruit/babyfood (nooit basisingrediënt)", delta: 175 });
       }
 
       // 6. Vlees & vis: penalizeer snacks met vleessmaak en sterk verwerkte producten.
@@ -10603,6 +10607,17 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         } else if (/\bei\b/.test(title)) {
           score -= 10;
           adjustments.push({ kind: "bonus", label: "Ei in titel", delta: -10 });
+        }
+      }
+
+      // Samengesteld gerecht: nooit een basisingrediënt (bijv. "spaghetti met ei" bij zoek op "ei").
+      // Alleen van toepassing als het ingredient zelf GEEN gerecht is.
+      if (!isIngredientDishLike) {
+        const composedDishInTitle =
+          /\b(spaghetti|pasta\b|penne|linguine|tagliatelle|fettuccine|rigatoni|lasagne|macaroni|nasi\b|bami\b|noedels|noodles|ramen\b|stamppot|ovenschotel|wokmaaltijd|rijstschotel|pastaschotel|frittata|omelet\b|quiche|shakshuka|wrap\b|pitabrood\s+met|curry\b|stoofschotel|maaltijdsoep|kant[-\s]?en[-\s]?klaar|instant\s+(?:noedels?|noodles?|soep))\b/i.test(title);
+        if (composedDishInTitle) {
+          score += 190;
+          adjustments.push({ kind: "penalty", label: "Samengesteld gerecht ≠ basisingrediënt", delta: 190 });
         }
       }
 

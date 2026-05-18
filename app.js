@@ -2363,8 +2363,15 @@ function getBasketHandoffUrl(preview) {
       })
       .filter(Boolean);
     if (selectedIds.length) {
+      // AH's add-multiple parser expects a literal colon between ID and qty (NOT %3A).
+      // Encode only the ID part; keep the colon and qty unencoded.
       return `https://www.ah.nl/mijnlijst/add-multiple?${selectedIds
-        .map((entry) => `p=${encodeURIComponent(entry)}`)
+        .map((entry) => {
+          const colonIdx = entry.lastIndexOf(":");
+          const id = colonIdx >= 0 ? entry.slice(0, colonIdx) : entry;
+          const qty = colonIdx >= 0 ? entry.slice(colonIdx + 1) : "1";
+          return `p=${encodeURIComponent(id)}:${qty}`;
+        })
         .join("&")}`;
     }
     return "https://www.ah.nl/mijnlijst/";
