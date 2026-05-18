@@ -15,7 +15,7 @@ function createSeedRecipe({
     title,
     description,
     time,
-    kcal: `${Math.max(280, ingredients.length * 75)} kcal`,
+    kcal: "",
     servings,
     mealTag,
     sourceUrl,
@@ -707,7 +707,7 @@ const state = {
 };
 
 const PLATELY_CLIENT_ANON_KEY = "plately-client-anon-v1";
-const CLIENT_TRACK_FLUSH_MS = 3200;
+const CLIENT_TRACK_FLUSH_MS = 12000;
 const CLIENT_TRACK_ALLOWED = new Set([
   "client_navigation",
   "client_grocery_add",
@@ -2320,12 +2320,10 @@ function getStoreConfig(storeSlug = "albert-heijn") {
 }
 
 function buildStoreSearchUrl(storeSlug, items) {
-  const query = encodeURIComponent(
-    (Array.isArray(items) ? items : [])
-      .map((item) => String(item?.title || "").trim())
-      .filter(Boolean)
-      .join(" ")
-  );
+  // Gebruik het eerste ingredient als zoekterm — alle ingrediënten aaneenschakelen
+  // levert vrijwel nooit bruikbare resultaten op bij AH of Jumbo.
+  const firstItem = (Array.isArray(items) ? items : []).find((item) => String(item?.title || "").trim());
+  const query = encodeURIComponent(String(firstItem?.title || "boodschappenlijst").trim());
 
   if ((storeSlug || "albert-heijn") === "jumbo") {
     return `https://www.jumbo.com/zoeken/?searchTerms=${query}`;
@@ -2382,7 +2380,9 @@ function getBasketHandoffUrl(preview) {
       .map((item) => {
         const choice = item.choices?.[item.selectedChoiceIndex || 0];
         const sku = choice?.productId || choice?.sku || "";
-        return sku ? { sku, quantity: 1 } : null;
+        if (!sku) return null;
+        const qty = Math.max(1, Math.min(24, estimateAhHandoffQuantityClient(item, choice)));
+        return { sku, quantity: qty };
       })
       .filter(Boolean);
     if (items.length) {
@@ -9580,7 +9580,7 @@ function scheduleRefetchBasketWithPreferences() {
       vegan: state.basketFilter.vegan,
       plantaardig: state.basketFilter.plantaardig,
     });
-  }, 450);
+  }, 900);
 }
 
 async function refetchBasketWithPreferences(preferences) {
@@ -9758,7 +9758,7 @@ function normalizeImportedRecipe(recipe) {
     title: cleanTitle,
     description,
     time: normalizeImportedTime(recipe.time),
-    kcal: recipe.kcal || `${Math.max(280, parsedIngredients.length * 85)} kcal`,
+    kcal: recipe.kcal || "",
     servings,
     mealTag,
     sourceUrl: recipe.sourceUrl || "#",
@@ -10006,10 +10006,10 @@ function renderRecipeSlider() {
 }
 
 // ── Admin Dashboard ───────────────────────────────────────────────────────────
-const ADMIN_EMAIL = "pradix@me.com";
-
 function isAdmin() {
-  return state.auth.authenticated && state.auth.email === ADMIN_EMAIL;
+  // isAdmin wordt server-side bepaald en meegegeven in de auth-response.
+  // Geen hardcoded e-mail in de client-bundle.
+  return Boolean(state.auth.authenticated && state.auth.isAdmin);
 }
 
 function renderAll() {

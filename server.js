@@ -1021,6 +1021,13 @@ function normalizeIngredientForSearch(raw) {
   if (/zongedroogde.*tomaten?/.test(t))     return "zongedroogde tomaten";
   if (/\b(gezeefde|gepureerde|gehakte|ingeblikte)\s*tomaten?/.test(t)) return "tomaten gepeld";
 
+  // 7b. Suiker: basterdsuiker-varianten → gewone zoekopdracht "suiker"
+  if (/\b(licht|donker|wit|bruin)e?\s+basterdsuiker\b/i.test(t)) return "basterdsuiker";
+  if (/\bbasterdsuiker\b/.test(t)) return "basterdsuiker";
+
+  // 7c. Radijs: verkleinde of meervoudsvorm → enkelvoud voor AH-zoek
+  if (/\bradijsjes?\b/.test(t)) return "radijs";
+
   // 8. Onion/garlic
   if (/knoflookteen|teentje.*knoflook/.test(t)) return "knoflook";
   if (/\b(rode|gele|witte|zilver)\s*ui\b/.test(t)) return "ui";
@@ -2373,8 +2380,8 @@ function withGlobalCustomChannels(appState, globalCustomChannels) {
   return { ...appState, customChannels: merged };
 }
 
-/** Tijdelijk uitgeschakelde kanalen — Cloudflare blokkeert imports/zoek; weer aanzetten zodra dat stabiel is. */
-const TEMPORARILY_DISABLED_CHANNEL_IDS = new Set(["ch-mj", "ch-ek"]);
+/** Tijdelijk uitgeschakelde kanalen — leeg: beheer via admin-panel / database. */
+const TEMPORARILY_DISABLED_CHANNEL_IDS = new Set([]);
 
 function isChannelEnabled(channelKind, channelId, enabledState) {
   const kind = sanitizeText(channelKind || "");
@@ -2917,9 +2924,9 @@ async function getAuthenticatedUser(request) {
 }
 
 const ADMIN_EMAIL = sanitizeText(process.env.ADMIN_EMAIL || "pradix@me.com");
+const isAdminEmail = (email) => sanitizeText(email || "") === ADMIN_EMAIL;
 
 async function requireAdmin(request) {
-  // Keep in sync with frontend email-based `isAdmin()`.
   let authUser = await getAuthenticatedUser(request).catch(() => null);
   // Dev-only fallback: allow json-file mode sessions when present.
   if (!authUser && !isPostgresEnabled()) {
@@ -10443,9 +10450,10 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
           adjustments.push({ kind: "penalty", label: "Fruit verwerkt (sap/jam/cake/chips — vers gevraagd)", delta: 70 });
         }
         // Knijpfruit / babyfood / fruitpap: nooit een vers-fruit product.
-        if (/\b(knijpfruit|knijpzakje|fruitmoes|fruitpap|babyvoeding|babyhapje|baby\s*fruit)\b/i.test(title)) {
-          score += 120;
-          adjustments.push({ kind: "penalty", label: "Knijpfruit/babyfood ≠ vers fruit", delta: 120 });
+        if (/\b(knijpfruit|knijpzakje|fruitmoes|fruitpap|babyvoeding|babyhapje|baby\s*fruit|groentehapje)\b/i.test(title) ||
+            (/\b\d+\s*m\+?\b/i.test(title) && /\b(hapje|pap|moes|puree|fruit|maaltijd|biologisch)\b/i.test(title))) {
+          score += 175;
+          adjustments.push({ kind: "penalty", label: "Knijpfruit/babyfood ≠ vers fruit", delta: 175 });
         }
         if (/\b(per\s+stuk|los\b|vers(?:e)?\b|stuks?|biologisch)\b/i.test(title)) {
           score -= 10;
@@ -10454,7 +10462,10 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       }
 
       // 5b. Universeel: knijpfruit/babyfood is nooit een basisingrediënt (ook buiten fruitquery).
-      if (/\b(knijpfruit|knijpzakje|babyvoeding|babyhapje|baby\s*maaltijd)\b/i.test(title)) {
+      const isBabyFood =
+        /\b(knijpfruit|knijpzakje|babyvoeding|babyhapje|baby\s*maaltijd|groentehapje|fruitpuree\s+baby|peuterkoek|peuterreep)\b/i.test(title) ||
+        (/\b\d+\s*m\+?\b/i.test(title) && /\b(hapje|pap|moes|puree|brood|groente|fruit|maaltijd|biologisch)\b/i.test(title));
+      if (isBabyFood) {
         score += 175;
         adjustments.push({ kind: "penalty", label: "Knijpfruit/babyfood (nooit basisingrediënt)", delta: 175 });
       }
@@ -10880,10 +10891,15 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       }
 
       // Cheese-specific "avoid": parmesan is often matched to sauces/spreads; avoid those.
-      if (baseLower === "parmezaanse kaas") {
+      if (baseLower === "parmezaanse kaas" || /\b(parmigiano|parmezaan)\b/.test(baseLower)) {
         if (/\b(saus|pesto|kruidenboter|spread)\b/.test(title)) {
           score += 80;
           adjustments.push({ kind: "penalty", label: "Parmezaan ≠ saus/spread", delta: 80 });
+        }
+        // Grissini/crackers/snacks met parmezaanse kaas als smaak ≠ blok/stuk kaas.
+        if (/\b(grissini|broodstengels?|crackers?|toastjes?|chips|snack|koekjes?|mini\s*koek)\b/i.test(title)) {
+          score += 180;
+          adjustments.push({ kind: "penalty", label: "Parmezaan ≠ cracker/snack", delta: 180 });
         }
       }
 
@@ -11587,7 +11603,10 @@ function buildAHDirectAddUrl(results) {
 function buildJumboDirectAddUrl(results) {
   const found = results.filter((r) => r.product?.sku);
   if (!found.length) return "";
-  const items = found.map((r) => ({ sku: r.product.sku, quantity: 1 }));
+  const items = found.map((r) => ({
+    sku: r.product.sku,
+    quantity: Math.max(1, Math.min(24, Math.ceil(Number(r.quantity || 1) || 1))),
+  }));
   return `https://www.jumbo.com/mandje/?add=${encodeURIComponent(JSON.stringify(items))}`;
 }
 
@@ -16565,7 +16584,8 @@ async function buildStoreBasket(body) {
         if (!products || products.length === 0) {
           products = await findJumboProducts(ingredientName, 12);
         }
-        return { ingredient: ingredientName, product: products[0] || null, products };
+        const pickedJumbo = products[0] || null;
+        return { ingredient: ingredientName, product: pickedJumbo, products, quantity: estimateAhHandoffQuantity(item, pickedJumbo) };
       })
     ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
   } else {
@@ -17798,6 +17818,7 @@ const server = http.createServer(async (request, response) => {
             enabled: isPostgresEnabled(),
             authenticated: true,
             email: authUser.email,
+            isAdmin: isAdminEmail(authUser.email),
           },
         });
         return;
@@ -18632,7 +18653,7 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 200, {
           ok: true,
           user: buildAppStateFromUser(user),
-          auth: { enabled: true, authenticated: true, email: user.email, token },
+          auth: { enabled: true, authenticated: true, email: user.email, token, isAdmin: isAdminEmail(user.email) },
         });
         return;
       } else {
@@ -18672,7 +18693,7 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 200, {
           ok: true,
           user: { ...user, authenticated: true, email },
-          auth: { enabled: false, authenticated: true, email, token },
+          auth: { enabled: false, authenticated: true, email, token, isAdmin: isAdminEmail(email) },
         });
         return;
       }
