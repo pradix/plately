@@ -682,7 +682,9 @@ async function proxyImage(requestUrl, response) {
         signal: AbortSignal.timeout(8000),
       });
       if (!upstream.ok) {
-        sendJson(response, 502, { ok: false, error: `Upstream error (${upstream.status})` });
+        // Redirect to original URL so the browser can still try loading directly.
+        response.writeHead(302, { Location: raw, "Cache-Control": "no-store" });
+        response.end();
         return;
       }
       contentType = upstream.headers.get("content-type") || imageContentTypeFromUrl(raw);
@@ -18671,6 +18673,20 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/store-basket" && request.method === "POST") {
       const body = await readRequestBody(request);
       const basket = await buildStoreBasket(body);
+      sendJson(response, 200, { ok: true, ...basket });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/ah-basket" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const basket = await buildStoreBasket({ ...body, store: "albert-heijn" });
+      sendJson(response, 200, { ok: true, ...basket });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/jumbo-basket" && request.method === "POST") {
+      const body = await readRequestBody(request);
+      const basket = await buildStoreBasket({ ...body, store: "jumbo" });
       sendJson(response, 200, { ok: true, ...basket });
       return;
     }

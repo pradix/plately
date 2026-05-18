@@ -2988,7 +2988,7 @@ async function ensureBasketChoicesLoaded(itemIndexes) {
   const recipeTitle = preview.recipeTitle || getSingleRecipeContext(activeItems)?.recipeTitle || "Boodschappenlijst";
 
   try {
-    const payload = await fetchJson(`${state.apiBase}/api/store-basket`, {
+    const payload = await fetchJson(`${state.apiBase}/api/ah-basket`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -3091,7 +3091,8 @@ async function smartPickLowConfidence() {
 async function fetchSingleBasketItemMatch(store, title, preferences) {
   const cleanTitle = String(title || "").trim();
   if (!cleanTitle) return null;
-  const payload = await fetchJson(`${state.apiBase}/api/store-basket`, {
+  const _ep = store === "jumbo" ? "/api/jumbo-basket" : "/api/ah-basket";
+  const payload = await fetchJson(`${state.apiBase}${_ep}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -9472,7 +9473,8 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
   showAHBasketSplash(activeItems, storeSlug);
 
   try {
-    const payload = await fetchJson(`${state.apiBase}/api/store-basket`, {
+    const _basketEndpoint = storeSlug === "jumbo" ? "/api/jumbo-basket" : "/api/ah-basket";
+    const payload = await fetchJson(`${state.apiBase}${_basketEndpoint}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -9605,7 +9607,7 @@ async function refetchBasketWithPreferences(preferences) {
 
   try {
     const activeItems = getActiveGroceryItems();
-    const payload = await fetchJson(`${state.apiBase}/api/store-basket`, {
+    const payload = await fetchJson(`${state.apiBase}/api/ah-basket`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
