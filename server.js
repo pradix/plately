@@ -11078,7 +11078,7 @@ function _scoreJumboProduct(productName, searchBase) {
 
     // "[ingredient] [smaakmaker]" zonder "met" → bereid/gekruid product
     const SMAAKMAKERS_RE = /\b(knoflook|paprika|citroen|zwarte\s*peper|rode\s*peper|ui|kruid(?:en)?|tijm|rozemarijn|komijn|chili|jalape[ñn]o|gember|mosterd|honing|look|basilicum|peterselie|bieslook|sesam|teriyaki|cajun|provençaals?)\b/i;
-    if (!(/\bmet\b/i.test(title)) && SMAAKMAKERS_RE.test(title) && (overlap > 0 || compoundMatch)) score += 90;
+    if (!(/\bmet\b/i.test(title)) && SMAAKMAKERS_RE.test(title) && (overlap > 0 || compoundMatch)) score += 110;
   }
 
   // ── 5. Knijpfruit / babyfood ─────────────────────────────────────────────
@@ -11250,9 +11250,10 @@ async function findJumboProducts(ingredient, limit = 12) {
     // Score en sorteer; filter harde mismatches weg als er betere opties zijn
     const scored = raw.map(p => ({ p, score: _scoreJumboProduct(p.name, searchTerm) }));
     scored.sort((a, b) => a.score - b.score);
-    const good = scored.filter(s => s.score < 120);
+    const good = scored.filter(s => s.score < 100);
     const final = (good.length >= 2 ? good : scored).slice(0, limit);
-    return final.map(s => s.p);
+    // Hecht score aan product zodat findJumboAlternativesGrouped hem kan gebruiken
+    return final.map(s => ({ ...s.p, matchMeta: { score: s.score } }));
   } catch { return []; }
 }
 
@@ -11312,25 +11313,29 @@ async function findJumboAlternativesGrouped(ingredient, maxCount = 12) {
     }
   }
 
-  const merged = [...bySku.values()].map((p) => ({
-    ...p,
-    labels: [...new Set(p.labels.map((l) => sanitizeText(l)).filter(Boolean))],
-  }));
+  // Herscoor alle producten op de plain base (niet de bucket-prefixed query)
+  // zodat "Jumbo garnalen" en "Garnalen Knoflook" eerlijk vergelijkbaar zijn.
+  const merged = [...bySku.values()].map((p) => {
+    const rescored = _scoreJumboProduct(p.name, base);
+    return {
+      ...p,
+      labels: [...new Set(p.labels.map((l) => sanitizeText(l)).filter(Boolean))],
+      matchMeta: { score: rescored },
+    };
+  });
 
   const parseJumboPriceNum = (p) =>
     parseFloat(String(p.price || "").replace("€", "").replace(",", ".").trim()) || 9999;
 
-  // Sorteer: prijs oplopend → match-score → bonus als tie-breaker (bonus naar boven)
+  // Sorteer: relevantie (score laag = beter) → prijs oplopend → bonus als tie-breaker
   merged.sort((a, b) => {
+    const sa = Number(a.matchMeta?.score ?? 9999);
+    const sb = Number(b.matchMeta?.score ?? 9999);
+    if (sa !== sb) return sa - sb;
     const pa = parseJumboPriceNum(a);
     const pb = parseJumboPriceNum(b);
     if (pa !== pb) return pa - pb;
-    const sa = Number(a.matchMeta?.score);
-    const sb = Number(b.matchMeta?.score);
-    const fa = Number.isFinite(sa) ? sa : 9999;
-    const fb = Number.isFinite(sb) ? sb : 9999;
-    if (fa !== fb) return fa - fb;
-    // Bonus producten iets naar boven bij gelijke prijs/score
+    // Bonus producten iets naar boven bij gelijke score/prijs
     return (b.isBonus ? 1 : 0) - (a.isBonus ? 1 : 0);
   });
 
