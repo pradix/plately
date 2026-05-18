@@ -13229,6 +13229,8 @@ function searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit })
   return scored.slice(0, cap).map(({ e }) => {
     const r = e.recipe || {};
     const channelId = sanitizeText(e.channelId || "") || "plately";
+    const rv = Number(r.ratingValue);
+    const rc = Number(r.ratingCount);
     return {
       url: e.urlPath,
       title: sanitizeText(r.title || ""),
@@ -13238,6 +13240,9 @@ function searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit })
       time: sanitizeText(r.time || ""),
       sourceUrl: sanitizeText(r.sourceUrl || ""),
       _source: "plately",
+      ...(Number.isFinite(rv) && rv >= 1 && Number.isFinite(rc) && rc >= 1
+        ? { ratingValue: rv, ratingCount: rc, ...(r.ratingNormalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}) }
+        : {}),
     };
   });
 }
@@ -13291,6 +13296,8 @@ async function searchRecipesViaDatabase({ query, allowedChannels, limit, origin 
     return result.rows.map((row) => {
       const recipe = row.data && typeof row.data === "object" ? row.data : {};
       const channelId = sanitizeText(row.channel_id || "") || "plately";
+      const rv = Number(recipe.ratingValue);
+      const rc = Number(recipe.ratingCount);
       return {
         url: `/recept/${sanitizeText(row.slug || "recept")}`,
         title: sanitizeText(recipe.title || ""),
@@ -13300,6 +13307,9 @@ async function searchRecipesViaDatabase({ query, allowedChannels, limit, origin 
         time: sanitizeText(recipe.time || ""),
         sourceUrl: sanitizeText(recipe.sourceUrl || ""),
         _source: "plately",
+        ...(Number.isFinite(rv) && rv >= 1 && Number.isFinite(rc) && rc >= 1
+          ? { ratingValue: rv, ratingCount: rc, ...(recipe.ratingNormalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}) }
+          : {}),
       };
     });
   } catch (err) {
