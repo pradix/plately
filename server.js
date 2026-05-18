@@ -1021,6 +1021,26 @@ function normalizeIngredientForSearch(raw) {
   if (/zongedroogde.*tomaten?/.test(t))     return "zongedroogde tomaten";
   if (/\b(gezeefde|gepureerde|gehakte|ingeblikte)\s*tomaten?/.test(t)) return "tomaten gepeld";
 
+  // 7a. Samengestelde specerij/kruid-namen opsplitsen voor betere AH-zoekresultaten.
+  //     AH heeft producten vaak als twee woorden waar recepten één samenstelling gebruiken.
+  if (/\bchilivlokken?\b/.test(t)) return "chili vlokken";
+  if (/\bchilipeper(?:vlokken)?\b/.test(t) && !/\bgemalen\b/.test(t)) return "chili vlokken";
+  if (/\bchilipoeder\b/.test(t)) return "chili poeder";
+  if (/\bpaprikapoeder\b/.test(t)) return "paprika poeder";
+  if (/\brookpaprikapoeder\b/.test(t)) return "gerookte paprika poeder";
+  if (/\bknoflookpoeder\b/.test(t)) return "knoflook poeder";
+  if (/\buienpoeder\b/.test(t)) return "ui poeder";
+  if (/\bsesamzaad\b/.test(t)) return "sesam";
+  if (/\bmaanzaad\b/.test(t)) return "maanzaad";
+  if (/\bkomijnzaad\b/.test(t)) return "komijn";
+  if (/\bkorianderzaad\b/.test(t)) return "koriander zaad";
+  if (/\bvenkelzaad\b/.test(t)) return "venkel zaad";
+  if (/\bmosterdzaad\b/.test(t)) return "mosterd zaad";
+  if (/\bkurkumapoeder\b/.test(t)) return "kurkuma";
+  if (/\bkaneelpoeder\b/.test(t)) return "kaneel";
+  if (/\bgemberpoeder\b/.test(t) || /\bgemalen\s+gember\b/.test(t)) return "gemberpoeder";
+  if (/\bkardemonpoeder\b/.test(t)) return "kardemom";
+
   // 7b. Suiker: basterdsuiker-varianten → gewone zoekopdracht "suiker"
   if (/\b(licht|donker|wit|bruin)e?\s+basterdsuiker\b/i.test(t)) return "basterdsuiker";
   if (/\bbasterdsuiker\b/.test(t)) return "basterdsuiker";
@@ -10625,7 +10645,7 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       // Alleen van toepassing als het ingredient zelf GEEN gerecht is.
       if (!isIngredientDishLike) {
         const composedDishInTitle =
-          /\b(spaghetti|pasta\b|penne|linguine|tagliatelle|fettuccine|rigatoni|lasagne|macaroni|nasi\b|bami\b|noedels|noodles|ramen\b|stamppot|ovenschotel|wokmaaltijd|rijstschotel|pastaschotel|frittata|omelet\b|quiche|shakshuka|wrap\b|pitabrood\s+met|curry\b|stoofschotel|maaltijdsoep|kant[-\s]?en[-\s]?klaar|instant\s+(?:noedels?|noodles?|soep))\b/i.test(title);
+          /\b(spaghetti|pasta\b|penne|linguine|tagliatelle|fettuccine|rigatoni|lasagne|macaroni|nasi\b|bami\b|noedels|noodles|ramen\b|stamppot|ovenschotel|wokmaaltijd|rijstschotel|pastaschotel|frittata|omelet\b|quiche|shakshuka|wraps?\b|tortilla\b|pitabrood\s+met|curry\b|stoofschotel|maaltijdsoep|kant[-\s]?en[-\s]?klaar|instant\s+(?:noedels?|noodles?|soep))\b/i.test(title);
         if (composedDishInTitle) {
           score += 190;
           adjustments.push({ kind: "penalty", label: "Samengesteld gerecht ≠ basisingrediënt", delta: 190 });
@@ -10897,7 +10917,7 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
           adjustments.push({ kind: "penalty", label: "Parmezaan ≠ saus/spread", delta: 80 });
         }
         // Grissini/crackers/snacks met parmezaanse kaas als smaak ≠ blok/stuk kaas.
-        if (/\b(grissini|broodstengels?|crackers?|toastjes?|chips|snack|koekjes?|mini\s*koek)\b/i.test(title)) {
+        if (/\b(grissini|broodstengels?|crackers?|toastjes?|biscuits?|chips|snack|koekjes?|mini\s*koek)\b/i.test(title)) {
           score += 180;
           adjustments.push({ kind: "penalty", label: "Parmezaan ≠ cracker/snack", delta: 180 });
         }
