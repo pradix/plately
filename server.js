@@ -10947,10 +10947,42 @@ const JUMBO_SEARCH_QUERY = `
         title
         image
         price { price }
+        promotion {
+          label
+          promotionPrice { price }
+          fromPrice { price }
+          type
+        }
+        badge { text type }
+        tags { text type }
       }
     }
   }
 `;
+
+function _getJumboPromotionLabel(p) {
+  // Jumbo promotion object
+  const promo = p.promotion;
+  if (promo) {
+    // Expliciete label van Jumbo (bv. "2e gratis", "25% korting")
+    if (promo.label) return sanitizeText(promo.label);
+    // Promotieprijs vs. normale prijs → bereken % korting
+    const promoPrice = Number(promo.promotionPrice?.price);
+    const fromPrice  = Number(promo.fromPrice?.price) || Number(p.price?.price);
+    if (Number.isFinite(promoPrice) && Number.isFinite(fromPrice) && fromPrice > promoPrice && fromPrice > 0) {
+      const pct = Math.round((1 - promoPrice / fromPrice) * 100);
+      if (pct > 0) return `${pct}% korting`;
+    }
+    if (promo.type) return sanitizeText(promo.type);
+  }
+  // Badge (bv. "Aanbieding", "Nieuw")
+  const badge = Array.isArray(p.badge) ? p.badge[0] : p.badge;
+  if (badge?.text) return sanitizeText(badge.text);
+  // Tags
+  const promoTag = Array.isArray(p.tags) ? p.tags.find(t => /aanbieding|promo|sale|korting|gratis/i.test(t.text || "")) : null;
+  if (promoTag?.text) return sanitizeText(promoTag.text);
+  return "Aanbieding";
+}
 
 function _parseJumboProduct(p) {
   const sku = sanitizeText(p.sku || "");
@@ -10959,7 +10991,18 @@ function _parseJumboProduct(p) {
   const cents = Number(p.price?.price);
   const price = Number.isFinite(cents) && cents > 0 ? `€${(cents / 100).toFixed(2).replace(".", ",")}` : "";
   const imageUrl = sanitizeText(p.image || "");
-  return { sku, name, price, imageUrl };
+
+  // Promotie detectie
+  const hasPromotion = Boolean(
+    p.promotion?.label ||
+    p.promotion?.promotionPrice?.price ||
+    p.promotion?.type ||
+    (Array.isArray(p.badge) ? p.badge.length > 0 : Boolean(p.badge?.text)) ||
+    (Array.isArray(p.tags) && p.tags.some(t => /aanbieding|promo|sale|korting|gratis/i.test(t.text || "")))
+  );
+  const promotionLabel = hasPromotion ? _getJumboPromotionLabel(p) : "";
+
+  return { sku, name, price, imageUrl, isBonus: hasPromotion, promotionLabel };
 }
 
 /** Strip " of [alternatief]" uit ingredientnaam: "gember of laos" → "gember". */
@@ -11261,8 +11304,9 @@ async function findJumboProduct(ingredient) {
 }
 
 /**
- * Haalt Jumbo-producten op via meerdere zoekqueries (plain + biologisch + jumbo eigen merk),
- * dedupliceert op SKU, voegt labels toe en sorteert op prijs — vergelijkbaar met findAHAlternativesGrouped.
+ * Haalt Jumbo-producten op via meerdere zoekqueries (plain + aanbieding + biologisch + jumbo eigen merk),
+ * dedupliceert op SKU, voegt labels toe, markeert aanbiedingen en sorteert op prijs.
+ * Vergelijkbaar met findAHAlternativesGrouped (4 buckets).
  */
 async function findJumboAlternativesGrouped(ingredient, maxCount = 12) {
   const rawBase = sanitizeText(ingredient || "");
@@ -11273,9 +11317,10 @@ async function findJumboAlternativesGrouped(ingredient, maxCount = 12) {
   const LABEL_COUNT = 8;
 
   const variants = [
-    { tag: null,              query: base,                  count: BASE_COUNT },
-    { tag: "jumbo eigen merk", query: `jumbo ${base}`,      count: LABEL_COUNT },
-    { tag: "biologisch",      query: `biologisch ${base}`,  count: LABEL_COUNT },
+    { tag: null,               query: base,                    count: BASE_COUNT },
+    { tag: "jumbo eigen merk", query: `jumbo ${base}`,         count: LABEL_COUNT },
+    { tag: "biologisch",       query: `biologisch ${base}`,    count: LABEL_COUNT },
+    { tag: "aanbieding",       query: `aanbieding ${base}`,    count: LABEL_COUNT },
   ];
 
   const buckets = await Promise.all(
@@ -11285,17 +11330,25 @@ async function findJumboAlternativesGrouped(ingredient, maxCount = 12) {
     })
   );
 
-  // Dedupliceer op SKU; voeg label-tags samen
+  // Dedupliceer op SKU; voeg label-tags samen; houd isBonus/promotionLabel bij
   const bySku = new Map();
   for (const bucket of buckets) {
     for (const product of bucket.products) {
       const key = product.sku;
+      // Als het product via de aanbieding-bucket gevonden is → altijd isBonus markeren
+      const effectiveIsBonus = product.isBonus || bucket.tag === "aanbieding";
       if (!bySku.has(key)) {
-        const entry = { ...product, labels: Array.isArray(product.labels) ? [...product.labels] : [] };
+        const entry = {
+          ...product,
+          isBonus: effectiveIsBonus,
+          labels: Array.isArray(product.labels) ? [...product.labels] : [],
+        };
         if (bucket.tag) entry.labels.push(bucket.tag);
         bySku.set(key, entry);
       } else {
         const entry = bySku.get(key);
+        if (effectiveIsBonus) entry.isBonus = true;
+        if (product.promotionLabel && !entry.promotionLabel) entry.promotionLabel = product.promotionLabel;
         if (bucket.tag && !entry.labels.includes(bucket.tag)) entry.labels.push(bucket.tag);
       }
     }
@@ -11306,10 +11359,10 @@ async function findJumboAlternativesGrouped(ingredient, maxCount = 12) {
     labels: [...new Set(p.labels.map((l) => sanitizeText(l)).filter(Boolean))],
   }));
 
-  // Sorteer: prijs oplopend (goedkoopste eerst), als tie dan op naam-match score
   const parseJumboPriceNum = (p) =>
     parseFloat(String(p.price || "").replace("€", "").replace(",", ".").trim()) || 9999;
 
+  // Sorteer: prijs oplopend → match-score → bonus als tie-breaker (bonus naar boven)
   merged.sort((a, b) => {
     const pa = parseJumboPriceNum(a);
     const pb = parseJumboPriceNum(b);
@@ -11318,7 +11371,9 @@ async function findJumboAlternativesGrouped(ingredient, maxCount = 12) {
     const sb = Number(b.matchMeta?.score);
     const fa = Number.isFinite(sa) ? sa : 9999;
     const fb = Number.isFinite(sb) ? sb : 9999;
-    return fa - fb;
+    if (fa !== fb) return fa - fb;
+    // Bonus producten iets naar boven bij gelijke prijs/score
+    return (b.isBonus ? 1 : 0) - (a.isBonus ? 1 : 0);
   });
 
   return merged.slice(0, maxCount);

@@ -10872,6 +10872,11 @@ async function logoutAccount() {
     // Even if server request fails, clear auth state client-side
     state.auth.authenticated = false;
     state.auth.email = "";
+    clearUserAuthedMark();
+    renderAll();
+    showToast("Je bent uitgelogd (sessie kon niet server-side worden beëindigd).", { variant: "warning" });
+    if (!state.auth.authenticated) openAuthModal("login");
+    return;
   }
 
   clearUserAuthedMark();
