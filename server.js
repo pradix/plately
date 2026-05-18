@@ -11048,6 +11048,70 @@ async function findJumboProduct(ingredient) {
   return products[0] || null;
 }
 
+/**
+ * Haalt Jumbo-producten op via meerdere zoekqueries (plain + biologisch + jumbo eigen merk),
+ * dedupliceert op SKU, voegt labels toe en sorteert op prijs — vergelijkbaar met findAHAlternativesGrouped.
+ */
+async function findJumboAlternativesGrouped(ingredient, maxCount = 12) {
+  const rawBase = sanitizeText(ingredient || "");
+  const base = normalizeIngredientForSearch(rawBase) || rawBase;
+  if (!base) return [];
+
+  const BASE_COUNT = 12;
+  const LABEL_COUNT = 8;
+
+  const variants = [
+    { tag: null,              query: base,                  count: BASE_COUNT },
+    { tag: "jumbo eigen merk", query: `jumbo ${base}`,      count: LABEL_COUNT },
+    { tag: "biologisch",      query: `biologisch ${base}`,  count: LABEL_COUNT },
+  ];
+
+  const buckets = await Promise.all(
+    variants.map(async (v) => {
+      const products = await findJumboProducts(v.query, v.count);
+      return { tag: v.tag, products };
+    })
+  );
+
+  // Dedupliceer op SKU; voeg label-tags samen
+  const bySku = new Map();
+  for (const bucket of buckets) {
+    for (const product of bucket.products) {
+      const key = product.sku;
+      if (!bySku.has(key)) {
+        const entry = { ...product, labels: Array.isArray(product.labels) ? [...product.labels] : [] };
+        if (bucket.tag) entry.labels.push(bucket.tag);
+        bySku.set(key, entry);
+      } else {
+        const entry = bySku.get(key);
+        if (bucket.tag && !entry.labels.includes(bucket.tag)) entry.labels.push(bucket.tag);
+      }
+    }
+  }
+
+  const merged = [...bySku.values()].map((p) => ({
+    ...p,
+    labels: [...new Set(p.labels.map((l) => sanitizeText(l)).filter(Boolean))],
+  }));
+
+  // Sorteer: prijs oplopend (goedkoopste eerst), als tie dan op naam-match score
+  const parseJumboPriceNum = (p) =>
+    parseFloat(String(p.price || "").replace("€", "").replace(",", ".").trim()) || 9999;
+
+  merged.sort((a, b) => {
+    const pa = parseJumboPriceNum(a);
+    const pb = parseJumboPriceNum(b);
+    if (pa !== pb) return pa - pb;
+    const sa = Number(a.matchMeta?.score);
+    const sb = Number(b.matchMeta?.score);
+    const fa = Number.isFinite(sa) ? sa : 9999;
+    const fb = Number.isFinite(sb) ? sb : 9999;
+    return fa - fb;
+  });
+
+  return merged.slice(0, maxCount);
+}
+
 async function searchProductsForStore(store, ingredientNames) {
   const searches = ingredientNames.map(async (name) => {
     const product =
@@ -15944,7 +16008,12 @@ async function buildStoreBasket(body) {
         if (KITCHEN_TOOL_INGREDIENT_RE.test(rawName) || NON_FOOD_INGREDIENT_PATTERN.test(rawName) || isPantryFiller(rawName)) {
           return { ingredient: ingredientName, product: null, products: [], skipped: true };
         }
-        const products = await findJumboProducts(ingredientName, 12);
+        // Gebruik grouped search: meerdere queries (plain + biologisch + jumbo eigen merk), net als AH
+        let products = await findJumboAlternativesGrouped(ingredientName, 12);
+        // Val terug op enkelvoudige search als grouped niets oplevert
+        if (!products || products.length === 0) {
+          products = await findJumboProducts(ingredientName, 12);
+        }
         return { ingredient: ingredientName, product: products[0] || null, products };
       })
     ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
@@ -16068,7 +16137,11 @@ async function researchJumboChoices(body) {
       .map((id) => sanitizeText(id)).filter(Boolean)
   );
 
-  const products = await findJumboProducts(ingredientTitle, 16);
+  // Gebruik grouped search net als AH, voor betere alternatieven met labels
+  let products = await findJumboAlternativesGrouped(ingredientTitle, 16);
+  if (!products || products.length === 0) {
+    products = await findJumboProducts(ingredientTitle, 16);
+  }
   const filtered = products.filter((p) => !exclude.has(p.sku));
   const item = { title: ingredientTitle, amount: sanitizeText(body.amount || "1 verpakking") };
   const choices = filtered
@@ -18493,8 +18566,9 @@ const server = http.createServer(async (request, response) => {
         if (imageUrl === undefined) {
           try {
             if (store === "jumbo") {
-              const product = await findJumboProduct(searchTitle);
-              imageUrl = product?.imageUrl || "";
+              const products = await findJumboProducts(searchTitle, 5);
+              const best = products.find((p) => p.imageUrl) || null;
+              imageUrl = best?.imageUrl || "";
             } else {
               const parsed = await findAHProducts(searchTitle, 6);
               const best = parsed.find((p) => p.imageUrl) || null;
