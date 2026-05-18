@@ -16435,7 +16435,8 @@ const server = http.createServer(async (request, response) => {
       const origin = getPublicOrigin(request);
       const rawPath = sanitizeText(requestUrl.searchParams.get("path") || "");
       const pathSlug = rawPath.startsWith("/recept/") ? rawPath.slice("/recept/".length) : rawPath;
-      const oldToken = pathSlug.match(/-([A-Za-z0-9_-]{10})$/)?.[1] || "";
+      const _tm1 = pathSlug.match(/-([A-Za-z0-9_-]{10})$/)?.[1] || "";
+      const oldToken = _tm1 && /[^a-z]/.test(_tm1) ? _tm1 : "";
       const entry = oldToken
         ? await findPublicSeoRecipeByToken(oldToken, origin)
         : await findPublicSeoRecipeByPath(pathSlug, origin);
@@ -16454,7 +16455,8 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname.startsWith("/recept/") && (request.method === "GET" || request.method === "HEAD")) {
       const origin = getPublicOrigin(request);
       const raw = decodeURIComponent(requestUrl.pathname.slice("/recept/".length) || "");
-      const oldToken = raw.match(/-([A-Za-z0-9_-]{10})$/)?.[1] || "";
+      const _tm2 = raw.match(/-([A-Za-z0-9_-]{10})$/)?.[1] || "";
+      const oldToken = _tm2 && /[^a-z]/.test(_tm2) ? _tm2 : "";
       const entry = oldToken
         ? await findPublicSeoRecipeByToken(oldToken, origin)
         : await findPublicSeoRecipeByPath(raw, origin);
