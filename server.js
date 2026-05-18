@@ -10450,8 +10450,8 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
           adjustments.push({ kind: "penalty", label: "Fruit verwerkt (sap/jam/cake/chips — vers gevraagd)", delta: 70 });
         }
         // Knijpfruit / babyfood / fruitpap: nooit een vers-fruit product.
-        if (/\b(knijpfruit|knijpzakje|fruitmoes|fruitpap|babyvoeding|babyhapje|baby\s*fruit|groentehapje)\b/i.test(title) ||
-            (/\b\d+\s*m\+?\b/i.test(title) && /\b(hapje|pap|moes|puree|fruit|maaltijd|biologisch)\b/i.test(title))) {
+        if (/\b(knijpfruit|knijpzakje|fruitmoes|fruitpap|babyvoeding|babyhapje|baby\s*fruit|groentehapje|knabbels\b)\b/i.test(title) ||
+            /\b\d+\s*m(?=[+\d\s]|$)/i.test(title)) {
           score += 175;
           adjustments.push({ kind: "penalty", label: "Knijpfruit/babyfood ≠ vers fruit", delta: 175 });
         }
@@ -10463,8 +10463,8 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
 
       // 5b. Universeel: knijpfruit/babyfood is nooit een basisingrediënt (ook buiten fruitquery).
       const isBabyFood =
-        /\b(knijpfruit|knijpzakje|babyvoeding|babyhapje|baby\s*maaltijd|groentehapje|fruitpuree\s+baby|peuterkoek|peuterreep)\b/i.test(title) ||
-        (/\b\d+\s*m\+?\b/i.test(title) && /\b(hapje|pap|moes|puree|brood|groente|fruit|maaltijd|biologisch)\b/i.test(title));
+        /\b(knijpfruit|knijpzakje|babyvoeding|babyhapje|baby\s*maaltijd|groentehapje|fruitpuree\s+baby|peuterkoek|peuterreep|knabbels\b)\b/i.test(title) ||
+        /\b\d+\s*m(?=[+\d\s]|$)/i.test(title);
       if (isBabyFood) {
         score += 175;
         adjustments.push({ kind: "penalty", label: "Knijpfruit/babyfood (nooit basisingrediënt)", delta: 175 });
