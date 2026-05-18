@@ -748,6 +748,7 @@
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="logs">Logs</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk import</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="supermarkets">Supermarkten</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="basket-stats">Winkelwagen</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="seo">SEO</button>
       </div>
     </nav>
@@ -1679,6 +1680,41 @@
             <div id="supermarketsList" style="display:flex;flex-direction:column;gap:10px;margin:0 0 20px"></div>
             <button class="btn" type="button" id="supermarketsSaveBtn">Opslaan</button>
             <span id="supermarketsSaveStatus" style="margin-left:12px;font-size:13px;color:var(--muted)"></span>
+          </div>
+        </div>
+      </div>
+      <div class="admin-tab-section" id="adminTabBasketStats" data-tab="basket-stats">
+        <div class="section">
+          <div class="section-header">
+            <h2>Winkelwagen statistieken</h2>
+            <div class="muted">Meest toegevoegde producten, merken en gebruik per supermarkt.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+            <label style="font-size:13px;color:var(--muted)">Periode:</label>
+            <select id="basketStatsDays" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--panel)">
+              <option value="7">Afgelopen 7 dagen</option>
+              <option value="30" selected>Afgelopen 30 dagen</option>
+              <option value="90">Afgelopen 90 dagen</option>
+              <option value="365">Afgelopen jaar</option>
+            </select>
+            <button class="btn" type="button" onclick="loadBasketStats()">↻ Vernieuwen</button>
+          </div>
+          <p id="basketStatsStatus" style="font-size:13px;color:var(--muted);margin-bottom:12px"></p>
+
+          <!-- Per supermarkt -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px" id="basketStatsSupermarktGrid"></div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+            <!-- Top producten -->
+            <div>
+              <h3 style="font-size:14px;font-weight:600;margin-bottom:10px">Top producten</h3>
+              <div id="basketStatsProductsTable"></div>
+            </div>
+            <!-- Top merken -->
+            <div>
+              <h3 style="font-size:14px;font-weight:600;margin-bottom:10px">Top merken</h3>
+              <div id="basketStatsBrandsTable"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -5670,6 +5706,7 @@
         loadAnalytics();
       }
       if (next === "seo") { loadSeoOverview(); }
+      if (next === "basket-stats") loadBasketStats();
       if (next === "logs") {
         loadLogs();
       } else {
@@ -6049,6 +6086,79 @@
           saveStatus.textContent = "Fout bij opslaan.";
         }
       });
+    }
+
+    // ── Winkelwagen statistieken ──────────────────────────────────────────────────
+    async function loadBasketStats() {
+      const days = document.getElementById("basketStatsDays")?.value || "30";
+      const status = document.getElementById("basketStatsStatus");
+      const supermarktGrid = document.getElementById("basketStatsSupermarktGrid");
+      const productsTable = document.getElementById("basketStatsProductsTable");
+      const brandsTable = document.getElementById("basketStatsBrandsTable");
+
+      if (status) status.textContent = "Laden…";
+      if (supermarktGrid) supermarktGrid.innerHTML = "";
+      if (productsTable) productsTable.innerHTML = "";
+      if (brandsTable) brandsTable.innerHTML = "";
+
+      try {
+        const res = await fetch(`/api/admin/basket-stats?days=${days}`, adminFetchInit());
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "Onbekende fout");
+
+        if (status) status.textContent = `${data.totalBaskets} winkelwagens gebouwd in de afgelopen ${data.days} dagen.`;
+
+        // Supermarkt tiles
+        if (supermarktGrid) {
+          const storeLabels = { "albert-heijn": "Albert Heijn", "jumbo": "Jumbo" };
+          const storeColors = { "albert-heijn": "#00a0e2", "jumbo": "#ffc600" };
+          supermarktGrid.innerHTML = (data.bySupermarkt || []).map(row => {
+            const label = storeLabels[row.store] || row.store || "Onbekend";
+            const color = storeColors[row.store] || "#78936f";
+            return `<div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center">
+              <div style="font-size:22px;font-weight:700;color:${color}">${row.baskets}</div>
+              <div style="font-size:12px;font-weight:600;margin:2px 0">${label}</div>
+              <div style="font-size:11px;color:var(--muted)">${row.total_products || 0} producten totaal</div>
+            </div>`;
+          }).join("") || "<p style='color:var(--muted);font-size:13px'>Nog geen data.</p>";
+        }
+
+        // Producten tabel
+        const renderTable = (rows, nameKey, container) => {
+          if (!container) return;
+          if (!rows || !rows.length) {
+            container.innerHTML = "<p style='color:var(--muted);font-size:13px'>Nog geen data.</p>";
+            return;
+          }
+          const storeTag = (store) => {
+            if (!store) return "";
+            const colors = { "albert-heijn": "#00a0e2", "jumbo": "#ffc600" };
+            const labels = { "albert-heijn": "AH", "jumbo": "Jumbo" };
+            const color = colors[store] || "#78936f";
+            return `<span style="font-size:10px;background:${color}22;color:${color};border-radius:4px;padding:1px 5px;margin-left:4px">${labels[store] || store}</span>`;
+          };
+          container.innerHTML = `<table class="users-table" style="width:100%">
+            <thead><tr><th>#</th><th>Naam</th><th style="text-align:right">Aantal</th></tr></thead>
+            <tbody>${rows.slice(0, 25).map((row, i) => `
+              <tr>
+                <td style="color:var(--muted);width:32px">${i + 1}</td>
+                <td>${escAdm(row[nameKey])}${storeTag(row.store)}</td>
+                <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${row.count}</td>
+              </tr>`).join("")}
+            </tbody>
+          </table>`;
+        };
+
+        renderTable(data.topProducts, "name", productsTable);
+        renderTable(data.topBrands, "brand", brandsTable);
+
+      } catch (err) {
+        if (status) status.textContent = `Fout: ${err.message}`;
+      }
+    }
+
+    function escAdm(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     }
 
   </script>

@@ -16399,6 +16399,45 @@ async function runSeoRecipeBackfillForUser(authUser, options = {}) {
   };
 }
 
+/** Registreert welke producten in de winkelwagen zijn gezet voor admin analytics. */
+async function _recordBasketEvent(request, basket) {
+  try {
+    if (!isPostgresEnabled()) return;
+    const authUser = await getAuthenticatedUser(request).catch(() => null);
+    const store = sanitizeText(basket?.store || "");
+    const items = Array.isArray(basket?.items) ? basket.items : [];
+    // Verzamel de eerst-geselecteerde keuze per item (index 0)
+    const products = items
+      .map((item) => {
+        const choice = Array.isArray(item?.choices) ? item.choices[0] : null;
+        if (!choice) return null;
+        const name = sanitizeText(choice.title || "");
+        if (!name) return null;
+        // Extraheer merk: eerste woord als het 2+ woorden heeft, anders de naam zelf
+        const words = name.split(/\s+/);
+        const brand = words.length >= 2 ? words[0] : name;
+        return {
+          name,
+          brand: sanitizeText(brand),
+          price: sanitizeText(choice.price || ""),
+          id: sanitizeText(choice.productId || choice.sku || ""),
+          ingredient: sanitizeText(item.ingredientTitle || ""),
+        };
+      })
+      .filter(Boolean);
+
+    if (!products.length) return;
+
+    await recordEvent("basket_built", authUser?.id || null, {
+      store,
+      productCount: products.length,
+      products,
+    });
+  } catch {
+    // Negeer tracking fouten — blokkeer nooit de basket response
+  }
+}
+
 async function buildStoreBasket(body) {
   const store = normalizeStoreSlug(body.store);
   const items = Array.isArray(body.items) ? body.items : [];
@@ -19297,6 +19336,7 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/store-basket" && request.method === "POST") {
       const body = await readRequestBody(request);
       const basket = await buildStoreBasket(body);
+      void _recordBasketEvent(request, basket);
       sendJson(response, 200, { ok: true, ...basket });
       return;
     }
@@ -19304,6 +19344,7 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/ah-basket" && request.method === "POST") {
       const body = await readRequestBody(request);
       const basket = await buildStoreBasket({ ...body, store: "albert-heijn" });
+      void _recordBasketEvent(request, basket);
       sendJson(response, 200, { ok: true, ...basket });
       return;
     }
@@ -19311,6 +19352,7 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/jumbo-basket" && request.method === "POST") {
       const body = await readRequestBody(request);
       const basket = await buildStoreBasket({ ...body, store: "jumbo" });
+      void _recordBasketEvent(request, basket);
       sendJson(response, 200, { ok: true, ...basket });
       return;
     }
@@ -20643,6 +20685,86 @@ const server = http.createServer(async (request, response) => {
         console.error("❌ Error in /api/admin/import-errors:", error.message);
         return sendJson(response, statusCode, { ok: false, error: error.message || "Importfouten laden mislukt." });
       }
+    }
+
+    if (requestUrl.pathname === "/api/admin/basket-stats" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        if (!isPostgresEnabled()) {
+          sendJson(response, 200, { ok: true, topProducts: [], topBrands: [], bySupermarkt: [], totalBaskets: 0 });
+          return;
+        }
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        const daysRaw = Number(requestUrl.searchParams.get("days") || "30");
+        const days = Number.isFinite(daysRaw) ? Math.min(Math.max(daysRaw, 1), 365) : 30;
+
+        // Top producten
+        const topProductsRes = await pool.query(`
+          SELECT
+            prod->>'name' AS name,
+            prod->>'store' AS store,
+            COUNT(*)::int AS count
+          FROM plately_events,
+               jsonb_array_elements(meta->'products') AS prod
+          WHERE type = 'basket_built'
+            AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
+            AND prod->>'name' IS NOT NULL
+          GROUP BY prod->>'name', prod->>'store'
+          ORDER BY count DESC
+          LIMIT 50
+        `, [days]);
+
+        // Top merken
+        const topBrandsRes = await pool.query(`
+          SELECT
+            prod->>'brand' AS brand,
+            prod->>'store' AS store,
+            COUNT(*)::int AS count
+          FROM plately_events,
+               jsonb_array_elements(meta->'products') AS prod
+          WHERE type = 'basket_built'
+            AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
+            AND prod->>'brand' IS NOT NULL
+          GROUP BY prod->>'brand', prod->>'store'
+          ORDER BY count DESC
+          LIMIT 30
+        `, [days]);
+
+        // Per supermarkt
+        const bySupermarktRes = await pool.query(`
+          SELECT
+            meta->>'store' AS store,
+            COUNT(*)::int AS baskets,
+            SUM((meta->>'productCount')::int)::int AS total_products
+          FROM plately_events
+          WHERE type = 'basket_built'
+            AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
+          GROUP BY meta->>'store'
+          ORDER BY baskets DESC
+        `, [days]);
+
+        // Totaal baskets
+        const totalRes = await pool.query(`
+          SELECT COUNT(*)::int AS total
+          FROM plately_events
+          WHERE type = 'basket_built'
+            AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
+        `, [days]);
+
+        sendJson(response, 200, {
+          ok: true,
+          days,
+          totalBaskets: Number(totalRes.rows[0]?.total) || 0,
+          topProducts: topProductsRes.rows,
+          topBrands: topBrandsRes.rows,
+          bySupermarkt: bySupermarktRes.rows,
+        });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/basket-stats:", error.message);
+        sendJson(response, 500, { ok: false, error: error.message });
+      }
+      return;
     }
 
     if (requestUrl.pathname === "/api/admin/ah-basket-check" && request.method === "POST") {
