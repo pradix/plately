@@ -940,6 +940,14 @@
           <div class="stat-label">Recepten</div>
         </div>
         <div class="stat-card">
+          <div class="stat-value" id="totalRecipesInCookbooks">-</div>
+          <div class="stat-label">Recepten in kookboek</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="totalRecipesLoose">-</div>
+          <div class="stat-label">Recepten zonder kookboek</div>
+        </div>
+        <div class="stat-card">
           <div class="stat-value" id="avgRecipesPerUser">-</div>
           <div class="stat-label">Gem. recepten/user</div>
         </div>
@@ -1961,6 +1969,8 @@
 
         // Update cards
         const totalRecipes = stats.users.reduce((sum, u) => sum + u.recipes, 0);
+        const totalRecipesInCookbooks = stats.users.reduce((sum, u) => sum + (u.recipesInCookbooks || 0), 0);
+        const totalRecipesLoose = stats.users.reduce((sum, u) => sum + (u.recipesLoose ?? u.recipes), 0);
         const totalCookbooks = stats.users.reduce((sum, u) => sum + u.cookbooks, 0);
         const totalGroceries = stats.users.reduce((sum, u) => sum + u.groceryItems, 0);
         const now = Date.now();
@@ -1984,6 +1994,8 @@
         document.getElementById("activeUsers30").textContent = activeUsers30;
         document.getElementById("newUsers7d").textContent = newUsers7d;
         document.getElementById("totalRecipes").textContent = totalRecipes;
+        document.getElementById("totalRecipesInCookbooks").textContent = totalRecipesInCookbooks;
+        document.getElementById("totalRecipesLoose").textContent = totalRecipesLoose;
         document.getElementById("avgRecipesPerUser").textContent = avgRecipes;
         document.getElementById("totalCookbooks").textContent = totalCookbooks;
         document.getElementById("totalGroceries").textContent = totalGroceries;

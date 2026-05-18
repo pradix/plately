@@ -19680,6 +19680,7 @@ const server = http.createServer(async (request, response) => {
             const customChannelsCounts = customChannelsList.reduce(
               (acc, ch) => {
                 const status = (ch?.status || "approved");
+                if (status === "deleted") return acc; // exclude soft-deleted channels
                 acc.total += 1;
                 if (status === "pending") acc.pending += 1;
                 else if (status === "rejected") acc.rejected += 1;
@@ -19688,10 +19689,20 @@ const server = http.createServer(async (request, response) => {
               },
               { total: 0, approved: 0, pending: 0, rejected: 0 }
             );
+            // Count recipes that appear in at least one cookbook vs. those that don't
+            const allRecipeIdSet = new Set(importedRecipes.map((r) => r?.id).filter(Boolean));
+            const recipeIdsInCookbooks = new Set(
+              cookbooksList.flatMap((cb) => Array.isArray(cb?.recipeIds) ? cb.recipeIds : [])
+                .filter((id) => allRecipeIdSet.has(id))
+            );
+            const recipesInCookbooks = recipeIdsInCookbooks.size;
+            const recipesLoose = importedRecipes.length - recipesInCookbooks;
             return {
               id: u.id,
               email: u.email,
               recipes: importedRecipes.length,
+              recipesInCookbooks,
+              recipesLoose,
               cookbooks: cookbooksList.length,
               groceryItems: (appState.groceryItems || []).length,
               createdAt: u.created_at,
@@ -19738,6 +19749,7 @@ const server = http.createServer(async (request, response) => {
             const customChannelsCounts = customChannelsList.reduce(
               (acc, ch) => {
                 const status = (ch?.status || "approved");
+                if (status === "deleted") return acc; // exclude soft-deleted channels
                 acc.total += 1;
                 if (status === "pending") acc.pending += 1;
                 else if (status === "rejected") acc.rejected += 1;
@@ -19746,10 +19758,19 @@ const server = http.createServer(async (request, response) => {
               },
               { total: 0, approved: 0, pending: 0, rejected: 0 }
             );
+            const allRecipeIdSet = new Set(importedRecipes.map((r) => r?.id).filter(Boolean));
+            const recipeIdsInCookbooks = new Set(
+              cookbooksList.flatMap((cb) => Array.isArray(cb?.recipeIds) ? cb.recipeIds : [])
+                .filter((id) => allRecipeIdSet.has(id))
+            );
+            const recipesInCookbooks = recipeIdsInCookbooks.size;
+            const recipesLoose = importedRecipes.length - recipesInCookbooks;
             return {
               id: u.id,
               email: u.email || "Guest",
               recipes: importedRecipes.length,
+              recipesInCookbooks,
+              recipesLoose,
               cookbooks: cookbooksList.length,
               groceryItems: (u.groceryItems || []).length,
               createdAt: u.createdAt,
@@ -19967,8 +19988,13 @@ const server = http.createServer(async (request, response) => {
               COUNT(*)::int AS total_users,
               COALESCE(SUM(COALESCE(jsonb_array_length(app_state->'importedRecipes'), 0)), 0)::int AS total_recipes,
               COALESCE(SUM(COALESCE(jsonb_array_length(app_state->'cookbooks'), 0)), 0)::int AS total_cookbooks,
-              COALESCE(SUM(COALESCE(jsonb_array_length(app_state->'customChannels'), 0)), 0)::int AS total_custom_channels
-            FROM plately_users
+              -- count only non-deleted custom channels
+              COALESCE((
+                SELECT COUNT(*)::int
+                FROM jsonb_array_elements(COALESCE(u.app_state->'customChannels','[]'::jsonb)) ch2
+                WHERE COALESCE(ch2->>'status','approved') <> 'deleted'
+              ), 0) AS total_custom_channels
+            FROM plately_users u
             `
           );
 
@@ -19992,6 +20018,7 @@ const server = http.createServer(async (request, response) => {
               COALESCE(COUNT(*), 0)::int AS total
             FROM plately_users u
             CROSS JOIN LATERAL jsonb_array_elements(COALESCE(u.app_state->'customChannels','[]'::jsonb)) ch
+            WHERE COALESCE(ch->>'status','approved') <> 'deleted'
             `
           );
 
@@ -20090,6 +20117,7 @@ const server = http.createServer(async (request, response) => {
             const list = Array.isArray(u.customChannels) ? u.customChannels : [];
             for (const ch of list) {
               const status = (ch?.status || "approved");
+              if (status === "deleted") continue; // exclude soft-deleted channels
               acc.customChannels.total += 1;
               if (status === "pending") acc.customChannels.pending += 1;
               else if (status === "rejected") acc.customChannels.rejected += 1;

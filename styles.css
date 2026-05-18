@@ -18772,3 +18772,17 @@ body {
 .ah-basket-splash--leaving {
   animation: grocerySplashLeave 0.3s ease-in forwards;
 }
+
+/* ── Placeholder recipe title indicator ── */
+/* Shown when a recipe still has the generic import fallback title */
+.detail-title--placeholder {
+  font-style: italic;
+  opacity: 0.7;
+}
+.detail-title--placeholder::after {
+  content: " ✏️";
+  font-style: normal;
+  font-size: 0.65em;
+  vertical-align: middle;
+  opacity: 0.8;
+}

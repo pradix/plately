@@ -5916,7 +5916,7 @@ function renderHomeCookbooks() {
 
   strip.innerHTML = top.map((cookbook) => {
     const recipes = cookbook.recipeIds.map((id) => getRecipeById(id)).filter(Boolean);
-    const count = cookbook.recipeIds.length;
+    const count = recipes.length; // use filtered count (stale IDs that no longer exist are excluded)
 
     // Show "+" button for empty cookbooks instead of regular card
     if (count === 0) {
@@ -6419,6 +6419,8 @@ function renderDetailRecipe(resetServings = false) {
     detailHeroImage.addEventListener("error", () => detailHeroImage.classList.add("img-loaded"), { once: true });
   }
   detailTitle.textContent = recipe.title;
+  // Visual cue when the title is still the import placeholder
+  detailTitle.classList.toggle("detail-title--placeholder", recipe.title === "Geïmporteerd recept");
   detailMealTag.textContent = recipe.mealTag;
   if (detailMetaChips) {
     const chips = [];
@@ -6968,13 +6970,21 @@ function getActiveGroceryList() {
   return state.groceryLists.find((l) => l.id === state.activeGroceryListId) || state.groceryLists[0] || null;
 }
 
+// Per-list scroll position memory (in-memory only, cleared on hard reload — that's intentional)
+const _groceryScrollPositions = new Map();
+
 function switchGroceryList(listId) {
   const list = state.groceryLists.find((l) => l.id === listId);
   if (!list) return;
+  // Save scroll position for the list we're leaving
+  if (groceryGroups) _groceryScrollPositions.set(state.activeGroceryListId, groceryGroups.scrollTop || 0);
   state.activeGroceryListId = list.id;
   state.groceryItems = list.items;
   renderGroceryGroups();
   renderGroceryListSwitcher();
+  // Restore scroll position for the newly-active list
+  const savedScroll = _groceryScrollPositions.get(listId) || 0;
+  if (groceryGroups && savedScroll > 0) requestAnimationFrame(() => { groceryGroups.scrollTop = savedScroll; });
   schedulePersistAppState();
 }
 
@@ -7269,7 +7279,9 @@ function renderGroceryGroups(options = {}) {
             : "Importeer een recept of open een bestaand recept om ingrediënten op je lijst te zetten."
         }</p>
         <div class="grocery-empty-state__actions">
-          <button type="button" class="secondary-button grocery-empty-state__btn" id="groceryEmptyBrowseRecipesBtn">Naar recepten</button>
+          ${state.selectedRecipeId && getRecipeById(state.selectedRecipeId)
+            ? `<button type="button" class="secondary-button grocery-empty-state__btn" id="groceryEmptyBackToRecipeBtn">Terug naar recept</button>`
+            : `<button type="button" class="secondary-button grocery-empty-state__btn" id="groceryEmptyBrowseRecipesBtn">Naar recepten</button>`}
           <button type="button" class="primary-button grocery-empty-state__btn" id="groceryEmptyImportRecipeBtn">Importeer recept</button>
         </div>
         ${recipeCardsHtml ? `<div class="recipe-grid grocery-empty-recipes">${recipeCardsHtml}</div>` : ""}
@@ -7277,6 +7289,7 @@ function renderGroceryGroups(options = {}) {
     `;
 
     bindEvent(document.getElementById("groceryEmptyBrowseRecipesBtn"), "click", () => switchView("home"));
+    bindEvent(document.getElementById("groceryEmptyBackToRecipeBtn"), "click", () => switchView("detail"));
     bindEvent(document.getElementById("groceryEmptyImportRecipeBtn"), "click", () => {
       if (!state.auth.authenticated) {
         openAuthModal("login");
@@ -8598,7 +8611,7 @@ function renderCookbookDetail(cookbookId) {
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16a4 4 0 0 1 4-4h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
           <h3 class="cb-detail__empty-title">Dit kookboek is nog leeg</h3>
-          <p class="cb-detail__empty-text">Voeg recepten toe om ze hier te zien en te organiseren</p>
+          <p class="cb-detail__empty-text">Voeg je eerste recept toe via de <strong>+</strong> knop hieronder</p>
         </div>
       `}
       <button class="cb-detail__add-btn" type="button" data-open-recipe-picker="true">
@@ -8607,8 +8620,16 @@ function renderCookbookDetail(cookbookId) {
       </button>
     </div>
   `;
+  // Brief aria-busy while the grid is being written (helps screen readers and gives
+  // a consistent loading signal for tooling; recipes.length > 0 is where it matters most)
+  [cookbookList, _cbScreenGrid].forEach((el) => {
+    if (el instanceof HTMLElement) el.setAttribute("aria-busy", "true");
+  });
   cookbookList.innerHTML = _detailHtml;
   if (_cbScreenGrid) _cbScreenGrid.innerHTML = _detailHtml;
+  [cookbookList, _cbScreenGrid].forEach((el) => {
+    if (el instanceof HTMLElement) el.setAttribute("aria-busy", "false");
+  });
 
   // Defensive: ensure clicks inside detail view are handled even if outer
   // container bindings differ across screens/devices.
@@ -8725,7 +8746,7 @@ function renderCookbookList() {
           data-cookbook-id="${cookbook.id}"
         >
           ${coverMarkup}
-          <span class="cookbook-collection__badge">${cookbook.recipeIds.length} recepten</span>
+          <span class="cookbook-collection__badge">${recipes.length} recepten</span>
           <div class="cookbook-collection__head">
             <h3>${escapeHtml(cookbook.name)}</h3>
             <p class="cookbook-collection__meta">
@@ -10363,6 +10384,21 @@ function finishAppBoot() {
   }, 240);
 }
 
+// Multi-tab state sync: when another tab saves a new offline-state snapshot to
+// localStorage, silently pull it into the current tab so both tabs stay in sync
+// without a hard reload. Only fires for the offline-state key (the server is still
+// the source of truth — this is a best-effort sync for recipes/cookbooks).
+window.addEventListener("storage", (evt) => {
+  if (evt.key !== "plately-offline-state" || evt.storageArea !== localStorage) return;
+  if (!state.session.ready || !evt.newValue) return;
+  try {
+    const fresh = JSON.parse(evt.newValue);
+    if (!fresh || typeof fresh !== "object") return;
+    applyPersistedAppState(fresh);
+    renderAll();
+  } catch { /* parse error — ignore */ }
+});
+
 async function refreshBackendStatus() {
   try {
     await fetchJson(`${state.apiBase}/api/health`);
@@ -10766,8 +10802,11 @@ async function bootstrapSession() {
         switchView("detail");
         renderDetailRecipe(true);
       } else {
-        // Recipe not found, fallback to home
+        // Recipe not found — stale deep-link, tell the user
         switchView("home");
+        if (recipeIdToRestore) {
+          showToast("Recept niet meer beschikbaar.", { variant: "error" });
+        }
       }
     } else if (viewToRestore !== "home") {
       switchView(viewToRestore);
