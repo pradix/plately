@@ -2845,15 +2845,10 @@ function renderBasketPreview() {
   if (ctaBtn) {
     const isJumbo = preview?.store === "jumbo";
     ctaBtn.className = `basket-sheet__cta${isJumbo ? " basket-sheet__cta--jumbo" : ""}`;
+    const _ctaFavStyle = 'width:28px;height:28px;border-radius:6px;flex-shrink:0;vertical-align:middle';
     ctaBtn.innerHTML = isJumbo
-      ? `<img src="https://www.google.com/s2/favicons?domain=www.jumbo.com&sz=128" alt="Jumbo" width="28" height="28" style="border-radius:6px;flex-shrink:0" />
-        mandje`
-      : `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:28px;height:28px;flex-shrink:0">
-          <path d="M28,8 Q8,10 6,30 L6,155 Q6,192 43,192 L157,192 Q194,192 194,155 L194,78 Q194,56 178,42 L112,8 Q96,-1 80,4 Z" fill="#fff" fill-opacity="0.3"/>
-          <path d="M55,130 Q35,130 35,108 L35,88 Q35,66 55,66 Q70,66 76,78 L76,68 L90,68 L90,130 L76,130 L76,120 Q70,132 55,130 Z M57,118 Q72,118 76,104 L76,92 Q72,78 57,78 Q47,78 47,88 L47,108 Q47,118 57,118 Z" fill="#ffffff"/>
-          <path d="M100,50 L114,50 L114,80 Q120,66 136,66 Q155,66 155,86 L155,130 L141,130 L141,90 Q141,78 132,78 Q121,78 114,90 L114,130 L100,130 Z" fill="#ffffff"/>
-        </svg>
-        Zet in AH mandje`;
+      ? `Zet producten in <img src="https://www.google.com/s2/favicons?domain=www.jumbo.com&sz=128" alt="Jumbo" style="${_ctaFavStyle}"> mandje`
+      : `Zet producten in <img src="https://www.google.com/s2/favicons?domain=www.ah.nl&sz=128" alt="AH" style="${_ctaFavStyle}"> mandje`;
     ctaBtn.onclick = () => {
       const url = getBasketHandoffUrl(preview);
       if (url) window.open(url, "_blank", "noreferrer");
@@ -7175,8 +7170,9 @@ function renderGroceryGroups(options = {}) {
     });
   }
   const preferredStoreForLabel = state.profile.favoriteSupermarket || "ah";
-  if (orderAHItemCount) orderAHItemCount.textContent = `Zet ${uncheckedCount} producten klaar`;
-  if (orderJumboItemCount) orderJumboItemCount.textContent = `Zet ${uncheckedCount} producten klaar`;
+  const _favImgStyle = 'width:20px;height:20px;border-radius:4px;vertical-align:middle;display:inline-block;margin:0 3px 2px';
+  if (orderAHItemCount) orderAHItemCount.innerHTML = `Zet ${uncheckedCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.ah.nl&sz=64" alt="" style="${_favImgStyle}"> mandje`;
+  if (orderJumboItemCount) orderJumboItemCount.innerHTML = `Zet ${uncheckedCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.jumbo.com&sz=64" alt="" style="${_favImgStyle}"> mandje`;
   // Show only the preferred store button
   const preferredStore = state.profile.favoriteSupermarket || "ah";
   if (orderAHButton) orderAHButton.classList.toggle("hidden", preferredStore === "jumbo");

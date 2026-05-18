@@ -18574,9 +18574,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fdc500;
-  border-radius: 16px;
-  padding: 12px 20px;
 }
 .ah-basket-splash[data-store="jumbo"] {
   background: linear-gradient(160deg, #fdc500 0%, #f0b400 60%, #e0a800 100%);
