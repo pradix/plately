@@ -16084,19 +16084,22 @@ window.addEventListener("appinstalled", () => {
   console.log("✅ Plately installed successfully!");
 });
 
-// Hide bottom nav when virtual keyboard opens (iOS + Android).
-// iOS: window.innerHeight shrinks with keyboard — compare to initial height.
-// Android: window.innerHeight stays constant, visualViewport.height shrinks.
+// Pin bottom nav to the visual viewport bottom so it never jumps up when the
+// virtual keyboard opens on iOS or Android.
+// iOS: fixed elements are positioned relative to the layout viewport and get
+//   pushed up; we counter-translate by the gap between layout and visual bottom.
+// Android: visualViewport.height shrinks; same translation fixes it.
 (function initBottomNavKeyboardFix() {
   const nav = document.querySelector(".bottom-nav");
   if (!nav || !window.visualViewport) return;
 
-  const initialVVHeight = window.visualViewport.height;
-
-  function onViewportResize() {
-    const keyboardHeight = Math.max(0, initialVVHeight - window.visualViewport.height);
-    nav.style.display = keyboardHeight > 150 ? "none" : "";
+  function onViewportChange() {
+    const vv = window.visualViewport;
+    // Gap between the bottom of the visual viewport and the bottom of the layout viewport.
+    const offsetBottom = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
+    nav.style.transform = offsetBottom > 0 ? `translateY(${-offsetBottom}px)` : "";
   }
 
-  window.visualViewport.addEventListener("resize", onViewportResize, { passive: true });
+  window.visualViewport.addEventListener("resize", onViewportChange, { passive: true });
+  window.visualViewport.addEventListener("scroll", onViewportChange, { passive: true });
 }());
