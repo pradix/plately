@@ -347,10 +347,31 @@ let DATA_FILE = path.join(DATA_DIR, "plately-db.json");
 let OTP_FILE = path.join(DATA_DIR, "plately-otps.json");
 
 async function loadOtps() {
+  if (isPostgresEnabled()) {
+    try {
+      await ensurePostgresSchema();
+      const pool = await getPostgresPool();
+      const res = await pool.query(
+        `SELECT key, code, expires_at, attempts, meta FROM plately_otps WHERE expires_at > NOW()`
+      );
+      const result = {};
+      for (const row of res.rows) {
+        result[row.key] = {
+          code: row.code,
+          expiresAt: row.expires_at instanceof Date ? row.expires_at.toISOString() : String(row.expires_at),
+          attempts: Number(row.attempts) || 0,
+          ...(row.meta && typeof row.meta === "object" ? row.meta : {}),
+        };
+      }
+      return result;
+    } catch (err) {
+      console.error("❌ OTP laden uit Postgres mislukt:", err?.message);
+      return {};
+    }
+  }
   try {
     const raw = await fsp.readFile(path.join(DATA_DIR, "plately-otps.json"), "utf8");
     const parsed = JSON.parse(raw);
-    // Prune expired entries on load
     const now = Date.now();
     for (const key of Object.keys(parsed)) {
       if (!parsed[key]?.expiresAt || now > new Date(parsed[key].expiresAt).getTime()) {
@@ -364,6 +385,36 @@ async function loadOtps() {
 }
 
 async function saveOtps(otps) {
+  if (isPostgresEnabled()) {
+    try {
+      await ensurePostgresSchema();
+      const pool = await getPostgresPool();
+      // Haal huidige keys op uit DB
+      const existing = await pool.query(`SELECT key FROM plately_otps`);
+      const existingKeys = new Set(existing.rows.map((r) => r.key));
+      const newKeys = new Set(Object.keys(otps));
+      // Verwijder keys die niet meer bestaan
+      for (const key of existingKeys) {
+        if (!newKeys.has(key)) {
+          await pool.query(`DELETE FROM plately_otps WHERE key = $1`, [key]);
+        }
+      }
+      // Upsert huidige entries
+      for (const [key, record] of Object.entries(otps)) {
+        if (!record?.expiresAt || !record?.code) continue;
+        const { code, expiresAt, attempts = 0, ...meta } = record;
+        await pool.query(
+          `INSERT INTO plately_otps (key, code, expires_at, attempts, meta)
+           VALUES ($1, $2, $3, $4, $5::jsonb)
+           ON CONFLICT (key) DO UPDATE SET code = $2, expires_at = $3, attempts = $4, meta = $5::jsonb`,
+          [key, code, new Date(expiresAt), Number(attempts) || 0, JSON.stringify(meta)]
+        );
+      }
+    } catch (err) {
+      console.error("❌ OTP opslaan in Postgres mislukt:", err?.message);
+    }
+    return;
+  }
   try {
     await fsp.writeFile(path.join(DATA_DIR, "plately-otps.json"), JSON.stringify(otps), "utf8");
   } catch (err) {
@@ -1931,6 +1982,25 @@ async function ensurePostgresSchema() {
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `);
+      await pool.query(`
+  CREATE TABLE IF NOT EXISTS plately_otps (
+    key TEXT PRIMARY KEY,
+    code TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+`);
+      await pool.query(`
+  CREATE TABLE IF NOT EXISTS plately_share_links (
+    token TEXT PRIMARY KEY,
+    payload JSONB NOT NULL,
+    views INT NOT NULL DEFAULT 0,
+    last_viewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+`);
     })();
   }
 
@@ -16857,8 +16927,29 @@ const server = http.createServer(async (request, response) => {
       const token =
         requestUrl.pathname.startsWith("/share/") ? requestUrl.pathname.slice("/share/".length) : requestUrl.searchParams.get("t") || "";
       const safeToken = sanitizeText(String(token || "")).trim();
-      const db = await loadDatabase();
-      const record = db.shareLinks && safeToken ? db.shareLinks[safeToken] : null;
+      let record = null;
+      if (isPostgresEnabled()) {
+        try {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const res = await pool.query(
+            `SELECT payload, views, last_viewed_at FROM plately_share_links WHERE token = $1`,
+            [safeToken]
+          );
+          if (res.rows.length > 0) {
+            record = {
+              payload: res.rows[0].payload,
+              views: res.rows[0].views,
+              lastViewedAt: res.rows[0].last_viewed_at,
+            };
+          }
+        } catch (err) {
+          console.error("❌ Share link lezen mislukt:", err?.message);
+        }
+      } else {
+        const db = await loadDatabase();
+        record = db.shareLinks && safeToken ? db.shareLinks[safeToken] : null;
+      }
       if (!record || !record.payload) {
         response.writeHead(302, { Location: "/recipe.html", ...HTTP_HEADERS });
         response.end();
@@ -16876,8 +16967,19 @@ const server = http.createServer(async (request, response) => {
       try {
         record.views = Number(record.views || 0) + 1;
         record.lastViewedAt = new Date().toISOString();
-        if (db.shareLinks && safeToken) db.shareLinks[safeToken] = record;
-        await persistDatabase();
+        if (isPostgresEnabled()) {
+          try {
+            const pool = await getPostgresPool();
+            await pool.query(
+              `UPDATE plately_share_links SET views = views + 1, last_viewed_at = NOW() WHERE token = $1`,
+              [safeToken]
+            );
+          } catch { /* ignore */ }
+        } else {
+          const _db = await loadDatabase();
+          if (_db.shareLinks && safeToken) _db.shareLinks[safeToken] = record;
+          await persistDatabase();
+        }
       } catch {
         // ignore
       }
@@ -17239,16 +17341,30 @@ const server = http.createServer(async (request, response) => {
       }
 
       const token = crypto.randomBytes(5).toString("base64url"); // ~8 chars, URL-safe
-      const db = await loadDatabase();
-      if (!db.shareLinks || typeof db.shareLinks !== "object") db.shareLinks = {};
-      db.shareLinks[token] = { payload: safePayload, createdAt: new Date().toISOString() };
       let sharePersisted = false;
-      try {
-        await persistDatabase();
-        sharePersisted = true;
-      } catch (persistErr) {
-        // Shortlinks blijven in databaseCache maar overleven geen redeploy als schijf ontbreekt of /data niet schrijfbaar is.
-        console.error("[share/create] persistDatabase failed:", persistErr?.message || persistErr);
+      if (isPostgresEnabled()) {
+        try {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          await pool.query(
+            `INSERT INTO plately_share_links (token, payload) VALUES ($1, $2::jsonb)
+             ON CONFLICT (token) DO UPDATE SET payload = $2::jsonb`,
+            [token, JSON.stringify(safePayload)]
+          );
+          sharePersisted = true;
+        } catch (persistErr) {
+          console.error("[share/create] Postgres insert mislukt:", persistErr?.message || persistErr);
+        }
+      } else {
+        const db = await loadDatabase();
+        if (!db.shareLinks || typeof db.shareLinks !== "object") db.shareLinks = {};
+        db.shareLinks[token] = { payload: safePayload, createdAt: new Date().toISOString() };
+        try {
+          await persistDatabase();
+          sharePersisted = true;
+        } catch (persistErr) {
+          console.error("[share/create] persistDatabase failed:", persistErr?.message || persistErr);
+        }
       }
 
       const shareHost = sanitizeText(request.headers.host || "").slice(0, 160);
