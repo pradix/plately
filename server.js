@@ -10988,6 +10988,40 @@ function _scoreJumboProduct(productName, searchBase) {
   // Geen enkele token overlap → sterke penalty
   if (overlap === 0 && baseTokens.length >= 2) score += 60;
 
+  // Primair ingredient bonus: titel begint met het zoekwoord
+  if (baseTokens.length > 0 && title.startsWith(base)) score -= 15;
+  if (baseTokens.length > 0 && title.startsWith(baseTokens[0])) score -= 10;
+
+  // Samengesteld gerecht penalty: als het product een gerecht is en het ingredient is geen gerecht
+  // Bv. "Garnalen Salade met Surimi" voor "garnalen" → grote penalty
+  const isIngredientDish = /\b(salade|maaltijd|schotel|gerecht|soep|stoofpot|oven|pasta|spaghetti|lasagne|nasi|bami|wrap|pizza|curry|wok|rijst|bowl)\b/i.test(base);
+  if (!isIngredientDish) {
+    // Product is een kant-en-klaar gerecht
+    const isComposedDish = /\b(salade|maaltijd|schotel|gerecht|stoofpot|lasagne|ovenschotel|maaltijdpakket|menu|oven(?:maal|dish)|wok(?:maal)?|curry|rijstschotel|pastaschotel|soepje)\b/i.test(title);
+    if (isComposedDish) score += 200;
+
+    // "met [ingredient]" penalty: ingredient is bijzaak, niet het hoofdproduct
+    // Bv. "Spaghetti met Ei" voor "eieren" — ei is bijzaak
+    const metPattern = /\bmet\s+(\w+)/gi;
+    const vanPattern = /\bvan\s+(\w+)/gi;
+    let metMatch;
+    let baseIsPrimary = false;
+    while ((metMatch = metPattern.exec(title)) !== null) {
+      const afterMet = metMatch[1].toLowerCase();
+      if (baseTokens.some(t => afterMet.startsWith(t) || t.startsWith(afterMet))) {
+        // Base ingredient appears after "met" → het is bijzaak
+        score += 160;
+        baseIsPrimary = false;
+      }
+    }
+    while ((metMatch = vanPattern.exec(title)) !== null) {
+      const afterVan = metMatch[1].toLowerCase();
+      if (baseTokens.some(t => afterVan.startsWith(t) || t.startsWith(afterVan))) {
+        score += 120;
+      }
+    }
+  }
+
   // Drank-penalty: product bevat volume-aanduiding of drank-woorden, ingredient is geen drank
   const isIngredientDrink = /\b(sap|drank|limonade|siroop|frisdrank|bier|wijn|thee|koffie|smoothie)\b/i.test(base);
   if (!isIngredientDrink) {

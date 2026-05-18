@@ -2301,7 +2301,7 @@ function getStoreConfig(storeSlug = "albert-heijn") {
       kicker: "JUMBO MANDJE",
       loadingLabel: "Voorbereiden…",
       continueLabel: "Open Jumbo",
-      directLabel: "Open Jumbo mandje",
+      directLabel: "Zet producten in Jumbo mandje",
       helperCopy: "We tonen je beste productmatches en sturen je daarna door naar Jumbo.",
       defaultUrl: "https://www.jumbo.com/mandje/",
     };
@@ -2313,7 +2313,7 @@ function getStoreConfig(storeSlug = "albert-heijn") {
     kicker: "ALBERT HEIJN LIJSTJE",
     loadingLabel: "Voorbereiden…",
     continueLabel: "Open Albert Heijn",
-    directLabel: "Zet in AH mandje",
+    directLabel: "Zet producten in AH mandje",
     helperCopy: "We tonen je beste productmatches. Wissel waar nodig; daarna zetten we de gekozen producten klaar bij Albert Heijn.",
     defaultUrl: "https://www.ah.nl/mijnlijst/",
   };
@@ -2846,9 +2846,10 @@ function renderBasketPreview() {
     const isJumbo = preview?.store === "jumbo";
     ctaBtn.className = `basket-sheet__cta${isJumbo ? " basket-sheet__cta--jumbo" : ""}`;
     const _ctaFavStyle = 'width:28px;height:28px;border-radius:6px;flex-shrink:0;vertical-align:middle';
+    const _ctaCount = (preview?.items || []).filter(i => i.product || i.choices?.length).length || 0;
     ctaBtn.innerHTML = isJumbo
-      ? `Zet producten in <img src="https://www.google.com/s2/favicons?domain=www.jumbo.com&sz=128" alt="Jumbo" style="${_ctaFavStyle}"> mandje`
-      : `Zet producten in <img src="https://www.google.com/s2/favicons?domain=www.ah.nl&sz=128" alt="AH" style="${_ctaFavStyle}"> mandje`;
+      ? `Zet ${_ctaCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.jumbo.com&sz=128" alt="Jumbo" style="${_ctaFavStyle}"> mandje`
+      : `Zet ${_ctaCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.ah.nl&sz=128" alt="AH" style="${_ctaFavStyle}"> mandje`;
     ctaBtn.onclick = () => {
       const url = getBasketHandoffUrl(preview);
       if (url) window.open(url, "_blank", "noreferrer");
