@@ -5906,7 +5906,7 @@
       if (statusEl) statusEl.textContent = "Laden…";
 
       try {
-        const res = await fetch("/api/admin/seo-overview", { headers: { "X-Admin-Token": adminToken } });
+        const res = await fetch("/api/admin/seo-overview", adminFetchInit());
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
 
