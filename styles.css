@@ -3942,20 +3942,8 @@ button.ingredient-item {
 .store-cta--jumbo-pill .store-cta__name { display: none; }
 .store-cta--jumbo-pill .store-cta__dest { font-weight: 600; }
 .store-cta--jumbo-pill .store-cta__dest { color: rgba(26,18,0,0.72); }
-.store-cta__jumbo-badge {
-  background: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 5px 10px;
-  border-radius: 10px;
-  flex-shrink: 0;
-}
-.store-cta__jumbo-wordmark {
-  width: 52px;
-  height: auto;
-  object-fit: contain;
-  display: block;
+.store-cta__logo--jumbo-pill {
+  background: #fff3;
 }
 
 .store-cta__logo {

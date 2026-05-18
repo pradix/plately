@@ -2846,12 +2846,7 @@ function renderBasketPreview() {
     const isJumbo = preview?.store === "jumbo";
     ctaBtn.className = `basket-sheet__cta${isJumbo ? " basket-sheet__cta--jumbo" : ""}`;
     ctaBtn.innerHTML = isJumbo
-      ? `<span style="background:#fff;border-radius:6px;padding:3px 8px;flex-shrink:0;display:flex;align-items:center">
-          <svg viewBox="0 0 148 44" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:72px;height:22px;display:block" overflow="visible">
-            <text x="70" y="34" font-family="Arial Black,Arial,sans-serif" font-size="32" font-weight="900" font-style="italic" fill="#000" text-anchor="middle" letter-spacing="1">JUMBO</text>
-            <text x="67" y="31" font-family="Arial Black,Arial,sans-serif" font-size="32" font-weight="900" font-style="italic" fill="#FDC500" text-anchor="middle" letter-spacing="1">JUMBO</text>
-          </svg>
-        </span>
+      ? `<img src="https://www.google.com/s2/favicons?domain=www.jumbo.com&sz=128" alt="Jumbo" width="28" height="28" style="border-radius:6px;flex-shrink:0" />
         mandje`
       : `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:28px;height:28px;flex-shrink:0">
           <path d="M28,8 Q8,10 6,30 L6,155 Q6,192 43,192 L157,192 Q194,192 194,155 L194,78 Q194,56 178,42 L112,8 Q96,-1 80,4 Z" fill="#fff" fill-opacity="0.3"/>
@@ -7180,8 +7175,8 @@ function renderGroceryGroups(options = {}) {
     });
   }
   const preferredStoreForLabel = state.profile.favoriteSupermarket || "ah";
-  if (orderAHItemCount) orderAHItemCount.textContent = `Zet ${uncheckedCount} klaar in AH`;
-  if (orderJumboItemCount) orderJumboItemCount.textContent = `Zet ${uncheckedCount} klaar in Jumbo`;
+  if (orderAHItemCount) orderAHItemCount.textContent = `Zet ${uncheckedCount} producten klaar`;
+  if (orderJumboItemCount) orderJumboItemCount.textContent = `Zet ${uncheckedCount} producten klaar`;
   // Show only the preferred store button
   const preferredStore = state.profile.favoriteSupermarket || "ah";
   if (orderAHButton) orderAHButton.classList.toggle("hidden", preferredStore === "jumbo");
