@@ -748,6 +748,7 @@
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="logs">Logs</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk import</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="supermarkets">Supermarkten</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="seo">SEO</button>
       </div>
     </nav>
 
@@ -1679,6 +1680,35 @@
             <button class="btn" type="button" id="supermarketsSaveBtn">Opslaan</button>
             <span id="supermarketsSaveStatus" style="margin-left:12px;font-size:13px;color:var(--muted)"></span>
           </div>
+        </div>
+      </div>
+      <div class="admin-tab-section" id="adminTabSeo" data-tab="seo">
+        <div class="section">
+          <div class="section-header">
+            <h2>SEO &amp; Vindbaarheid</h2>
+            <div class="muted">Sitemap gezondheid, SEO-scores en homepage meta-info.</div>
+          </div>
+          <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+            <a class="btn" href="/sitemap.xml" target="_blank">📄 Sitemap</a>
+            <a class="btn" href="/recepten" target="_blank">🍽️ /recepten</a>
+            <button class="btn" type="button" onclick="loadSeoOverview()">↻ Vernieuwen</button>
+          </div>
+          <p class="muted" id="seoLoadStatus" style="font-size:13px;margin:0 0 16px">Laden…</p>
+
+          <!-- Score distribution -->
+          <div id="seoScoreGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px"></div>
+
+          <!-- Homepage meta -->
+          <h3 style="margin:0 0 10px;font-size:14px;font-weight:700">Homepage meta</h3>
+          <div id="seoHomepageMeta" style="background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;margin-bottom:24px;font-family:monospace;white-space:pre-wrap"></div>
+
+          <!-- Worst SEO score recipes -->
+          <h3 style="margin:0 0 10px;font-size:14px;font-weight:700">Recepten met laagste SEO-score (te verbeteren)</h3>
+          <div id="seoWorstRecipes" style="display:flex;flex-direction:column;gap:6px;margin-bottom:24px"></div>
+
+          <!-- Best SEO score recipes -->
+          <h3 style="margin:0 0 10px;font-size:14px;font-weight:700">Recepten met hoogste SEO-score (top)</h3>
+          <div id="seoBestRecipes" style="display:flex;flex-direction:column;gap:6px"></div>
         </div>
       </div>
     </div>
@@ -5639,6 +5669,7 @@
       if (next === "activity") {
         loadAnalytics();
       }
+      if (next === "seo") { loadSeoOverview(); }
       if (next === "logs") {
         loadLogs();
       } else {
@@ -5864,6 +5895,75 @@
         container.querySelectorAll("pre").forEach(p => { p.scrollTop = p.scrollHeight; });
       } catch (err) {
         if (statusEl) statusEl.textContent = `Fout: ${err.message}`;
+      }
+    }
+    async function loadSeoOverview() {
+      const statusEl = document.getElementById("seoLoadStatus");
+      const scoreGridEl = document.getElementById("seoScoreGrid");
+      const homepageMetaEl = document.getElementById("seoHomepageMeta");
+      const worstEl = document.getElementById("seoWorstRecipes");
+      const bestEl = document.getElementById("seoBestRecipes");
+      if (statusEl) statusEl.textContent = "Laden…";
+
+      try {
+        const res = await fetch("/api/admin/seo-overview", { headers: { "X-Admin-Token": adminToken } });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+
+        if (statusEl) statusEl.textContent = `${data.total} recepten in sitemap · bijgewerkt ${new Date().toLocaleTimeString("nl")}`;
+
+        // Score distribution
+        if (scoreGridEl) {
+          const cards = [
+            { label: "Goed (≥80)", value: data.good, color: "#2e7d32" },
+            { label: "Matig (60–79)", value: data.ok, color: "#e65100" },
+            { label: "Slecht (<60)", value: data.poor, color: "#b71c1c" },
+            { label: "Geen afbeelding", value: data.missingImage, color: "#555" },
+            { label: "Geen beschrijving", value: data.missingDescription, color: "#555" },
+            { label: "Totaal", value: data.total, color: "#1a1a1a" },
+          ];
+          scoreGridEl.innerHTML = cards.map(c => `
+            <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px 12px;text-align:center">
+              <div style="font-size:28px;font-weight:800;color:${c.color}">${c.value}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:4px">${c.label}</div>
+            </div>`).join("");
+        }
+
+        // Homepage meta
+        if (homepageMetaEl) {
+          homepageMetaEl.textContent = [
+            `title:        ${data.homepage.title}`,
+            `description:  ${data.homepage.description}`,
+            `og:title:     ${data.homepage.ogTitle}`,
+            `og:image:     ${data.homepage.ogImage}`,
+            `og:url:       ${data.homepage.ogUrl}`,
+            `robots:       ${data.homepage.robots}`,
+            `canonical:    ${data.homepage.canonical}`,
+            `schema type:  ${data.homepage.schemaType}`,
+          ].join("\n");
+        }
+
+        // Worst recipes
+        if (worstEl && data.worst) {
+          worstEl.innerHTML = data.worst.map(r => `
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#fff;border:1px solid var(--border);border-radius:6px;font-size:12px">
+              <span style="background:${r.score < 60 ? '#ffebee' : '#fff8e1'};color:${r.score < 60 ? '#b71c1c' : '#e65100'};border-radius:4px;padding:2px 6px;font-weight:700;min-width:32px;text-align:center">${r.score}</span>
+              <a href="${r.url}" target="_blank" style="color:inherit;text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.title}</a>
+              <span style="color:var(--muted)">${r.flags}</span>
+            </div>`).join("");
+        }
+
+        // Best recipes
+        if (bestEl && data.best) {
+          bestEl.innerHTML = data.best.map(r => `
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#fff;border:1px solid var(--border);border-radius:6px;font-size:12px">
+              <span style="background:#e8f5e9;color:#2e7d32;border-radius:4px;padding:2px 6px;font-weight:700;min-width:32px;text-align:center">${r.score}</span>
+              <a href="${r.url}" target="_blank" style="color:inherit;text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.title}</a>
+            </div>`).join("");
+        }
+
+      } catch (err) {
+        if (statusEl) statusEl.textContent = "Fout: " + err.message;
       }
     }
     function escHtml(s) {

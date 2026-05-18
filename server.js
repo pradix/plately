@@ -22202,6 +22202,46 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/seo-overview" && request.method === "GET") {
+      await requireAdmin(request);
+      const origin = getPublicOrigin(request);
+      const entries = await listPublicSeoRecipes(origin);
+
+      let good = 0, ok = 0, poor = 0, missingImage = 0, missingDescription = 0;
+      const scored = entries.map(e => {
+        const score = Number.isFinite(Number(e.seoScore)) ? Number(e.seoScore) : computeSeoRecipeScore(e.recipe || {});
+        if (score >= 80) good++;
+        else if (score >= 60) ok++;
+        else poor++;
+        const hasImage = !!(e.recipe?.image && /^https?:\/\//.test(e.recipe.image));
+        const hasDesc = !!(e.recipe?.description && e.recipe.description.length > 20);
+        if (!hasImage) missingImage++;
+        if (!hasDesc) missingDescription++;
+        const flags = [!hasImage && "📷", !hasDesc && "📝"].filter(Boolean).join(" ");
+        return { score, title: e.recipe?.title || e.slug, url: `${origin}${encodeURI(e.urlPath)}`, flags };
+      });
+      scored.sort((a, b) => a.score - b.score);
+      const worst = scored.slice(0, 20);
+      const best = scored.slice(-20).reverse();
+
+      sendJson(response, 200, {
+        total: entries.length,
+        good, ok, poor, missingImage, missingDescription,
+        worst, best,
+        homepage: {
+          title: "Plately — Bewaar, importeer en kook recepten",
+          description: "Importeer recepten van Instagram, TikTok en websites. Bewaar gerechten, maak boodschappenlijsten en kook met gemak.",
+          ogTitle: "Plately — Bewaar, importeer en kook recepten",
+          ogImage: `${origin}/assets/icon-512.png?v=7`,
+          ogUrl: `${origin}/`,
+          robots: "index,follow",
+          canonical: `${origin}/`,
+          schemaType: "WebApplication",
+        },
+      });
+      return;
+    }
+
     await serveStaticFile(requestUrl.pathname, response, request);
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
