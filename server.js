@@ -743,6 +743,12 @@ async function proxyImage(requestUrl, response) {
         return;
       }
       contentType = upstream.headers.get("content-type") || imageContentTypeFromUrl(raw);
+      // MIME-type validatie: weiger responses die geen afbeelding zijn (XSS-bescherming)
+      if (contentType && !contentType.split(";")[0].trim().startsWith("image/")) {
+        response.writeHead(400, { ...HTTP_HEADERS, "Content-Type": "application/json" });
+        response.end(JSON.stringify({ ok: false, error: "Upstream stuurde geen afbeelding." }));
+        return;
+      }
       buffer = Buffer.from(await upstream.arrayBuffer());
     }
 
@@ -2954,6 +2960,23 @@ async function getAuthenticatedUser(request) {
 
 const ADMIN_EMAIL = sanitizeText(process.env.ADMIN_EMAIL || "pradix@me.com");
 const isAdminEmail = (email) => sanitizeText(email || "") === ADMIN_EMAIL;
+
+// In-memory admin audit-log — max 200 entries, FIFO.
+// Bevat admin-acties zoals push-sends, channel-approvals, user-restores.
+const _adminAuditLog = [];
+const ADMIN_AUDIT_LOG_MAX = 200;
+
+function logAdminAction(adminEmail, action, meta = {}) {
+  _adminAuditLog.unshift({
+    ts: new Date().toISOString(),
+    admin: sanitizeText(String(adminEmail || "")).slice(0, 120),
+    action: sanitizeText(String(action || "")).slice(0, 80),
+    meta,
+  });
+  if (_adminAuditLog.length > ADMIN_AUDIT_LOG_MAX) {
+    _adminAuditLog.length = ADMIN_AUDIT_LOG_MAX;
+  }
+}
 
 async function requireAdmin(request) {
   let authUser = await getAuthenticatedUser(request).catch(() => null);
@@ -9533,6 +9556,24 @@ const CLIENT_INGEST_EVENT_TYPES = new Set([
 ]);
 
 const clientIngestBudget = new Map();
+
+// IP-gebaseerde rate-limit voor OTP-aanvragen — voorkomt enumerate van e-mailadressen.
+// Max 5 OTP-verzoeken per IP per 15 minuten (login + reset samen).
+const _otpRequestIpBudget = new Map();
+const OTP_IP_MAX = 5;
+const OTP_IP_WINDOW_MS = 15 * 60 * 1000;
+
+function checkOtpIpBudget(ip) {
+  const key = ip || "unknown";
+  const now = Date.now();
+  let row = _otpRequestIpBudget.get(key);
+  if (!row || now - row.started > OTP_IP_WINDOW_MS) {
+    row = { started: now, count: 0 };
+    _otpRequestIpBudget.set(key, row);
+  }
+  row.count += 1;
+  return row.count <= OTP_IP_MAX;
+}
 
 function getRequestClientIp(request) {
   const raw = sanitizeText(request.headers["x-forwarded-for"] || "").split(",")[0].trim();
@@ -18032,6 +18073,8 @@ const server = http.createServer(async (request, response) => {
         removed: endpointsToRemove.size,
       });
 
+      logAdminAction(adminUser?.email, "push_announce", { title, category, sent, failed, matched: filtered.length });
+
       sendJson(response, 200, {
         ok: true,
         sent,
@@ -18611,6 +18654,12 @@ const server = http.createServer(async (request, response) => {
         throw new HttpError(400, "Voer een geldig e-mailadres in.");
       }
 
+      // IP-gebaseerde rate-limit: max 5 OTP-verzoeken per 15 min per IP
+      const otpIp = getRequestClientIp(request);
+      if (!checkOtpIpBudget(otpIp)) {
+        throw new HttpError(429, "Te veel aanmeldpogingen. Probeer over 15 minuten opnieuw.");
+      }
+
       const loginOtps = await loadOtps();
 
       // Rate-limit: max 1 OTP per 60 seconds
@@ -18947,6 +18996,12 @@ const server = http.createServer(async (request, response) => {
         throw new HttpError(400, "Geldig e-mailadres vereist.");
       }
 
+      // IP-gebaseerde rate-limit (gedeeld budget met login-OTP)
+      const resetIp = getRequestClientIp(request);
+      if (!checkOtpIpBudget(resetIp)) {
+        throw new HttpError(429, "Te veel pogingen. Probeer over 15 minuten opnieuw.");
+      }
+
       const resetOtps = await loadOtps();
 
       // Rate-limit: one OTP per email per 60 seconds
@@ -18957,6 +19012,8 @@ const server = http.createServer(async (request, response) => {
       }
 
       // Check if user exists (always respond OK to avoid user enumeration)
+      // Timing-attack bescherming: meet hoe lang DB-query duurt, vul aan tot minimaal 150ms
+      const _resetTs = Date.now();
       let userExists = false;
       if (isPostgresEnabled()) {
         await ensurePostgresSchema();
@@ -18967,6 +19024,9 @@ const server = http.createServer(async (request, response) => {
         const db = await loadDatabase();
         userExists = Object.values(db.users).some((u) => String(u.email || "").toLowerCase() === email);
       }
+      // Altijd minstens 150ms wachten zodat "bestaat / bestaat niet" niet te meten is.
+      const _resetElapsed = Date.now() - _resetTs;
+      if (_resetElapsed < 150) await new Promise((r) => setTimeout(r, 150 - _resetElapsed));
 
       if (!userExists) {
         sendJson(response, 200, { ok: true, step: "code" });
@@ -19724,6 +19784,11 @@ const server = http.createServer(async (request, response) => {
         });
       }
       return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/audit-log" && request.method === "GET") {
+      await requireAdmin(request);
+      return sendJson(response, 200, { ok: true, entries: _adminAuditLog });
     }
 
     if (requestUrl.pathname === "/api/admin/diagnose" && request.method === "GET") {
@@ -23213,6 +23278,12 @@ const server = http.createServer(async (request, response) => {
     await serveStaticFile(requestUrl.pathname, response, request);
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
+    // Voeg Retry-After header toe bij 429 zodat clients weten wanneer ze opnieuw mogen
+    if (statusCode === 429) {
+      response.setHeader("Retry-After", "900"); // 15 minuten
+      response.setHeader("X-RateLimit-Limit", "5");
+      response.setHeader("X-RateLimit-Reset", String(Math.floor(Date.now() / 1000) + 900));
+    }
     sendJson(response, statusCode, {
       error:
         error instanceof HttpError

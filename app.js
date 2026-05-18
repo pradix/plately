@@ -5436,13 +5436,17 @@ async function searchChannels(query) {
         }
       }
     } catch (e) {
-      // ignore (fallback to channel-search below)
+      if (e?.name !== "AbortError") {
+        console.warn("[ChannelSearch] SEO-zoek mislukt:", e?.message);
+      }
+      // Fallback naar externe channel-search hieronder
     }
 
     let url = `/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`;
     if (customChannelsParam) url += `&customChannels=${encodeURIComponent(customChannelsParam)}`;
 
     const resp = await fetch(url, { signal: abortCtl.signal });
+    if (!resp.ok) throw new Error(`Channel-search fout (${resp.status})`);
     const data = await resp.json();
     if (requestId !== searchChannels._reqId) return;
     const merged = [];
@@ -5473,6 +5477,10 @@ async function searchChannels(query) {
     if (error?.name === "AbortError") return;
     if (requestId !== searchChannels._reqId) return;
     state.channelSearchIsSearching = false;
+    // Toon foutmelding als er ook geen eerder resultaten zijn
+    if (!state.channelSearchAllResults?.length) {
+      showToast("Zoeken mislukt. Controleer je verbinding.", { variant: "error" });
+    }
     renderChannelSearchResults([]);
   } finally {
     if (requestId === searchChannels._reqId) {
@@ -11063,20 +11071,43 @@ async function registerServiceWorker() {
     const registration = await navigator.serviceWorker.register(`/service-worker.js?v=${encodeURIComponent(buildVersion)}`);
     registration.update().catch(() => {});
 
-    let reloadScheduled = false;
-    const scheduleReload = () => {
-      if (reloadScheduled) return;
-      reloadScheduled = true;
-      // Give the new SW 800ms to finish caching the app shell before reload.
-      window.setTimeout(() => window.location.reload(), 800);
+    // Toon update-banner in Plately-stijl — gebruiker kiest zelf wanneer te herladen.
+    let _updateBannerShown = false;
+    const showUpdateBanner = () => {
+      if (_updateBannerShown) return;
+      _updateBannerShown = true;
+      const banner = document.getElementById("updateBanner");
+      if (banner) banner.classList.remove("hidden");
     };
 
-    // New SW took control → reload so fresh CSS/JS are served from new cache.
-    navigator.serviceWorker.addEventListener("controllerchange", scheduleReload);
+    const updateBannerReloadBtn = document.getElementById("updateBannerReload");
+    if (updateBannerReloadBtn) {
+      updateBannerReloadBtn.addEventListener("click", () => {
+        updateBannerReloadBtn.disabled = true;
+        updateBannerReloadBtn.textContent = "Herladen…";
+        // Activeer de wachtende SW en herlaad zodra die de controle overneemt.
+        const waiting = registration.waiting;
+        if (waiting) {
+          navigator.serviceWorker.addEventListener("controllerchange", () => window.location.reload(), { once: true });
+          waiting.postMessage({ type: "SKIP_WAITING" });
+        } else {
+          window.location.reload();
+        }
+      });
+    }
 
-    // SW was already waiting when we registered (e.g. tab was open in background).
+    // Nieuwe SW heeft de controle overgenomen → herlaad alleen als banner al getoond was
+    // (gebruiker heeft al "Vernieuwen" geklikt) of als er nog geen controller was (eerste load).
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (_updateBannerShown) {
+        // Banner was shown and user clicked reload — now the new SW controls the page.
+        // The reload was already triggered by the button handler; nothing to do here.
+      }
+    });
+
+    // SW was al waiting bij registratie (tab stond op de achtergrond) → toon banner meteen.
     if (registration.waiting) {
-      registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      showUpdateBanner();
     }
 
     registration.addEventListener("updatefound", () => {
@@ -11084,8 +11115,8 @@ async function registerServiceWorker() {
       if (!worker) return;
       worker.addEventListener("statechange", () => {
         if (worker.state === "installed" && navigator.serviceWorker.controller) {
-          // Activate the new SW immediately — controllerchange will then trigger reload.
-          worker.postMessage({ type: "SKIP_WAITING" });
+          // Nieuwe versie gereed — toon banner, wacht op gebruiker.
+          showUpdateBanner();
         }
       });
     });
@@ -11821,6 +11852,7 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
     onDone(importedRecipe);
   } catch (error) {
     const message = normalizeUiErrorMessage(error?.message || "");
+    const isNetworkErr = /verbinding|internet|timeout|network|fetch/i.test(message) || !navigator.onLine;
     setFeedback(message, "error");
     if (!navigator.onLine) {
       showToast("Geen internet. Probeer opnieuw zodra je verbinding hebt.", {
@@ -11829,6 +11861,13 @@ async function submitImport(url, note, setFeedback, setLoading, onDone) {
         onUndo: () => submitImport(url, note, setFeedback, setLoading, onDone),
       });
       setPendingRetryAction(() => submitImport(url, note, setFeedback, setLoading, onDone));
+    } else if (isNetworkErr) {
+      // Netwerk-fout terwijl online: toon "Opnieuw"-knop zodat gebruiker direct kan herproberen
+      showToast(message.trim() || "Importeren mislukt.", {
+        variant: "error",
+        undoLabel: "Opnieuw",
+        onUndo: () => submitImport(url, note, setFeedback, setLoading, onDone),
+      });
     } else {
       showToast(message.trim() || "Importeren mislukt.", { variant: "error" });
     }

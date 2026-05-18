@@ -746,6 +746,7 @@
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="notifications">Notificaties</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Kanaal test</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="logs">Logs</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="audit-log">Audit</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk import</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="supermarkets">Supermarkten</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="basket-stats">Winkelwagen</button>
@@ -769,7 +770,7 @@
           <select id="channelTestSelect" class="admin-test__select" aria-label="Kanaal kiezen">
             <option value="">Kanaal kiezen…</option>
           </select>
-          <input id="channelTestQuery" class="admin-test__input" type="text" placeholder="Search query" />
+          <input id="channelTestQuery" class="admin-test__input" type="text" placeholder="Search query" aria-label="Zoekquery" />
           <button class="btn btn-primary" type="button" onclick="runChannelTestSearch()">Test search</button>
         </div>
         <div class="admin-test__all-controls">
@@ -803,7 +804,7 @@
         <hr class="divider" />
 
         <div class="admin-test__row">
-          <input id="channelTestImportUrl" class="admin-test__input" type="text" placeholder="Import URL" />
+          <input id="channelTestImportUrl" class="admin-test__input" type="text" placeholder="Import URL" aria-label="Import URL" />
           <button class="btn" type="button" onclick="runChannelTestImport()">Test import (auto-detect)</button>
         </div>
         <div id="channelTestImportStatus" class="muted" style="margin-top:8px"></div>
@@ -838,9 +839,9 @@
         </div>
         <div id="newChannelError" class="error" style="display:none"></div>
         <div class="admin-test__row" style="flex-wrap:wrap;gap:8px">
-          <input id="newChannelName" class="admin-test__input" type="text" placeholder="Naam (bijv. Lekker en Simpel)" style="min-width:180px;flex:1" />
-          <input id="newChannelUrl" class="admin-test__input" type="text" placeholder="URL of zoek-URL (bijv. https://brendakookt.nl of …/?_zoeken=pasta)" style="min-width:260px;flex:2" />
-          <input id="newChannelQuery" class="admin-test__input" type="text" placeholder="Testzoekterm (bijv. pasta)" style="min-width:140px;flex:1" />
+          <input id="newChannelName" class="admin-test__input" type="text" placeholder="Naam (bijv. Lekker en Simpel)" style="min-width:180px;flex:1" aria-label="Kanaalnaam" />
+          <input id="newChannelUrl" class="admin-test__input" type="text" placeholder="URL of zoek-URL (bijv. https://brendakookt.nl of …/?_zoeken=pasta)" style="min-width:260px;flex:2" aria-label="Kanaal URL" />
+          <input id="newChannelQuery" class="admin-test__input" type="text" placeholder="Testzoekterm (bijv. pasta)" style="min-width:140px;flex:1" aria-label="Testzoekterm" />
         </div>
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
           <button class="btn btn-primary" type="button" onclick="newChannelTestSearch()">🔍 Test zoeken</button>
@@ -873,14 +874,14 @@
           </select>
         </div>
         <div class="admin-test__row">
-          <input id="notifTitle" class="admin-test__input" type="text" placeholder="Titel" />
-          <input id="notifUrl" class="admin-test__input" type="text" placeholder="Deep link (optioneel, leeg = automatisch)" />
+          <input id="notifTitle" class="admin-test__input" type="text" placeholder="Titel" aria-label="Notificatie titel" />
+          <input id="notifUrl" class="admin-test__input" type="text" placeholder="Deep link (optioneel, leeg = automatisch)" aria-label="Deep link URL" />
         </div>
         <div style="margin-top:10px">
-          <textarea id="notifBody" class="admin-test__input" rows="3" placeholder="Bericht" style="width:100%;resize:vertical"></textarea>
+          <textarea id="notifBody" class="admin-test__input" rows="3" placeholder="Bericht" style="width:100%;resize:vertical" aria-label="Notificatie bericht"></textarea>
         </div>
         <div class="admin-test__row" style="margin-top:10px">
-          <input id="notifImageUrl" class="admin-test__input" type="text" placeholder="Afbeelding URL (optioneel)" />
+          <input id="notifImageUrl" class="admin-test__input" type="text" placeholder="Afbeelding URL (optioneel)" aria-label="Afbeelding URL" />
         </div>
         <div class="admin-test__row" style="margin-top:10px">
           <label class="pill" style="cursor:pointer;flex:0 0 auto;min-width:260px">
@@ -1438,6 +1439,21 @@
           </div>
           <div id="logsStatus" style="font-size:12px;color:var(--muted);margin-bottom:8px"></div>
           <div id="logsContainer"></div>
+        </div>
+      </div>
+
+      <!-- ── Admin audit-log tab ── -->
+      <div class="admin-tab-section" id="adminTabAuditLog" data-tab="audit-log">
+        <div class="section">
+          <div class="section-header">
+            <h2>🔍 Admin audit-log</h2>
+            <div class="muted">Recente admin-acties (max 200, in geheugen — reset bij herstart)</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <button id="auditLogRefreshBtn" type="button" class="btn" style="padding:6px 14px;font-size:13px">↺ Verversen</button>
+          </div>
+          <div id="auditLogStatus" class="muted" style="margin-bottom:8px;font-size:12px"></div>
+          <div id="auditLogTable"></div>
         </div>
       </div>
 
@@ -6024,6 +6040,40 @@
     document.getElementById("logsLinesSelect")?.addEventListener("change", loadLogs);
     document.getElementById("logsAutoRefresh")?.addEventListener("change", (e) => {
       if (e.target.checked) startLogsAutoRefresh(); else stopLogsAutoRefresh();
+    });
+
+    // ── Admin audit-log ───────────────────────────────────────────────────────
+    async function loadAuditLog() {
+      const statusEl = document.getElementById("auditLogStatus");
+      const tableEl = document.getElementById("auditLogTable");
+      if (statusEl) statusEl.textContent = "Laden…";
+      try {
+        const resp = await fetch("/api/admin/audit-log", { credentials: "include" });
+        const data = await resp.json();
+        if (statusEl) statusEl.textContent = `${data.entries?.length || 0} entries`;
+        if (!tableEl) return;
+        if (!data.entries?.length) {
+          tableEl.innerHTML = `<p class="muted">Nog geen admin-acties geregistreerd.</p>`;
+          return;
+        }
+        tableEl.innerHTML = `<table class="admin-table" style="width:100%;font-size:13px">
+          <thead><tr><th>Tijdstip</th><th>Admin</th><th>Actie</th><th>Details</th></tr></thead>
+          <tbody>${data.entries.map((e) => `<tr>
+            <td style="white-space:nowrap;color:var(--muted)">${new Date(e.ts).toLocaleString("nl-NL")}</td>
+            <td style="font-weight:600">${escHtml(e.admin)}</td>
+            <td><code style="font-size:12px">${escHtml(e.action)}</code></td>
+            <td style="color:var(--muted);font-size:12px">${escHtml(JSON.stringify(e.meta || {}))}</td>
+          </tr>`).join("")}</tbody>
+        </table>`;
+      } catch (err) {
+        if (statusEl) statusEl.textContent = `Fout: ${err.message}`;
+      }
+    }
+    function escHtml(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+    document.getElementById("auditLogRefreshBtn")?.addEventListener("click", loadAuditLog);
+    // Laad automatisch als tab geactiveerd wordt
+    document.addEventListener("click", (e) => {
+      if (e.target?.dataset?.adminTab === "audit-log") loadAuditLog();
     });
 
     initAdminTabs();

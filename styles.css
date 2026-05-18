@@ -18235,6 +18235,66 @@ body {
   transform: translateX(-50%) translateY(0);
 }
 
+/* ── Update banner (nieuwe versie beschikbaar) ── */
+.update-banner {
+  position: fixed;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  width: min(calc(100% - 28px), 400px);
+  padding: 11px 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #1a7a3c 0%, #1e9448 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: 0 8px 24px rgba(26, 122, 60, 0.38), 0 2px 8px rgba(0,0,0,0.12);
+  z-index: 418;
+  transition: opacity 0.28s ease, transform 0.36s cubic-bezier(.22,1,.36,1);
+}
+.update-banner.hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(120%);
+  pointer-events: none;
+}
+.update-banner:not(.hidden) {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.update-banner__icon {
+  font-size: 1.1rem;
+  flex: 0 0 auto;
+  line-height: 1;
+}
+.update-banner__text {
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.update-banner__btn {
+  border: 1.5px solid rgba(255,255,255,0.55);
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+  border-radius: 999px;
+  padding: 7px 13px;
+  font-size: 0.86rem;
+  font-weight: 750;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.15s;
+}
+.update-banner__btn:hover {
+  background: rgba(255,255,255,0.3);
+}
+.update-banner__btn:focus-visible {
+  outline: 2px solid rgba(255,255,255,0.9);
+  outline-offset: 2px;
+}
+
 /* ── Grocery sort button ── */
 .grocery-sort-btn {
   display: flex;
