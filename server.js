@@ -14177,7 +14177,7 @@ function pickChannelSearchCandidateRating(candidate) {
 async function enrichChannelSearchResultsWithRatings(results, opts = {}) {
   const MAX_URLS = Number.isFinite(opts.maxUrls) ? Math.min(200, Math.max(1, opts.maxUrls)) : 20;
   const CONCURRENCY = Number.isFinite(opts.concurrency) ? Math.min(16, Math.max(1, opts.concurrency)) : 6;
-  const TIMEOUT_MS = Number.isFinite(opts.timeoutMs) ? Math.min(12_000, Math.max(1500, opts.timeoutMs)) : 5000;
+  const TIMEOUT_MS = Number.isFinite(opts.timeoutMs) ? Math.min(12_000, Math.max(1500, opts.timeoutMs)) : 7000;
   if (!Array.isArray(results) || !results.length) return results;
 
   const candidates = [];
@@ -14229,24 +14229,49 @@ async function enrichChannelSearchResultsWithRatings(results, opts = {}) {
         continue;
       }
 
+      // Helper: probeer HTML te fetchen direct, met Jina als fallback bij blokkering
+      const fetchRecipeHtml = async () => {
+        try {
+          const resp = await fetch(uKey, {
+            headers: {
+              ...FETCH_HEADERS,
+              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
+              Referer: (() => { try { const u = new URL(uKey); return `${u.origin}/`; } catch { return ""; } })(),
+            },
+            signal: AbortSignal.timeout(TIMEOUT_MS),
+            redirect: "follow",
+          });
+          if (resp.ok) return await resp.text();
+          // 403/429/503 = geblokkeerd — probeer Jina reader als fallback
+          if ([403, 429, 503].includes(resp.status)) {
+            console.log(`[rating-enrich] ${resp.status} op ${host} — probeer Jina fallback`);
+            const jinaUrl = `https://r.jina.ai/${uKey}`;
+            const jr = await fetch(jinaUrl, {
+              headers: { ...FETCH_HEADERS, ...jinaReaderAuthHeaders(), Accept: "text/plain,text/html,*/*" },
+              signal: AbortSignal.timeout(TIMEOUT_MS + 3000),
+              redirect: "follow",
+            });
+            if (jr.ok) {
+              bumpRatingEnrichHostStat(host, "jinaFallback");
+              return await jr.text();
+            }
+          }
+          return null;
+        } catch {
+          return null;
+        }
+      };
+
       try {
         batch.fetches++;
         bumpRatingEnrichHostStat(host, "fetch");
-        const resp = await fetch(uKey, {
-          headers: {
-            ...FETCH_HEADERS,
-            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
-          },
-          signal: AbortSignal.timeout(TIMEOUT_MS),
-          redirect: "follow",
-        });
-        if (!resp.ok) {
+        const html = await fetchRecipeHtml();
+        if (!html) {
           batch.httpErr++;
           bumpRatingEnrichHostStat(host, "httpErr");
           continue;
         }
-        const html = await resp.text();
         const rt = extractAggregateRatingFromRecipeHtml(html);
         if (rt) {
           batch.jsonLdRatingsNew++;
@@ -14256,6 +14281,8 @@ async function enrichChannelSearchResultsWithRatings(results, opts = {}) {
         } else {
           batch.jsonLdMiss++;
           bumpRatingEnrichHostStat(host, "schemaMiss");
+          // Sla ook "geen rating" op zodat we niet elke keer opnieuw fetchen
+          setCachedRecipeLdRating(uKey, null);
         }
       } catch {
         batch.httpErr++;
