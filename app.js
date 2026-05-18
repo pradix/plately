@@ -7172,9 +7172,9 @@ function renderGroceryGroups(options = {}) {
     });
   }
   const preferredStoreForLabel = state.profile.favoriteSupermarket || "ah";
-  const _favImgStyle = 'width:20px;height:20px;border-radius:4px;vertical-align:middle;display:inline-block;margin:0 3px 2px';
-  if (orderAHItemCount) orderAHItemCount.innerHTML = `Zet ${uncheckedCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.ah.nl&sz=64" alt="" style="${_favImgStyle}"> mandje`;
-  if (orderJumboItemCount) orderJumboItemCount.innerHTML = `Zet ${uncheckedCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.jumbo.com&sz=64" alt="" style="${_favImgStyle}"> mandje`;
+  const _favImgStyle = 'width:28px;height:28px;border-radius:6px;flex-shrink:0;vertical-align:middle';
+  if (orderAHItemCount) orderAHItemCount.innerHTML = `Zet ${uncheckedCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.ah.nl&sz=128" alt="" style="${_favImgStyle}"> mandje`;
+  if (orderJumboItemCount) orderJumboItemCount.innerHTML = `Zet ${uncheckedCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.jumbo.com&sz=128" alt="" style="${_favImgStyle}"> mandje`;
   // Show only the preferred store button
   const preferredStore = state.profile.favoriteSupermarket || "ah";
   if (orderAHButton) orderAHButton.classList.toggle("hidden", preferredStore === "jumbo");
@@ -9462,7 +9462,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
     showToast(`De knop voor ${storeName} ontbreekt nog.`);
     return;
   }
-  const destLabel = button.querySelector(".store-cta__dest");
+  const destLabel = button.querySelector("span");
 
   // Loading state
   button.disabled = true;

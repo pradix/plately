@@ -14738,6 +14738,7 @@ body {
 .basket-sheet__cta--jumbo { background: #fdc500; color: #1a1200; }
 .basket-sheet__cta--jumbo:hover { background: #f0b800; }
 .basket-sheet__cta--jumbo:active { opacity: 0.85; }
+.grocery-order__cta { border-radius: 999px; margin-bottom: 8px; }
 .basket-product__jumbo-link {
   display: inline-block;
   margin-top: 4px;

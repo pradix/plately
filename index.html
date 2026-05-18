@@ -40,9 +40,9 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="preload" href="styles.css?v=1.0.21.48" as="style" />
-    <link rel="preload" href="app.js?v=1.0.21.48" as="script" />
-    <link rel="stylesheet" href="styles.css?v=1.0.21.48" />
+    <link rel="preload" href="styles.css?v=1.0.21.49" as="style" />
+    <link rel="preload" href="app.js?v=1.0.21.49" as="script" />
+    <link rel="stylesheet" href="styles.css?v=1.0.21.49" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -547,13 +547,11 @@
           <!-- Store order CTAs — shown when items exist -->
           <div class="grocery-order hidden" id="groceryOrder">
             <div class="grocery-order__stores">
-              <button class="store-cta store-cta--ah-pill" id="orderAHButton" type="button" aria-label="Zet boodschappen in AH mandje">
-                <span class="store-cta__dest" id="orderAHItemCount">Zet 0 producten in AH mandje</span>
-                <span class="store-cta__arrow" aria-hidden="true">›</span>
+              <button class="basket-sheet__cta grocery-order__cta" id="orderAHButton" type="button" aria-label="Zet boodschappen in AH mandje">
+                <span id="orderAHItemCount">Zet 0 producten in AH mandje</span>
               </button>
-              <button class="store-cta store-cta--jumbo-pill" id="orderJumboButton" type="button" aria-label="Zet boodschappen in Jumbo mandje">
-                <span class="store-cta__dest" id="orderJumboItemCount">Zet 0 producten in Jumbo mandje</span>
-                <span class="store-cta__arrow store-cta__arrow--dark" aria-hidden="true">›</span>
+              <button class="basket-sheet__cta basket-sheet__cta--jumbo grocery-order__cta" id="orderJumboButton" type="button" aria-label="Zet boodschappen in Jumbo mandje">
+                <span id="orderJumboItemCount">Zet 0 producten in Jumbo mandje</span>
               </button>
             </div>
           </div>
@@ -2644,6 +2642,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=1.0.21.48" defer></script>
+    <script src="app.js?v=1.0.21.49" defer></script>
   </body>
 </html>
