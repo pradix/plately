@@ -6424,10 +6424,7 @@ function renderDetailRecipe(resetServings = false) {
     const chips = [];
     const timeLabel = String(recipe.time || "").trim();
     if (timeLabel) chips.push({ ic: "⏱", tx: timeLabel });
-    const kcalRaw = String(recipe.kcal || "").trim();
-    if (kcalRaw && kcalRaw !== "◔" && !/^[\s◔·]+$/.test(kcalRaw)) {
-      chips.push({ ic: "", tx: kcalRaw });
-    }
+    // kcal niet weergeven — waarden van externe sites zijn onbetrouwbaar
     const servLabel = String(recipe.servings || "").trim();
     if (servLabel) chips.push({ ic: "👥", tx: servLabel });
     chips.push({ ic: "", tx: getPlatformLabel(recipe.platform || "website") });
@@ -9818,7 +9815,7 @@ function normalizeImportedRecipe(recipe) {
     title: cleanTitle,
     description,
     time: normalizeImportedTime(recipe.time),
-    kcal: recipe.kcal || "",
+    kcal: "", // niet opslaan — externe kcal-waarden zijn onbetrouwbaar
     servings,
     mealTag,
     sourceUrl: recipe.sourceUrl || "#",
