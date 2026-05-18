@@ -9466,7 +9466,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
 
   // Loading state
   button.disabled = true;
-  const originalLabel = destLabel ? destLabel.textContent : "";
+  const originalLabel = destLabel ? destLabel.innerHTML : "";
   if (destLabel) {
     destLabel.textContent = storeConfig.loadingLabel;
   }
@@ -9553,7 +9553,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
   } finally {
     button.disabled = false;
     if (destLabel) {
-      destLabel.textContent = originalLabel;
+      destLabel.innerHTML = originalLabel;
     }
   }
 }
