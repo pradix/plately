@@ -17969,6 +17969,7 @@ const server = http.createServer(async (request, response) => {
       const payload = JSON.stringify({ title, body: message, url: effectiveUrl, imageUrl: imageUrl || undefined, announcementId: announcement.id });
       const subscriptions = await listPushSubscriptionsWithMeta();
       const onlyAh = Boolean(segment?.onlyFavoriteSupermarketAh);
+      const onlyJumbo = Boolean(segment?.onlyFavoriteSupermarketJumbo);
       const onlyBasketReady = Boolean(segment?.onlyTriggerAhBasketReadyEnabled);
       const onlyBonus = Boolean(segment?.onlyTriggerAhBonusEnabled);
       const filtered = subscriptions.filter((sub) => {
@@ -17976,6 +17977,10 @@ const server = http.createServer(async (request, response) => {
         if (onlyAh) {
           const fav = pickFavoriteSupermarketFromAppState(sub.userAppState);
           if (fav !== "ah") return false;
+        }
+        if (onlyJumbo) {
+          const fav = pickFavoriteSupermarketFromAppState(sub.userAppState);
+          if (fav !== "jumbo") return false;
         }
         if (onlyBasketReady && !Boolean(sub?.prefs?.triggers?.ahBasketReady)) return false;
         if (onlyBonus && !Boolean(sub?.prefs?.triggers?.ahBonus)) return false;
@@ -18096,6 +18101,7 @@ const server = http.createServer(async (request, response) => {
 
       const subscriptions = await listPushSubscriptionsWithMeta();
       const onlyAh = Boolean(segment?.onlyFavoriteSupermarketAh);
+      const onlyJumbo = Boolean(segment?.onlyFavoriteSupermarketJumbo);
       const onlyBasketReady = Boolean(segment?.onlyTriggerAhBasketReadyEnabled);
       const onlyBonus = Boolean(segment?.onlyTriggerAhBonusEnabled);
       const filtered = subscriptions.filter((sub) => {
@@ -18103,6 +18109,10 @@ const server = http.createServer(async (request, response) => {
         if (onlyAh) {
           const fav = pickFavoriteSupermarketFromAppState(sub.userAppState);
           if (fav !== "ah") return false;
+        }
+        if (onlyJumbo) {
+          const fav = pickFavoriteSupermarketFromAppState(sub.userAppState);
+          if (fav !== "jumbo") return false;
         }
         if (onlyBasketReady && !Boolean(sub?.prefs?.triggers?.ahBasketReady)) return false;
         if (onlyBonus && !Boolean(sub?.prefs?.triggers?.ahBonus)) return false;

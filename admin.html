@@ -888,6 +888,10 @@
             Alleen fav supermarkt: AH
           </label>
           <label class="pill" style="cursor:pointer;flex:0 0 auto;min-width:260px">
+            <input id="notifSegOnlyJumbo" type="checkbox" style="margin-right:8px" />
+            Alleen fav supermarkt: Jumbo
+          </label>
+          <label class="pill" style="cursor:pointer;flex:0 0 auto;min-width:260px">
             <input id="notifSegOnlyBasketReady" type="checkbox" style="margin-right:8px" />
             Alleen trigger: AH lijst klaar
           </label>
@@ -5412,6 +5416,7 @@
       const url = String(document.getElementById("notifUrl")?.value || "").trim();
       const imageUrl = String(document.getElementById("notifImageUrl")?.value || "").trim();
       const onlyAh = Boolean(document.getElementById("notifSegOnlyAh")?.checked);
+      const onlyJumbo = Boolean(document.getElementById("notifSegOnlyJumbo")?.checked);
       const onlyBasketReady = Boolean(document.getElementById("notifSegOnlyBasketReady")?.checked);
       const onlyBonus = Boolean(document.getElementById("notifSegOnlyBonus")?.checked);
       return {
@@ -5423,6 +5428,7 @@
         imageUrl: imageUrl || undefined,
         segment: {
           onlyFavoriteSupermarketAh: onlyAh,
+          onlyFavoriteSupermarketJumbo: onlyJumbo,
           onlyTriggerAhBasketReadyEnabled: onlyBasketReady,
           onlyTriggerAhBonusEnabled: onlyBonus,
         },

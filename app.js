@@ -707,6 +707,14 @@ const state = {
 };
 
 const PLATELY_CLIENT_ANON_KEY = "plately-client-anon-v1";
+
+// Centrale toast-tijden — verander hier, werkt overal.
+const TOAST_DURATIONS = {
+  default: 2800,
+  success: 3000,
+  error: 3800,
+  withUndo: 6000,
+};
 const CLIENT_TRACK_FLUSH_MS = 12000;
 const CLIENT_TRACK_ALLOWED = new Set([
   "client_navigation",
@@ -1433,7 +1441,7 @@ function showToast(message, opts = {}) {
   const hasUndo = typeof opts.onUndo === "function";
   const durationMs =
     opts.durationMs ??
-    (hasUndo ? 6000 : variant === "error" ? 3800 : variant === "success" ? 3000 : 2800);
+    (hasUndo ? TOAST_DURATIONS.withUndo : TOAST_DURATIONS[variant] ?? TOAST_DURATIONS.default);
 
   if (toastText) toastText.textContent = message;
   else toast.textContent = message;
@@ -1532,8 +1540,14 @@ function focusTrapDocumentKey(e) {
   }
 }
 
+const MAX_FOCUS_TRAP_DEPTH = 6;
+
 function pushFocusTrap(root, { onEscape }) {
   if (!root) return () => {};
+  if (focusTrapStack.length >= MAX_FOCUS_TRAP_DEPTH) {
+    console.warn("[FocusTrap] Max nesting depth bereikt, trap genegeerd:", root.id || root.className);
+    return () => {};
+  }
   const previousActive = document.activeElement;
   const layer = { root, onEscape, previousActive };
   focusTrapStack.push(layer);
@@ -1845,9 +1859,9 @@ function showResetStep2(email) {
   if (step1) step1.classList.add("hidden");
   if (step2) step2.classList.remove("hidden");
   if (subtitle) subtitle.textContent = `Voer de 6-cijferige code in die we naar ${email} hebben verstuurd.`;
-  // Focus first OTP box
+  // Focus first OTP box — rAF werkt betrouwbaarder dan een vaste 80ms delay op langzame devices
   const firstBox = document.querySelector(".otp-box");
-  if (firstBox) setTimeout(() => firstBox.focus(), 80);
+  if (firstBox) requestAnimationFrame(() => firstBox.focus());
   scrollAuthModalToTop();
 }
 
@@ -3843,7 +3857,15 @@ function pushRecentSearch(query) {
   if (!text || text.length < 2) return;
   const lower = text.toLowerCase();
   const next = [text, ...loadRecentSearches().filter((x) => x.toLowerCase() !== lower)].slice(0, MAX_RECENT_SEARCHES);
-  try { localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  try {
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+  } catch (e) {
+    if (e?.name === "QuotaExceededError") {
+      // Opslag vol: verwijder helft van recente zoekopdrachten en probeer opnieuw
+      try { localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next.slice(0, Math.ceil(next.length / 2)))); } catch {}
+      showToast("Opslag bijna vol. Oudere zoekopdrachten zijn opgeruimd.", { variant: "info" });
+    }
+  }
 }
 
 function loadRecentRecipeIds() {
@@ -3861,7 +3883,13 @@ function pushRecentRecipeId(recipeId) {
   const rid = String(recipeId || "").trim();
   if (!rid) return;
   const next = [rid, ...loadRecentRecipeIds().filter((x) => x !== rid)].slice(0, MAX_RECENT_RECIPES);
-  try { localStorage.setItem(RECENT_RECIPES_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  try {
+    localStorage.setItem(RECENT_RECIPES_KEY, JSON.stringify(next));
+  } catch (e) {
+    if (e?.name === "QuotaExceededError") {
+      try { localStorage.setItem(RECENT_RECIPES_KEY, JSON.stringify(next.slice(0, Math.ceil(next.length / 2)))); } catch {}
+    }
+  }
 }
 
 function renderHomeQuickChips() {
@@ -8426,7 +8454,7 @@ function renderProfileSummary() {
   }
   updateLanguagePanel();
   renderAvatars();
-  refreshFeaturePushState().catch(() => {});
+  refreshFeaturePushState().catch((e) => console.warn("[Profile] Push feature-state fout:", e?.message));
 }
 
 function renderAvatars() {
@@ -9558,6 +9586,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
     }
   } catch (err) {
     hideAHBasketSplash();
+    console.warn(`[Basket] ${storeName} fout:`, err?.message || err);
     if (!navigator.onLine) {
       showToast(`Geen internet. ${storeName} kan niet laden.`, {
         variant: "error",
@@ -9565,6 +9594,8 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
         onUndo: () => openStoreBasket(storeSlug),
       });
       setPendingRetryAction(() => openStoreBasket(storeSlug));
+    } else if (storeSlug === "jumbo") {
+      showToast("Jumbo kon de boodschappenlijst niet voorbereiden. Probeer het opnieuw.", { variant: "error" });
     } else {
       showToast(`Kon ${storeName} niet voorbereiden.`, { variant: "error" });
     }
@@ -9984,7 +10015,14 @@ function persistGroceryItemsLocally() {
   try {
     localStorage.setItem("plately-grocery-items", JSON.stringify(state.groceryItems));
     localStorage.setItem("plately-grocery-ts", String(Date.now()));
-  } catch {}
+  } catch (e) {
+    if (e?.name === "QuotaExceededError") {
+      // Verwijder alleen de oudste boodschappenlijst-timestamp en probeer opnieuw
+      try { localStorage.removeItem("plately-grocery-ts"); } catch {}
+      try { localStorage.setItem("plately-grocery-items", JSON.stringify(state.groceryItems)); } catch {}
+      showToast("Lokale opslag bijna vol.", { variant: "info" });
+    }
+  }
 }
 
 function renderRecipeSlider() {
@@ -10713,13 +10751,13 @@ async function bootstrapSession() {
     }
 
     finishAppBoot();
-    refreshAppleSignInConfig().catch(() => {});
+    refreshAppleSignInConfig().catch((e) => console.warn("[Boot] Apple Sign-In config fout:", e?.message));
     refreshBackendStatus();
-    fetchEnabledSupermarkets().catch(() => {});
-    refreshFeaturePushState().catch(() => {});
+    fetchEnabledSupermarkets().catch((e) => console.warn("[Boot] Supermarkets ophalen mislukt:", e?.message));
+    refreshFeaturePushState().catch((e) => console.warn("[Boot] Push feature-state fout:", e?.message));
 
     // Handle announce deep links (/?announce=... or /?new=1)
-    handleAnnouncementQueryParams().catch(() => {});
+    handleAnnouncementQueryParams().catch((e) => console.warn("[Boot] Announcement params fout:", e?.message));
 
     const signupUrlParams = new URLSearchParams(window.location.search);
     const wantsRegisterFromUrl =
@@ -11475,11 +11513,13 @@ function showImportSplash(url) {
     _renderImportSplashPhases(_importSplashPhase);
   }, 1100);
   // Safety: als hideImportSplash() onverhoopt nooit wordt aangeroepen
-  // (bv. import-promise hangt of een uncaught error), forceer dichtklap.
+  // (bv. import-promise hangt of een uncaught error), forceer dichtklap + toon foutmelding.
   if (_importSplashSafetyTimeout) clearTimeout(_importSplashSafetyTimeout);
   _importSplashSafetyTimeout = setTimeout(() => {
     _importSplashSafetyTimeout = null;
+    console.warn("[Import] Safety timeout: import duurde te lang, splash gesloten.");
     _doHideImportSplash();
+    showToast("Import duurde te lang. Controleer je verbinding en probeer opnieuw.", { variant: "error" });
   }, IMPORT_SPLASH_MAX_MS);
 }
 
@@ -11954,6 +11994,15 @@ bindEvent(groceryMoreButton, "click", () => {
 
 let grocerySuggestTimeout = null;
 let grocerySuggestIndex = -1;
+// Gecachte DOM-referentie — wordt één keer opgezocht zodat keydown/input handlers
+// niet iedere keer getElementById hoeven aan te roepen.
+let _grocerySuggestDd = null;
+function getGrocerySuggestDropdown() {
+  if (!_grocerySuggestDd || !document.contains(_grocerySuggestDd)) {
+    _grocerySuggestDd = document.getElementById("grocerySuggestDropdown");
+  }
+  return _grocerySuggestDd;
+}
 
 function addGroceryItemByTitle(title, amount = "1 stuk", imageUrl = "") {
   if (!title) return;
@@ -11985,13 +12034,13 @@ function addGroceryItemByTitle(title, amount = "1 stuk", imageUrl = "") {
 }
 
 function closeSuggestDropdown() {
-  const dd = document.getElementById("grocerySuggestDropdown");
+  const dd = getGrocerySuggestDropdown();
   if (dd) { dd.classList.add("hidden"); dd.innerHTML = ""; }
   grocerySuggestIndex = -1;
 }
 
 function renderSuggestDropdown(suggestions, rawQuery) {
-  const dd = document.getElementById("grocerySuggestDropdown");
+  const dd = getGrocerySuggestDropdown();
   if (!dd) return;
 
   if (!suggestions.length) {
@@ -12046,7 +12095,7 @@ if (groceryQuickInput) {
     clearTimeout(grocerySuggestTimeout);
     if (!q) { closeSuggestDropdown(); return; }
     // Show a skeleton immediately so it feels instant
-    const dd = document.getElementById("grocerySuggestDropdown");
+    const dd = getGrocerySuggestDropdown();
     if (dd) {
       dd.innerHTML = `<p class="suggest-loading">Zoeken…</p>`;
       dd.classList.remove("hidden");
@@ -12055,7 +12104,7 @@ if (groceryQuickInput) {
   });
 
   groceryQuickInput.addEventListener("keydown", (event) => {
-    const dd = document.getElementById("grocerySuggestDropdown");
+    const dd = getGrocerySuggestDropdown();
     const items = dd ? [...dd.querySelectorAll(".suggest-item")] : [];
 
     if (event.key === "ArrowDown") {
