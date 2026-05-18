@@ -171,6 +171,42 @@ const {
 
 /** ISO tijd bij start Node-proces (voor deploy-status / logs). */
 const SERVER_BOOT_AT_ISO = new Date().toISOString();
+// IndexNow: set INDEXNOW_KEY env var to your own key, or use this default.
+// The key must also be served at /{key}.txt — the route below handles that.
+const INDEXNOW_KEY = sanitizeText(process.env.INDEXNOW_KEY || "plately7b3f91e2a8d04c56");
+
+async function pingIndexNow(urlList, origin) {
+  if (!INDEXNOW_KEY || !Array.isArray(urlList) || !urlList.length) return;
+  try {
+    const hostname = new URL(origin).hostname;
+    const res = await fetch("https://api.indexnow.org/indexnow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({
+        host: hostname,
+        key: INDEXNOW_KEY,
+        keyLocation: `${origin}/${INDEXNOW_KEY}.txt`,
+        urlList: urlList.slice(0, 10000),
+      }),
+    });
+    console.log(`[indexnow] Pinged ${urlList.length} URL(s) → HTTP ${res.status}`);
+  } catch (err) {
+    console.warn("[indexnow] Ping failed:", err?.message);
+  }
+}
+
+async function pingSitemapToSearch(origin) {
+  try {
+    const encoded = encodeURIComponent(`${origin}/sitemap.xml`);
+    await Promise.all([
+      fetch(`https://www.google.com/ping?sitemap=${encoded}`).catch(() => {}),
+      fetch(`https://www.bing.com/ping?sitemap=${encoded}`).catch(() => {}),
+    ]);
+    console.log("[sitemap-ping] Pinged Google + Bing");
+  } catch (err) {
+    console.warn("[sitemap-ping] Failed:", err?.message);
+  }
+}
 /** `plately-build` uit index.html (lezen bij boot). */
 let CACHED_PLATELY_BUILD_META = "";
 try {
@@ -474,6 +510,22 @@ function isAllowedImageProxyUrl(rawUrl) {
       "www.uitpaulineskeuken.nl",
       "www.chickslovefood.com",
       "chickslovefood.com",
+      "dechicks.com",
+      "www.dechicks.com",
+      "www.francescakookt.nl",
+      "francescakookt.nl",
+      "www.foodiesmagazine.nl",
+      "foodiesmagazine.nl",
+      "static-images.jumbo.com",
+      "recipe-service.prod.cloud.jumbo.com",
+      "www.leukerecepten.nl",
+      "leukerecepten.nl",
+      "www.smulweb.nl",
+      "smulweb.nl",
+      "www.allerhande.nl",
+      "allerhande.nl",
+      "www.ah.nl",
+      "ah.nl",
       "www.laurasbakery.nl",
       "laurasbakery.nl",
       "www.culy.nl",
@@ -2992,6 +3044,10 @@ async function updateAuthenticatedUserState(userId, body) {
   }
   const nextProfile = appState.profile;
 
+  const newRecipeIds = nextImported > prevImported
+    ? appState.importedRecipes.slice(prevImported).map((r) => sanitizeText(r?.id || "")).filter(Boolean)
+    : [];
+
   const updated = await pool.query(
     `
       UPDATE plately_users
@@ -3004,7 +3060,7 @@ async function updateAuthenticatedUserState(userId, body) {
     [userId, JSON.stringify(nextProfile), JSON.stringify(appState)]
   );
 
-  return updated.rows[0];
+  return { user: updated.rows[0], newRecipeIds };
 }
 
 async function ensureUserSession(request, response) {
@@ -16098,9 +16154,15 @@ function renderPublicSeoRecipePage(entry, origin) {
   const mealPlanUrl = `/?register=1&intent=meal-plan&recipe=${recipeParam}`;
   const sourceUrl = normalizePublicSourceUrl(recipe.sourceUrl);
   const shareText = `${title} recept via Plately`;
-  const imageUrl = recipe.image
-    ? (/^https?:\/\//i.test(recipe.image) ? recipe.image : `${origin}${String(recipe.image).startsWith("/") ? "" : "/"}${recipe.image}`)
+  const _rawImg = recipe.image && /^https?:\/\//i.test(recipe.image) ? recipe.image
+    : recipe.image ? `${origin}${String(recipe.image).startsWith("/") ? "" : "/"}${recipe.image}`
+    : "";
+  // Proxy through our server so Google can always fetch the og:image for rich results
+  const imageUrl = _rawImg
+    ? (isAllowedImageProxyUrl(_rawImg) ? `${origin}/api/image-proxy?url=${encodeURIComponent(_rawImg)}` : _rawImg)
     : `${origin}/assets/icon-512.png?v=7`;
+  // For the visible <img> tag, use same proxy logic
+  const imageUrlDirect = _rawImg || `${origin}/assets/icon-512.png?v=7`;
   const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
   const instructions = Array.isArray(recipe.instructions) ? recipe.instructions : [];
   const ratingValue = Number(recipe.ratingValue);
@@ -16200,7 +16262,7 @@ function renderPublicSeoRecipePage(entry, origin) {
       </header>
 
       <article class="public-recipe__card">
-        ${recipe.image ? `<div class="public-recipe__hero"><img src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.alt || title)}" draggable="false" loading="eager" decoding="async"/><div class="public-recipe__hero-fade" aria-hidden="true"></div></div>` : ""}
+        ${imageUrlDirect ? `<div class="public-recipe__hero"><img src="${escapeHtml(imageUrlDirect)}" alt="${escapeHtml(recipe.alt || title)}" draggable="false" loading="eager" decoding="async" referrerpolicy="no-referrer" onload="this.classList.add('img-loaded')" onerror="this.classList.add('img-loaded')"/><div class="public-recipe__hero-fade" aria-hidden="true"></div></div>` : ""}
         <div class="public-recipe__card-inner">
           <p class="section-kicker public-recipe__kicker">${escapeHtml(recipe.mealTag || "Recept")}</p>
           <h1 class="public-recipe__title">${escapeHtml(title)}</h1>
@@ -16392,6 +16454,13 @@ const server = http.createServer(async (request, response) => {
   }
 
   try {
+    // ── IndexNow key verification file ──────────────────────────────────────
+    if (requestUrl.pathname === `/${INDEXNOW_KEY}.txt` && (request.method === "GET" || request.method === "HEAD")) {
+      response.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" });
+      response.end(INDEXNOW_KEY);
+      return;
+    }
+
     // ── Public SEO recipe pages ─────────────────────────────────────────────
     if (requestUrl.pathname === "/robots.txt" && (request.method === "GET" || request.method === "HEAD")) {
       const origin = getPublicOrigin(request);
@@ -17406,7 +17475,7 @@ const server = http.createServer(async (request, response) => {
       const body = await readRequestBody(request);
       const authUser = await getAuthenticatedUser(request);
       if (authUser) {
-        const updatedUser = await updateAuthenticatedUserState(authUser.id, body);
+        const { user: updatedUser, newRecipeIds } = await updateAuthenticatedUserState(authUser.id, body);
         const channelEnabled = await getChannelEnabledState().catch(() => ({ seed: {}, custom: {} }));
         const globalCustomChannels = await getGlobalCustomChannels().catch(() => []);
         sendJson(response, 200, {
@@ -17418,6 +17487,22 @@ const server = http.createServer(async (request, response) => {
             email: updatedUser.email,
           },
         });
+        // Fire-and-forget: ping search engines when new recipes are added
+        if (newRecipeIds.length) {
+          const _origin = getPublicOrigin(request);
+          (async () => {
+            const _entries = await listPublicSeoRecipes(_origin).catch(() => []);
+            const _urls = newRecipeIds
+              .map((id) => {
+                const tok = getSeoRecipeToken(authUser.id, id);
+                const ent = _entries.find((e) => e.token === tok);
+                return ent ? `${_origin}${encodeURI(ent.urlPath)}` : null;
+              })
+              .filter(Boolean);
+            if (_urls.length) await pingIndexNow(_urls, _origin);
+            await pingSitemapToSearch(_origin);
+          })().catch(() => {});
+        }
         return;
       }
 
@@ -17583,7 +17668,7 @@ const server = http.createServer(async (request, response) => {
       let { user, isNew } = await findOrCreateApplePostgresUser(pool, { sub, email, displayName });
 
       if (isNew && body?.currentState && typeof body.currentState === "object") {
-        user = await updateAuthenticatedUserState(user.id, body.currentState);
+        ({ user } = await updateAuthenticatedUserState(user.id, body.currentState));
       }
 
       const token = await createAuthSession(response, user.id);
