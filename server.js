@@ -10947,42 +10947,10 @@ const JUMBO_SEARCH_QUERY = `
         title
         image
         price { price }
-        promotion {
-          label
-          promotionPrice { price }
-          fromPrice { price }
-          type
-        }
-        badge { text type }
-        tags { text type }
       }
     }
   }
 `;
-
-function _getJumboPromotionLabel(p) {
-  // Jumbo promotion object
-  const promo = p.promotion;
-  if (promo) {
-    // Expliciete label van Jumbo (bv. "2e gratis", "25% korting")
-    if (promo.label) return sanitizeText(promo.label);
-    // Promotieprijs vs. normale prijs → bereken % korting
-    const promoPrice = Number(promo.promotionPrice?.price);
-    const fromPrice  = Number(promo.fromPrice?.price) || Number(p.price?.price);
-    if (Number.isFinite(promoPrice) && Number.isFinite(fromPrice) && fromPrice > promoPrice && fromPrice > 0) {
-      const pct = Math.round((1 - promoPrice / fromPrice) * 100);
-      if (pct > 0) return `${pct}% korting`;
-    }
-    if (promo.type) return sanitizeText(promo.type);
-  }
-  // Badge (bv. "Aanbieding", "Nieuw")
-  const badge = Array.isArray(p.badge) ? p.badge[0] : p.badge;
-  if (badge?.text) return sanitizeText(badge.text);
-  // Tags
-  const promoTag = Array.isArray(p.tags) ? p.tags.find(t => /aanbieding|promo|sale|korting|gratis/i.test(t.text || "")) : null;
-  if (promoTag?.text) return sanitizeText(promoTag.text);
-  return "Aanbieding";
-}
 
 function _parseJumboProduct(p) {
   const sku = sanitizeText(p.sku || "");
@@ -10991,18 +10959,8 @@ function _parseJumboProduct(p) {
   const cents = Number(p.price?.price);
   const price = Number.isFinite(cents) && cents > 0 ? `€${(cents / 100).toFixed(2).replace(".", ",")}` : "";
   const imageUrl = sanitizeText(p.image || "");
-
-  // Promotie detectie
-  const hasPromotion = Boolean(
-    p.promotion?.label ||
-    p.promotion?.promotionPrice?.price ||
-    p.promotion?.type ||
-    (Array.isArray(p.badge) ? p.badge.length > 0 : Boolean(p.badge?.text)) ||
-    (Array.isArray(p.tags) && p.tags.some(t => /aanbieding|promo|sale|korting|gratis/i.test(t.text || "")))
-  );
-  const promotionLabel = hasPromotion ? _getJumboPromotionLabel(p) : "";
-
-  return { sku, name, price, imageUrl, isBonus: hasPromotion, promotionLabel };
+  // isBonus wordt gezet door findJumboAlternativesGrouped op basis van de aanbieding-bucket
+  return { sku, name, price, imageUrl, isBonus: false, promotionLabel: "" };
 }
 
 /** Strip " of [alternatief]" uit ingredientnaam: "gember of laos" → "gember". */
