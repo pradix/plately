@@ -16311,8 +16311,12 @@ function renderPublicRecipeIndexPage(entries, origin) {
       const recipe = entry.recipe || {};
       const score = Number.isFinite(Number(entry.seoScore)) ? Number(entry.seoScore) : computeSeoRecipeScore(recipe);
       const scoreClass = score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
+      const _rawImg = recipe.image || "";
+      const _imgSrc = isAllowedImageProxyUrl(_rawImg)
+        ? `/api/image-proxy?url=${encodeURIComponent(_rawImg)}`
+        : (_rawImg || "/assets/hero-burger.svg");
       return `<a class="recent-card" href="${escapeHtml(encodeURI(entry.urlPath))}">
-        <img class="recent-card__img" src="${escapeHtml(recipe.image || "/assets/hero-burger.svg")}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" crossorigin="anonymous" />
+        <img class="recent-card__img" src="${escapeHtml(_imgSrc)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
         <span class="recent-card__body">
           <strong class="recent-card__title">${escapeHtml(recipe.title || "Recept")}</strong>
           <span class="recent-card__meta">${escapeHtml([recipe.mealTag, recipe.time].filter(Boolean).join(" · "))}</span>
@@ -16421,7 +16425,7 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === "/recepten" && (request.method === "GET" || request.method === "HEAD")) {
       const origin = getPublicOrigin(request);
-      const entries = await listPublicSeoRecipes(origin);
+      const entries = await listPublicSeoRecipesCached(origin);
       response.writeHead(200, { ...HTTP_HEADERS, "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
       response.end(renderPublicRecipeIndexPage(entries, origin));
       return;

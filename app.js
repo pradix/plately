@@ -16084,22 +16084,14 @@ window.addEventListener("appinstalled", () => {
   console.log("✅ Plately installed successfully!");
 });
 
-// Pin bottom nav to the visual viewport bottom so it never jumps up when the
-// virtual keyboard opens on iOS or Android.
-// iOS: fixed elements are positioned relative to the layout viewport and get
-//   pushed up; we counter-translate by the gap between layout and visual bottom.
-// Android: visualViewport.height shrinks; same translation fixes it.
+// Hide bottom nav when the virtual keyboard is open (iOS + Android).
 (function initBottomNavKeyboardFix() {
   const nav = document.querySelector(".bottom-nav");
   if (!nav || !window.visualViewport) return;
-
+  const initialVVHeight = window.visualViewport.height;
   function onViewportChange() {
-    const vv = window.visualViewport;
-    // Gap between the bottom of the visual viewport and the bottom of the layout viewport.
-    const offsetBottom = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
-    nav.style.transform = offsetBottom > 0 ? `translateY(${-offsetBottom}px)` : "";
+    const keyboardHeight = Math.max(0, initialVVHeight - window.visualViewport.height);
+    nav.style.display = keyboardHeight > 150 ? "none" : "";
   }
-
   window.visualViewport.addEventListener("resize", onViewportChange, { passive: true });
-  window.visualViewport.addEventListener("scroll", onViewportChange, { passive: true });
 }());
