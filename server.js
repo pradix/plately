@@ -10976,69 +10976,104 @@ function _scoreJumboProduct(productName, searchBase) {
   const base = searchBase.toLowerCase();
   let score = 0;
 
-  // Token overlap bonus
   const titleTokens = new Set(title.split(/\W+/).filter(w => w.length > 1));
   const baseTokens = base.split(/\W+/).filter(w => w.length > 1);
+
+  // ── Dutch compound word matching ──────────────────────────────────────────
+  // "rodekool" ↔ "rode kool", "limoensap" ↔ "limoen sap"
+  const titleNoSpaces = title.replace(/\W+/g, '');
+  const baseNoSpaces = base.replace(/\W+/g, '');
+  // 1) De samengevoegde titel bevat het base-woord (of andersom)
+  const exactCompound = titleNoSpaces.includes(baseNoSpaces) || baseNoSpaces.includes(titleNoSpaces);
+  // 2) Splits base op in twee stukken en check of beide stukken in de titelTokens zitten
+  let splitCompound = false;
+  if (!exactCompound && base.length > 5) {
+    for (let i = 3; i <= base.length - 3; i++) {
+      const p1 = base.slice(0, i);
+      const p2 = base.slice(i);
+      if (p1.length >= 3 && p2.length >= 3 && titleTokens.has(p1) && titleTokens.has(p2)) {
+        splitCompound = true;
+        break;
+      }
+    }
+  }
+  const compoundMatch = exactCompound || splitCompound;
+
+  // ── Token overlap bonus ───────────────────────────────────────────────────
   const overlap = baseTokens.filter(t => titleTokens.has(t)).length;
   score -= overlap * 18;
+  if (compoundMatch && overlap === 0) score -= 12; // compound bonus
 
   // Phrase hit bonus
   if (title.includes(base)) score -= 20;
 
-  // Geen enkele token overlap → sterke penalty
-  if (overlap === 0 && baseTokens.length >= 2) score += 60;
+  // Geen enkele overlap → penalty
+  if (overlap === 0 && !compoundMatch && baseTokens.length >= 2) score += 60;
 
   // Primair ingredient bonus: titel begint met het zoekwoord
-  if (baseTokens.length > 0 && title.startsWith(base)) score -= 15;
-  if (baseTokens.length > 0 && title.startsWith(baseTokens[0])) score -= 10;
+  if (title.startsWith(base)) score -= 15;
+  else if (baseTokens.length > 0 && title.startsWith(baseTokens[0])) score -= 10;
 
-  // Samengesteld gerecht penalty: als het product een gerecht is en het ingredient is geen gerecht
-  // Bv. "Garnalen Salade met Surimi" voor "garnalen" → grote penalty
-  const isIngredientDish = /\b(salade|maaltijd|schotel|gerecht|soep|stoofpot|oven|pasta|spaghetti|lasagne|nasi|bami|wrap|pizza|curry|wok|rijst|bowl)\b/i.test(base);
+  // ── Samengesteld gerecht / bereiding ─────────────────────────────────────
+  const isIngredientDish = /\b(salade|maaltijd|schotel|gerecht|soep|stoofpot|pasta|spaghetti|lasagne|nasi|bami|wrap|pizza|curry|wok|rijst|bowl|noedels|noodles|ramen|mie)\b/i.test(base);
   if (!isIngredientDish) {
-    // Product is een kant-en-klaar gerecht
-    const isComposedDish = /\b(salade|maaltijd|schotel|gerecht|stoofpot|lasagne|ovenschotel|maaltijdpakket|menu|oven(?:maal|dish)|wok(?:maal)?|curry|rijstschotel|pastaschotel|soepje)\b/i.test(title);
-    if (isComposedDish) score += 200;
+    // Product is een kant-en-klaar gerecht of bereiding
+    const isComposedDish = /\b(salade|maaltijd|schotel|gerecht|stoofpot|lasagne|ovenschotel|maaltijdpakket|menu|wok(?:maal)?|curry|rijstschotel|pastaschotel|soepje|noedels|noodles|ramen|stamppot|oven(?:maal|schotel)|instant\s+(?:noedels?|noodles?|soep))\b/i.test(title);
+    if (isComposedDish) score += 220;
 
-    // "met [ingredient]" penalty: ingredient is bijzaak, niet het hoofdproduct
-    // Bv. "Spaghetti met Ei" voor "eieren" — ei is bijzaak
-    const metPattern = /\bmet\s+(\w+)/gi;
-    const vanPattern = /\bvan\s+(\w+)/gi;
-    let metMatch;
-    let baseIsPrimary = false;
-    while ((metMatch = metPattern.exec(title)) !== null) {
-      const afterMet = metMatch[1].toLowerCase();
-      if (baseTokens.some(t => afterMet.startsWith(t) || t.startsWith(afterMet))) {
-        // Base ingredient appears after "met" → het is bijzaak
-        score += 160;
-        baseIsPrimary = false;
-      }
+    // "[ingredient] met [toevoeging]" → bereid/gemodificeerd product
+    // Bv. "Rode Kool met Appel" voor "rodekool", "Spaghetti met Ei" voor "eieren"
+    if (/\bmet\b/i.test(title)) {
+      const parts = title.split(/\bmet\b/i);
+      const beforeMet = parts[0].replace(/\W+/g, '');
+      const afterMetRaw = (parts[1] || '').trim();
+      const afterMetFirst = (afterMetRaw.split(/\W+/)[0] || '').toLowerCase();
+
+      // Ingredient staat VOOR "met" → product is een bewerkte versie
+      const baseBeforeMet = baseTokens.some(t => beforeMet.includes(t))
+        || (compoundMatch && beforeMet.includes(baseNoSpaces.slice(0, Math.ceil(baseNoSpaces.length * 0.6))));
+      if (baseBeforeMet && afterMetRaw.length > 0) score += 160;
+
+      // Ingredient staat NA "met" → ingredient is bijzaak
+      if (baseTokens.some(t => afterMetFirst.startsWith(t) || t.startsWith(afterMetFirst))) score += 160;
     }
-    while ((metMatch = vanPattern.exec(title)) !== null) {
-      const afterVan = metMatch[1].toLowerCase();
-      if (baseTokens.some(t => afterVan.startsWith(t) || t.startsWith(afterVan))) {
-        score += 120;
-      }
+
+    // "van [ingredient]" penalty
+    const vanMatch = title.match(/\bvan\s+(\w+)/i);
+    if (vanMatch) {
+      const afterVan = vanMatch[1].toLowerCase();
+      if (baseTokens.some(t => afterVan.startsWith(t) || t.startsWith(afterVan))) score += 120;
+    }
+
+    // "[ingredient] [smaakmaker]" zonder "met" → bereid/gekruid product
+    // Bv. "Garnalen Knoflook 80 g", "Zalm Citroen 150 g"
+    const SMAAKMAKERS = /\b(knoflook|paprika|citroen|zwarte\s*peper|rode\s*peper|ui|kruid(?:en)?|tijm|rozemarijn|komijn|chili|jalape[ñn]o|gember|mosterd|honing|look|basilicum|peterselie|bieslook|sesam|teriyaki|cajun|provençaals?)\b/i;
+    if (!(/\bmet\b/i.test(title)) && SMAAKMAKERS.test(title)) {
+      const baseInTitle = overlap > 0 || compoundMatch;
+      if (baseInTitle) score += 90;
     }
   }
 
-  // Drank-penalty: product bevat volume-aanduiding of drank-woorden, ingredient is geen drank
-  const isIngredientDrink = /\b(sap|drank|limonade|siroop|frisdrank|bier|wijn|thee|koffie|smoothie)\b/i.test(base);
+  // ── Drank-penalty ─────────────────────────────────────────────────────────
+  const isIngredientDrink = /\b(sap|drank|limonade|siroop|frisdrank|bier|wijn|thee|koffie|smoothie|juice)\b/i.test(base)
+    || /\w+sap$/.test(base); // "appelsap", "sinaasappelsap" als ingredient
   if (!isIngredientDrink) {
+    // Volume-aanduiding → waarschijnlijk een drankje
     if (/\b\d+\s*(?:ml|cl|liter|l)\b/i.test(title)) score += 80;
-    if (/\b(energydrank|frisdrank|sportdrank|vitamine?\s*drink|limonade|siroop|karvan|appelsap|sinaasappelsap|smoothie|milkshake|chocomel|drinkpak)\b/i.test(title)) score += 100;
-    // "smaak" = smaakvariant van iets anders (bv. "Sinaasappel & Gember Smaak")
+    // Compound drank-woord: "limoensap", "appelsap", "druivensap" etc.
+    if (/\b\w+sap\b/i.test(title)) score += 130;
+    if (/\b(energydrank|frisdrank|sportdrank|vitamine?\s*drink|limonade|siroop|karvan|smoothie|milkshake|chocomel|drinkpak|appelsap|sinaasappelsap|tomatensap|vruchtensap)\b/i.test(title)) score += 100;
     if (/\bsmaak\b/i.test(title) && !/\bsmaak(?:vol|maker)\b/i.test(title)) score += 90;
-    if (/\b(refresh|zero sugar|zero cal|light\b|sport\b)\b/i.test(title)) score += 60;
+    if (/\b(refresh|zero sugar|zero cal|sport\b)\b/i.test(title)) score += 60;
   }
 
-  // Snoep-penalty
+  // ── Snoep-penalty ─────────────────────────────────────────────────────────
   const isIngredientSweet = /\b(chocolade|cacao|suiker|stroop|honing|snoep|drop|koek)\b/i.test(base);
   if (!isIngredientSweet) {
     if (/\b(drop|snoep(?:goed)?|lolly|gummy|haribo|marshmallow|winegum)\b/i.test(title)) score += 150;
   }
 
-  // Niet-eten penalty
+  // ── Niet-eten penalty ─────────────────────────────────────────────────────
   if (NON_FOOD_INGREDIENT_PATTERN.test(title)) score += 400;
 
   return score;
