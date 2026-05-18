@@ -3785,7 +3785,13 @@ async function listPublicSeoRecipes(origin) {
   for (const entry of entries) {
     if (!byToken.has(entry.token)) byToken.set(entry.token, entry);
   }
-  const uniqueEntries = Array.from(byToken.values());
+  // Sort by token so slug deduplication is deterministic regardless of DB insertion order
+  // or when users last updated their profile (updated_at). Without this, the same recipe
+  // could get /recept/slug one request and /recept/slug-2 the next if another user's
+  // recipe with the same slug moves up in the query ordering.
+  const uniqueEntries = Array.from(byToken.values()).sort((a, b) =>
+    String(a.token || "").localeCompare(String(b.token || ""))
+  );
   const slugCounts = new Map();
   for (const entry of uniqueEntries) {
     const baseSlug = entry.slug || "recept";
@@ -16084,7 +16090,7 @@ function renderPublicSeoRecipePage(entry, origin) {
   const recipe = entry.recipe || {};
   const title = sanitizeText(recipe.title || "Recept");
   const description = sanitizeText(recipe.description || "Een recept op Plately.");
-  const canonicalUrl = `${origin}${entry.urlPath}`;
+  const canonicalUrl = `${origin}${encodeURI(entry.urlPath)}`;
   const recipeParam = encodeURIComponent(entry.urlPath);
   const loginUrl = `/?intent=save-recipe&recipe=${recipeParam}`;
   const saveUrl = `/?register=1&intent=save-recipe&recipe=${recipeParam}`;
@@ -16305,7 +16311,7 @@ function renderPublicRecipeIndexPage(entries, origin) {
       const recipe = entry.recipe || {};
       const score = Number.isFinite(Number(entry.seoScore)) ? Number(entry.seoScore) : computeSeoRecipeScore(recipe);
       const scoreClass = score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
-      return `<a class="recent-card" href="${escapeHtml(entry.urlPath)}">
+      return `<a class="recent-card" href="${escapeHtml(encodeURI(entry.urlPath))}">
         <img class="recent-card__img" src="${escapeHtml(recipe.image || "/assets/hero-burger.svg")}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" crossorigin="anonymous" />
         <span class="recent-card__body">
           <strong class="recent-card__title">${escapeHtml(recipe.title || "Recept")}</strong>
@@ -16397,7 +16403,7 @@ const server = http.createServer(async (request, response) => {
         { loc: `${origin}/`, lastmod: SERVER_BOOT_AT_ISO, priority: "0.8" },
         { loc: `${origin}/recepten`, lastmod: SERVER_BOOT_AT_ISO, priority: "0.7" },
         ...entries.map((entry) => ({
-          loc: `${origin}${entry.urlPath}`,
+          loc: `${origin}${encodeURI(entry.urlPath)}`,
           lastmod: entry.updatedAt || SERVER_BOOT_AT_ISO,
           priority: "0.6",
         })),
@@ -16454,8 +16460,10 @@ const server = http.createServer(async (request, response) => {
         response.end();
         return;
       }
-      if (requestUrl.pathname !== entry.urlPath) {
-        response.writeHead(301, { Location: entry.urlPath, ...HTTP_HEADERS });
+      let decodedPathname;
+      try { decodedPathname = decodeURIComponent(requestUrl.pathname); } catch { decodedPathname = requestUrl.pathname; }
+      if (decodedPathname !== entry.urlPath) {
+        response.writeHead(301, { Location: encodeURI(entry.urlPath), ...HTTP_HEADERS });
         response.end();
         return;
       }
