@@ -2001,6 +2001,31 @@ async function ensurePostgresSchema() {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
 `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS plately_recipes (
+          id TEXT NOT NULL,
+          user_id TEXT NOT NULL REFERENCES plately_users(id) ON DELETE CASCADE,
+          data JSONB NOT NULL,
+          channel_id TEXT NOT NULL DEFAULT '',
+          token TEXT NOT NULL DEFAULT '',
+          slug TEXT NOT NULL DEFAULT '',
+          search_vector TSVECTOR,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (user_id, id)
+        );
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_plately_recipes_token ON plately_recipes(token);
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_plately_recipes_channel_id ON plately_recipes(channel_id);
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_plately_recipes_search ON plately_recipes USING GIN(search_vector);
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_plately_recipes_updated ON plately_recipes(updated_at DESC);
+      `);
     })();
   }
 
@@ -3132,7 +3157,108 @@ async function updateAuthenticatedUserState(userId, body) {
     [userId, JSON.stringify(nextProfile), JSON.stringify(appState)]
   );
 
+  // Sync recepten naar plately_recipes (fire-and-forget, blokkeert response niet)
+  void syncUserRecipesToTable(userId, appState.importedRecipes, pool).catch((err) =>
+    console.error("Recipe sync fout:", err?.message)
+  );
+
   return { user: updated.rows[0], newRecipeIds };
+}
+
+/**
+ * Synct alle recepten van een gebruiker naar de plately_recipes tabel.
+ * Doet een full sync: upsert alle huidige recepten, verwijder de rest.
+ * Wordt fire-and-forget aangeroepen vanuit updateAuthenticatedUserState.
+ */
+async function syncUserRecipesToTable(userId, recipes, pool) {
+  try {
+    const clean = (Array.isArray(recipes) ? recipes : [])
+      .map((r) => sanitizeRecipeForStorage(r))
+      .filter((r) => r?.id);
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      if (clean.length === 0) {
+        await client.query("DELETE FROM plately_recipes WHERE user_id = $1", [userId]);
+      } else {
+        for (const recipe of clean) {
+          const token = getSeoRecipeToken(userId, recipe.id);
+          const slug = slugify(recipe.title) || "recept";
+          const channelId = inferSeedChannelIdFromSourceUrl(recipe.sourceUrl || "") || "";
+          const searchText = [recipe.title, recipe.description, recipe.mealTag, recipe.author]
+            .filter(Boolean)
+            .join(" ");
+          await client.query(
+            `INSERT INTO plately_recipes (id, user_id, data, channel_id, token, slug, search_vector, updated_at)
+             VALUES ($1, $2, $3::jsonb, $4, $5, $6, to_tsvector('simple', $7), NOW())
+             ON CONFLICT (user_id, id) DO UPDATE SET
+               data = EXCLUDED.data,
+               channel_id = EXCLUDED.channel_id,
+               token = EXCLUDED.token,
+               slug = EXCLUDED.slug,
+               search_vector = EXCLUDED.search_vector,
+               updated_at = EXCLUDED.updated_at`,
+            [recipe.id, userId, JSON.stringify(recipe), channelId, token, slug, searchText]
+          );
+        }
+        const currentIds = clean.map((r) => r.id);
+        await client.query(
+          "DELETE FROM plately_recipes WHERE user_id = $1 AND id != ALL($2::text[])",
+          [userId, currentIds]
+        );
+      }
+
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("❌ syncUserRecipesToTable mislukt:", err?.message || err);
+  }
+}
+
+/**
+ * Eenmalige startupmigratie: vult plately_recipes vanuit app_state.importedRecipes
+ * voor alle gebruikers die nog geen rijen hebben in plately_recipes.
+ */
+async function migrateRecipesToTable() {
+  if (!isPostgresEnabled()) return;
+  try {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+
+    // Vind gebruikers met recepten maar zonder rijen in plately_recipes
+    const usersResult = await pool.query(`
+      SELECT u.id, u.email, u.app_state, u.updated_at
+      FROM plately_users u
+      WHERE COALESCE(jsonb_array_length(COALESCE(u.app_state, '{}'::jsonb)->'importedRecipes'), 0) > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM plately_recipes r WHERE r.user_id = u.id LIMIT 1
+        )
+    `);
+
+    if (usersResult.rows.length === 0) {
+      console.log("✅ Recipe migratie: alle gebruikers zijn al gemigreerd.");
+      return;
+    }
+
+    console.log(`🔄 Recipe migratie: ${usersResult.rows.length} gebruiker(s) migreren...`);
+    for (const row of usersResult.rows) {
+      const appState = row.app_state && typeof row.app_state === "object" ? row.app_state : {};
+      const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+      if (!recipes.length) continue;
+      await syncUserRecipesToTable(row.id, recipes, pool);
+      console.log(`  ✅ ${row.email}: ${recipes.length} recepten gemigreerd`);
+    }
+    console.log("✅ Recipe migratie voltooid.");
+  } catch (err) {
+    console.error("❌ Recipe migratie mislukt:", err?.message || err);
+  }
 }
 
 async function ensureUserSession(request, response) {
@@ -3867,27 +3993,32 @@ async function listPublicSeoRecipes(origin) {
     await ensurePostgresSchema();
     const pool = await getPostgresPool();
     const result = await pool.query(`
-      SELECT id, email, app_state, updated_at
-      FROM plately_users
-      WHERE COALESCE(jsonb_array_length(COALESCE(app_state, '{}'::jsonb)->'importedRecipes'), 0) > 0
-      ORDER BY updated_at DESC
+      SELECT r.id, r.user_id, r.data, r.channel_id, r.token, r.slug, r.updated_at, u.email
+      FROM plately_recipes r
+      JOIN plately_users u ON u.id = r.user_id
+      ORDER BY r.token
     `);
-    for (const row of result.rows || []) {
-      const appState = row.app_state && typeof row.app_state === "object" ? row.app_state : {};
-      const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
-      for (const recipe of recipes) {
-        const entry = buildSeoRecipeEntry({
-          userId: row.id,
-          email: row.email,
-          recipe,
-          updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : "",
-          origin,
-        });
-        if (entry) {
-          entry.seoScore = computeSeoRecipeScore(entry.recipe || recipe);
-          entries.push(entry);
-        }
-      }
+    for (const row of result.rows) {
+      const recipe = row.data && typeof row.data === "object" ? row.data : {};
+      const entry = {
+        token: sanitizeText(row.token || getSeoRecipeToken(row.user_id, row.id)),
+        slug: sanitizeText(row.slug || slugify(recipe.title || "") || "recept"),
+        urlPath: `/recept/${sanitizeText(row.slug || slugify(recipe.title || "") || "recept")}`,
+        channelId: sanitizeText(row.channel_id || ""),
+        userId: sanitizeText(row.user_id || ""),
+        email: sanitizeText(row.email || ""),
+        updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : "",
+        recipe: {
+          ...recipe,
+          image: normalizePublicImageUrl(recipe.image || "", origin),
+          sourceUrl: normalizePublicSourceUrl(recipe.sourceUrl || ""),
+          description: sanitizeText(recipe.description || "").slice(0, 220) ||
+            `Maak ${sanitizeText(recipe.title || "dit recept")} met dit recept op Plately.`,
+        },
+      };
+      if (!entry.token || !recipe.title) continue;
+      entry.seoScore = computeSeoRecipeScore(entry.recipe || recipe);
+      entries.push(entry);
     }
   } else {
     const db = await loadDatabase();
@@ -12964,6 +13095,72 @@ function searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit })
 }
 
 /**
+ * Zoekt recepten via PostgreSQL full-text search op plately_recipes.
+ * Vervangt searchPublicSeoRecipesLocal voor de Postgres-modus.
+ */
+async function searchRecipesViaDatabase({ query, allowedChannels, limit, origin }) {
+  if (!isPostgresEnabled()) return null; // val terug op in-memory zoeken
+  try {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+
+    const q = sanitizeText(query || "").trim();
+    if (!q || q.length < 2) return [];
+
+    const cap = Math.min(60, Math.max(1, Number(limit) || 18));
+    const allowAllSeeds = allowedChannels === null;
+    const allowNoneSeeds = Array.isArray(allowedChannels) && allowedChannels.length === 0;
+    if (allowNoneSeeds) return [];
+
+    let sql, params;
+    if (allowAllSeeds) {
+      sql = `
+        SELECT r.id, r.user_id, r.data, r.channel_id, r.token, r.slug, r.updated_at, u.email,
+               ts_rank(r.search_vector, plainto_tsquery('simple', $1)) AS rank
+        FROM plately_recipes r
+        JOIN plately_users u ON u.id = r.user_id
+        WHERE r.search_vector @@ plainto_tsquery('simple', $1)
+        ORDER BY rank DESC
+        LIMIT $2
+      `;
+      params = [q, cap];
+    } else {
+      const channelIds = Array.isArray(allowedChannels) ? allowedChannels.map((c) => sanitizeText(c)).filter(Boolean) : [];
+      sql = `
+        SELECT r.id, r.user_id, r.data, r.channel_id, r.token, r.slug, r.updated_at, u.email,
+               ts_rank(r.search_vector, plainto_tsquery('simple', $1)) AS rank
+        FROM plately_recipes r
+        JOIN plately_users u ON u.id = r.user_id
+        WHERE r.search_vector @@ plainto_tsquery('simple', $1)
+          AND r.channel_id = ANY($3::text[])
+        ORDER BY rank DESC
+        LIMIT $2
+      `;
+      params = [q, cap, channelIds];
+    }
+
+    const result = await pool.query(sql, params);
+    return result.rows.map((row) => {
+      const recipe = row.data && typeof row.data === "object" ? row.data : {};
+      const channelId = sanitizeText(row.channel_id || "") || "plately";
+      return {
+        url: `/recept/${sanitizeText(row.slug || "recept")}`,
+        title: sanitizeText(recipe.title || ""),
+        thumbnail: normalizePublicImageUrl(recipe.image || "", origin),
+        channelId,
+        channel: channelId === "plately" ? "Plately" : getSeedChannelName(channelId),
+        time: sanitizeText(recipe.time || ""),
+        sourceUrl: sanitizeText(recipe.sourceUrl || ""),
+        _source: "plately",
+      };
+    });
+  } catch (err) {
+    console.error("❌ DB recipe search mislukt:", err?.message);
+    return null; // val terug op in-memory zoeken
+  }
+}
+
+/**
  * Returns true when a WP post URL looks like a recipe (not a blog/tip/news article).
  * - If the URL matches a known-recipe pattern → keep
  * - If the URL matches a known-blog pattern → drop
@@ -18861,6 +19058,13 @@ const server = http.createServer(async (request, response) => {
       );
 
       const origin = getPublicOrigin(request);
+      // Probeer eerst direct via database te zoeken (sneller, geen volledige load)
+      const dbResults = await searchRecipesViaDatabase({ query, allowedChannels, limit, origin });
+      if (dbResults !== null) {
+        sendJson(response, 200, { ok: true, results: dbResults, responseTimeMs: responseTimeMs() });
+        return;
+      }
+      // Fallback: laad alle entries in memory en zoek lokaal
       const entries = await listPublicSeoRecipesCached(origin);
       const results = searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit });
       sendJson(response, 200, { ok: true, results, responseTimeMs: responseTimeMs() });
@@ -22781,6 +22985,8 @@ if (require.main === module) {
     .finally(() => {
       server.listen(PORT, () => {
         console.log(`Plately draait op http://localhost:${PORT}`);
+        // Migreer bestaande recepten naar plately_recipes (eenmalig, async)
+        void migrateRecipesToTable();
       });
     });
 }
