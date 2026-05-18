@@ -16316,7 +16316,7 @@ function renderPublicRecipeIndexPage(entries, origin) {
         ? `/api/image-proxy?url=${encodeURIComponent(_rawImg)}`
         : (_rawImg || "/assets/hero-burger.svg");
       return `<a class="recent-card" href="${escapeHtml(encodeURI(entry.urlPath))}">
-        <img class="recent-card__img" src="${escapeHtml(_imgSrc)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+        <img class="recent-card__img" src="${escapeHtml(_imgSrc)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="this.classList.add('img-loaded')" onerror="this.classList.add('img-loaded')" />
         <span class="recent-card__body">
           <strong class="recent-card__title">${escapeHtml(recipe.title || "Recept")}</strong>
           <span class="recent-card__meta">${escapeHtml([recipe.mealTag, recipe.time].filter(Boolean).join(" · "))}</span>

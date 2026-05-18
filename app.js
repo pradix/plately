@@ -16085,13 +16085,14 @@ window.addEventListener("appinstalled", () => {
 });
 
 // Hide bottom nav when the virtual keyboard is open (iOS + Android).
+// On iOS, window.innerHeight stays constant when keyboard opens;
+// visualViewport.height shrinks. The difference = keyboard height.
 (function initBottomNavKeyboardFix() {
   const nav = document.querySelector(".bottom-nav");
   if (!nav || !window.visualViewport) return;
-  const initialVVHeight = window.visualViewport.height;
   function onViewportChange() {
-    const keyboardHeight = Math.max(0, initialVVHeight - window.visualViewport.height);
-    nav.style.display = keyboardHeight > 150 ? "none" : "";
+    const keyboardHeight = Math.max(0, window.innerHeight - window.visualViewport.height);
+    nav.style.display = keyboardHeight > 100 ? "none" : "";
   }
   window.visualViewport.addEventListener("resize", onViewportChange, { passive: true });
 }());
