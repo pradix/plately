@@ -16306,7 +16306,7 @@ function renderPublicRecipeIndexPage(entries, origin) {
       const score = Number.isFinite(Number(entry.seoScore)) ? Number(entry.seoScore) : computeSeoRecipeScore(recipe);
       const scoreClass = score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
       return `<a class="recent-card" href="${escapeHtml(entry.urlPath)}">
-        <img class="recent-card__img" src="${escapeHtml(recipe.image || "/assets/hero-burger.svg")}" alt="" loading="lazy" decoding="async" />
+        <img class="recent-card__img" src="${recipe.image ? `/api/image-proxy?url=${encodeURIComponent(sanitizeText(recipe.image))}` : "/assets/hero-burger.svg"}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
         <span class="recent-card__body">
           <strong class="recent-card__title">${escapeHtml(recipe.title || "Recept")}</strong>
           <span class="recent-card__meta">${escapeHtml([recipe.mealTag, recipe.time].filter(Boolean).join(" · "))}</span>
