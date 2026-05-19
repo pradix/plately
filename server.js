@@ -19287,15 +19287,39 @@ const server = http.createServer(async (request, response) => {
         runCustomChannelExtras(),
       ]);
       const merged = [...(Array.isArray(seedResults) ? seedResults : []), ...customResults];
-      const results =
-        merged.length > 0 ? await enrichChannelSearchResultsWithRatings(merged) : merged;
+
+      // Rating-enrichment met time-budget: stuur resultaten snel terug, verrijk op de
+      // achtergrond als de eerste ronde niet binnen het budget klaar is.
+      // Budget: 2,5 s extra bovenop de al bestede zoektijd.
+      const ENRICH_BUDGET_MS = 2500;
+      let finalResults = merged;
+      if (merged.length > 0) {
+        const enrichPromise = enrichChannelSearchResultsWithRatings([...merged], {
+          timeoutMs: 4000, // korter per-URL timeout zodat trage sites niet alles blokkeren
+          maxUrls: 16,
+        });
+        const budgetPromise = new Promise((resolve) => setTimeout(() => resolve(null), ENRICH_BUDGET_MS));
+        const winner = await Promise.race([enrichPromise, budgetPromise]);
+        if (winner !== null) {
+          // Klaar binnen budget — gebruik verrijkte resultaten direct
+          finalResults = winner;
+        } else {
+          // Time-out — stuur nu terug zonder rating; enrichment loopt door op achtergrond
+          // en update de cache zodra het klaar is (volgende request profiteert hiervan).
+          enrichPromise.then((enriched) => {
+            if (Array.isArray(enriched) && enriched.length > 0) {
+              setCachedChannelSearch(cacheKey, enriched);
+            }
+          }).catch(() => {});
+        }
+      }
 
       // Never cache empty responses: a cold multi-channel race often returns [] once, then succeeds
       // a second later — caching [] poisons the app while admin "test channel" (no cache) works.
-      if (Array.isArray(results) && results.length > 0) {
-        setCachedChannelSearch(cacheKey, results);
+      if (Array.isArray(finalResults) && finalResults.length > 0) {
+        setCachedChannelSearch(cacheKey, finalResults);
       }
-      sendJson(response, 200, { ok: true, results, responseTimeMs: responseTimeMs() });
+      sendJson(response, 200, { ok: true, results: finalResults, responseTimeMs: responseTimeMs() });
       return;
     }
 
@@ -19323,16 +19347,30 @@ const server = http.createServer(async (request, response) => {
       );
 
       const origin = getPublicOrigin(request);
+
+      /** Voeg cached ratings (geen fetch) toe aan SEO-resultaten — gratis verrijking. */
+      const applyCachedRatingsToSeoResults = (rows) => {
+        if (!Array.isArray(rows)) return rows;
+        return rows.map((r) => {
+          if (!r || r.ratingValue != null) return r;
+          const sourceUrl = String(r.sourceUrl || "").trim();
+          if (!sourceUrl || sourceUrl.startsWith("local:") || sourceUrl.startsWith("/")) return r;
+          const cached = getCachedRecipeLdRating(normalizeRecipeRatingCacheUrl(sourceUrl));
+          if (!cached || typeof cached !== "object" || cached.ratingValue == null) return r;
+          return { ...r, ratingValue: cached.ratingValue, ratingCount: cached.ratingCount };
+        });
+      };
+
       // Probeer eerst direct via database te zoeken (sneller, geen volledige load)
       const dbResults = await searchRecipesViaDatabase({ query, allowedChannels, limit, origin });
       if (dbResults !== null) {
-        sendJson(response, 200, { ok: true, results: dbResults, responseTimeMs: responseTimeMs() });
+        sendJson(response, 200, { ok: true, results: applyCachedRatingsToSeoResults(dbResults), responseTimeMs: responseTimeMs() });
         return;
       }
       // Fallback: laad alle entries in memory en zoek lokaal
       const entries = await listPublicSeoRecipesCached(origin);
       const results = searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit });
-      sendJson(response, 200, { ok: true, results, responseTimeMs: responseTimeMs() });
+      sendJson(response, 200, { ok: true, results: applyCachedRatingsToSeoResults(results), responseTimeMs: responseTimeMs() });
       return;
     }
 
