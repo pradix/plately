@@ -457,6 +457,7 @@
 
     .users-table tbody tr:hover { background: rgba(0,0,0,0.02); cursor: pointer; }
     .user-row { transition: background 0.15s; }
+    .user-row--suspended { opacity: 0.6; background: rgba(220,53,69,0.04); }
 
     .admin-search-terms__table {
       width: 100%;
@@ -4336,13 +4337,14 @@
         const more = extra ? `<span class="channel-more">+${extra}</span>` : "";
         const followedHtml = followedNames.length ? `${chips}${more}` : `<span class="muted">—</span>`;
 
+        const isSuspended = user.active === false;
         return `
-          <tr class="user-row" onclick="showDetail('${escapeHtml(user.id)}')">
+          <tr class="user-row${isSuspended ? ' user-row--suspended' : ''}" onclick="showDetail('${escapeHtml(user.id)}')">
             <td onclick="event.stopPropagation()">
               <input type="checkbox" class="user-select" data-user-id="${escapeHtml(user.id)}" ${selectedUserIds.has(user.id) ? "checked" : ""} />
             </td>
             <td>
-              <div class="user-email">${escapeHtml(email)}</div>
+              <div class="user-email">${escapeHtml(email)}${isSuspended ? ' <span class="badge" style="background:#dc3545;color:#fff;font-size:10px">GEBLOKKEERD</span>' : ''}</div>
               <div class="user-id">${user.id.substring(0, 16)}...</div>
             </td>
             <td>${user.recipes}</td>
@@ -4427,6 +4429,7 @@
     function showDetail(userId) {
       const user = allUsers.find(u => u.id === userId);
       if (!user) return;
+      const isSuspended = user.active === false;
 
       const followedNames = (Array.isArray(user.followedChannels) ? user.followedChannels : [])
         .map((ch) => String(ch?.name || ch?.id || "").trim())
@@ -4495,7 +4498,13 @@
         <p>${formatDate(new Date(user.updatedAt))}</p>
 
         <h3>Acties</h3>
-        <button class="btn btn-danger" onclick="deleteUser('${escapeHtml(user.id)}', '${escapeHtml(user.email)}')">Gebruiker verwijderen</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          ${isSuspended
+            ? `<button class="btn btn-primary" onclick="reactivateUser('${escapeHtml(user.id)}', '${escapeHtml(user.email)}')">✅ Account heractiveren</button>`
+            : `<button class="btn" style="border-color:#e67e22;color:#e67e22" onclick="deactivateUser('${escapeHtml(user.id)}', '${escapeHtml(user.email)}')">🚫 Account blokkeren</button>`
+          }
+          <button class="btn btn-danger" onclick="deleteUser('${escapeHtml(user.id)}', '${escapeHtml(user.email)}')">🗑️ Gebruiker verwijderen</button>
+        </div>
 
         <hr class="divider" style="margin:16px 0" />
         <h3>Eventlog (dit account)</h3>
@@ -4556,26 +4565,39 @@
     }
 
     async function deleteUser(userId, userEmail) {
-      if (!confirm(`Weet je zeker dat je ${escapeHtml(userEmail)} wilt verwijderen? Dit kan niet ongedaan gemaakt worden.`)) {
-        return;
-      }
-
+      if (!confirm(`Weet je zeker dat je ${userEmail} wilt verwijderen? Dit kan NIET ongedaan worden gemaakt.`)) return;
       try {
-        const response = await fetch("/api/admin/delete-user", adminFetchInit({
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId })
-        }));
-
+        const response = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, adminFetchInit({ method: "DELETE" }));
         const data = await response.json();
-        if (!response.ok || !data.ok) {
-          alert("Fout bij verwijderen: " + (data.error || "Onbekende fout"));
-          return;
-        }
-
-        alert("Gebruiker verwijderd!");
+        if (!response.ok || !data.ok) { alert("Fout bij verwijderen: " + (data.error || "Onbekende fout")); return; }
         closeDetail();
-        loadStats();
+        await loadStats();
+      } catch (error) {
+        alert("Fout: " + error.message);
+      }
+    }
+
+    async function deactivateUser(userId, userEmail) {
+      if (!confirm(`Account van ${userEmail} blokkeren? De gebruiker kan niet meer inloggen maar de data blijft bewaard.`)) return;
+      try {
+        const response = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/deactivate`, adminFetchInit({ method: "POST" }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) { alert("Fout bij blokkeren: " + (data.error || "Onbekende fout")); return; }
+        closeDetail();
+        await loadStats();
+      } catch (error) {
+        alert("Fout: " + error.message);
+      }
+    }
+
+    async function reactivateUser(userId, userEmail) {
+      if (!confirm(`Account van ${userEmail} heractiveren?`)) return;
+      try {
+        const response = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/reactivate`, adminFetchInit({ method: "POST" }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) { alert("Fout bij heractiveren: " + (data.error || "Onbekende fout")); return; }
+        closeDetail();
+        await loadStats();
       } catch (error) {
         alert("Fout: " + error.message);
       }

@@ -19821,6 +19821,7 @@ const server = http.createServer(async (request, response) => {
             return {
               id: u.id,
               email: u.email,
+              active: profile.active !== false,
               recipes: importedRecipes.length,
               recipesInCookbooks,
               recipesLoose,
@@ -19889,6 +19890,7 @@ const server = http.createServer(async (request, response) => {
             return {
               id: u.id,
               email: u.email || "Guest",
+              active: u.active !== false,
               recipes: importedRecipes.length,
               recipesInCookbooks,
               recipesLoose,
@@ -22346,6 +22348,8 @@ const server = http.createServer(async (request, response) => {
             await client.query("DELETE FROM plately_auth_sessions WHERE user_id = ANY($1)", [userIds]);
             const res = await client.query("DELETE FROM plately_users WHERE id = ANY($1)", [userIds]);
             await client.query("COMMIT");
+            const adminUser = await requireAdmin(request).catch(() => null);
+            logAdminAction(adminUser?.email || "admin", "bulk_delete_users", { count: res.rowCount || 0, userIds });
             return sendJson(response, 200, { ok: true, deleted: res.rowCount || 0 });
           } catch (error) {
             await client.query("ROLLBACK");
@@ -23293,9 +23297,40 @@ const server = http.createServer(async (request, response) => {
           db.users[userId].active = false;
           await persistDatabase();
         }
+        const adminUser2 = await requireAdmin(request).catch(() => null);
+        logAdminAction(adminUser2?.email || "admin", "deactivate_user", { userId });
         return sendJson(response, 200, { ok: true, userId, active: false });
       } catch (error) {
         console.error("❌ Error in /api/admin/users/:id/deactivate:", error.message);
+        return sendJson(response, error.statusCode || 500, { ok: false, error: error.message });
+      }
+    }
+
+    if (/^\/api\/admin\/users\/([^/]+)\/reactivate$/.test(requestUrl.pathname) && request.method === "POST") {
+      try {
+        await requireAdmin(request);
+        const userId = sanitizeText(decodeURIComponent(requestUrl.pathname.split("/")[4] || ""));
+        if (!userId) return sendJson(response, 400, { ok: false, error: "userId required" });
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const result = await pool.query("SELECT profile FROM plately_users WHERE id = $1 LIMIT 1", [userId]);
+          if (!result.rows.length) return sendJson(response, 404, { ok: false, error: "Gebruiker niet gevonden." });
+          const profile = typeof result.rows[0].profile === "object" ? result.rows[0].profile : JSON.parse(result.rows[0].profile || "{}");
+          delete profile.active;
+          await pool.query("UPDATE plately_users SET profile = $2::jsonb, updated_at = NOW() WHERE id = $1", [userId, JSON.stringify(profile)]);
+        } else {
+          const db = await loadDatabase();
+          if (!db.users?.[userId]) return sendJson(response, 404, { ok: false, error: "Gebruiker niet gevonden." });
+          if (db.users[userId].active !== undefined) delete db.users[userId].active;
+          await persistDatabase();
+        }
+        const adminUser3 = await requireAdmin(request).catch(() => null);
+        logAdminAction(adminUser3?.email || "admin", "reactivate_user", { userId });
+        return sendJson(response, 200, { ok: true, userId, active: true });
+      } catch (error) {
+        console.error("❌ Error in /api/admin/users/:id/reactivate:", error.message);
         return sendJson(response, error.statusCode || 500, { ok: false, error: error.message });
       }
     }
