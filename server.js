@@ -9772,29 +9772,23 @@ let ahTokenCache = _persistedToken
 {
   const AUTO_REFRESH_INTERVAL = 6 * 24 * 60 * 60 * 1000; // 6 dagen
   // Auto-refresh when no static token is set — works both directly and via the CF Worker proxy.
-  const shouldAutoRefresh = () =>
-    !String(process.env.AH_ANONYMOUS_TOKEN || "").trim();
-  if (shouldAutoRefresh()) {
-    setInterval(() => {
-      fetchAHAnonymousToken().catch((err) =>
-        console.warn(`[AH] Auto token-refresh mislukt: ${err?.message || err}`)
-      );
-    }, AUTO_REFRESH_INTERVAL);
-    // Warm-up: haal direct een token op zodat de eerste request niet hoeft te wachten.
-    setImmediate(() =>
-      fetchAHAnonymousToken().catch((err) => {
+  // Warm-up: laad het token in de cache bij startup (zowel statisch als via proxy).
+  setImmediate(() =>
+    fetchAHAnonymousToken()
+      .then(() => scheduleAHTokenRefresh())
+      .catch((err) => {
         console.warn(`[AH] Initieel token ophalen mislukt: ${err?.message || err}`);
-        console.warn(`[AH] Fix: stel AH_ANONYMOUS_TOKEN in als env-var of gebruik AH_API_PROXY voor een CF Worker.`);
-        // Retry elke 60 minuten totdat het lukt (bv. na een netwerk-probleem).
+        // Retry elke 30 minuten totdat het lukt
         const retryInterval = setInterval(() => {
-          if (ahTokenCache.token) { clearInterval(retryInterval); return; }
-          fetchAHAnonymousToken()
-            .then(() => { console.log("[AH] Token alsnog verkregen."); clearInterval(retryInterval); })
-            .catch(() => {});
-        }, 60 * 60 * 1000);
+          if (ahTokenCache.token) {
+            clearInterval(retryInterval);
+            scheduleAHTokenRefresh();
+            return;
+          }
+          fetchAHAnonymousToken().catch(() => {});
+        }, 30 * 60 * 1000);
       })
-    );
-  }
+  );
 }
 
 // In-memory cache voor Jumbo productzoekopdrachten — zelfde patroon als AH cache.
@@ -9890,41 +9884,67 @@ function _setAHSearchCache(key, products) {
   _ahSearchCache.set(key, { products, expiresAt: Date.now() + AH_SEARCH_CACHE_TTL });
 }
 
+async function _fetchFreshAHToken() {
+  const response = await fetch(`${AH_API_BASE}/mobile-auth/v1/auth/token/anonymous`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "User-Agent": "Appie/8.22.3", ...AH_PROXY_HEADERS },
+    body: JSON.stringify({ clientId: "appie" }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) throw new Error(`AH auth mislukt (${response.status})`);
+  const data = await response.json();
+  if (!data.access_token) throw new Error("Geen access_token in AH-respons");
+  const expiresAt = Date.now() + (Number(data.expires_in) || 604800) * 1000;
+  ahTokenCache = { token: data.access_token, expiresAt };
+  process.env.AH_ANONYMOUS_TOKEN = data.access_token;
+  persistAHToken(data.access_token, expiresAt);
+  console.log(`[AH] Token automatisch vernieuwd — geldig tot ${new Date(expiresAt).toISOString()}`);
+  return data.access_token;
+}
+
 async function fetchAHAnonymousToken() {
-  // Static token override — handig als api.ah.nl/mobile-auth geblokkeerd is vanuit het server-IP.
-  // Zet AH_ANONYMOUS_TOKEN als env var (geldig ~7 dagen).
-  // Vernieuwen: voer lokaal uit: node scripts/refresh-ah-token.js
+  // Cache-hit: token is nog geldig (minstens 1 uur marge)
+  if (ahTokenCache.token && Date.now() < ahTokenCache.expiresAt - 60 * 60 * 1000) {
+    return ahTokenCache.token;
+  }
+
+  // Probeer een vers token op te halen (werkt via proxy als direct geblokkeerd)
+  try {
+    return await _fetchFreshAHToken();
+  } catch (refreshErr) {
+    console.warn(`[AH] Token-refresh mislukt: ${refreshErr?.message} — probeer statische fallback`);
+  }
+
+  // Fallback: gebruik het statische env-token als het er nog is (ook al is het verlopen)
   const staticToken = String(process.env.AH_ANONYMOUS_TOKEN || "").trim();
   if (staticToken) {
-    // Populate ahTokenCache zodat admin panel het token ziet na een pm2 restart.
-    if (!ahTokenCache.token || ahTokenCache.token !== staticToken) {
-      ahTokenCache = { token: staticToken, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 };
+    if (!ahTokenCache.token) {
+      // Zet een ruime window zodat we het niet elke request opnieuw proberen
+      ahTokenCache = { token: staticToken, expiresAt: Date.now() + 30 * 60 * 1000 };
     }
     return staticToken;
   }
 
-  if (ahTokenCache.token && Date.now() < ahTokenCache.expiresAt - 60_000) {
-    return ahTokenCache.token;
-  }
-  const response = await fetch(`${AH_API_BASE}/mobile-auth/v1/auth/token/anonymous`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...AH_PROXY_HEADERS },
-    body: JSON.stringify({ clientId: "appie" }),
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!response.ok) {
-    console.warn(`[AH] Auth token mislukt: HTTP ${response.status}`);
-    throw new Error(`AH auth mislukt (${response.status})`);
-  }
-  const data = await response.json();
-  ahTokenCache = {
-    token: data.access_token,
-    expiresAt: Date.now() + (Number(data.expires_in) || 3600) * 1000,
-  };
-  // Persist zodat token een pm2-restart overleeft — ook bij auto-refresh.
-  process.env.AH_ANONYMOUS_TOKEN = ahTokenCache.token;
-  persistAHToken(ahTokenCache.token, ahTokenCache.expiresAt);
-  return ahTokenCache.token;
+  throw new Error("Geen geldig AH-token beschikbaar");
+}
+
+// Achtergrond-verversing: plan een refresh 1 dag vóór het token verloopt
+function scheduleAHTokenRefresh() {
+  const msUntilRefresh = Math.max(
+    60_000,
+    ahTokenCache.expiresAt
+      ? ahTokenCache.expiresAt - Date.now() - 24 * 60 * 60 * 1000
+      : 6 * 24 * 60 * 60 * 1000
+  );
+  setTimeout(async () => {
+    try {
+      await _fetchFreshAHToken();
+    } catch (e) {
+      console.warn(`[AH] Geplande token-refresh mislukt: ${e?.message}`);
+    }
+    scheduleAHTokenRefresh(); // plan de volgende cyclus
+  }, msUntilRefresh);
+  console.log(`[AH] Token-refresh gepland over ${Math.round(msUntilRefresh / 3600000 * 10) / 10} uur`);
 }
 
 function parseAHProduct(product) {
