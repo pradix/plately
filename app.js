@@ -5511,6 +5511,10 @@ async function searchChannels(query) {
     if (Array.isArray(merged) && merged.length) {
       setCachedClientChannelSearch(cacheKey, merged);
     }
+    // Zet isSearching false vóór de render zodat er geen skeletons blijven staan
+    if (requestId === searchChannels._reqId) {
+      state.channelSearchIsSearching = false;
+    }
     renderChannelSearchResults(merged);
   } catch (error) {
     if (error?.name === "AbortError") return;
