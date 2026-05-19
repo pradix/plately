@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Plately Admin — Statistieken</title>
+  <title>Plately Admin</title>
   <script>
     (function () {
       try {
@@ -739,20 +739,29 @@
 
     <nav class="admin-tabs" aria-label="Admin tabs">
       <div class="admin-tabs__rail" id="adminTabsRail" role="tablist" aria-label="Admin secties">
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="true" data-admin-tab="overview">Overzicht</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channels">Kanalen</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="users">Gebruikers</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="search-terms">Zoekwoorden</button>
+        <!-- 📊 Overzicht -->
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="true"  data-admin-tab="overview">Dashboard</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="activity">Activiteit</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="basket-stats">Winkelwagen</button>
+        <span class="admin-tabs__sep" aria-hidden="true"></span>
+        <!-- 👥 Gebruikers -->
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="users">Gebruikers</button>
+        <span class="admin-tabs__sep" aria-hidden="true"></span>
+        <!-- 📡 Content & kanalen -->
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channels">Kanalen</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Testen</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk import</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="seo">SEO</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="search-terms">Zoekwoorden</button>
+        <span class="admin-tabs__sep" aria-hidden="true"></span>
+        <!-- ⚙️ Configuratie -->
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="supermarkets">Supermarkten</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="notifications">Notificaties</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Kanaal test</button>
+        <span class="admin-tabs__sep" aria-hidden="true"></span>
+        <!-- 🔧 Systeem -->
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="storage">Opslag</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="logs">Logs</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="audit-log">Audit</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk import</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="supermarkets">Supermarkten</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="basket-stats">Winkelwagen</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="seo">SEO</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="storage">Opslag</button>
       </div>
     </nav>
 
@@ -764,7 +773,7 @@
       <div class="admin-tab-section" id="adminTabChannelTest" data-tab="channel-test">
       <div class="section" id="channelTestSection">
         <div class="section-header">
-          <h2>Kanaal test (search + import)</h2>
+          <h2>Kanaal testen</h2>
           <div class="muted">Test 1 kanaal óf alle kanalen</div>
         </div>
         <div id="channelTestError" class="error" style="display:none"></div>
@@ -1025,12 +1034,12 @@
 
       <div class="section" id="overviewSection">
         <div class="section-header">
-          <h2>Overzicht</h2>
+          <h2>Dashboard</h2>
           <div class="muted" id="overviewMeta">—</div>
         </div>
 
         <div id="overviewError" class="error" style="display:none;margin-top:12px"></div>
-        <div id="overviewLoading" class="loading" style="display:none;padding:18px 0">⏳ Overzicht laden...</div>
+        <div id="overviewLoading" class="loading" style="display:none;padding:18px 0">⏳ Dashboard laden...</div>
 
         <div id="overviewContent" style="display:none;margin-top:14px">
           <div class="stats-grid" style="margin:0 0 12px">
@@ -2124,7 +2133,7 @@
           const ts = overview.generatedAt ? new Date(overview.generatedAt) : null;
           metaEl.textContent = ts && Number.isFinite(ts.getTime())
             ? `Laatst bijgewerkt: ${formatDate(ts)}`
-            : "Overzicht bijgewerkt";
+            : "Dashboard bijgewerkt";
         }
 
         loadingEl.style.display = "none";

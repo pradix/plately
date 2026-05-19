@@ -5172,6 +5172,21 @@ button.ingredient-item {
   box-shadow: inset 0 0 0 1px rgba(141, 164, 133, 0.28);
 }
 
+.admin-tabs__btn:hover:not([aria-selected="true"]) {
+  background: rgba(0,0,0,0.05);
+  color: rgba(37, 33, 29, 0.88);
+}
+
+/* Groepscheiderlijn tussen tabbladen */
+.admin-tabs__sep {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(34,32,29,0.10);
+  margin: 4px 2px;
+  flex-shrink: 0;
+  border-radius: 1px;
+}
+
 .admin-channel-create {
   display: grid;
   gap: 12px;
