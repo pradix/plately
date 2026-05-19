@@ -20109,13 +20109,14 @@ const server = http.createServer(async (request, response) => {
               COUNT(*)::int AS total_users,
               COALESCE(SUM(COALESCE(jsonb_array_length(app_state->'importedRecipes'), 0)), 0)::int AS total_recipes,
               COALESCE(SUM(COALESCE(jsonb_array_length(app_state->'cookbooks'), 0)), 0)::int AS total_cookbooks,
-              -- count only non-deleted custom channels
+              -- count non-deleted custom channels across all users (non-correlated subquery)
               COALESCE((
                 SELECT COUNT(*)::int
-                FROM jsonb_array_elements(COALESCE(u.app_state->'customChannels','[]'::jsonb)) ch2
+                FROM plately_users uu
+                CROSS JOIN LATERAL jsonb_array_elements(COALESCE(uu.app_state->'customChannels','[]'::jsonb)) ch2
                 WHERE COALESCE(ch2->>'status','approved') <> 'deleted'
               ), 0) AS total_custom_channels
-            FROM plately_users u
+            FROM plately_users
             `
           );
 
