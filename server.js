@@ -10664,9 +10664,9 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
           adjustments.push({ kind: "bonus", label: "Vers (net/bol)", delta: -6 });
         }
         // Avoid "knoflook"-flavoured products when the ingredient is plain garlic.
-        if (/\b(roomkaas|kaas|kruidenmix|mix|saus)\b/.test(title)) {
-          score += 35;
-          adjustments.push({ kind: "penalty", label: "Knoflook als smaak (mix/saus/kaas)", delta: 35 });
+        if (/\b(roomkaas|kaas|kruidenmix|mix|saus|soep|bouillon|dressing|marinade|spread)\b/.test(title)) {
+          score += 110;
+          adjustments.push({ kind: "penalty", label: "Knoflook als smaak (mix/saus/soep/kaas)", delta: 110 });
         }
         // Avoid "knoflook as flavour" in unrelated products.
         if (/\b(tomatenpuree|tomatenpasta)\b/.test(title)) {
@@ -10689,6 +10689,11 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
           score -= 20;
           adjustments.push({ kind: "bonus", label: "Uien (verpakking)", delta: -20 });
         }
+        // Penalize soups, sauces and processed products — searcher wants actual onions
+        if (/\b(soep|uiensoep|bouillon|saus|uiensaus|dressing|marinade|spread|mix|uienmix|kruidenmix)\b/i.test(title)) {
+          score += 110;
+          adjustments.push({ kind: "penalty", label: "Ui als smaak in soep/saus/mix", delta: 110 });
+        }
         if (/\b(knorr|unox|maggi)\b/i.test(title) && !/\buien\b/i.test(title)) {
           score += 60;
           adjustments.push({ kind: "penalty", label: "Merkgerecht (geen zak uien)", delta: 60 });
@@ -10703,13 +10708,22 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
         }
       }
 
-      // Fresh herbs: prefer "vers" / bunch-style products and avoid dried mixes/pastes.
+      // Fresh herbs: prefer "vers" / bunch-style products and avoid sauces, soups, processed.
       if (isFreshHerbQuery) {
-        if (/\b(droog|gedroogd|kruidenmix|kruidenmixen|mix|pasta|puree|poeder|gemalen)\b/.test(title)) {
-          score += 70;
-          adjustments.push({ kind: "penalty", label: "Verse kruiden ≠ droog/mix/pasta", delta: 70 });
+        if (/\b(saus|soep|room|bouillon|dressing|marinade|rub|kruidensaus|roomsaus|kruidenboter|olie\b)\b/i.test(title)
+            || /(?:saus|soep|bouillon|puree|moes|pesto|spread)\b/i.test(title)) {
+          score += 130;
+          adjustments.push({ kind: "penalty", label: "Verse kruiden ≠ saus/soep/verwerkt", delta: 130 });
         }
-        if (/\bvers\b/.test(title) || /\b(bosje|plant)\b/.test(title)) {
+        if (/\b(droog|gedroogd|kruidenmix|kruidenmixen|mix|poeder|gemalen)\b/.test(title)) {
+          score += 70;
+          adjustments.push({ kind: "penalty", label: "Verse kruiden ≠ droog/mix/poeder", delta: 70 });
+        }
+        if (/\b(potje|tube|knijp|zakje)\b/.test(title)) {
+          score += 60;
+          adjustments.push({ kind: "penalty", label: "Verse kruiden ≠ potje/tube/pasta", delta: 60 });
+        }
+        if (/\bvers\b/.test(title) || /\b(bosje|plant|potplant)\b/.test(title)) {
           score -= 18;
           adjustments.push({ kind: "bonus", label: "Verse kruiden match", delta: -18 });
         }
@@ -11333,6 +11347,8 @@ function _scoreJumboProduct(productName, searchBase) {
   const isNutOrSeedQuery = /^(?:biologisch\s+)?(?:gemalen\s+|geroosterde?\s+|ongezouten\s+|gehakte?\s+)?(amandelen?|walnoten?|cashewnoten?|hazelnoten?|paranoten?|pinda(?:'?s)?|pecannoten?|pistachenoten?|macadamianoten?|pijnboompitten?|pompoenpitten?|zonnebloempitten?|sesamzaad|lijnzaad|chiazaad|maanzaad|hennepzaad)$/.test(base);
   const isBroadFreshVegQuery = /^(?:biologisch\s+)?(?:verse?\s+)?(?:\d+\s+)?(wortel(?:s|tjes)?|wortelen|broccoli|bloemkool|spruitjes?|spitskool|savooikool|rode\s+kool|witte\s+kool|rodekool|witkool|boerenkool|prei(?:en)?|selderij|knolselderij|venkel|asperges?|sperziebonen?|snijbonen?|peultjes?|sugarsnaps?|broccolini|romanesco|bataat|zoete\s+aardappel(?:s)?|aardappel(?:en|tjes)?|rapen?|pastina(?:ak|ken)?|radijs(?:jes)?|koolrabi|spinazie|andijvie|witlof|rucola|veldsla|ijsbergsla|sla\b|snijsla|kropsla|mais(?:kolf(?:ven)?)?|maiskolf|champignon(?:s)?|portobello|oesterzwam(?:men)?|shiitake(?:s)?)$/.test(base);
   const isFreshHerbQuery = /^(?:biologisch\s+)?(?:verse\s+)?(koriander|peterselie|basilicum|munt|dille|bieslook)\b/.test(base) || /\bvers(?:e)?\s+(koriander|peterselie|basilicum|munt|dille|bieslook)\b/.test(base);
+  const isPlainOnionQuery = base === "ui" || base === "uien" || /^(rode|gele|witte|zilver|biologisch(?:e)?)\s+ui(en)?$/i.test(base);
+  const isPlainGarlicQuery = base === "knoflook" || /^biologisch(?:e)?\s+knoflook$/i.test(base);
   const isSpiceLikeQuery = /\b(kurkuma|turmeric|komijn|djinten|cumin|kaneel|paprika(?:poeder)?|chilipoeder|chili\s*poeder|chili|cayenne|kerrie|currypoeder|curry\s*poeder|garam\s*masala|ras\s*el\s*hanout|sumak|nootmuskaat|kruidnagel|kardemom|piment|anijs)\b/.test(base);
   const isTurmericQuery = /\b(kurkuma|turmeric)\b/.test(base);
   const isPepperQuery   = base === "peper" || base === "zwarte peper";
@@ -11463,8 +11479,42 @@ function _scoreJumboProduct(productName, searchBase) {
 
   // ── 10. Verse kruiden ─────────────────────────────────────────────────────
   if (isFreshHerbQuery) {
-    if (/\b(droog|gedroogd|kruidenmix|mix|pasta|puree|poeder|gemalen)\b/.test(title)) score += 70;
-    if (/\bvers\b/.test(title) || /\b(bosje|plant)\b/.test(title)) score -= 18;
+    // Bereid/verwerkt product met kruid als smaakstof → zwaar penaliseren
+    if (PROCESSED_SUFFIXES_RE.test(title) || /\b(saus|soep|room|bouillon|dressing|marinade|rub|kruidensaus|roomsaus|kruidenboter|olie\b)\b/i.test(title)) {
+      score += 130;
+    }
+    if (/\b(droog|gedroogd|kruidenmix|mix|poeder|gemalen)\b/.test(title)) score += 70;
+    // "potje" / "tube" / "knijpzakje" basilicum-pasta → ook penaliseren
+    if (/\b(potje|tube|knijp|zakje)\b/.test(title)) score += 60;
+    if (/\bvers\b/.test(title) || /\b(bosje|plant|potplant)\b/.test(title)) score -= 18;
+  }
+
+  // ── 10b. Knoflook (puur, vers) ────────────────────────────────────────────
+  if (isPlainGarlicQuery && !wantsGarlicButter) {
+    // Prefer titles that start with "knoflook" (fresh garlic net/bol)
+    if (!/^(?:jumbo\s+)?(?:biologisch\s+)?(?:verse\s+)?knoflook\b/i.test(title)) {
+      score += 45;
+    }
+    if (/\b(net|bol)\b/.test(title)) score -= 6;
+    // Sauces, soups, spreads with garlic as flavour → heavily penalize
+    if (/\b(roomkaas|kaas|kruidenmix|mix|saus|soep|bouillon|dressing|marinade|spread)\b/.test(title)) {
+      score += 110;
+    }
+    if (/\b(kruidenboter|knoflookboter)\b/.test(title)) score += 70;
+    if (/\b(pasta|puree|poeder|granulaat|zout)\b/.test(title)) score += 20;
+    if (/\b(tomatenpuree|tomatenpasta)\b/.test(title)) score += 75;
+    if (/\b(aardappel|partjes|wok|smaakmaker)\b/.test(title)) score += 55;
+  }
+
+  // ── 10c. Ui (los / zak uien) ──────────────────────────────────────────────
+  if (isPlainOnionQuery) {
+    if (/\buien\b/i.test(title)) score -= 20;
+    // Penalize soups, sauces and processed products — searcher wants actual onions
+    if (/\b(soep|uiensoep|bouillon|saus|uiensaus|dressing|marinade|mix|uienmix|kruidenmix)\b/i.test(title)) {
+      score += 110;
+    }
+    if (/\b(knorr|unox|maggi)\b/i.test(title) && !/\buien\b/i.test(title)) score += 60;
+    if (/\b(bacon|spek|ham)\b.*\bui\b/i.test(title) || /\bui\b.*\b(bacon|spek|ham)\b/i.test(title)) score += 65;
   }
 
   // ── 11. Eieren ────────────────────────────────────────────────────────────
