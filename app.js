@@ -5349,7 +5349,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
         <div class="ch-card__body">
           <p class="ch-card__title">${escapeHtml(r.title)}</p>
           ${formatChannelSearchRatingHtml(r, { showRatingSource: showRatingSourceInPill })}
-          ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
+          ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(displayTime(r.time))}</span>` : ""}
         </div>
         <div class="ch-card__actions">
           <button class="ch-card__import" type="button"
@@ -5565,7 +5565,7 @@ function renderImportScreenResults(container, localResults, externalResults, isL
         <div class="ch-card__body">
           <p class="ch-card__title">${escapeHtml(r.title)}</p>
           ${formatChannelSearchRatingHtml(r, { showRatingSource: false })}
-          ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(r.time)}</span>` : ""}
+          ${r.time ? `<span class="ch-card__time">⏱ ${escapeHtml(displayTime(r.time))}</span>` : ""}
         </div>
         <div class="ch-card__actions">
           <button class="ch-card__import" type="button"
@@ -6354,7 +6354,7 @@ function renderRecipeGrid() {
           ${faviconHtml}
           <div class="recent-card__body">
             <p class="recent-card__title">${escapeHtml(recipe.title)}</p>
-            <p class="recent-card__meta">${escapeHtml(recipe.time || "")}</p>
+            <p class="recent-card__meta">${escapeHtml(displayTime(recipe.time))}</p>
           </div>
         </button>
       `;
@@ -6460,7 +6460,7 @@ function renderDetailRecipe(resetServings = false) {
   detailMealTag.textContent = recipe.mealTag;
   if (detailMetaChips) {
     const chips = [];
-    const timeLabel = String(recipe.time || "").trim();
+    const timeLabel = displayTime(recipe.time);
     if (timeLabel) chips.push({ ic: "⏱", tx: timeLabel });
     // kcal niet weergeven — waarden van externe sites zijn onbetrouwbaar
     const servLabel = String(recipe.servings || "").trim();
@@ -6546,10 +6546,6 @@ function renderDetailRecipe(resetServings = false) {
             aria-pressed="${checked ? "true" : "false"}"
           >
             <span class="recipe-check" aria-hidden="true"></span>
-            <span class="ingredient-image-wrapper" aria-hidden="true">
-              <img class="ingredient-image" src="" alt="" loading="lazy" />
-              <span class="ingredient-image-fallback" aria-hidden="true">${getIngredientVisualMarkup(ingredient.name)}</span>
-            </span>
             <span class="ingredient-name">${escapeHtml(ingredient.name)}</span>
             <span class="ingredient-amount">${formatIngredientAmount(ingredient, factor)}</span>
           </button>
@@ -7296,7 +7292,7 @@ function renderGroceryGroups(options = {}) {
             ${faviconHtml}
             <div class="recent-card__body">
               <p class="recent-card__title">${escapeHtml(recipe.title || "Recept")}</p>
-              <p class="recent-card__meta">${escapeHtml(recipe.time || "")}</p>
+              <p class="recent-card__meta">${escapeHtml(displayTime(recipe.time))}</p>
             </div>
           </button>
         `;
@@ -7728,37 +7724,11 @@ async function fetchIngredientPhotos() {
       }
     }
 
-    if (changed && state.view === "detail") {
-      updateIngredientImages();
-    }
   } catch {
     // silently ignore
   }
 }
 
-function updateIngredientImages() {
-  const recipe = getSelectedRecipe();
-  if (!recipe) return;
-
-  const wrappers = document.querySelectorAll(".ingredient-image-wrapper");
-  wrappers.forEach((wrapper, index) => {
-    const ingredient = recipe.ingredients[index];
-    if (ingredient?.imageUrl) {
-      const img = wrapper.querySelector(".ingredient-image");
-      const fallback = wrapper.querySelector(".ingredient-image-fallback");
-      if (img) {
-        img.src = normalizeChannelThumbnailUrl(ingredient.imageUrl);
-        img.alt = ingredient.name;
-        img.onload = () => {
-          if (fallback) fallback.style.display = "none";
-        };
-        img.onerror = () => {
-          if (fallback) fallback.style.display = "grid";
-        };
-      }
-    }
-  });
-}
 
 function getReviewRecipe() {
   return getRecipeById(state.reviewRecipeId || state.selectedRecipeId);
@@ -8619,7 +8589,7 @@ function renderCookbookDetail(cookbookId) {
                 })()}
                 <div class="cb-detail__card-body">
                   <span class="cb-detail__card-title">${escapeHtml(recipe.title)}</span>
-                  <span class="cb-detail__card-time">${escapeHtml(recipe.time)}</span>
+                  <span class="cb-detail__card-time">${escapeHtml(displayTime(recipe.time))}</span>
                 </div>
               </button>
               <button class="cb-detail__select" type="button"
@@ -8824,7 +8794,7 @@ function renderMealPlanCurrentRecipe() {
     <article class="planner-focus__card">
       <p class="section-kicker">GESELECTEERD RECEPT</p>
       <h2 class="planner-focus__title">${escapeHtml(recipe.title)}</h2>
-      <p class="planner-focus__meta">${escapeHtml(recipe.time)} • ${escapeHtml(recipe.servings)}</p>
+      <p class="planner-focus__meta">${escapeHtml(displayTime(recipe.time))} • ${escapeHtml(recipe.servings)}</p>
       <p class="planner-focus__hint">Klik op "Plan hier" bij een dag hieronder om dit recept in te plannen.</p>
     </article>
   `;
@@ -9844,6 +9814,14 @@ function normalizeImportedTime(value) {
   return clean;
 }
 
+/** Strip kcal/calorie-info uit een tijdlabel (display-only, niet voor opslaan). */
+function displayTime(value) {
+  return String(value || "")
+    .replace(/[\s·|,\-–]+\d+\s*(?:kcal|cal|kj|kcals?)\b.*$/i, "")
+    .replace(/\b\d+\s*(?:kcal|cal|kj|kcals?)\b.*/i, "")
+    .trim();
+}
+
 function parseServingsValue(value) {
   const match = String(value || "").match(/\d+/);
   return match ? `${match[0]} Pers.` : "2 Pers.";
@@ -10122,7 +10100,7 @@ function renderRecipeSlider() {
       <img src="${escapeHtml(recipe.image)}" alt="${escapeHtml(recipe.title)}" loading="lazy" />
       <div class="recipe-slider__body">
         <p class="recipe-slider__title">${escapeHtml(recipe.title)}</p>
-        ${recipe.time ? `<p class="recipe-slider__time">⏱ ${escapeHtml(recipe.time)}</p>` : ""}
+        ${recipe.time ? `<p class="recipe-slider__time">⏱ ${escapeHtml(displayTime(recipe.time))}</p>` : ""}
       </div>
     </button>
   `).join("");
