@@ -5360,6 +5360,10 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
             ${actionLabel}
           </button>
+          ${hasExternalView && viewUrl && viewUrl !== "#" ? `<a class="ch-card__view" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Bekijk ${escapeHtml(r.title)} op de bronwebsite">
+            <svg viewBox="0 0 24 24" aria-hidden="true" width="13" height="13"><path d="M14 3h7v7M21 3L10 14M9 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Bekijk
+          </a>` : ""}
         </div>
       </div>`;
     }).join("")}${loadingBanner}${moreHint}</div>`;
@@ -5548,6 +5552,8 @@ function renderImportScreenResults(container, localResults, externalResults, isL
     const actionIcon = isLocal
       ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>`
       : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+    const importViewUrl = isLocal ? String(r.sourceUrl || "").trim() : r.url;
+    const showViewBtn = Boolean(importViewUrl && !importViewUrl.startsWith("local:") && !importViewUrl.startsWith("/"));
     return `
       <div class="ch-card${isLocal ? " ch-card--local" : ""}" data-ch-card-url="${escapeHtml(r.url)}">
         <div class="ch-card__visual">
@@ -5568,6 +5574,10 @@ function renderImportScreenResults(container, localResults, externalResults, isL
             aria-label="${escapeHtml(actionLabel)} ${escapeHtml(r.title)}">
             ${actionIcon} ${actionLabel}
           </button>
+          ${showViewBtn ? `<a class="ch-card__view" href="${escapeHtml(importViewUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Bekijk ${escapeHtml(r.title)} op de bronwebsite">
+            <svg viewBox="0 0 24 24" aria-hidden="true" width="13" height="13"><path d="M14 3h7v7M21 3L10 14M9 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Bekijk
+          </a>` : ""}
         </div>
       </div>`;
   };

@@ -13257,22 +13257,28 @@ body {
 }
 
 .ch-card__view {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 0.78rem;
+  gap: 4px;
+  font-size: 0.74rem;
   font-weight: 600;
-  color: #555;
+  color: var(--color-text-muted, #666);
   text-decoration: none;
-  padding: 7px 10px;
+  padding: 6px 10px;
   border-radius: 8px;
-  background: #f2f2f0;
-  transition: background 0.15s, color 0.15s;
+  background: var(--color-surface-2, #f2f2f0);
+  border: 1px solid var(--color-border, #e8e8e4);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
   white-space: nowrap;
+  flex-shrink: 0;
+  min-height: 32px;
 }
-.ch-card__view:hover { background: #e6e6e3; color: #333; }
-.ch-card__view.is-disabled { opacity: 0.5; pointer-events: none; }
-.ch-card__view svg { width: 14px; height: 14px; flex-shrink: 0; }
+.ch-card__view:hover {
+  background: var(--color-surface-3, #e8e8e4);
+  color: var(--color-text, #333);
+  border-color: var(--color-border-strong, #ccc);
+}
+.ch-card__view svg { width: 13px; height: 13px; flex-shrink: 0; }
 
 .ch-card__import {
   flex: 1;
