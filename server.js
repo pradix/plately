@@ -7244,15 +7244,10 @@ function findRecipeJsonLd(html) {
 }
 
 /**
- * Gemiddelde score + aantal uit schema.org Recipe.
- * Geen minimum naar 1 afdwingen — ontbrekende of placeholdertoontjes (vaak 1/5) worden genegeerd.
- * Zonder minstens 1 waardering tonen we geen score (eist consistentie met UI).
+ * Gemiddelde score + aantal uit schema.org aggregateRating.
  * `ratingNormalizedFromWideScale` als de bron expliciet een schaal >5 gebruikte en we naar /5 rekenden.
  */
-function extractAggregateRatingFromRecipeHtml(html) {
-  if (!html || typeof html !== "string") return null;
-  const recipe = findRecipeJsonLd(html);
-  const agg = recipe?.aggregateRating;
+function normalizeAggregateRating(agg) {
   if (!agg || typeof agg !== "object") return null;
   let ratingValue = Number(agg.ratingValue);
   if (!Number.isFinite(ratingValue) || ratingValue <= 0) return null;
@@ -7274,6 +7269,20 @@ function extractAggregateRatingFromRecipeHtml(html) {
     ratingCount,
     ...(normalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}),
   };
+}
+
+/** aggregateRating uit Recipe JSON-LD in HTML (import + enrich). */
+function extractAggregateRatingFromRecipeHtml(html) {
+  if (!html || typeof html !== "string") return null;
+  const recipe = findRecipeJsonLd(html);
+  return normalizeAggregateRating(recipe?.aggregateRating);
+}
+
+/** Eerst uit al geparsed recipe-object, anders opnieuw uit HTML. */
+function pickAggregateRatingForParsedRecipe(recipeSource, html) {
+  const fromSource = normalizeAggregateRating(recipeSource?.aggregateRating);
+  if (fromSource) return fromSource;
+  return extractAggregateRatingFromRecipeHtml(html);
 }
 
 function extractBalancedJsonValue(source, key, startIndex = 0) {
@@ -8032,6 +8041,8 @@ function parseWebsiteRecipe(html, url) {
       return "";
     })();
 
+    const rating = pickAggregateRatingForParsedRecipe(recipeSource, cleanHtml);
+
     return {
       platform: "website",
       sourceUrl: url,
@@ -8064,6 +8075,7 @@ function parseWebsiteRecipe(html, url) {
       // Lower threshold (3 vs 2) means Claude is called more proactively for incomplete recipes.
       needsReview: mergedIngredients.length < 3 || mergedInstructions.length < 4 || !recipeImage,
       sourceLabel: "Imported from Website",
+      ...(rating || {}),
     };
   }
 
@@ -8083,6 +8095,8 @@ function parseWebsiteRecipe(html, url) {
     [wprmInstructionsSide, fallbackInstructionsList].sort((a, b) => b.length - a.length).find((c) => c.length >= 2) ||
     (wprmInstructionsSide.length ? wprmInstructionsSide : fallbackInstructionsList);
 
+  const rating = extractAggregateRatingFromRecipeHtml(cleanHtml);
+
   return {
     platform: "website",
     sourceUrl: url,
@@ -8097,6 +8111,7 @@ function parseWebsiteRecipe(html, url) {
     servings: "2",
     needsReview: ingPick.length < 2 || insPick.length < 2,
     sourceLabel: "Imported from Website",
+    ...(rating || {}),
   };
 }
 
@@ -13176,6 +13191,10 @@ const recipeRatingLdCache = new Map(); // normalizedUrl -> { at, value }
 /** Cumulatieve statistieken JSON-LD enrich (per hostname, voor logs/monitoring). */
 const ratingEnrichHostStats = new Map();
 
+/** Index bron-URL → rating uit opgeslagen SEO-recepten (importedRecipes in DB). */
+const STORED_RECIPE_RATING_INDEX_TTL_MS = 2 * 60_000;
+let storedRecipeRatingIndexCache = null; // { at:number, index:Map<string,object> }
+
 // Public SEO recipes index: fast, in-memory search helper.
 const SEO_RECIPE_SEARCH_CACHE_TTL_MS = 2 * 60_000;
 const seoRecipeSearchCache = new Map(); // origin -> { at:number, entries:any[] }
@@ -13205,7 +13224,7 @@ function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam 
   }
   const custom = String(customChannelsParam || "").trim();
   // Bump when API-resultaatscherm wijzigt (bijv. ratingvelden) — oude cache mist die velden.
-  const schema = "cs-v8";
+  const schema = "cs-v9";
   return `${q}||${channels}||${custom}||${schema}`;
 }
 
@@ -13343,8 +13362,7 @@ function searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit })
   return scored.slice(0, cap).map(({ e }) => {
     const r = e.recipe || {};
     const channelId = sanitizeText(e.channelId || "") || "plately";
-    const rv = Number(r.ratingValue);
-    const rc = Number(r.ratingCount);
+    const rating = pickChannelSearchCandidateRating(r);
     return {
       url: e.urlPath,
       title: sanitizeText(r.title || ""),
@@ -13354,9 +13372,7 @@ function searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit })
       time: sanitizeText(r.time || ""),
       sourceUrl: sanitizeText(r.sourceUrl || ""),
       _source: "plately",
-      ...(Number.isFinite(rv) && rv >= 1 && Number.isFinite(rc) && rc >= 1
-        ? { ratingValue: rv, ratingCount: rc, ...(r.ratingNormalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}) }
-        : {}),
+      ...(rating || {}),
     };
   });
 }
@@ -14301,6 +14317,60 @@ function pickChannelSearchCandidateRating(candidate) {
   return out;
 }
 
+function invalidateStoredRecipeRatingCaches() {
+  storedRecipeRatingIndexCache = null;
+  seoRecipeSearchCache.clear();
+}
+
+/** Bron-URL → rating uit alle publieke SEO-recepten (app_state.importedRecipes). */
+function buildStoredRecipeRatingIndexFromSeoEntries(entries) {
+  const index = new Map();
+  for (const e of Array.isArray(entries) ? entries : []) {
+    const r = e?.recipe;
+    const rating = pickChannelSearchCandidateRating(r);
+    if (!rating) continue;
+    const sourceUrl = normalizeRecipeRatingCacheUrl(r?.sourceUrl || "");
+    if (!sourceUrl) continue;
+    const prev = index.get(sourceUrl);
+    if (!prev || (rating.ratingCount || 0) > (prev.ratingCount || 0)) {
+      index.set(sourceUrl, rating);
+    }
+  }
+  return index;
+}
+
+async function getStoredRecipeRatingIndex(origin) {
+  const now = Date.now();
+  if (
+    storedRecipeRatingIndexCache &&
+    now - storedRecipeRatingIndexCache.at <= STORED_RECIPE_RATING_INDEX_TTL_MS
+  ) {
+    return storedRecipeRatingIndexCache.index;
+  }
+  const entries = await listPublicSeoRecipesCached(origin || "");
+  const index = buildStoredRecipeRatingIndexFromSeoEntries(entries);
+  storedRecipeRatingIndexCache = { at: now, index };
+  return index;
+}
+
+function applyStoredRatingToSearchResult(row, index) {
+  if (!row || row.ratingValue != null || !index || !index.size) return row;
+  const keys = [
+    normalizeRecipeRatingCacheUrl(row.url || ""),
+    normalizeRecipeRatingCacheUrl(row.sourceUrl || ""),
+  ].filter(Boolean);
+  for (const key of keys) {
+    const rt = index.get(key);
+    if (rt) return { ...row, ...rt };
+  }
+  return row;
+}
+
+function mergeStoredRatingsIntoSearchResults(results, index) {
+  if (!Array.isArray(results) || !results.length || !index || !index.size) return results;
+  return results.map((r) => applyStoredRatingToSearchResult(r, index));
+}
+
 /**
  * Voor alle kanalen: ontbrekende beoordeling aanvullen via schema.org op de receptpagina.
  * Limiet + parallel om zoektijd te cappen.
@@ -14308,14 +14378,23 @@ function pickChannelSearchCandidateRating(candidate) {
  * @param {{ maxUrls?: number, concurrency?: number, timeoutMs?: number }} [opts]
  */
 async function enrichChannelSearchResultsWithRatings(results, opts = {}) {
-  const MAX_URLS = Number.isFinite(opts.maxUrls) ? Math.min(200, Math.max(1, opts.maxUrls)) : 20;
+  const MAX_URLS = Number.isFinite(opts.maxUrls) ? Math.min(200, Math.max(1, opts.maxUrls)) : 40;
   const CONCURRENCY = Number.isFinite(opts.concurrency) ? Math.min(16, Math.max(1, opts.concurrency)) : 6;
   const TIMEOUT_MS = Number.isFinite(opts.timeoutMs) ? Math.min(12_000, Math.max(1500, opts.timeoutMs)) : 7000;
   if (!Array.isArray(results) || !results.length) return results;
 
+  let mergedFromDb = results;
+  if (opts.useStoredRatings !== false) {
+    const index =
+      opts.storedRatingIndex instanceof Map
+        ? opts.storedRatingIndex
+        : await getStoredRecipeRatingIndex(opts.origin || "");
+    mergedFromDb = mergeStoredRatingsIntoSearchResults(results, index);
+  }
+
   const candidates = [];
   const seen = new Set();
-  for (const r of results) {
+  for (const r of mergedFromDb) {
     if (!r || r.ratingValue != null) continue;
     const u = String(r.url || "").trim();
     if (!urlEligibleForChannelSearchRatingFetch(u)) continue;
@@ -14324,7 +14403,7 @@ async function enrichChannelSearchResultsWithRatings(results, opts = {}) {
     candidates.push(r);
     if (candidates.length >= MAX_URLS) break;
   }
-  if (!candidates.length) return results;
+  if (!candidates.length) return mergedFromDb;
 
   const ratingByUrl = new Map();
   let next = 0;
@@ -14440,8 +14519,8 @@ async function enrichChannelSearchResultsWithRatings(results, opts = {}) {
     );
   }
 
-  if (!ratingByUrl.size) return results;
-  return results.map((r) => {
+  if (!ratingByUrl.size) return mergedFromDb;
+  return mergedFromDb.map((r) => {
     if (!r || r.ratingValue != null) return r;
     const u = String(r.url || "").trim();
     const rt = ratingByUrl.get(u);
@@ -14720,6 +14799,9 @@ async function backfillImportedRecipeRatingsForAllUsers({
     await persistDatabase();
   }
   out.updatedUsers = touchedUsers.size;
+  if (!out.dryRun && out.updatedRecipes > 0) {
+    invalidateStoredRecipeRatingCaches();
+  }
   return out;
 }
 
@@ -19443,35 +19525,37 @@ const server = http.createServer(async (request, response) => {
         return merged;
       };
 
+      const origin = getPublicOrigin(request);
+      const storedRatingIndex = await getStoredRecipeRatingIndex(origin);
+
       const [seedResults, customResults] = await Promise.all([
         searchChannelRecipes(query, allowedChannels),
         runCustomChannelExtras(),
       ]);
       const merged = [...(Array.isArray(seedResults) ? seedResults : []), ...customResults];
 
-      // Rating-enrichment met time-budget: stuur resultaten snel terug, verrijk op de
-      // achtergrond als de eerste ronde niet binnen het budget klaar is.
-      // Budget: 2,5 s extra bovenop de al bestede zoektijd.
+      // DB-ratings direct; live JSON-LD-enrichment met time-budget (snelle response).
       const ENRICH_BUDGET_MS = 2500;
-      let finalResults = merged;
+      let finalResults = mergeStoredRatingsIntoSearchResults(merged, storedRatingIndex);
       if (merged.length > 0) {
         const enrichPromise = enrichChannelSearchResultsWithRatings([...merged], {
-          timeoutMs: 4000, // korter per-URL timeout zodat trage sites niet alles blokkeren
+          timeoutMs: 4000,
           maxUrls: 16,
+          storedRatingIndex,
+          origin,
         });
         const budgetPromise = new Promise((resolve) => setTimeout(() => resolve(null), ENRICH_BUDGET_MS));
         const winner = await Promise.race([enrichPromise, budgetPromise]);
         if (winner !== null) {
-          // Klaar binnen budget — gebruik verrijkte resultaten direct
           finalResults = winner;
         } else {
-          // Time-out — stuur nu terug zonder rating; enrichment loopt door op achtergrond
-          // en update de cache zodra het klaar is (volgende request profiteert hiervan).
-          enrichPromise.then((enriched) => {
-            if (Array.isArray(enriched) && enriched.length > 0) {
-              setCachedChannelSearch(cacheKey, enriched);
-            }
-          }).catch(() => {});
+          enrichPromise
+            .then((enriched) => {
+              if (Array.isArray(enriched) && enriched.length > 0) {
+                setCachedChannelSearch(cacheKey, enriched);
+              }
+            })
+            .catch(() => {});
         }
       }
 
@@ -23751,5 +23835,10 @@ module.exports = {
     parseIngredientLine,
     repairIngredientUnitRemainder,
     repairRecipeIngredientUnitRemainders,
+    normalizeAggregateRating,
+    extractAggregateRatingFromRecipeHtml,
+    searchPublicSeoRecipesLocal,
+    buildStoredRecipeRatingIndexFromSeoEntries,
+    pickChannelSearchCandidateRating,
   },
 };
