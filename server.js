@@ -13224,7 +13224,7 @@ function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam 
   }
   const custom = String(customChannelsParam || "").trim();
   // Bump when API-resultaatscherm wijzigt (bijv. ratingvelden) — oude cache mist die velden.
-  const schema = "cs-v9";
+  const schema = "cs-v10";
   return `${q}||${channels}||${custom}||${schema}`;
 }
 
@@ -14320,6 +14320,7 @@ function pickChannelSearchCandidateRating(candidate) {
 function invalidateStoredRecipeRatingCaches() {
   storedRecipeRatingIndexCache = null;
   seoRecipeSearchCache.clear();
+  channelSearchCache.clear();
 }
 
 /** Bron-URL → rating uit alle publieke SEO-recepten (app_state.importedRecipes). */
@@ -14334,6 +14335,7 @@ function buildStoredRecipeRatingIndexFromSeoEntries(entries) {
     const prev = index.get(sourceUrl);
     if (!prev || (rating.ratingCount || 0) > (prev.ratingCount || 0)) {
       index.set(sourceUrl, rating);
+      setCachedRecipeLdRating(sourceUrl, rating);
     }
   }
   return index;
@@ -19535,12 +19537,12 @@ const server = http.createServer(async (request, response) => {
       const merged = [...(Array.isArray(seedResults) ? seedResults : []), ...customResults];
 
       // DB-ratings direct; live JSON-LD-enrichment met time-budget (snelle response).
-      const ENRICH_BUDGET_MS = 2500;
+      const ENRICH_BUDGET_MS = 8000;
       let finalResults = mergeStoredRatingsIntoSearchResults(merged, storedRatingIndex);
       if (merged.length > 0) {
         const enrichPromise = enrichChannelSearchResultsWithRatings([...merged], {
-          timeoutMs: 4000,
-          maxUrls: 16,
+          timeoutMs: 5500,
+          maxUrls: Math.min(merged.length, 36),
           storedRatingIndex,
           origin,
         });
