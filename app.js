@@ -5344,6 +5344,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
         <div class="ch-card__visual">
           ${thumbHtml}
           <span class="ch-card__badge" style="background:${escapeHtml(channelColor)}">${escapeHtml(r.channel)}</span>
+          ${hasExternalView && viewUrl && viewUrl !== "#" ? `<a class="ch-card__view-icon" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Bekijk ${escapeHtml(r.title)} op de bronwebsite" title="Bekijk op bronwebsite"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7M21 3L10 14M9 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>` : ""}
         </div>
         <div class="ch-card__body">
           <p class="ch-card__title">${escapeHtml(r.title)}</p>
@@ -5360,10 +5361,6 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
             ${actionLabel}
           </button>
-          ${hasExternalView && viewUrl && viewUrl !== "#" ? `<a class="ch-card__view" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Bekijk ${escapeHtml(r.title)} op de bronwebsite">
-            <svg viewBox="0 0 24 24" aria-hidden="true" width="13" height="13"><path d="M14 3h7v7M21 3L10 14M9 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Bekijk
-          </a>` : ""}
         </div>
       </div>`;
     }).join("")}${loadingBanner}${moreHint}</div>`;
@@ -5559,6 +5556,7 @@ function renderImportScreenResults(container, localResults, externalResults, isL
         <div class="ch-card__visual">
           ${thumbHtml}
           <span class="ch-card__badge" style="background:${escapeHtml(badgeBg)}">${escapeHtml(badgeLabel)}</span>
+          ${showViewBtn ? `<a class="ch-card__view-icon" href="${escapeHtml(importViewUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Bekijk ${escapeHtml(r.title)} op de bronwebsite" title="Bekijk op bronwebsite"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7M21 3L10 14M9 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>` : ""}
         </div>
         <div class="ch-card__body">
           <p class="ch-card__title">${escapeHtml(r.title)}</p>
@@ -5574,10 +5572,6 @@ function renderImportScreenResults(container, localResults, externalResults, isL
             aria-label="${escapeHtml(actionLabel)} ${escapeHtml(r.title)}">
             ${actionIcon} ${actionLabel}
           </button>
-          ${showViewBtn ? `<a class="ch-card__view" href="${escapeHtml(importViewUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Bekijk ${escapeHtml(r.title)} op de bronwebsite">
-            <svg viewBox="0 0 24 24" aria-hidden="true" width="13" height="13"><path d="M14 3h7v7M21 3L10 14M9 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Bekijk
-          </a>` : ""}
         </div>
       </div>`;
   };
