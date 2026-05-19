@@ -6191,7 +6191,7 @@
 
       let data;
       try {
-        const resp = await adminFetch("/api/admin/storage-info");
+        const resp = await fetch("/api/admin/storage-info", adminFetchInit());
         data = await resp.json();
       } catch (e) {
         if (status) status.textContent = "❌ Laden mislukt: " + e.message;
