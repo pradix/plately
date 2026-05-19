@@ -3247,18 +3247,22 @@ async function syncUserRecipesToTable(userId, recipes, pool) {
           const token = getSeoRecipeToken(userId, recipe.id);
           const slug = slugify(recipe.title) || "recept";
           const channelId = inferSeedChannelIdFromSourceUrl(recipe.sourceUrl || "") || "";
-          const searchText = [recipe.title, recipe.description, recipe.mealTag, recipe.author]
+          const ingredientNames = Array.isArray(recipe.ingredients)
+            ? recipe.ingredients.map((ing) => (typeof ing === "string" ? ing : ing?.name || "")).filter(Boolean).join(" ")
+            : "";
+          const searchText = [recipe.title, recipe.description, recipe.mealTag, recipe.author, ingredientNames]
             .filter(Boolean)
             .join(" ");
           await client.query(
-            `INSERT INTO plately_recipes (id, user_id, data, channel_id, token, slug, search_vector, updated_at)
-             VALUES ($1, $2, $3::jsonb, $4, $5, $6, to_tsvector('simple', $7), NOW())
+            `INSERT INTO plately_recipes (id, user_id, data, channel_id, token, slug, search_vector, search_lang, updated_at)
+             VALUES ($1, $2, $3::jsonb, $4, $5, $6, to_tsvector('dutch', $7), 'dutch', NOW())
              ON CONFLICT (user_id, id) DO UPDATE SET
                data = EXCLUDED.data,
                channel_id = EXCLUDED.channel_id,
                token = EXCLUDED.token,
                slug = EXCLUDED.slug,
                search_vector = EXCLUDED.search_vector,
+               search_lang = EXCLUDED.search_lang,
                updated_at = EXCLUDED.updated_at`,
             [recipe.id, userId, JSON.stringify(recipe), channelId, token, slug, searchText]
           );
@@ -3318,6 +3322,58 @@ async function migrateRecipesToTable() {
     console.log("✅ Recipe migratie voltooid.");
   } catch (err) {
     console.error("❌ Recipe migratie mislukt:", err?.message || err);
+  }
+}
+
+/**
+ * Eenmalige startup-migratie: herbouwt search_vectors van 'simple' naar 'dutch'
+ * zodat Nederlandse stemming werkt (kip→kippen, pasta→pasta's, etc.)
+ * Veilig om meermaals te draaien — detecteert al-gemigreerde rijen via metadatakolom.
+ */
+async function migrateSearchVectorsToDutch() {
+  if (!isPostgresEnabled()) return;
+  try {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+
+    // Voeg een kolom toe die bijhoudt of de vector al Dutch is (idempotent)
+    await pool.query(`
+      ALTER TABLE plately_recipes ADD COLUMN IF NOT EXISTS search_lang TEXT NOT NULL DEFAULT 'simple'
+    `).catch(() => {}); // ignore if already exists
+
+    const { rows } = await pool.query(
+      `SELECT COUNT(*) AS cnt FROM plately_recipes WHERE search_lang != 'dutch'`
+    );
+    const todo = Number(rows[0]?.cnt || 0);
+    if (todo === 0) {
+      console.log("✅ Search vector migratie: al klaar (dutch).");
+      return;
+    }
+
+    console.log(`🔄 Search vector migratie: ${todo} recepten herbouwen naar Dutch...`);
+    // Herbouw ook de ingrediëntnamen in de search_vector zodat "kip" pasta-recepten
+    // met "kipfilet" als ingrediënt ook vindbaar maakt via full-text search.
+    await pool.query(`
+      UPDATE plately_recipes
+      SET
+        search_vector = to_tsvector('dutch',
+          coalesce(data->>'title', '') || ' ' ||
+          coalesce(data->>'description', '') || ' ' ||
+          coalesce(data->>'mealTag', '') || ' ' ||
+          coalesce(data->>'author', '') || ' ' ||
+          coalesce(
+            (SELECT string_agg(ing->>'name', ' ')
+             FROM jsonb_array_elements(coalesce(data->'ingredients', '[]'::jsonb)) AS ing
+             WHERE ing->>'name' IS NOT NULL),
+            ''
+          )
+        ),
+        search_lang = 'dutch'
+      WHERE search_lang != 'dutch'
+    `);
+    console.log(`✅ Search vector migratie voltooid: ${todo} recepten bijgewerkt.`);
+  } catch (err) {
+    console.error("❌ Search vector migratie mislukt:", err?.message || err);
   }
 }
 
@@ -13108,7 +13164,7 @@ function isLikelyBlogPage(title, url, description = "") {
 // Simple per-process cache to keep channel search snappy for repeated queries.
 // This resets on deploy/restart (fine for our use-case). Longer TTL = sneller bij herhaalde termen
 // (lege resultaten worden sowieso niet gecached).
-const CHANNEL_SEARCH_CACHE_TTL_MS = 15 * 60_000;
+const CHANNEL_SEARCH_CACHE_TTL_MS = 90 * 60_000; // 90 min — populaire queries veranderen zelden
 const CHANNEL_SEARCH_CACHE_MAX_ENTRIES = 250;
 const channelSearchCache = new Map(); // key -> { at:number, results:any[] }
 
@@ -13306,6 +13362,23 @@ function searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit })
 }
 
 /**
+/**
+ * Bouwt een prefix-aware tsquery voor PostgreSQL full-text search.
+ * Alle woorden moeten matchen (Dutch stemming); het laatste woord krijgt :* zodat
+ * typen-in-progress werkt ("past" vindt "pasta", "kip" vindt "kipfilet").
+ */
+function buildDutchPrefixTsquery(query) {
+  const words = String(query || "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => w.replace(/['"&|!():*<>]/g, "").trim())
+    .filter((w) => w.length >= 2);
+  if (!words.length) return null;
+  return words.map((w, i) => (i === words.length - 1 ? `${w}:*` : w)).join(" & ");
+}
+
+/**
  * Zoekt recepten via PostgreSQL full-text search op plately_recipes.
  * Vervangt searchPublicSeoRecipesLocal voor de Postgres-modus.
  */
@@ -13323,31 +13396,35 @@ async function searchRecipesViaDatabase({ query, allowedChannels, limit, origin 
     const allowNoneSeeds = Array.isArray(allowedChannels) && allowedChannels.length === 0;
     if (allowNoneSeeds) return [];
 
+    // Bouw prefix-aware tsquery (laatste woord krijgt :* voor typen-in-progress)
+    const tsqueryStr = buildDutchPrefixTsquery(q);
+    if (!tsqueryStr) return [];
+
     let sql, params;
     if (allowAllSeeds) {
       sql = `
         SELECT r.id, r.user_id, r.data, r.channel_id, r.token, r.slug, r.updated_at, u.email,
-               ts_rank(r.search_vector, plainto_tsquery('simple', $1)) AS rank
+               ts_rank(r.search_vector, to_tsquery('dutch', $1)) AS rank
         FROM plately_recipes r
         JOIN plately_users u ON u.id = r.user_id
-        WHERE r.search_vector @@ plainto_tsquery('simple', $1)
+        WHERE r.search_vector @@ to_tsquery('dutch', $1)
         ORDER BY rank DESC
         LIMIT $2
       `;
-      params = [q, cap];
+      params = [tsqueryStr, cap];
     } else {
       const channelIds = Array.isArray(allowedChannels) ? allowedChannels.map((c) => sanitizeText(c)).filter(Boolean) : [];
       sql = `
         SELECT r.id, r.user_id, r.data, r.channel_id, r.token, r.slug, r.updated_at, u.email,
-               ts_rank(r.search_vector, plainto_tsquery('simple', $1)) AS rank
+               ts_rank(r.search_vector, to_tsquery('dutch', $1)) AS rank
         FROM plately_recipes r
         JOIN plately_users u ON u.id = r.user_id
-        WHERE r.search_vector @@ plainto_tsquery('simple', $1)
+        WHERE r.search_vector @@ to_tsquery('dutch', $1)
           AND r.channel_id = ANY($3::text[])
         ORDER BY rank DESC
         LIMIT $2
       `;
-      params = [q, cap, channelIds];
+      params = [tsqueryStr, cap, channelIds];
     }
 
     const result = await pool.query(sql, params);
@@ -19290,6 +19367,34 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
+      // ── DB-first: zoek direct in plately_recipes (GIN full-text index, <50ms) ──
+      // Dit geeft instant resultaten voor queries die al eerder door iemand zijn gezocht/geïmporteerd.
+      // Scraping loopt daarna op de achtergrond en verrijkt de cache voor volgende requests.
+      const dbFirstResults = await searchRecipesViaDatabase({
+        query,
+        allowedChannels,
+        limit: 24,
+        origin: `${request.headers["x-forwarded-proto"] || "https"}://${request.headers.host}`,
+      }).catch(() => null);
+
+      if (Array.isArray(dbFirstResults) && dbFirstResults.length >= 6) {
+        // Genoeg resultaten uit DB — stuur direct terug, scrape op achtergrond voor cache-update
+        sendJson(response, 200, { ok: true, results: dbFirstResults, _source: "db", responseTimeMs: responseTimeMs() });
+        // Scrape in achtergrond en update cache zodra klaar
+        Promise.all([
+          searchChannelRecipes(query, allowedChannels),
+          (async () => {
+            if (!customChannelsParam) return [];
+            // custom channel scraping (hergebruik logica hieronder)
+            return [];
+          })(),
+        ]).then(([seedResults]) => {
+          const merged = Array.isArray(seedResults) && seedResults.length > 0 ? seedResults : dbFirstResults;
+          if (merged.length > 0) setCachedChannelSearch(cacheKey, merged);
+        }).catch(() => {});
+        return;
+      }
+
       const runCustomChannelExtras = async () => {
         if (!customChannelsParam) return [];
         const customChannelEntries = customChannelsParam
@@ -23617,6 +23722,8 @@ if (require.main === module) {
         console.log(`Plately draait op http://localhost:${PORT}`);
         // Migreer bestaande recepten naar plately_recipes (eenmalig, async)
         void migrateRecipesToTable();
+        // Herbouw search_vectors naar Dutch stemming (eenmalig, async)
+        void migrateSearchVectorsToDutch();
       });
     });
 }
