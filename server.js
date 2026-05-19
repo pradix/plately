@@ -9767,28 +9767,23 @@ let ahTokenCache = _persistedToken
   ? { token: _persistedToken.token, expiresAt: _persistedToken.expiresAt }
   : { token: "", expiresAt: 0 };
 
-// Vernieuw het AH-token automatisch elke 6 dagen als er geen statisch token of proxy is ingesteld.
-// Met CF Worker (AH_API_PROXY) haalt de worker zelf tokens op; dit is dan alleen een fallback.
+// Bij serverstart altijd direct een vers token ophalen via de proxy.
+// Daarna elke 6 dagen automatisch vernieuwen — het token verloopt na 7 dagen.
 {
-  const AUTO_REFRESH_INTERVAL = 6 * 24 * 60 * 60 * 1000; // 6 dagen
-  // Auto-refresh when no static token is set — works both directly and via the CF Worker proxy.
-  // Warm-up: laad het token in de cache bij startup (zowel statisch als via proxy).
-  setImmediate(() =>
-    fetchAHAnonymousToken()
+  const doStartupRefresh = () =>
+    _fetchFreshAHToken()
       .then(() => scheduleAHTokenRefresh())
       .catch((err) => {
-        console.warn(`[AH] Initieel token ophalen mislukt: ${err?.message || err}`);
-        // Retry elke 30 minuten totdat het lukt
+        console.warn(`[AH] Startup token-refresh mislukt: ${err?.message || err} — retry over 30 min`);
+        // Retry elke 30 minuten totdat het lukt, dan scheduling starten
         const retryInterval = setInterval(() => {
-          if (ahTokenCache.token) {
-            clearInterval(retryInterval);
-            scheduleAHTokenRefresh();
-            return;
-          }
-          fetchAHAnonymousToken().catch(() => {});
+          _fetchFreshAHToken()
+            .then(() => { clearInterval(retryInterval); scheduleAHTokenRefresh(); })
+            .catch(() => {});
         }, 30 * 60 * 1000);
-      })
-  );
+      });
+
+  setImmediate(doStartupRefresh);
 }
 
 // In-memory cache voor Jumbo productzoekopdrachten — zelfde patroon als AH cache.
@@ -9903,29 +9898,20 @@ async function _fetchFreshAHToken() {
 }
 
 async function fetchAHAnonymousToken() {
-  // Cache-hit: token is nog geldig (minstens 1 uur marge)
+  // Cache-hit: vers token beschikbaar
   if (ahTokenCache.token && Date.now() < ahTokenCache.expiresAt - 60 * 60 * 1000) {
     return ahTokenCache.token;
   }
 
-  // Probeer een vers token op te halen (werkt via proxy als direct geblokkeerd)
+  // Cache leeg of verlopen — haal direct een vers token op
   try {
     return await _fetchFreshAHToken();
   } catch (refreshErr) {
-    console.warn(`[AH] Token-refresh mislukt: ${refreshErr?.message} — probeer statische fallback`);
+    console.warn(`[AH] Token-refresh mislukt: ${refreshErr?.message}`);
+    // Geef verlopen cache-token terug als noodoplossing (beter dan niets)
+    if (ahTokenCache.token) return ahTokenCache.token;
+    throw new Error("Geen geldig AH-token beschikbaar");
   }
-
-  // Fallback: gebruik het statische env-token als het er nog is (ook al is het verlopen)
-  const staticToken = String(process.env.AH_ANONYMOUS_TOKEN || "").trim();
-  if (staticToken) {
-    if (!ahTokenCache.token) {
-      // Zet een ruime window zodat we het niet elke request opnieuw proberen
-      ahTokenCache = { token: staticToken, expiresAt: Date.now() + 30 * 60 * 1000 };
-    }
-    return staticToken;
-  }
-
-  throw new Error("Geen geldig AH-token beschikbaar");
 }
 
 // Achtergrond-verversing: plan een refresh 1 dag vóór het token verloopt
