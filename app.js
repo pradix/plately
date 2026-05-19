@@ -6606,9 +6606,6 @@ function renderDetailRecipe(resetServings = false) {
   updateWakeLockUI();
   renderMealPlanCurrentRecipe();
 
-  // Fetch ingredient photos from Albert Heijn
-  fetchIngredientPhotos();
-
   // Load related recipes from same channel
   loadDetailRelatedRecipes(recipe);
 }
@@ -10840,6 +10837,11 @@ async function bootstrapSession() {
     fetchEnabledSupermarkets().catch((e) => console.warn("[Boot] Supermarkets ophalen mislukt:", e?.message));
     refreshFeaturePushState().catch((e) => console.warn("[Boot] Push feature-state fout:", e?.message));
 
+    // Toon PWA-installatiemodal na 4s — niet eerder zodat de gebruiker eerst de app ziet
+    if (state.auth.authenticated) {
+      window.setTimeout(() => showInstallAppModal(), 4000);
+    }
+
     // Handle announce deep links (/?announce=... or /?new=1)
     handleAnnouncementQueryParams().catch((e) => console.warn("[Boot] Announcement params fout:", e?.message));
 
@@ -10949,6 +10951,8 @@ function completeAuthSessionFromPayload(payload, { treatAsNewUser } = {}) {
       scrollToTopSoon();
       window.setTimeout(() => startOnboarding(), 450);
     }
+    // Toon installatie-prompt na 5s voor terugkerende gebruikers
+    window.setTimeout(() => showInstallAppModal(), 5000);
   }
 }
 
@@ -16202,6 +16206,10 @@ const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 // Show install app modal once per session (after login)
 function showInstallAppModal() {
   if (!state.auth.authenticated) return;
+  // Skip when already running as installed PWA (standalone or fullscreen)
+  if (window.matchMedia("(display-mode: standalone)").matches || window.matchMedia("(display-mode: fullscreen)").matches) return;
+  // On desktop without beforeinstallprompt support and not iOS → nothing to show
+  if (!installPrompt && !isIOS) return;
 
   // Check if we already showed the modal this session
   try { if (sessionStorage.getItem(INSTALL_APP_SESSION_KEY)) return; } catch {}

@@ -2133,7 +2133,7 @@ img {
 .ingredient-item {
   list-style: none;
   display: grid;
-  grid-template-columns: 28px 36px minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -2185,11 +2185,6 @@ button.ingredient-item {
   text-decoration-color: rgba(141, 164, 133, 0.6);
 }
 
-.ingredient-item.is-checked .ingredient-image-wrapper {
-  opacity: 0.35;
-  filter: grayscale(0.7);
-}
-
 .ingredient-item.is-checked .ingredient-amount {
   opacity: 0.4;
 }
@@ -2205,32 +2200,6 @@ button.ingredient-item {
   font-size: 0.82rem;
   white-space: nowrap;
   flex-shrink: 0;
-}
-
-.ingredient-image-wrapper {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: rgba(245, 240, 232, 0.8);
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  overflow: hidden;
-  position: relative;
-}
-
-.ingredient-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.ingredient-image-fallback {
-  font-size: 1.1rem;
-  position: absolute;
-  display: grid;
-  place-items: center;
 }
 
 .ingredient-name {
@@ -2253,9 +2222,6 @@ button.ingredient-item {
   overflow: hidden;
 }
 
-.ingredient-item.is-checked .ingredient-thumb {
-  opacity: 0.4;
-}
 
 /* ── Steps — flat card ── */
 .step-list {
