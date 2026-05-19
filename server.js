@@ -23444,6 +23444,117 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    // ── Opslag-overzicht ──────────────────────────────────────────────────────
+    if (requestUrl.pathname === "/api/admin/storage-info" && request.method === "GET") {
+      await requireAdmin(request);
+
+      // ─ Bestanden op schijf ─
+      const files = [];
+      const fileChecks = [
+        { key: "db", label: "Hoofddatabase", path: () => DATA_FILE, description: "Gebruikers, sessies, notificaties, sharelinks" },
+        { key: "otps", label: "OTP-codes", path: () => OTP_FILE, description: "Tijdelijke login-codes (worden periodiek opgeschoond)" },
+        { key: "ahToken", label: "AH API-token", path: () => AH_TOKEN_FILE(), description: "Albert Heijn anoniem toegangstoken (max 7 dagen)" },
+        { key: "deployRevision", label: "Deploy-revisie", path: () => path.join(ROOT_DIR, "deploy-revision.json"), description: "Git-commit en buildinformatie" },
+      ];
+      for (const f of fileChecks) {
+        try {
+          const fp = f.path();
+          const stat = await fsp.stat(fp).catch(() => null);
+          let sizeBytes = stat ? stat.size : null;
+          let lastModified = stat ? stat.mtime.toISOString() : null;
+          let recordCount = null;
+          let preview = null;
+          if (stat) {
+            try {
+              const raw = await fsp.readFile(fp, "utf8");
+              const parsed = JSON.parse(raw);
+              if (f.key === "db") {
+                recordCount = {
+                  users: Object.keys(parsed.users || {}).length,
+                  sessions: Object.keys(parsed.sessions || {}).length,
+                  authSessions: Object.keys(parsed.authSessions || {}).length,
+                  pushSubscriptions: (parsed.pushSubscriptions || []).length,
+                  announcements: (parsed.announcements || []).length,
+                  shareLinks: Object.keys(parsed.shareLinks || {}).length,
+                };
+              } else if (f.key === "otps") {
+                recordCount = { codes: Array.isArray(parsed) ? parsed.length : Object.keys(parsed).length };
+              } else if (f.key === "ahToken") {
+                preview = {
+                  tokenPreview: parsed.token ? parsed.token.slice(0, 12) + "…" : null,
+                  expiresAt: parsed.expiresAt ? new Date(parsed.expiresAt).toISOString() : null,
+                  expiresInHours: parsed.expiresAt ? Math.round((parsed.expiresAt - Date.now()) / 3600000) : null,
+                };
+              } else if (f.key === "deployRevision") {
+                preview = { sha: parsed.sha, buildTime: parsed.buildTime, branch: parsed.branch };
+              }
+            } catch {}
+          }
+          files.push({ key: f.key, label: f.label, description: f.description, path: fp, exists: Boolean(stat), sizeBytes, lastModified, recordCount, preview });
+        } catch (e) {
+          files.push({ key: f.key, label: f.label, description: f.description, exists: false, error: e.message });
+        }
+      }
+
+      // ─ PostgreSQL-tabellen ─
+      let postgres = null;
+      if (isPostgresEnabled()) {
+        try {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const tables = [
+            { key: "users", label: "Gebruikers", table: "plately_users", description: "Account, e-mail, recepten (app_state), boodschappenlijsten" },
+            { key: "auth_sessions", label: "Login-sessies", table: "plately_auth_sessions", description: "Actieve sessie-tokens" },
+            { key: "recipes", label: "Recepten (index)", table: "plately_recipes", description: "Geïndexeerde recepten voor zoeken en bulk-statistieken" },
+            { key: "events", label: "Activiteiten", table: "plately_events", description: "Gebruiksgebeurtenissen en audit-log" },
+            { key: "push_subscriptions", label: "Push-subscriptions", table: "plately_push_subscriptions", description: "Apparaten voor pushberichten" },
+            { key: "announcements", label: "Aankondigingen", table: "plately_announcements", description: "Verstuurde notificaties" },
+            { key: "admin_state", label: "Admin-instellingen", table: "plately_admin_state", description: "Server-side configuratie (bijv. ingeschakelde supermarkten)" },
+          ];
+          const tableRows = await Promise.all(tables.map(async (t) => {
+            try {
+              const res = await pool.query(`SELECT COUNT(*) AS cnt FROM ${t.table}`);
+              return { ...t, count: Number(res.rows[0]?.cnt ?? 0), accessible: true };
+            } catch (e) {
+              return { ...t, count: null, accessible: false, error: e.message };
+            }
+          }));
+          postgres = { enabled: true, tables: tableRows };
+        } catch (e) {
+          postgres = { enabled: true, error: e.message };
+        }
+      } else {
+        postgres = { enabled: false };
+      }
+
+      // ─ In-memory caches ─
+      const caches = [
+        { key: "ahSearch", label: "AH zoekresultaten", entries: _ahSearchCache.size, maxEntries: AH_SEARCH_CACHE_MAX, ttlHours: 24, description: "Productzoekresultaten Albert Heijn" },
+        { key: "jumboSearch", label: "Jumbo zoekresultaten", entries: _jumboSearchCache.size, maxEntries: JUMBO_SEARCH_CACHE_MAX, ttlHours: 12, description: "Productzoekresultaten Jumbo" },
+        { key: "photoCache", label: "Foto-URLs", entries: _photoCache.size, maxEntries: PHOTO_CACHE_MAX, ttlHours: 48, description: "Productafbeelding-URLs (AH)" },
+        { key: "imageProxy", label: "Afbeeldingsproxy", entries: _imageProxyCache.size, maxEntries: IMAGE_PROXY_CACHE_MAX, ttlHours: 24 * 7, description: "Geproxyde afbeeldingen (in buffer)" },
+        { key: "channelSearch", label: "Receptzoekresultaten", entries: channelSearchCache.size, maxEntries: CHANNEL_SEARCH_CACHE_MAX_ENTRIES, ttlMinutes: 15, description: "Zoekresultaten receptkanalen + ratings" },
+        { key: "recipeRating", label: "Recept-ratings", entries: recipeRatingLdCache.size, maxEntries: RECIPE_RATING_LD_CACHE_MAX_ENTRIES, ttlHours: 2, description: "LD+JSON ratings per recept-URL" },
+        { key: "seoRecipeSearch", label: "SEO-zoekresultaten", entries: seoRecipeSearchCache.size, maxEntries: null, ttlMinutes: 2, description: "Resultaten SEO-receptzoekopdrachten" },
+      ];
+
+      // ─ Statische assets ─
+      const staticAssets = [
+        { label: "SEO recept-keywords", path: path.join(ROOT_DIR, "assets/seo-recipe-keywords.nl.json"), description: "Lijst zoekwoorden voor SEO-receptenindexering" },
+      ];
+      const staticInfo = await Promise.all(staticAssets.map(async (a) => {
+        const stat = await fsp.stat(a.path).catch(() => null);
+        let count = null;
+        if (stat) {
+          try { const arr = JSON.parse(await fsp.readFile(a.path, "utf8")); count = Array.isArray(arr) ? arr.length : null; } catch {}
+        }
+        return { ...a, exists: Boolean(stat), sizeBytes: stat ? stat.size : null, count };
+      }));
+
+      sendJson(response, 200, { ok: true, files, postgres, caches, staticAssets: staticInfo, dataDir: DATA_DIR, postgresEnabled: isPostgresEnabled() });
+      return;
+    }
+
     await serveStaticFile(requestUrl.pathname, response, request);
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.statusCode : 500;

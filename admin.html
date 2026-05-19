@@ -751,6 +751,7 @@
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="supermarkets">Supermarkten</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="basket-stats">Winkelwagen</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="seo">SEO</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="storage">Opslag</button>
       </div>
     </nav>
 
@@ -1773,6 +1774,37 @@
           <!-- Best SEO score recipes -->
           <h3 style="margin:0 0 10px;font-size:14px;font-weight:700">Recepten met hoogste SEO-score (top)</h3>
           <div id="seoBestRecipes" style="display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+      </div>
+
+      <!-- ── Opslag-tab ───────────────────────────────────────────────────── -->
+      <div class="admin-tab-section" id="adminTabStorage" data-tab="storage">
+        <div class="section">
+          <div class="section-header">
+            <h2>📦 Opslag</h2>
+            <button class="btn btn-sm" type="button" onclick="loadStorageInfo()">↻ Vernieuwen</button>
+          </div>
+          <p class="muted" id="storageLoadStatus" style="font-size:13px;margin:0 0 16px">Laden…</p>
+          <div id="storageContent" style="display:none">
+
+            <!-- Persistent bestanden -->
+            <h3 style="margin:0 0 10px;font-size:14px;font-weight:700">📄 Bestanden op schijf</h3>
+            <p class="muted" style="font-size:12px;margin:-6px 0 12px" id="storageDataDir"></p>
+            <div id="storageFiles" style="display:flex;flex-direction:column;gap:8px;margin-bottom:28px"></div>
+
+            <!-- PostgreSQL -->
+            <h3 style="margin:0 0 10px;font-size:14px;font-weight:700">🐘 PostgreSQL-tabellen</h3>
+            <div id="storagePostgres" style="margin-bottom:28px"></div>
+
+            <!-- In-memory caches -->
+            <h3 style="margin:0 0 10px;font-size:14px;font-weight:700">⚡ In-memory caches</h3>
+            <p class="muted" style="font-size:12px;margin:-6px 0 12px">Verdwijnen bij herstart — gebruikt voor snelheid, niet voor persistentie.</p>
+            <div id="storageCaches" style="display:flex;flex-direction:column;gap:6px;margin-bottom:28px"></div>
+
+            <!-- Statische bestanden -->
+            <h3 style="margin:0 0 10px;font-size:14px;font-weight:700">📁 Statische assets</h3>
+            <div id="storageStatic" style="display:flex;flex-direction:column;gap:6px"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -5734,6 +5766,7 @@
       }
       if (next === "seo") { loadSeoOverview(); }
       if (next === "basket-stats") loadBasketStats();
+      if (next === "storage") loadStorageInfo();
       if (next === "logs") {
         loadLogs();
       } else {
@@ -6147,6 +6180,145 @@
           saveStatus.textContent = "Fout bij opslaan.";
         }
       });
+    }
+
+    // ── Opslag-overzicht ─────────────────────────────────────────────────────────
+    async function loadStorageInfo() {
+      const status = document.getElementById("storageLoadStatus");
+      const content = document.getElementById("storageContent");
+      if (status) status.textContent = "⏳ Laden…";
+      if (content) content.style.display = "none";
+
+      let data;
+      try {
+        const resp = await adminFetch("/api/admin/storage-info");
+        data = await resp.json();
+      } catch (e) {
+        if (status) status.textContent = "❌ Laden mislukt: " + e.message;
+        return;
+      }
+      if (!data.ok) {
+        if (status) status.textContent = "❌ " + (data.error || "Onbekende fout");
+        return;
+      }
+
+      if (status) status.textContent = "";
+      if (content) content.style.display = "";
+
+      // ── Data dir ──
+      const dataDirEl = document.getElementById("storageDataDir");
+      if (dataDirEl) dataDirEl.textContent = "DATA_DIR: " + (data.dataDir || "—");
+
+      // ── Bestanden ──
+      const filesEl = document.getElementById("storageFiles");
+      if (filesEl) {
+        filesEl.innerHTML = (data.files || []).map(f => {
+          const sizeStr = f.sizeBytes != null ? (f.sizeBytes > 1024 * 1024 ? (f.sizeBytes / 1024 / 1024).toFixed(1) + " MB" : Math.round(f.sizeBytes / 1024) + " KB") : "—";
+          const modStr = f.lastModified ? new Date(f.lastModified).toLocaleString("nl-NL") : "";
+          const statusIcon = f.exists ? "✅" : "⚠️";
+
+          let detailRows = "";
+          if (f.recordCount) {
+            detailRows = Object.entries(f.recordCount).map(([k, v]) =>
+              `<span style="display:inline-flex;gap:4px;align-items:center;background:rgba(0,0,0,0.05);border-radius:6px;padding:2px 8px;font-size:12px"><b>${v}</b> ${k}</span>`
+            ).join(" ");
+          }
+          if (f.preview) {
+            if (f.key === "ahToken") {
+              const hrs = f.preview.expiresInHours;
+              const color = hrs == null ? "#999" : hrs < 24 ? "#dc3545" : hrs < 72 ? "#f59e0b" : "#22c55e";
+              detailRows = `<span style="font-size:12px">Token: <code>${f.preview.tokenPreview || "—"}</code> &nbsp;·&nbsp; Verloopt: <b style="color:${color}">${hrs != null ? hrs + "u" : "onbekend"}</b> (${f.preview.expiresAt ? new Date(f.preview.expiresAt).toLocaleString("nl-NL") : "—"})</span>`;
+            } else if (f.key === "deployRevision") {
+              detailRows = `<span style="font-size:12px">Branch: <code>${f.preview.branch || "—"}</code> &nbsp;·&nbsp; SHA: <code>${(f.preview.sha || "").slice(0,8)}</code> &nbsp;·&nbsp; Build: ${f.preview.buildTime ? new Date(f.preview.buildTime).toLocaleString("nl-NL") : "—"}</span>`;
+            }
+          }
+
+          return `<div style="background:rgba(0,0,0,0.025);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+              <div>
+                <span style="font-weight:600;font-size:13px">${statusIcon} ${f.label}</span>
+                <span class="muted" style="font-size:12px;margin-left:8px">${f.description || ""}</span>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <span style="font-size:12px;color:#666">${sizeStr}</span>
+                ${modStr ? `<span class="muted" style="font-size:11px;display:block">${modStr}</span>` : ""}
+              </div>
+            </div>
+            <div style="font-size:11px;color:#888;margin-top:4px;word-break:break-all">${f.path || ""}</div>
+            ${detailRows ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">${detailRows}</div>` : ""}
+            ${f.error ? `<div style="color:#dc3545;font-size:12px;margin-top:6px">⚠️ ${f.error}</div>` : ""}
+          </div>`;
+        }).join("");
+      }
+
+      // ── PostgreSQL ──
+      const pgEl = document.getElementById("storagePostgres");
+      if (pgEl) {
+        if (!data.postgres?.enabled) {
+          pgEl.innerHTML = `<p class="muted" style="font-size:13px">PostgreSQL is niet geconfigureerd. Gebruikersdata wordt opgeslagen in <code>plately-db.json</code>.</p>`;
+        } else if (data.postgres.error) {
+          pgEl.innerHTML = `<div class="error">❌ Verbindingsfout: ${data.postgres.error}</div>`;
+        } else {
+          const rows = (data.postgres.tables || []).map(t => {
+            const icon = t.accessible ? "✅" : "❌";
+            const countStr = t.count != null ? t.count.toLocaleString("nl-NL") : "—";
+            return `<div style="display:grid;grid-template-columns:1fr auto;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);align-items:center">
+              <div>
+                <span style="font-weight:600;font-size:13px">${icon} ${t.label}</span>
+                <span class="muted" style="font-size:12px;margin-left:6px">${t.description || ""}</span>
+                <div style="font-size:11px;color:#888;margin-top:2px"><code>${t.table}</code></div>
+                ${t.error ? `<div style="color:#dc3545;font-size:12px">${t.error}</div>` : ""}
+              </div>
+              <div style="font-size:18px;font-weight:700;text-align:right;color:#111">${countStr}</div>
+            </div>`;
+          }).join("");
+          pgEl.innerHTML = `<div style="background:rgba(0,0,0,0.025);border:1px solid var(--border);border-radius:10px;overflow:hidden">${rows}</div>`;
+        }
+      }
+
+      // ── Caches ──
+      const cachesEl = document.getElementById("storageCaches");
+      if (cachesEl) {
+        cachesEl.innerHTML = (data.caches || []).map(c => {
+          const pct = c.maxEntries ? Math.min(100, Math.round(c.entries / c.maxEntries * 100)) : null;
+          const ttlStr = c.ttlMinutes ? c.ttlMinutes + " min" : c.ttlHours ? c.ttlHours + "u" : "—";
+          const barColor = pct == null ? "#94a3b8" : pct > 90 ? "#dc3545" : pct > 70 ? "#f59e0b" : "#22c55e";
+          return `<div style="background:rgba(0,0,0,0.025);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+              <div>
+                <span style="font-weight:600;font-size:13px">${c.label}</span>
+                <span class="muted" style="font-size:12px;margin-left:6px">${c.description || ""}</span>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <span style="font-size:15px;font-weight:700">${c.entries}</span>
+                ${c.maxEntries ? `<span class="muted" style="font-size:12px"> / ${c.maxEntries}</span>` : ""}
+                <span class="muted" style="font-size:11px;display:block">TTL: ${ttlStr}</span>
+              </div>
+            </div>
+            ${pct != null ? `<div style="margin-top:6px;height:4px;background:#e5e7eb;border-radius:2px"><div style="height:4px;border-radius:2px;background:${barColor};width:${pct}%"></div></div>` : ""}
+          </div>`;
+        }).join("");
+      }
+
+      // ── Statische assets ──
+      const staticEl = document.getElementById("storageStatic");
+      if (staticEl) {
+        staticEl.innerHTML = (data.staticAssets || []).map(a => {
+          const sizeStr = a.sizeBytes != null ? Math.round(a.sizeBytes / 1024) + " KB" : "—";
+          const icon = a.exists ? "✅" : "⚠️";
+          return `<div style="background:rgba(0,0,0,0.025);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <div>
+              <span style="font-weight:600;font-size:13px">${icon} ${a.label}</span>
+              <span class="muted" style="font-size:12px;margin-left:6px">${a.description || ""}</span>
+              <div style="font-size:11px;color:#888;margin-top:2px">${a.path || ""}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              ${a.count != null ? `<span style="font-size:15px;font-weight:700">${a.count.toLocaleString("nl-NL")}</span><span class="muted" style="font-size:12px"> items</span>` : ""}
+              <span class="muted" style="font-size:11px;display:block">${sizeStr}</span>
+            </div>
+          </div>`;
+        }).join("");
+      }
     }
 
     // ── Winkelwagen statistieken ──────────────────────────────────────────────────
