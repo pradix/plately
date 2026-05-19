@@ -5302,7 +5302,9 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
     rows = rows.slice(0, visibleCount);
 
     // Skip expensive full rerender when the visible set is effectively identical.
-    const sig = `${rows.length}::${rows.slice(0, 22).map((r) => r?.url || "").join("|")}`;
+    // Include a rating fingerprint so that back-filling ratings into SEO results triggers a re-render.
+    const ratingFp = rows.slice(0, 22).map((r) => (r?.ratingValue ?? "") + (r?.ratingCount ?? "")).join("|");
+    const sig = `${rows.length}::${rows.slice(0, 22).map((r) => r?.url || "").join("|")}::r${ratingFp}`;
     const nextRenderKey = `${state.channelSearchQuery}||${state.channelSearchFilter || ""}||${sig}||${state.channelSearchIsSearching ? "1" : "0"}||${visibleCount}`;
     if (renderChannelSearchResults._lastKey === nextRenderKey) return;
     renderChannelSearchResults._lastKey = nextRenderKey;
@@ -5468,22 +5470,41 @@ async function searchChannels(query) {
     if (requestId !== searchChannels._reqId) return;
     const merged = [];
     const seen = new Set();
+    // Map from dedup-key → index in merged, so we can back-fill ratings later.
+    const mergedIndexByKey = new Map();
     for (const r of savedResults) {
       const keys = getChannelResultDedupeKeys(r);
       if (!keys.length || keys.some((key) => seen.has(key))) continue;
-      keys.forEach((key) => seen.add(key));
+      keys.forEach((key) => { seen.add(key); mergedIndexByKey.set(key, merged.length); });
       merged.push(r);
     }
     for (const r of (Array.isArray(seoResults) ? seoResults : [])) {
       const keys = getChannelResultDedupeKeys(r);
       if (!keys.length || keys.some((key) => seen.has(key))) continue;
-      keys.forEach((key) => seen.add(key));
+      keys.forEach((key) => { seen.add(key); mergedIndexByKey.set(key, merged.length); });
       merged.push(r);
     }
     for (const r of (data.results || [])) {
       const keys = getChannelResultDedupeKeys(r);
-      if (!keys.length || keys.some((key) => seen.has(key))) continue;
-      keys.forEach((key) => seen.add(key));
+      const dupKey = keys.find((key) => seen.has(key));
+      if (dupKey) {
+        // Duplicate — but if the live API result carries a rating that the earlier
+        // (SEO-indexed) entry lacks, back-fill the rating so it isn't lost.
+        if (r.ratingValue != null) {
+          const idx = mergedIndexByKey.get(dupKey);
+          if (idx != null && merged[idx] && merged[idx].ratingValue == null) {
+            merged[idx] = {
+              ...merged[idx],
+              ratingValue: r.ratingValue,
+              ratingCount: r.ratingCount,
+              ...(r.ratingNormalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}),
+            };
+          }
+        }
+        continue;
+      }
+      if (!keys.length) continue;
+      keys.forEach((key) => { seen.add(key); mergedIndexByKey.set(key, merged.length); });
       merged.push(r);
     }
     if (Array.isArray(merged) && merged.length) {
