@@ -2388,7 +2388,7 @@ function getBasketHandoffUrl(preview) {
         })
         .join("&")}`;
     }
-    return "https://www.ah.nl/mijnlijst/";
+    return preview.directUrl || preview.fallbackUrl || "https://www.ah.nl/mijnlijst/";
   }
   if (preview.store === "jumbo") {
     // Bouw URL dynamisch van geselecteerde producten (zoals AH), zodat wisselen ook werkt
@@ -2873,8 +2873,19 @@ function renderBasketPreview() {
     ctaBtn.innerHTML = isJumbo
       ? `Zet ${_ctaCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.jumbo.com&sz=128" alt="Jumbo" style="${_ctaFavStyle}"> mandje`
       : `Zet ${_ctaCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.ah.nl&sz=128" alt="AH" style="${_ctaFavStyle}"> mandje`;
-    ctaBtn.onclick = () => {
-      const url = getBasketHandoffUrl(preview);
+    ctaBtn.onclick = async () => {
+      ctaBtn.disabled = true;
+      const previousHtml = ctaBtn.innerHTML;
+      ctaBtn.textContent = "Producten laden…";
+      if (state.basketPreview?.store === "albert-heijn") {
+        const idxs = (state.basketPreview.items || []).map((_, i) => i);
+        await ensureBasketChoicesLoaded(idxs);
+      }
+      const currentPreview = state.basketPreview || preview;
+      const url = getBasketHandoffUrl(currentPreview);
+      ctaBtn.disabled = false;
+      ctaBtn.innerHTML = previousHtml;
+      renderBasketPreview();
       if (url) window.open(url, "_blank", "noreferrer");
     };
   }
