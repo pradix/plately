@@ -11849,6 +11849,7 @@ async function findJumboAlternativesGrouped(ingredient, maxCount = 12) {
         const entry = {
           ...product,
           isBonus: effectiveIsBonus,
+          promotionLabel: effectiveIsBonus ? sanitizeText(product.promotionLabel || "Aanbieding") : "",
           labels: Array.isArray(product.labels) ? [...product.labels] : [],
         };
         if (bucket.tag) entry.labels.push(bucket.tag);
@@ -11856,6 +11857,7 @@ async function findJumboAlternativesGrouped(ingredient, maxCount = 12) {
       } else {
         const entry = bySku.get(key);
         if (effectiveIsBonus) entry.isBonus = true;
+        if (effectiveIsBonus && !entry.promotionLabel) entry.promotionLabel = "Aanbieding";
         if (product.promotionLabel && !entry.promotionLabel) entry.promotionLabel = product.promotionLabel;
         if (bucket.tag && !entry.labels.includes(bucket.tag)) entry.labels.push(bucket.tag);
       }

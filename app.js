@@ -2600,10 +2600,11 @@ function extractBasketLabelsFromChoice(choice, item) {
   return flags;
 }
 
-function getChoicePromotionLabel(choice) {
+function getChoicePromotionLabel(choice, storeSlug = state.basketPreview?.store || "") {
   const label = String(choice?.promotionLabel || "").trim();
   if (label) return label;
-  return choice?.isBonus ? "BONUS" : "";
+  if (!choice?.isBonus) return "";
+  return storeSlug === "jumbo" ? "Aanbieding" : "BONUS";
 }
 
 function formatEuro(value) {
@@ -2783,7 +2784,7 @@ function renderBasketPreview() {
     const displayTitle = bioActive && isBioChoice
       ? `🌱 Biologisch ${choice.title}`
       : choice.title;
-    const promotionLabel = getChoicePromotionLabel(choice);
+    const promotionLabel = getChoicePromotionLabel(choice, preview?.store || "");
     const promotionBadge = promotionLabel
       ? `<span class="basket-product__bonus">${escapeHtml(promotionLabel)}</span>`
       : "";
@@ -3086,7 +3087,7 @@ async function applyBasketBulkOptimization(mode) {
     if (mode === "cheapest") {
       nextIdx = pickCheapestChoiceIndex(item);
     } else if (mode === "bonus") {
-      nextIdx = pickPreferredChoiceIndex(item, (choice) => Boolean(getChoicePromotionLabel(choice)));
+      nextIdx = pickPreferredChoiceIndex(item, (choice) => Boolean(getChoicePromotionLabel(choice, preview.store)));
     } else if (mode === "bio") {
       nextIdx = pickPreferredChoiceIndex(item, (choice, it) => Boolean(extractBasketLabelsFromChoice(choice, it).bio));
     }
@@ -3100,7 +3101,7 @@ async function applyBasketBulkOptimization(mode) {
   renderBasketPreview();
 
   if (mode === "cheapest") showToast(changed ? "Goedkoopste keuzes geselecteerd." : "Alles stond al op goedkoopste.");
-  if (mode === "bonus") showToast(changed ? "BONUS keuzes geselecteerd." : "Geen BONUS alternatieven gevonden.");
+  if (mode === "bonus") showToast(changed ? "Aanbiedingskeuzes geselecteerd." : "Geen aanbiedingen gevonden.");
   if (mode === "bio") showToast(changed ? "Bio keuzes geselecteerd." : "Geen bio alternatieven gevonden.");
 }
 
@@ -3324,7 +3325,7 @@ function renderAltBadges(choice, item, { showCheapest = false, forceKeys = [] } 
     if (k) keys.add(k);
   }
   const primary = ALT_BADGE_PRIORITY.filter((k) => keys.has(k)).slice(0, 2);
-  const promotionLabel = getChoicePromotionLabel(choice);
+  const promotionLabel = getChoicePromotionLabel(choice, state.basketPreview?.store || "");
   const badges = [
     ...(promotionLabel ? [{ key: "bonus", label: promotionLabel }] : []),
     ...primary.map((k) => ({ key: k, label: formatAltBadgeLabel(k) })),
