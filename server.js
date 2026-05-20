@@ -16635,6 +16635,64 @@ async function repairChicksLoveFoodImportsForUser(user, options = {}) {
   };
 }
 
+async function repairChicksLoveFoodImportsForAllUsers(options = {}) {
+  const dryRun = options?.dryRun !== false;
+  const maxRecipes = Math.max(1, Math.min(Number(options?.maxRecipes) || 100, 500));
+  let usersScanned = 0;
+  let usersChanged = 0;
+  let repairedRecipes = 0;
+  const sampleRepaired = [];
+  const sampleFailed = [];
+
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const res = await pool.query(
+      `
+      SELECT *
+      FROM plately_users
+      WHERE COALESCE(app_state, '{}'::jsonb)::text ILIKE '%chickslovefood.com/recept/%'
+      `
+    );
+    for (const row of res.rows || []) {
+      usersScanned += 1;
+      const result = await repairChicksLoveFoodImportsForUser(row, { maxRecipes });
+      sampleFailed.push(...result.failed.slice(0, Math.max(0, 40 - sampleFailed.length)));
+      if (!result.changed) continue;
+      usersChanged += 1;
+      repairedRecipes += result.repaired.length;
+      sampleRepaired.push(...result.repaired.slice(0, Math.max(0, 40 - sampleRepaired.length)));
+      if (!dryRun) await updateAuthenticatedUserState(row.id, result.nextState);
+    }
+  } else {
+    const db = await loadDatabase();
+    for (const user of Object.values(db.users || {})) {
+      const recipes = Array.isArray(user?.importedRecipes) ? user.importedRecipes : [];
+      if (!recipes.some((r) => isChicksLoveFoodRecipeUrl(r?.sourceUrl || r?.source || ""))) continue;
+      usersScanned += 1;
+      const result = await repairChicksLoveFoodImportsForUser(user, { maxRecipes });
+      sampleFailed.push(...result.failed.slice(0, Math.max(0, 40 - sampleFailed.length)));
+      if (!result.changed) continue;
+      usersChanged += 1;
+      repairedRecipes += result.repaired.length;
+      sampleRepaired.push(...result.repaired.slice(0, Math.max(0, 40 - sampleRepaired.length)));
+      if (!dryRun) db.users[user.id] = sanitizeUserStatePayload(result.nextState, user);
+    }
+    if (!dryRun && usersChanged) await persistDatabase();
+  }
+
+  return {
+    ok: true,
+    dryRun,
+    maxRecipes,
+    usersScanned,
+    usersChanged,
+    repairedRecipes,
+    sampleRepaired,
+    sampleFailed,
+  };
+}
+
 async function runSeoRecipeBackfillForUser(authUser, options = {}) {
   const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
   const forceReimport = Boolean(options.forceReimport);
@@ -21128,59 +21186,8 @@ const server = http.createServer(async (request, response) => {
         const body = await readRequestBody(request);
         const dryRun = body?.dryRun !== false;
         const maxRecipes = Math.max(1, Math.min(Number(body?.maxRecipes) || 100, 500));
-        let usersScanned = 0;
-        let usersChanged = 0;
-        let repairedRecipes = 0;
-        const sampleRepaired = [];
-        const sampleFailed = [];
-
-        if (isPostgresEnabled()) {
-          await ensurePostgresSchema();
-          const pool = await getPostgresPool();
-          const res = await pool.query(
-            `
-            SELECT *
-            FROM plately_users
-            WHERE COALESCE(app_state, '{}'::jsonb)::text ILIKE '%chickslovefood.com/recept/%'
-            `
-          );
-          for (const row of res.rows || []) {
-            usersScanned += 1;
-            const result = await repairChicksLoveFoodImportsForUser(row, { maxRecipes });
-            sampleFailed.push(...result.failed.slice(0, Math.max(0, 40 - sampleFailed.length)));
-            if (!result.changed) continue;
-            usersChanged += 1;
-            repairedRecipes += result.repaired.length;
-            sampleRepaired.push(...result.repaired.slice(0, Math.max(0, 40 - sampleRepaired.length)));
-            if (!dryRun) await updateAuthenticatedUserState(row.id, result.nextState);
-          }
-        } else {
-          const db = await loadDatabase();
-          for (const user of Object.values(db.users || {})) {
-            const recipes = Array.isArray(user?.importedRecipes) ? user.importedRecipes : [];
-            if (!recipes.some((r) => isChicksLoveFoodRecipeUrl(r?.sourceUrl || r?.source || ""))) continue;
-            usersScanned += 1;
-            const result = await repairChicksLoveFoodImportsForUser(user, { maxRecipes });
-            sampleFailed.push(...result.failed.slice(0, Math.max(0, 40 - sampleFailed.length)));
-            if (!result.changed) continue;
-            usersChanged += 1;
-            repairedRecipes += result.repaired.length;
-            sampleRepaired.push(...result.repaired.slice(0, Math.max(0, 40 - sampleRepaired.length)));
-            if (!dryRun) db.users[user.id] = sanitizeUserStatePayload(result.nextState, user);
-          }
-          if (!dryRun && usersChanged) await persistDatabase();
-        }
-
-        return sendJson(response, 200, {
-          ok: true,
-          dryRun,
-          maxRecipes,
-          usersScanned,
-          usersChanged,
-          repairedRecipes,
-          sampleRepaired,
-          sampleFailed,
-        });
+        const result = await repairChicksLoveFoodImportsForAllUsers({ dryRun, maxRecipes });
+        return sendJson(response, 200, result);
       } catch (error) {
         const statusCode = error.statusCode || 400;
         console.error("❌ Error in /api/admin/chicks-love-food-imports-repair:", error.message);
@@ -24025,6 +24032,7 @@ module.exports = {
     parseMarkdownInstructionSection,
     normalizeIngredientList,
     extractMarkdownSection,
+    repairChicksLoveFoodImportsForAllUsers,
     findRecipeJsonLd,
     isAhAllerhandeRecipeUrl,
     ahSeoBackfillResultMatchesQuery,
