@@ -10558,6 +10558,8 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
     // Is het ingredient zelf al een samengesteld gerecht? Dan samengesteld-gerecht-penalty niet toepassen.
     const isIngredientDishLike =
       /\b(salade|maaltijd|schotel|gerecht|stoofpot|lasagne|ovenschotel|stamppot|curry|wok|nasi|bami|wrap|pizza|soep|noedels|noodles|ramen|spaghetti|pasta|penne|linguine|tagliatelle|frittata|omelet|quiche|rijstschotel|pastaschotel)\b/i.test(baseLower);
+    const isPlainPastaQuery =
+      /^(?:biologisch\s+)?(?:volkoren\s+)?(?:pasta|penne|fusilli|spaghetti|tagliatelle|macaroni|lasagnebladen|lasagne\s+bladen)$/i.test(baseLower);
 
     const ingredientTokens = tokenizeForMatch(baseLower);
     const produceSynonymTokens = [];
@@ -10715,6 +10717,13 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       if (isBabyFood) {
         score += 175;
         adjustments.push({ kind: "penalty", label: "Knijpfruit/babyfood (nooit basisingrediënt)", delta: 175 });
+      }
+
+      if (isPlainPastaQuery) {
+        if (/\b(maaltijdhapje|babyhapje|babyvoeding|8\+|12\+|speculoos|hazelnoot|choco|miso|pesto(?:saus)?|pastasaus|geraspte\s+kaas|salade|cashew|amandel)\b/i.test(title)) {
+          score += 140;
+          adjustments.push({ kind: "penalty", label: "Geen droge pasta voor recept", delta: 140 });
+        }
       }
 
       // 6. Vlees & vis: penalizeer snacks met vleessmaak en sterk verwerkte producten.
