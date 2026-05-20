@@ -3689,77 +3689,76 @@ function pickUniqueRandom(items, count, rng = Math.random) {
 }
 
 const HOME_QUICK_CHIP_DISH_POOL = [
-  "Bami",
-  "Nasi",
+  "Pasta pesto",
+  "Pasta carbonara",
+  "Pasta bolognese",
   "Lasagne",
-  "Pad thai",
-  "Pannenkoeken",
-  "Saté",
-  "Sushi bowl",
+  "Risotto met champignons",
+  "Gnocchi met pesto",
+  "Nasi goreng",
+  "Bami goreng",
+  "Rijst met kip",
+  "Noedels met kip",
+  "Curry met kip",
+  "Kip kerrie",
+  "Butter chicken",
+  "Kip tikka masala",
+  "Chili con carne",
+  "Chili sin carne",
+  "Wraps met kip",
+  "Taco met gehakt",
+  "Burrito bowl",
+  "Quesadilla",
   "Poké bowl",
-  "Ovenschotel",
-  "Spaghetti Bolognese",
-  "Pasta Carbonara",
-  "Lasagne Bolognese",
-  "Pasta Pesto",
-  "Macaroni and Cheese",
-  "Tomatenrisotto met Parmezaan en citroen",
-  "Gnocchi met salieboter",
-  "Pizza Margherita",
-  "Pasta met feta uit de oven",
-  "Fettuccine Alfredo",
-  "Aubergine Parmigiana",
-  "Stamppot Boerenkool",
-  "Stamppot Hutspot",
-  "Hachee",
-  "Ovenschotel met prei en aardappel",
-  "Bloemkool met kaassaus en aardappels",
-  "Gehaktballen in jus",
-  "Hollandse pannenkoeken",
-  "Babi Pangang",
-  "Snert",
-  "Thaise Pad Thai",
-  "Massaman Curry",
-  "Indiase Butter Chicken",
-  "Indonesische Gado Gado",
-  "Mexicaanse Taco's met gehakt",
+  "Sushi bowl",
+  "Pad thai",
+  "Ramen",
+  "Gado gado",
+  "Saté met rijst",
   "Shakshuka",
-  "Spaanse Paella",
-  "Kip Tikka Masala",
-  "Nasi Goreng",
-  "Chili con Carne",
+  "Falafel bowl",
+  "Pita gyros",
+  "Kapsalon kip",
+  "Pizza margherita",
+  "Plaattaart",
+  "Quiche lorraine",
+  "Hartige taart",
+  "Maaltijdsalade kip",
+  "Pastasalade pesto",
+  "Tomatensoep",
+  "Pompoensoep",
+  "Erwtensoep",
+  "Stamppot boerenkool",
+  "Stamppot andijvie",
+  "Hutspot",
+  "Ovenschotel gehakt",
+  "Aardappelgratin",
+  "Bloemkool ovenschotel",
   "Kip uit de oven",
-  "Kip Teriyaki",
-  "Saté met pindasaus",
-  "Steak met chimichurri",
-  "Pulled Pork",
-  "Gyros",
 ];
 
 const HOME_QUICK_CHIP_GENERAL_POOL = [
-  "Pasta",
-  "Kip",
-  "Avocado",
-  "Snelle lunch",
-  "Gezond",
-  "Vegetarisch",
-  "Vegan",
-  "Salade",
-  "Soep",
-  "Curry",
-  "Rijst",
-  "Noedels",
-  "Wrap",
-  "Taco",
-  "Bowl",
-  "Airfryer",
+  "Snelle avondmaaltijd",
+  "Makkelijke maaltijd",
+  "Gezonde maaltijd",
+  "Budget avondeten",
+  "Vegetarisch avondeten",
+  "Vegan avondeten",
+  "Mealprep lunch",
+  "Lunch meenemen",
+  "Airfryer recepten",
+  "Ovenschotel",
+  "Eenpansgerecht",
+  "Plaatbakgerecht",
   "30 minuten",
-  "Budget",
-  "Mealprep",
-  "Ontbijt",
-  "Smoothie",
-  "Eieren",
-  "Vis",
+  "Kindvriendelijk",
+  "Gezinsproof",
+  "Salade maaltijd",
+  "Soep maaltijd",
+  "Pasta met kip",
+  "Kipfilet",
+  "Gehakt",
+  "Zalm",
   "Garnalen",
   "Tofu",
   "Kikkererwten",
@@ -3770,22 +3769,22 @@ const HOME_QUICK_CHIP_GENERAL_POOL = [
   "Spinazie",
   "Courgette",
   "Aubergine",
-  "Tomaat",
   "Paprika",
   "Pesto",
-  "Parmezaan",
   "Feta",
   "Burrata",
-  "Stoof",
-  "BBQ",
-  "Dessert",
-  "Chocolate chip",
-  "Gezinsproof",
 ];
 
 let homeSeoRecipeKeywordPool = null;
 let homeSeoRecipeKeywordPoolLoaded = false;
 const HOME_SEO_KEYWORDS_ASSET = "/assets/seo-recipe-keywords.nl.json";
+
+const HOME_SEASONAL_CHIP_POOL = {
+  lente: ["Asperges", "Aspergesoep", "Pasta met spinazie", "Rabarber crumble", "Salade met aardbei", "Lente risotto"],
+  zomer: ["BBQ kip", "Pastasalade", "Couscous salade", "Gazpacho", "Courgette pasta", "Gegrilde groenten"],
+  herfst: ["Pompoensoep", "Paddenstoelen risotto", "Stoofpot", "Appel crumble", "Spruitjes uit de oven", "Pastinaak soep"],
+  winter: ["Stamppot boerenkool", "Hutspot", "Erwtensoep", "Hachee", "Witlof ovenschotel", "Rode kool"],
+};
 
 async function loadHomeSeoRecipeKeywordsOnce() {
   if (homeSeoRecipeKeywordPoolLoaded) return homeSeoRecipeKeywordPool;
@@ -3805,6 +3804,7 @@ async function loadHomeSeoRecipeKeywordsOnce() {
 
 function pickHomeQuickChips(count, rng) {
   const extra = Array.isArray(homeSeoRecipeKeywordPool) ? homeSeoRecipeKeywordPool : [];
+  const seasonal = HOME_SEASONAL_CHIP_POOL[getSeason()] || [];
 
   // Personalized: add titles from user's saved recipes as chip suggestions
   const personal = getSavedImportedRecipes()
@@ -3815,7 +3815,6 @@ function pickHomeQuickChips(count, rng) {
   const n = Math.max(0, Math.min(count, HOME_QUICK_CHIP_DISH_POOL.length + HOME_QUICK_CHIP_GENERAL_POOL.length + extra.length + personal.length));
   if (n === 0) return [];
 
-  // Always try to include 1 personal recipe chip if user has recipes
   let picks = [];
   if (personal.length) {
     const personalPick = pickUniqueRandom(personal, 1, rng)[0];
@@ -3823,12 +3822,23 @@ function pickHomeQuickChips(count, rng) {
   }
 
   const dishPick = pickUniqueRandom(HOME_QUICK_CHIP_DISH_POOL, 1, rng)[0];
-  picks.push(dishPick);
+  if (dishPick) picks.push(dishPick);
+
+  const seasonalPick = pickUniqueRandom(seasonal, 1, rng)[0];
+  if (seasonalPick) picks.push(seasonalPick);
+
+  const intentPick = pickUniqueRandom(HOME_QUICK_CHIP_GENERAL_POOL, 1, rng)[0];
+  if (intentPick) picks.push(intentPick);
 
   const remaining = Math.max(0, n - picks.length);
-  const combined = [...HOME_QUICK_CHIP_DISH_POOL, ...HOME_QUICK_CHIP_GENERAL_POOL, ...extra]
+  const seoPickCount = extra.length ? Math.min(remaining, Math.max(1, Math.floor(n / 2))) : 0;
+  const seoPicks = pickUniqueRandom(extra.filter((x) => !picks.includes(x)), seoPickCount, rng);
+  picks.push(...seoPicks);
+
+  const restRemaining = Math.max(0, n - picks.length);
+  const combined = [...HOME_QUICK_CHIP_DISH_POOL, ...HOME_QUICK_CHIP_GENERAL_POOL, ...seasonal, ...extra]
     .filter((x) => !picks.includes(x));
-  const rest = pickUniqueRandom(combined, remaining, rng);
+  const rest = pickUniqueRandom(combined, restRemaining, rng);
 
   return pickUniqueRandom([...picks, ...rest], n, rng);
 }
