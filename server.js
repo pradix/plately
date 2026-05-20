@@ -4900,6 +4900,10 @@ function cleanListLine(line) {
   return sanitizeText(
     String(line || "")
       .replace(/^[\-\u2022\u2023\u25E6\u2043\u2219•●▪◦]+\s*/, "")
+      // CLF/Jina renders recipe checklists as "afvinken maar - [x] 6 ..." for
+      // the first ingredient and "- [x] ..." for the rest.
+      .replace(/^afvinken maar\b\s*/i, "")
+      .replace(/^[-–]?\s*\[\s*[x ]\s*\]\s*/i, "")
       .replace(/^(step|stap)\s*\d+\s*[:.)-]?\s*/i, "")
       // Only strip actual list numbering like "1. " / "2) " — not decimals like "2.5".
       .replace(/^\d+\s*[.)-]\s+/, "")
@@ -4951,10 +4955,39 @@ function isLikelyRecipeMarkdownNoiseLine(line) {
   return false;
 }
 
+function isLikelyInstructionNoiseLine(line) {
+  const clean = sanitizeText(
+    cleanListLine(
+      String(line || "")
+        .replace(/\[([^\]]+)\]\((?:https?:\/\/|#|javascript:)[^)]+\)/gi, "$1")
+        .replace(/^#{1,6}\s*/, "")
+    )
+  );
+  if (!clean) return true;
+  if (isLikelyRecipeMarkdownNoiseLine(clean)) return true;
+  if (
+    /^(favorite|deel dit recept|facebook|pinterest|twitter|whatsapp|mail|powered by|skip|ads by|shop ingredients at)\b/i.test(clean)
+  ) {
+    return true;
+  }
+  if (
+    /^(privacy statement|cookie statement|cookieinstellingen|afmelden voor advertenties|word gratis member|toon meer(?:\s+inspiratie)?|bekijk de menu'?s hier|doe je met ons mee\??)$/i.test(clean)
+  ) {
+    return true;
+  }
+  if (/^dit recept is geschreven\b/i.test(clean)) return true;
+  if (/^meer\s+(?:sinner sunday|5 or less|skinny six|inspiratie)\b/i.test(clean)) return true;
+  if (/chickslovefood\.com\/(?:privacybeleid|cookie-statement)\b/i.test(clean)) return true;
+  return false;
+}
+
 function isLikelyInstructionLine(line) {
   const clean = cleanListLine(line);
   // Lower minimum length to catch shorter instructions like "Bak 5 min"
   if (!clean || clean.length < 8) {
+    return false;
+  }
+  if (isLikelyInstructionNoiseLine(clean)) {
     return false;
   }
   if (INSTRUCTION_HEADING_PATTERN.test(clean)) {
@@ -5192,6 +5225,12 @@ function extractStructuredSections(text) {
     }
 
     if (mode === "instructions") {
+      if (/^(meer\s+\S+|word gratis member|privacy statement|cookie statement|cookieinstellingen)\b/i.test(line)) {
+        break;
+      }
+      if (isLikelyInstructionNoiseLine(line)) {
+        continue;
+      }
       sections.instructions.push(line);
     }
   }
@@ -5997,6 +6036,7 @@ function finalizeInstructionSteps(steps) {
     ...new Set(
       expanded
         .map((step) => stripInstructionStepPrefix(sanitizeInstructionStep(step)))
+        .filter((step) => !isLikelyInstructionNoiseLine(step))
         .filter(Boolean)
     ),
   ];
@@ -6009,7 +6049,7 @@ function finalizeInstructionSteps(steps) {
           .replace(/\bbuon appetito\b!?$/i, "")
       )
     )
-    .filter(Boolean);
+    .filter((step) => step && !isLikelyInstructionNoiseLine(step));
 
   const mergedNormalized = mergeDanglingConjunctions(normalized);
   const shouldTrimOptional = mergedNormalized.length >= 5;
@@ -7596,8 +7636,10 @@ function parseParagraphsAfterHeading(html, headingPattern) {
 
 function extractMarkdownSection(text, headingPattern, stopPattern) {
   // Headings can include extra trailing text, e.g. "## Bereidingswijze Surinaamse soep".
+  // Use horizontal whitespace after the heading pattern; `\s+` also matches the
+  // newline after a heading and can accidentally swallow the first list item.
   const regex = new RegExp(
-    `(?:^|\\n)#{2,3}\\s*(?:${headingPattern})(?:\\s+[^\\n]*)?\\s*\\n([\\s\\S]*?)(?=\\n#{2,3}\\s*(?:${stopPattern})(?:\\s+[^\\n]*)?\\s*\\n|$)`,
+    `(?:^|\\n)#{2,3}[^\\S\\n]*(?:${headingPattern})(?:[^\\S\\n]+[^\\n]*)?[^\\S\\n]*\\n([\\s\\S]*?)(?=\\n#{2,3}[^\\S\\n]*(?:${stopPattern})(?:[^\\S\\n]+[^\\n]*)?[^\\S\\n]*\\n|$)`,
     "gi"
   );
   const matches = [...String(text || "").matchAll(regex)];
@@ -7817,9 +7859,21 @@ function parseMarkdownIngredientSection(text) {
       })
   );
 
-  // Chickslovefood/Jina quirk: sometimes the first ingredient line includes extra helper text
-  // ("afvinken maar - [x] ...") and ends up dropped. Recover a common pasta/gnocchi line if present.
-  const recovered = (() => {
+  const recoveredFirstChecklistIngredient = (() => {
+    const m = String(trimmedSection || "").match(/(?:^|\n)\s*(?:\*|-)?\s*afvinken maar\s*-\s*\[[x ]\]\s*([^\n]+)/i);
+    if (!m) return null;
+    const parsedFirst = parseIngredientLine(m[1]);
+    if (!parsedFirst?.name) return null;
+    const firstKey = `${parsedFirst.quantity}|${parsedFirst.unit}|${parsedFirst.name}`.toLowerCase();
+    const existing = new Set(
+      parsed.map((i) => `${i?.quantity || ""}|${i?.unit || ""}|${i?.name || ""}`.toLowerCase()).filter(Boolean)
+    );
+    if (existing.has(firstKey)) return null;
+    return normalizeIngredientObject(parsedFirst);
+  })();
+
+  // Older generic fallback for pages where the first CLF ingredient was glued to helper text.
+  const recoveredPastaIngredient = (() => {
     const lower = String(trimmedSection || "").toLowerCase();
     const existing = new Set(parsed.map((i) => String(i?.name || "").toLowerCase()).filter(Boolean));
     const m = lower.match(/\b(\d+(?:[.,]\d+)?)\s*g\s*(penne|gnocchi|pasta)\b/);
@@ -7831,7 +7885,7 @@ function parseMarkdownIngredientSection(text) {
     return normalizeIngredientObject({ quantity: qty, unit: "g", name });
   })();
 
-  return recovered ? normalizeIngredientList([...parsed, recovered]) : parsed;
+  return normalizeIngredientList([recoveredFirstChecklistIngredient, ...parsed, recoveredPastaIngredient].filter(Boolean));
 }
 
 function parseMarkdownInstructionSection(text) {
@@ -9850,11 +9904,13 @@ let ahTokenCache = _persistedToken
         const retryInterval = setInterval(() => {
           _fetchFreshAHToken()
             .then(() => { clearInterval(retryInterval); scheduleAHTokenRefresh(); })
-            .catch(() => {});
+          .catch(() => {});
         }, 30 * 60 * 1000);
       });
 
-  setImmediate(doStartupRefresh);
+  if (process.env.NODE_ENV !== "test") {
+    setImmediate(doStartupRefresh);
+  }
 }
 
 // In-memory cache voor Jumbo productzoekopdrachten — zelfde patroon als AH cache.
@@ -16512,6 +16568,73 @@ async function repairSeoRecipesForUser(user, options = {}) {
   };
 }
 
+function isChicksLoveFoodRecipeUrl(rawUrl) {
+  try {
+    const u = new URL(String(rawUrl || "").trim());
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    return host === "chickslovefood.com" && /\/recept\//i.test(u.pathname);
+  } catch {
+    return false;
+  }
+}
+
+async function repairChicksLoveFoodImportsForUser(user, options = {}) {
+  const maxRecipes = Math.max(1, Math.min(Number(options.maxRecipes) || 100, 500));
+  const appState = buildAppStateFromUser(user);
+  const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes.map((r) => ({ ...r })) : [];
+  const repaired = [];
+  const failed = [];
+
+  for (let index = 0; index < recipes.length; index += 1) {
+    if (repaired.length + failed.length >= maxRecipes) break;
+    const recipe = recipes[index];
+    const sourceUrl = sanitizeText(recipe?.sourceUrl || recipe?.source || "");
+    if (!isChicksLoveFoodRecipeUrl(sourceUrl)) continue;
+
+    const id = sanitizeText(recipe?.id || "");
+    try {
+      const fresh = await importRecipe(sourceUrl, "", sanitizeText(recipe?.image || ""));
+      const merged = sanitizeRecipeForStorage({
+        ...recipe,
+        ...fresh,
+        id,
+        sourceUrl: sanitizeText(fresh?.sourceUrl || sourceUrl),
+        image: sanitizeText(fresh?.image || recipe?.image || ""),
+        platform: sanitizeText(fresh?.platform || recipe?.platform || "website"),
+      });
+      if (!merged || !Array.isArray(merged.ingredients) || !Array.isArray(merged.instructions)) {
+        failed.push({ id, title: sanitizeText(recipe?.title || "Recept"), sourceUrl, error: "ongeldige_import" });
+        continue;
+      }
+      recipes[index] = merged;
+      repaired.push({
+        id,
+        title: sanitizeText(merged.title || recipe?.title || "Recept"),
+        sourceUrl,
+        ingredientsBefore: Array.isArray(recipe?.ingredients) ? recipe.ingredients.length : 0,
+        ingredientsAfter: merged.ingredients.length,
+        instructionsBefore: Array.isArray(recipe?.instructions) ? recipe.instructions.length : 0,
+        instructionsAfter: merged.instructions.length,
+      });
+    } catch (error) {
+      failed.push({
+        id,
+        title: sanitizeText(recipe?.title || "Recept"),
+        sourceUrl,
+        error: sanitizeText(error?.message || "reparatie mislukt").slice(0, 180),
+      });
+    }
+  }
+
+  if (!repaired.length) return { changed: false, nextState: appState, repaired, failed };
+  return {
+    changed: true,
+    nextState: { ...appState, importedRecipes: recipes },
+    repaired,
+    failed,
+  };
+}
+
 async function runSeoRecipeBackfillForUser(authUser, options = {}) {
   const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
   const forceReimport = Boolean(options.forceReimport);
@@ -20998,6 +21121,73 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/chicks-love-food-imports-repair" && request.method === "POST") {
+      console.log("🐣 /api/admin/chicks-love-food-imports-repair called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const dryRun = body?.dryRun !== false;
+        const maxRecipes = Math.max(1, Math.min(Number(body?.maxRecipes) || 100, 500));
+        let usersScanned = 0;
+        let usersChanged = 0;
+        let repairedRecipes = 0;
+        const sampleRepaired = [];
+        const sampleFailed = [];
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const res = await pool.query(
+            `
+            SELECT *
+            FROM plately_users
+            WHERE COALESCE(app_state, '{}'::jsonb)::text ILIKE '%chickslovefood.com/recept/%'
+            `
+          );
+          for (const row of res.rows || []) {
+            usersScanned += 1;
+            const result = await repairChicksLoveFoodImportsForUser(row, { maxRecipes });
+            sampleFailed.push(...result.failed.slice(0, Math.max(0, 40 - sampleFailed.length)));
+            if (!result.changed) continue;
+            usersChanged += 1;
+            repairedRecipes += result.repaired.length;
+            sampleRepaired.push(...result.repaired.slice(0, Math.max(0, 40 - sampleRepaired.length)));
+            if (!dryRun) await updateAuthenticatedUserState(row.id, result.nextState);
+          }
+        } else {
+          const db = await loadDatabase();
+          for (const user of Object.values(db.users || {})) {
+            const recipes = Array.isArray(user?.importedRecipes) ? user.importedRecipes : [];
+            if (!recipes.some((r) => isChicksLoveFoodRecipeUrl(r?.sourceUrl || r?.source || ""))) continue;
+            usersScanned += 1;
+            const result = await repairChicksLoveFoodImportsForUser(user, { maxRecipes });
+            sampleFailed.push(...result.failed.slice(0, Math.max(0, 40 - sampleFailed.length)));
+            if (!result.changed) continue;
+            usersChanged += 1;
+            repairedRecipes += result.repaired.length;
+            sampleRepaired.push(...result.repaired.slice(0, Math.max(0, 40 - sampleRepaired.length)));
+            if (!dryRun) db.users[user.id] = sanitizeUserStatePayload(result.nextState, user);
+          }
+          if (!dryRun && usersChanged) await persistDatabase();
+        }
+
+        return sendJson(response, 200, {
+          ok: true,
+          dryRun,
+          maxRecipes,
+          usersScanned,
+          usersChanged,
+          repairedRecipes,
+          sampleRepaired,
+          sampleFailed,
+        });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/chicks-love-food-imports-repair:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Chicks Love Food imports repareren mislukt." });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/fix-ingredient-units" && request.method === "POST") {
       await requireAdmin(request);
       // Units that were often parsed incorrectly (singular form left, 's' prepended to ingredient name)
@@ -23830,6 +24020,11 @@ module.exports = {
     importWebsite,
     importRecipe,
     parseWebsiteRecipe,
+    parseTextRecipeDocument,
+    parseMarkdownIngredientSection,
+    parseMarkdownInstructionSection,
+    normalizeIngredientList,
+    extractMarkdownSection,
     findRecipeJsonLd,
     isAhAllerhandeRecipeUrl,
     ahSeoBackfillResultMatchesQuery,
