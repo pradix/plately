@@ -13204,6 +13204,56 @@ const RECIPE_URL_RE = /\/(recept|recepten|recipe|recipes|gerecht|gerechten|bakke
 const BLOG_TITLE_RE = /\b(tips?|review|gids|uitleg|interview|podcast|blog|nieuws|aankondiging|aanbieding|webshop|kookboek|artikel|weekmenu|week\s*menu|wat\s+is|waarom|zo\s+doe\s+je|best\s+bekeken|favoriete|populaire|verzameling|10\s+x\b|\d+\s+keer\b)\b/i;
 const LISTICLE_RECIPE_TITLE_RE = /(?:^\s*\d+\.\s+\S|\b\d+\s*x\b|\b\d+\s+(?:recepten|gerechten|idee[eë]n)\b|\b(?:recepten|gerechten|idee[eë]n)\s*(?:met|voor|van)?\s*\d+\b)/i;
 const LISTICLE_RECIPE_URL_RE = /\/(?:\d+\s*x|[0-9]+x|[^/?#]*-\d+-(?:recepten|gerechten|ideeen|ideeën)|[^/?#]*(?:best-bekeken|populaire|favoriete|verzameling)[^/?#]*)/i;
+const RECIPE_COLLECTION_WORD_RE = /\b(?:recepten|gerechten|idee[eë]n|inspiratie|overzicht|verzameling|favoriete|favorieten|populaire|beste|lekkerste|makkelijkste|gezonde|snelle|weekmenu|menu|top|best\s+bekeken)\b/i;
+const INDIVIDUAL_RECIPE_SIGNAL_RE = /\b(?:met|gevuld(?:e)?|gebakken|geroosterde?|gegrilde?|gestoofde?|romige|frisse|pittige|krokante|zelfgemaakte|uit\s+de\s+oven|airfryer|salade|soep|saus|curry|pasta|rijst|bowl|taart|cake|koek|brood|wrap|taco|burger|stamppot|risotto|lasagne|quiche|traybake|ovenschotel)\b/i;
+
+function normalizePathSlugForClassifier(rawUrl) {
+  try {
+    const u = new URL(String(rawUrl || ""));
+    return decodeURIComponent((u.pathname || "").split("/").filter(Boolean).pop() || "")
+      .replace(/[-_]+/g, " ")
+      .trim();
+  } catch {
+    return "";
+  }
+}
+
+function recipeCollectionPageScore(title, url, description = "") {
+  const t = sanitizeText(String(title || "")).trim();
+  const u = String(url || "").trim();
+  const d = sanitizeText(String(description || "")).trim();
+  const slugText = normalizePathSlugForClassifier(u);
+  const combined = `${t} ${d} ${slugText}`.trim();
+  if (!combined) return 0;
+
+  let score = 0;
+  if (LISTICLE_RECIPE_TITLE_RE.test(t)) score += 4;
+  if (LISTICLE_RECIPE_TITLE_RE.test(d)) score += 3;
+  if (LISTICLE_RECIPE_TITLE_RE.test(slugText)) score += 3;
+  if (LISTICLE_RECIPE_URL_RE.test(u)) score += 4;
+  if (/^\s*\d+\.\s+\S/i.test(t)) score += 4;
+  if (/\b\d+\s*x\b/i.test(combined)) score += 3;
+  if (/\btop\s*\d+\b/i.test(combined)) score += 3;
+  if (/\b\d+\s+(?:recepten|gerechten|idee[eë]n)\b/i.test(combined)) score += 4;
+  if (/\b(?:recepten|gerechten|idee[eë]n)$/i.test(t)) score += 2;
+  if (RECIPE_COLLECTION_WORD_RE.test(combined)) score += 2;
+  if (/\b(?:recepten|gerechten|idee[eë]n)\b/i.test(combined) && /\b(?:onze|favoriete|populaire|beste|lekkerste|gezonde|snelle|makkelijke|top|overzicht)\b/i.test(combined)) score += 3;
+  if (/\b(?:deze|alle|onze)\s+(?:recepten|gerechten|favorieten)\b/i.test(combined)) score += 2;
+  if (/\b(?:bekijk|ontdek|vind)\s+(?:alle|onze|de)\b/i.test(combined)) score += 2;
+
+  const hasConcreteRecipeSignals = INDIVIDUAL_RECIPE_SIGNAL_RE.test(t) || INDIVIDUAL_RECIPE_SIGNAL_RE.test(slugText);
+  const hasExplicitCollectionCount =
+    LISTICLE_RECIPE_TITLE_RE.test(t) ||
+    LISTICLE_RECIPE_TITLE_RE.test(slugText) ||
+    LISTICLE_RECIPE_URL_RE.test(u);
+  if (hasConcreteRecipeSignals && !hasExplicitCollectionCount) score -= 2;
+
+  return Math.max(0, score);
+}
+
+function isLikelyRecipeCollectionPage(title, url, description = "") {
+  return recipeCollectionPageScore(title, url, description) >= 4;
+}
 
 function isLikelyBlogPage(title, url, description = "") {
   const t = sanitizeText(String(title || "")).trim();
@@ -13211,11 +13261,7 @@ function isLikelyBlogPage(title, url, description = "") {
   const d = sanitizeText(String(description || "")).trim();
   const combined = `${t} ${d}`.trim();
 
-  const looksLikeRecipeCollection =
-    (t && LISTICLE_RECIPE_TITLE_RE.test(t)) ||
-    (d && LISTICLE_RECIPE_TITLE_RE.test(d)) ||
-    (u && LISTICLE_RECIPE_URL_RE.test(u));
-  if (looksLikeRecipeCollection) return true;
+  if (isLikelyRecipeCollectionPage(t, u, d)) return true;
 
   // If URL is explicitly recipe-like, keep it (safer than dropping valid recipes).
   if (u && RECIPE_URL_RE.test(u)) return false;
@@ -13591,7 +13637,7 @@ function isAhAllerhandeRecipeUrl(url) {
  */
 function titleLooksLikeRecipe(title) {
   if (!title) return true;
-  if (LISTICLE_RECIPE_TITLE_RE.test(String(title || ""))) return false;
+  if (isLikelyRecipeCollectionPage(String(title || ""), "", "")) return false;
 
   // Strong positive indicators for recipes
   const recipeKeywords = /\b(?:recept|recipe|maken|bereid|bak|ingredient|snelle|makkelijke|gezonde|eenvoudige|lekker|vers|huisgemaakte|homemade|how\s+to\s+make|how\s+to\s+bake|voor|met|soep|pizza|pasta|diner|ontbijt|tart|cake|koekje|cookies?)\b/i;
@@ -24318,6 +24364,8 @@ module.exports = {
     ahSeoBackfillResultMatchesQuery,
     urlLooksLikeRecipe,
     isLikelyBlogPage,
+    isLikelyRecipeCollectionPage,
+    recipeCollectionPageScore,
     titleLooksLikeRecipe,
     parseIngredientLine,
     repairIngredientUnitRemainder,

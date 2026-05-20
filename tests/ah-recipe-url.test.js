@@ -58,10 +58,24 @@ describe("Channel recipe search blog/listicle guardrails", () => {
         title: "5x avondeten recepten",
         url: "https://example.com/recept/5x-avondeten-recepten/",
       },
+      {
+        title: "Onze favoriete pasta recepten",
+        url: "https://example.com/recept/pasta-recepten-overzicht/",
+      },
+      {
+        title: "Top 10 snelle gerechten",
+        url: "https://example.com/recept/top-10-snelle-gerechten/",
+      },
+      {
+        title: "Gezonde lunch ideeën",
+        url: "https://example.com/recept/gezonde-lunch-ideeen/",
+        description: "Ontdek alle recepten voor een makkelijke lunch.",
+      },
     ];
 
     for (const row of badRows) {
       assert.equal(__dev.isLikelyBlogPage(row.title, row.url), true, row.title);
+      assert.equal(__dev.isLikelyRecipeCollectionPage(row.title, row.url, row.description || ""), true, row.title);
       assert.equal(__dev.titleLooksLikeRecipe(row.title), false, row.title);
     }
   });
@@ -75,5 +89,19 @@ describe("Channel recipe search blog/listicle guardrails", () => {
       false
     );
     assert.equal(__dev.titleLooksLikeRecipe("Poké bowl met broccolirijst"), true);
+    assert.equal(
+      __dev.isLikelyRecipeCollectionPage(
+        "Pasta pesto met kip",
+        "https://example.com/recept/pasta-pesto-met-kip/"
+      ),
+      false
+    );
+    assert.equal(
+      __dev.isLikelyRecipeCollectionPage(
+        "Traybake met groenten uit de oven",
+        "https://example.com/recept/traybake-met-groenten-uit-de-oven/"
+      ),
+      false
+    );
   });
 });
