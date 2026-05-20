@@ -16580,6 +16580,7 @@ function isChicksLoveFoodRecipeUrl(rawUrl) {
 
 async function repairChicksLoveFoodImportsForUser(user, options = {}) {
   const maxRecipes = Math.max(1, Math.min(Number(options.maxRecipes) || 100, 500));
+  const timeoutMs = Math.max(5000, Math.min(Number(options.timeoutMs) || 25000, 120000));
   const appState = buildAppStateFromUser(user);
   const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes.map((r) => ({ ...r })) : [];
   const repaired = [];
@@ -16593,7 +16594,13 @@ async function repairChicksLoveFoodImportsForUser(user, options = {}) {
 
     const id = sanitizeText(recipe?.id || "");
     try {
-      const fresh = await importRecipe(sourceUrl, "", sanitizeText(recipe?.image || ""));
+      console.log(`[clf-repair] import ${repaired.length + failed.length + 1}/${maxRecipes}: ${sourceUrl}`);
+      const fresh = await Promise.race([
+        importRecipe(sourceUrl, "", sanitizeText(recipe?.image || "")),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new HttpError(504, `timeout na ${timeoutMs}ms`)), timeoutMs)
+        ),
+      ]);
       const merged = sanitizeRecipeForStorage({
         ...recipe,
         ...fresh,
@@ -16638,6 +16645,7 @@ async function repairChicksLoveFoodImportsForUser(user, options = {}) {
 async function repairChicksLoveFoodImportsForAllUsers(options = {}) {
   const dryRun = options?.dryRun !== false;
   const maxRecipes = Math.max(1, Math.min(Number(options?.maxRecipes) || 100, 500));
+  const timeoutMs = Math.max(5000, Math.min(Number(options?.timeoutMs) || 25000, 120000));
   let usersScanned = 0;
   let usersChanged = 0;
   let repairedRecipes = 0;
@@ -16656,7 +16664,7 @@ async function repairChicksLoveFoodImportsForAllUsers(options = {}) {
     );
     for (const row of res.rows || []) {
       usersScanned += 1;
-      const result = await repairChicksLoveFoodImportsForUser(row, { maxRecipes });
+      const result = await repairChicksLoveFoodImportsForUser(row, { maxRecipes, timeoutMs });
       sampleFailed.push(...result.failed.slice(0, Math.max(0, 40 - sampleFailed.length)));
       if (!result.changed) continue;
       usersChanged += 1;
@@ -16670,7 +16678,7 @@ async function repairChicksLoveFoodImportsForAllUsers(options = {}) {
       const recipes = Array.isArray(user?.importedRecipes) ? user.importedRecipes : [];
       if (!recipes.some((r) => isChicksLoveFoodRecipeUrl(r?.sourceUrl || r?.source || ""))) continue;
       usersScanned += 1;
-      const result = await repairChicksLoveFoodImportsForUser(user, { maxRecipes });
+      const result = await repairChicksLoveFoodImportsForUser(user, { maxRecipes, timeoutMs });
       sampleFailed.push(...result.failed.slice(0, Math.max(0, 40 - sampleFailed.length)));
       if (!result.changed) continue;
       usersChanged += 1;
@@ -16685,6 +16693,7 @@ async function repairChicksLoveFoodImportsForAllUsers(options = {}) {
     ok: true,
     dryRun,
     maxRecipes,
+    timeoutMs,
     usersScanned,
     usersChanged,
     repairedRecipes,
@@ -21186,7 +21195,8 @@ const server = http.createServer(async (request, response) => {
         const body = await readRequestBody(request);
         const dryRun = body?.dryRun !== false;
         const maxRecipes = Math.max(1, Math.min(Number(body?.maxRecipes) || 100, 500));
-        const result = await repairChicksLoveFoodImportsForAllUsers({ dryRun, maxRecipes });
+        const timeoutMs = Math.max(5000, Math.min(Number(body?.timeoutMs) || 25000, 120000));
+        const result = await repairChicksLoveFoodImportsForAllUsers({ dryRun, maxRecipes, timeoutMs });
         return sendJson(response, 200, result);
       } catch (error) {
         const statusCode = error.statusCode || 400;

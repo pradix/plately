@@ -15,7 +15,11 @@ PM2_NAME="${PLATELY_PM2_NAME:-plately-beta}"
 
 echo "==> Plately deploy — $ROOT (branch: $BRANCH, pm2: $PM2_NAME)"
 
-git fetch origin
+if ! git fetch --prune origin; then
+  echo "⚠️ git fetch faalde; reset stale origin/$BRANCH ref en probeer opnieuw"
+  git update-ref -d "refs/remotes/origin/$BRANCH" || true
+  git fetch --prune origin
+fi
 git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"
 
