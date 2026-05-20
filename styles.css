@@ -1583,6 +1583,15 @@ img {
   font-weight: 780;
 }
 
+.detail-chip--rating {
+  background: color-mix(in srgb, var(--color-brand-soft) 40%, #fff);
+  border-color: color-mix(in srgb, var(--color-brand) 28%, var(--color-border));
+}
+
+.detail-chip--rating .detail-chip__ic {
+  color: var(--color-brand);
+}
+
 .detail-trust-note {
   margin: 0 0 14px;
   padding: 10px 12px;
@@ -4247,6 +4256,56 @@ button.ingredient-item {
   font-size: 0.76rem;
   color: #9dad9d;
   font-weight: 500;
+}
+
+.recent-card__meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.recipe-rating-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 5px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-surface-3) 92%, #fff);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted-2);
+  font-size: 0.68rem;
+  line-height: 1;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.recipe-rating-chip__star {
+  color: var(--color-brand);
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.recipe-rating-chip__score {
+  color: var(--color-text);
+  font-weight: 820;
+}
+
+.recipe-rating-chip__count {
+  color: var(--color-text-muted);
+  font-weight: 650;
+}
+
+.recipe-rating-chip__scale {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  font-size: 0.56rem;
+  color: var(--color-text-muted);
 }
 
 .recent-card--add {

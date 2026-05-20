@@ -3701,20 +3701,35 @@ function pickUniqueRandom(items, count, rng = Math.random) {
 }
 
 const HOME_QUICK_CHIP_DISH_POOL = [
+  "Kip teriyaki",
+  "Kip madras",
+  "Kip fajita",
+  "Kip shoarma",
+  "Kip parmezaan",
+  "Kip ketjap",
   "Pasta pesto",
   "Pasta carbonara",
   "Pasta bolognese",
+  "Pasta arrabbiata",
+  "Pasta tonijn",
+  "Pasta zalm",
+  "Mac and cheese",
   "Lasagne",
   "Risotto met champignons",
+  "Risotto met pompoen",
   "Gnocchi met pesto",
+  "Orzo met feta",
   "Nasi goreng",
   "Bami goreng",
   "Rijst met kip",
+  "Rijst bowl",
   "Noedels met kip",
   "Curry met kip",
+  "Curry met bloemkool",
   "Kip kerrie",
   "Butter chicken",
   "Kip tikka masala",
+  "Dahl met linzen",
   "Chili con carne",
   "Chili sin carne",
   "Wraps met kip",
@@ -3733,9 +3748,11 @@ const HOME_QUICK_CHIP_DISH_POOL = [
   "Kapsalon kip",
   "Pizza margherita",
   "Plaattaart",
+  "Flammkuchen",
   "Quiche lorraine",
   "Hartige taart",
   "Maaltijdsalade kip",
+  "Couscous salade",
   "Pastasalade pesto",
   "Tomatensoep",
   "Pompoensoep",
@@ -3746,6 +3763,7 @@ const HOME_QUICK_CHIP_DISH_POOL = [
   "Ovenschotel gehakt",
   "Aardappelgratin",
   "Bloemkool ovenschotel",
+  "Witlof ovenschotel",
   "Kip uit de oven",
 ];
 
@@ -3754,17 +3772,25 @@ const HOME_QUICK_CHIP_GENERAL_POOL = [
   "Makkelijke maaltijd",
   "Gezonde maaltijd",
   "Budget avondeten",
+  "Goedkoop koken",
+  "Restjes opmaken",
   "Vegetarisch avondeten",
   "Vegan avondeten",
+  "Eiwitrijke maaltijd",
+  "Koolhydraatarm",
   "Mealprep lunch",
+  "Mealprep avondeten",
   "Lunch meenemen",
   "Airfryer recepten",
+  "Slowcooker recepten",
   "Ovenschotel",
   "Eenpansgerecht",
   "Plaatbakgerecht",
   "30 minuten",
+  "15 minuten",
   "Kindvriendelijk",
   "Gezinsproof",
+  "Zonder pakjes",
   "Salade maaltijd",
   "Soep maaltijd",
   "Pasta met kip",
@@ -3798,6 +3824,34 @@ const HOME_SEASONAL_CHIP_POOL = {
   winter: ["Stamppot boerenkool", "Hutspot", "Erwtensoep", "Hachee", "Witlof ovenschotel", "Rode kool"],
 };
 
+function cleanHomeSearchChipLabel(value) {
+  let label = String(value || "")
+    .replace(/^[\s"'`*•·-]+/, "")
+    .replace(/^\d+[\).:\-\s]+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  label = label.replace(/[.。]+$/g, "").trim();
+  if (label.length < 3 || label.length > 38) return "";
+  if (/^\d+$/.test(label)) return "";
+  if (!/[a-zA-ZÀ-ÿ]/.test(label)) return "";
+  if (/^(recept|recepten|zoeken|zoek|home|undefined|null)$/i.test(label)) return "";
+  return label;
+}
+
+function uniqueCleanHomeSearchChipLabels(values) {
+  const seen = new Set();
+  const out = [];
+  for (const value of Array.isArray(values) ? values : []) {
+    const label = cleanHomeSearchChipLabel(value);
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(label);
+  }
+  return out;
+}
+
 async function loadHomeSeoRecipeKeywordsOnce() {
   if (homeSeoRecipeKeywordPoolLoaded) return homeSeoRecipeKeywordPool;
   homeSeoRecipeKeywordPoolLoaded = true;
@@ -3806,7 +3860,7 @@ async function loadHomeSeoRecipeKeywordsOnce() {
     if (!resp.ok) return null;
     const parsed = await resp.json();
     if (!Array.isArray(parsed)) return null;
-    const cleaned = parsed.map((s) => String(s || "").trim()).filter((s) => s.length >= 2);
+    const cleaned = uniqueCleanHomeSearchChipLabels(parsed);
     homeSeoRecipeKeywordPool = cleaned.length ? cleaned : null;
     return homeSeoRecipeKeywordPool;
   } catch {
@@ -3820,8 +3874,8 @@ function pickHomeQuickChips(count, rng) {
 
   // Personalized: add titles from user's saved recipes as chip suggestions
   const personal = getSavedImportedRecipes()
-    .map((r) => (r.title || "").trim())
-    .filter((t) => t.length > 2 && t.length <= 32)
+    .map((r) => cleanHomeSearchChipLabel(r.title || ""))
+    .filter(Boolean)
     .slice(0, 12);
 
   const n = Math.max(0, Math.min(count, HOME_QUICK_CHIP_DISH_POOL.length + HOME_QUICK_CHIP_GENERAL_POOL.length + extra.length + personal.length));
@@ -3844,15 +3898,17 @@ function pickHomeQuickChips(count, rng) {
 
   const remaining = Math.max(0, n - picks.length);
   const seoPickCount = extra.length ? Math.min(remaining, Math.max(1, Math.floor(n / 2))) : 0;
+  const cleanPicks = uniqueCleanHomeSearchChipLabels(picks);
+  picks = cleanPicks;
   const seoPicks = pickUniqueRandom(extra.filter((x) => !picks.includes(x)), seoPickCount, rng);
   picks.push(...seoPicks);
 
   const restRemaining = Math.max(0, n - picks.length);
-  const combined = [...HOME_QUICK_CHIP_DISH_POOL, ...HOME_QUICK_CHIP_GENERAL_POOL, ...seasonal, ...extra]
+  const combined = uniqueCleanHomeSearchChipLabels([...HOME_QUICK_CHIP_DISH_POOL, ...HOME_QUICK_CHIP_GENERAL_POOL, ...seasonal, ...extra])
     .filter((x) => !picks.includes(x));
   const rest = pickUniqueRandom(combined, restRemaining, rng);
 
-  return pickUniqueRandom([...picks, ...rest], n, rng);
+  return pickUniqueRandom(uniqueCleanHomeSearchChipLabels([...picks, ...rest]), n, rng);
 }
 
 // ── Focus-state helpers (recent searches, recent viewed recipes, intent chips) ─
@@ -5256,6 +5312,34 @@ function formatChannelSearchRatingHtml(r, options = {}) {
   </div>`;
 }
 
+function getRecipeRatingSummary(recipe) {
+  const cnt = Number(recipe?.ratingCount);
+  const raw = recipe?.ratingValue;
+  if (!Number.isFinite(cnt) || cnt < 1 || raw == null || raw === "") return null;
+  const num = Math.min(5, Math.max(1, Math.round(Number(raw))));
+  if (!Number.isFinite(num) || num < 1) return null;
+  return {
+    num,
+    cnt: Math.max(1, Math.round(cnt)),
+    normalized: Boolean(recipe?.ratingNormalizedFromWideScale),
+  };
+}
+
+function formatCompactRecipeRatingHtml(recipe, extraClass = "") {
+  const rating = getRecipeRatingSummary(recipe);
+  if (!rating) return "";
+  const className = ["recipe-rating-chip", extraClass].filter(Boolean).join(" ");
+  const scaleHtml = rating.normalized
+    ? `<span class="recipe-rating-chip__scale" title="De bron gebruikte een hogere scoreschaal; Plately toont dit als sterren op 5.">10→5</span>`
+    : "";
+  return `<span class="${escapeHtml(className)}" aria-label="${rating.num} van 5 sterren, ${rating.cnt} waarderingen op de bronwebsite">
+    <span class="recipe-rating-chip__star" aria-hidden="true">★</span>
+    <span class="recipe-rating-chip__score">${rating.num}/5</span>
+    <span class="recipe-rating-chip__count">${rating.cnt}×</span>
+    ${scaleHtml}
+  </span>`;
+}
+
 function renderChannelSearchResults(results, filter = state.channelSearchFilter) {
   if (!channelSearchSection || !channelSearchResults) return;
 
@@ -6359,6 +6443,7 @@ function renderRecipeGrid() {
         const faviconHtml = faviconUrl
           ? `<span class="recent-card__favicon"><img src="${escapeHtml(faviconUrl)}" alt="" loading="lazy" /></span>`
           : "";
+        const ratingHtml = formatCompactRecipeRatingHtml(recipe, "recent-card__rating");
         const statusBadges = [
           recipe.needsReview
             ? `<span class="recipe-status-pill recipe-status-pill--review">Nakijken</span>`
@@ -6376,7 +6461,10 @@ function renderRecipeGrid() {
           ${faviconHtml}
           <div class="recent-card__body">
             <p class="recent-card__title">${escapeHtml(recipe.title)}</p>
-            <p class="recent-card__meta">${escapeHtml(displayTime(recipe.time))}</p>
+            <div class="recent-card__meta-row">
+              <p class="recent-card__meta">${escapeHtml(displayTime(recipe.time))}</p>
+              ${ratingHtml}
+            </div>
           </div>
         </button>
       `;
@@ -6487,11 +6575,19 @@ function renderDetailRecipe(resetServings = false) {
     // kcal niet weergeven — waarden van externe sites zijn onbetrouwbaar
     const servLabel = String(recipe.servings || "").trim();
     if (servLabel) chips.push({ ic: "👥", tx: servLabel });
+    const rating = getRecipeRatingSummary(recipe);
+    if (rating) {
+      chips.push({
+        ic: "★",
+        tx: `${rating.num}/5 · ${rating.cnt}×`,
+        cls: "detail-chip--rating",
+      });
+    }
     chips.push({ ic: "", tx: getPlatformLabel(recipe.platform || "website") });
     detailMetaChips.innerHTML = chips
       .map(
         (c) =>
-          `<span class="detail-chip" role="listitem"><span class="detail-chip__ic" aria-hidden="true">${escapeHtml(c.ic)}</span><span class="detail-chip__tx">${escapeHtml(c.tx)}</span></span>`
+          `<span class="detail-chip ${escapeHtml(c.cls || "")}" role="listitem"><span class="detail-chip__ic" aria-hidden="true">${escapeHtml(c.ic)}</span><span class="detail-chip__tx">${escapeHtml(c.tx)}</span></span>`
       )
       .join("");
   }
