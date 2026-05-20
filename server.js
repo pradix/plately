@@ -13201,12 +13201,21 @@ const BLOG_POST_URL_RE = /\/(blog|artikel|artikelen|nieuws|tips?|advies|inspirat
 // URL patterns that strongly suggest a recipe post
 const RECIPE_URL_RE = /\/(recept|recepten|recipe|recipes|gerecht|gerechten|bakken|koken|lekker|snack|ontbijt|lunch|diner|avondeten|dessert|taart|cake|soep|salade|pasta|vlees|vis|vegetarisch|vegan|borrelhap|hapje|saus|dressing)\//i;
 // Title keywords that strongly suggest a non-recipe post (opinion / list / guide).
-const BLOG_TITLE_RE = /\b(tips?|review|gids|uitleg|interview|podcast|blog|nieuws|aankondiging|aanbieding|webshop|kookboek|artikel|weekmenu|week\s*menu|wat\s+is|waarom|zo\s+doe\s+je|10\s+x\b|\d+\s+keer\b)\b/i;
+const BLOG_TITLE_RE = /\b(tips?|review|gids|uitleg|interview|podcast|blog|nieuws|aankondiging|aanbieding|webshop|kookboek|artikel|weekmenu|week\s*menu|wat\s+is|waarom|zo\s+doe\s+je|best\s+bekeken|favoriete|populaire|verzameling|10\s+x\b|\d+\s+keer\b)\b/i;
+const LISTICLE_RECIPE_TITLE_RE = /(?:^\s*\d+\.\s+\S|\b\d+\s*x\b|\b\d+\s+(?:recepten|gerechten|idee[eë]n)\b|\b(?:recepten|gerechten|idee[eë]n)\s*(?:met|voor|van)?\s*\d+\b)/i;
+const LISTICLE_RECIPE_URL_RE = /\/(?:\d+\s*x|[0-9]+x|[^/?#]*-\d+-(?:recepten|gerechten|ideeen|ideeën)|[^/?#]*(?:best-bekeken|populaire|favoriete|verzameling)[^/?#]*)/i;
 
 function isLikelyBlogPage(title, url, description = "") {
   const t = sanitizeText(String(title || "")).trim();
   const u = String(url || "").trim();
   const d = sanitizeText(String(description || "")).trim();
+  const combined = `${t} ${d}`.trim();
+
+  const looksLikeRecipeCollection =
+    (t && LISTICLE_RECIPE_TITLE_RE.test(t)) ||
+    (d && LISTICLE_RECIPE_TITLE_RE.test(d)) ||
+    (u && LISTICLE_RECIPE_URL_RE.test(u));
+  if (looksLikeRecipeCollection) return true;
 
   // If URL is explicitly recipe-like, keep it (safer than dropping valid recipes).
   if (u && RECIPE_URL_RE.test(u)) return false;
@@ -13214,7 +13223,6 @@ function isLikelyBlogPage(title, url, description = "") {
   // Strong negative indicators.
   if ((u && BLOG_POST_URL_RE.test(u)) || (t && BLOG_TITLE_RE.test(t))) return true;
 
-  const combined = `${t} ${d}`.trim();
   if (!combined) return false;
 
   // Listicle heuristics: "10x beste ...", "5 keer tips ...", "top 10 ...".
@@ -13299,8 +13307,8 @@ function getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam 
     channels = "*";
   }
   const custom = String(customChannelsParam || "").trim();
-  // Bump when API-resultaatscherm wijzigt (bijv. ratingvelden) — oude cache mist die velden.
-  const schema = "cs-v10";
+  // Bump when API-resultaatscherm/filtering wijzigt — oude cache kan vervuilde resultaten bevatten.
+  const schema = "cs-v11";
   return `${q}||${channels}||${custom}||${schema}`;
 }
 
@@ -13583,6 +13591,7 @@ function isAhAllerhandeRecipeUrl(url) {
  */
 function titleLooksLikeRecipe(title) {
   if (!title) return true;
+  if (LISTICLE_RECIPE_TITLE_RE.test(String(title || ""))) return false;
 
   // Strong positive indicators for recipes
   const recipeKeywords = /\b(?:recept|recipe|maken|bereid|bak|ingredient|snelle|makkelijke|gezonde|eenvoudige|lekker|vers|huisgemaakte|homemade|how\s+to\s+make|how\s+to\s+bake|voor|met|soep|pizza|pasta|diner|ontbijt|tart|cake|koekje|cookies?)\b/i;
@@ -24308,6 +24317,8 @@ module.exports = {
     isAhAllerhandeRecipeUrl,
     ahSeoBackfillResultMatchesQuery,
     urlLooksLikeRecipe,
+    isLikelyBlogPage,
+    titleLooksLikeRecipe,
     parseIngredientLine,
     repairIngredientUnitRemainder,
     repairRecipeIngredientUnitRemainders,

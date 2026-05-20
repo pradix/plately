@@ -38,3 +38,42 @@ describe("AH Allerhande recipe URL guardrails", () => {
     );
   });
 });
+
+describe("Channel recipe search blog/listicle guardrails", () => {
+  it("rejects recipe collection/listicle pages from channel search", () => {
+    const badRows = [
+      {
+        title: "25x best bekeken 5 or less recepten",
+        url: "https://chickslovefood.com/recept/25x-best-bekeken-5-or-less-recepten/",
+      },
+      {
+        title: "Flammkuchen – 5 recepten",
+        url: "https://uitpaulineskeuken.nl/recept/flammkuchen-5-recepten/",
+      },
+      {
+        title: "7. Poké bowl met broccolirijst",
+        url: "https://example.com/recept/5x-avondeten-recepten/#poke-bowl",
+      },
+      {
+        title: "5x avondeten recepten",
+        url: "https://example.com/recept/5x-avondeten-recepten/",
+      },
+    ];
+
+    for (const row of badRows) {
+      assert.equal(__dev.isLikelyBlogPage(row.title, row.url), true, row.title);
+      assert.equal(__dev.titleLooksLikeRecipe(row.title), false, row.title);
+    }
+  });
+
+  it("keeps concrete individual recipe pages", () => {
+    assert.equal(
+      __dev.isLikelyBlogPage(
+        "Poké bowl met broccolirijst",
+        "https://chickslovefood.com/recept/poke-bowl-met-broccolirijst/"
+      ),
+      false
+    );
+    assert.equal(__dev.titleLooksLikeRecipe("Poké bowl met broccolirijst"), true);
+  });
+});
