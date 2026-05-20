@@ -1369,10 +1369,13 @@
           </div>
           <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
             <div class="section-header" style="margin-bottom:8px">
-              <h3 style="margin:0;font-size:14px">Chicks Love Food opnieuw importeren</h3>
-              <div class="muted" style="font-size:12px">Herimporteert bestaande Chickslovefood-recepten uit alle accounts</div>
+              <h3 style="margin:0;font-size:14px">Kanaal opnieuw importeren</h3>
+              <div class="muted" style="font-size:12px">Herimporteert bestaande recepten van één kanaal uit alle accounts</div>
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+              <select id="channelRepairSelect" style="min-width:260px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
+                <option value="">Chicks Love Food</option>
+              </select>
               <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Max per gebruiker
                 <input id="clfRepairMaxRecipes" type="number" min="1" max="500" value="25" style="width:72px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
               </label>
@@ -3356,6 +3359,30 @@
       if (current && Array.from(sel.options).some((option) => option.value === current)) sel.value = current;
     }
 
+    function renderChannelRepairSelect(seedChannels, customChannels = null) {
+      const sel = document.getElementById("channelRepairSelect");
+      if (!sel) return;
+      const current = sel.value || "";
+      const seed = (Array.isArray(seedChannels) ? seedChannels : []).filter((ch) => ch && ch.id);
+      const approved = Array.isArray(customChannels?.approved) ? customChannels.approved : [];
+      const pending = Array.isArray(customChannels?.pending) ? customChannels.pending : [];
+      const rejected = Array.isArray(customChannels?.rejected) ? customChannels.rejected : [];
+      const allCustom = [...approved, ...pending, ...rejected];
+      const opt = (label, valueObj) => `<option value="${escapeHtml(JSON.stringify(valueObj))}">${escapeHtml(label)}</option>`;
+      const groups = [];
+      if (seed.length) groups.push(`<optgroup label="Seed-kanalen">${seed.map((ch) => opt(ch.name || ch.id, { channelId: ch.id, channelUrl: ch.url || "" })).join("")}</optgroup>`);
+      if (allCustom.length) groups.push(`<optgroup label="Custom kanalen">${allCustom.map((ch) => opt(`${ch.name}${ch.url ? ` — ${ch.url}` : ""}`, { channelId: ch.id, channelUrl: ch.url || "" })).join("")}</optgroup>`);
+      sel.innerHTML = `<option value="${escapeHtml(JSON.stringify({ channelId: "ch-clf", channelUrl: "https://www.chickslovefood.com" }))}">Chicks Love Food</option>` + groups.join("");
+      if (current && Array.from(sel.options).some((option) => option.value === current)) {
+        sel.value = current;
+      } else {
+        const clf = Array.from(sel.options).find((option) => {
+          try { return JSON.parse(option.value || "{}").channelId === "ch-clf"; } catch { return false; }
+        });
+        if (clf) sel.value = clf.value;
+      }
+    }
+
     function renderSeoSingleRecipeChannelSelect(seedChannels, customChannels) {
       const sel = document.getElementById("seoSingleRecipeChannelSelect");
       if (!sel) return;
@@ -3616,33 +3643,47 @@
       const outEl = document.getElementById("clfRepairOutput");
       const maxRaw = document.getElementById("clfRepairMaxRecipes")?.value || "25";
       const timeoutRaw = document.getElementById("clfRepairTimeoutMs")?.value || "15000";
+      const rawSelection = document.getElementById("channelRepairSelect")?.value || "";
       const maxRecipes = Math.max(1, Math.min(Number(maxRaw) || 25, 500));
       const timeoutMs = Math.max(5000, Math.min(Number(timeoutRaw) || 15000, 120000));
+      let selected = { channelId: "ch-clf", channelUrl: "https://www.chickslovefood.com" };
+      try {
+        selected = { ...selected, ...(JSON.parse(rawSelection || "{}") || {}) };
+      } catch {
+        // default to Chicks Love Food
+      }
+      const label = document.getElementById("channelRepairSelect")?.selectedOptions?.[0]?.textContent?.trim() || "dit kanaal";
       if (!dryRun) {
-        const ok = confirm(`Maximaal ${maxRecipes} bestaande Chickslovefood-recepten per gebruiker opnieuw importeren? Recepten met verdachte output worden overgeslagen.`);
+        const ok = confirm(`Maximaal ${maxRecipes} bestaande recepten van ${label} per gebruiker opnieuw importeren? Recepten met verdachte output worden overgeslagen.`);
         if (!ok) return;
       }
       if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> ${dryRun ? "Dry-run" : "Opnieuw importeren"}…`;
       if (outEl) outEl.textContent = "Bezig…";
       try {
-        const response = await fetch("/api/admin/chicks-love-food-imports-repair", adminFetchInit({
+        const response = await fetch("/api/admin/channel-imports-repair", adminFetchInit({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             dryRun: Boolean(dryRun),
             maxRecipes,
             timeoutMs,
+            channelId: selected.channelId || "",
+            channelUrl: selected.channelUrl || "",
+            host: selected.host || "",
           }),
         }));
         const data = await response.json();
-        if (!response.ok || !data.ok) throw new Error(data.error || "Chicks Love Food opnieuw importeren mislukt");
+        if (!response.ok || !data.ok) throw new Error(data.error || "Kanaal opnieuw importeren mislukt");
         const failedCount = Array.isArray(data.sampleFailed) ? data.sampleFailed.length : 0;
         if (statusEl) {
-          statusEl.textContent = `${dryRun ? "Dry-run" : "Klaar"}: ${data.repairedRecipes || 0} Chickslovefood-recepten opnieuw geïmporteerd bij ${data.usersChanged || 0}/${data.usersScanned || 0} users · ${failedCount} fout/overgeslagen in sample.`;
+          statusEl.textContent = `${dryRun ? "Dry-run" : "Klaar"}: ${data.repairedRecipes || 0} recepten van ${label} opnieuw geïmporteerd bij ${data.usersChanged || 0}/${data.usersScanned || 0} users · ${failedCount} fout/overgeslagen in sample.`;
         }
         if (outEl) {
           outEl.textContent = JSON.stringify({
             dryRun: data.dryRun,
+            channelId: data.channelId,
+            channelUrl: data.channelUrl,
+            host: data.host,
             maxRecipes: data.maxRecipes,
             timeoutMs: data.timeoutMs,
             usersScanned: data.usersScanned,
@@ -5199,6 +5240,7 @@
         renderSeoBackfillChannelSelect(seed, custom);
         renderSeoSingleRecipeChannelSelect(seed, custom);
         renderSeoDeleteChannelSelect(seed, custom);
+        renderChannelRepairSelect(seed, custom);
         const approved = Array.isArray(custom.approved) ? custom.approved : [];
         const pending = Array.isArray(custom.pending) ? custom.pending : [];
         const rejected = Array.isArray(custom.rejected) ? custom.rejected : [];

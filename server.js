@@ -16763,6 +16763,183 @@ async function repairChicksLoveFoodImportsForAllUsers(options = {}) {
   };
 }
 
+function hostFromUrl(rawUrl) {
+  try {
+    return new URL(String(rawUrl || "")).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function recipeMatchesImportRepairTarget(recipe, target = {}) {
+  const sourceUrl = sanitizeText(recipe?.sourceUrl || recipe?.source || "");
+  if (!sourceUrl) return false;
+  const channelId = sanitizeText(target.channelId || "");
+  const channelUrl = sanitizeText(target.channelUrl || "");
+  const targetHost = sanitizeText(target.host || hostFromUrl(channelUrl));
+  const recipeChannelId = sanitizeText(recipe?.channelId || inferSeedChannelIdFromSourceUrl(sourceUrl) || "");
+  if (channelId && recipeChannelId && recipeChannelId === channelId) return true;
+  const sourceHost = hostFromUrl(sourceUrl);
+  return Boolean(targetHost && sourceHost && sourceHost === targetHost);
+}
+
+function isPlausibleGenericReimport(recipe) {
+  if (!isValidImportedSeoRecipe(recipe)) return false;
+  const ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients : [];
+  const instructions = Array.isArray(recipe?.instructions) ? recipe.instructions : [];
+  if (ingredients.length > 80 || instructions.length > 80) return false;
+  const instructionText = instructions.map((step) => sanitizeText(step || "")).join(" ");
+  if (/\b(privacy statement|cookie statement|cookieinstellingen|word gratis member|toon meer inspiratie)\b/i.test(instructionText)) {
+    return false;
+  }
+  return true;
+}
+
+async function repairChannelImportsForUser(user, options = {}) {
+  const maxRecipes = Math.max(1, Math.min(Number(options.maxRecipes) || 50, 500));
+  const timeoutMs = Math.max(5000, Math.min(Number(options.timeoutMs) || 25000, 120000));
+  const target = {
+    channelId: sanitizeText(options.channelId || ""),
+    channelUrl: sanitizeText(options.channelUrl || ""),
+    host: sanitizeText(options.host || hostFromUrl(options.channelUrl || "")),
+  };
+  const appState = buildAppStateFromUser(user);
+  const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes.map((r) => ({ ...r })) : [];
+  const repaired = [];
+  const failed = [];
+
+  for (let index = 0; index < recipes.length; index += 1) {
+    if (repaired.length + failed.length >= maxRecipes) break;
+    const recipe = recipes[index];
+    const sourceUrl = sanitizeText(recipe?.sourceUrl || recipe?.source || "");
+    if (!recipeMatchesImportRepairTarget(recipe, target)) continue;
+
+    const id = sanitizeText(recipe?.id || "");
+    try {
+      console.log(`[channel-repair] import ${repaired.length + failed.length + 1}/${maxRecipes}: ${sourceUrl}`);
+      const fresh = await Promise.race([
+        importRecipe(sourceUrl, "", sanitizeText(recipe?.image || "")),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new HttpError(504, `timeout na ${timeoutMs}ms`)), timeoutMs)
+        ),
+      ]);
+      const merged = sanitizeRecipeForStorage({
+        ...recipe,
+        ...fresh,
+        id,
+        title: isChicksLoveFoodRecipeUrl(sourceUrl)
+          ? cleanChicksLoveFoodTitle(fresh?.title, recipe?.title, sourceUrl)
+          : sanitizeText(fresh?.title || recipe?.title || "Recept"),
+        sourceUrl: sanitizeText(fresh?.sourceUrl || sourceUrl),
+        image: sanitizeText(fresh?.image || recipe?.image || ""),
+        platform: sanitizeText(fresh?.platform || recipe?.platform || "website"),
+      });
+      const plausible = isChicksLoveFoodRecipeUrl(sourceUrl)
+        ? isPlausibleChicksLoveFoodRepair(merged)
+        : isPlausibleGenericReimport(merged);
+      if (!merged || !plausible) {
+        failed.push({ id, title: sanitizeText(recipe?.title || "Recept"), sourceUrl, error: "onbetrouwbare_import" });
+        continue;
+      }
+      recipes[index] = merged;
+      repaired.push({
+        id,
+        title: sanitizeText(merged.title || recipe?.title || "Recept"),
+        sourceUrl,
+        ingredientsBefore: Array.isArray(recipe?.ingredients) ? recipe.ingredients.length : 0,
+        ingredientsAfter: merged.ingredients.length,
+        instructionsBefore: Array.isArray(recipe?.instructions) ? recipe.instructions.length : 0,
+        instructionsAfter: merged.instructions.length,
+      });
+    } catch (error) {
+      failed.push({
+        id,
+        title: sanitizeText(recipe?.title || "Recept"),
+        sourceUrl,
+        error: sanitizeText(error?.message || "reparatie mislukt").slice(0, 180),
+      });
+    }
+  }
+
+  if (!repaired.length) return { changed: false, nextState: appState, repaired, failed };
+  return {
+    changed: true,
+    nextState: { ...appState, importedRecipes: recipes },
+    repaired,
+    failed,
+  };
+}
+
+async function repairChannelImportsForAllUsers(options = {}) {
+  const dryRun = options?.dryRun !== false;
+  const maxRecipes = Math.max(1, Math.min(Number(options?.maxRecipes) || 50, 500));
+  const timeoutMs = Math.max(5000, Math.min(Number(options?.timeoutMs) || 25000, 120000));
+  const channelId = sanitizeText(options?.channelId || "");
+  const channelUrl = sanitizeText(options?.channelUrl || "");
+  const host = sanitizeText(options?.host || hostFromUrl(channelUrl));
+  if (!channelId && !host) throw new HttpError(400, "Kies een kanaal of geef een kanaal-host op.");
+
+  let usersScanned = 0;
+  let usersChanged = 0;
+  let repairedRecipes = 0;
+  const sampleRepaired = [];
+  const sampleFailed = [];
+
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const hostFilter = host ? `%${host}%` : "%";
+    const res = await pool.query(
+      `
+      SELECT *
+      FROM plately_users
+      WHERE COALESCE(app_state, '{}'::jsonb)::text ILIKE $1
+      `,
+      [hostFilter]
+    );
+    for (const row of res.rows || []) {
+      usersScanned += 1;
+      const result = await repairChannelImportsForUser(row, { channelId, channelUrl, host, maxRecipes, timeoutMs });
+      sampleFailed.push(...result.failed.slice(0, Math.max(0, 40 - sampleFailed.length)));
+      if (!result.changed) continue;
+      usersChanged += 1;
+      repairedRecipes += result.repaired.length;
+      sampleRepaired.push(...result.repaired.slice(0, Math.max(0, 40 - sampleRepaired.length)));
+      if (!dryRun) await updateAuthenticatedUserState(row.id, result.nextState);
+    }
+  } else {
+    const db = await loadDatabase();
+    for (const user of Object.values(db.users || {})) {
+      const recipes = Array.isArray(user?.importedRecipes) ? user.importedRecipes : [];
+      if (!recipes.some((r) => recipeMatchesImportRepairTarget(r, { channelId, channelUrl, host }))) continue;
+      usersScanned += 1;
+      const result = await repairChannelImportsForUser(user, { channelId, channelUrl, host, maxRecipes, timeoutMs });
+      sampleFailed.push(...result.failed.slice(0, Math.max(0, 40 - sampleFailed.length)));
+      if (!result.changed) continue;
+      usersChanged += 1;
+      repairedRecipes += result.repaired.length;
+      sampleRepaired.push(...result.repaired.slice(0, Math.max(0, 40 - sampleRepaired.length)));
+      if (!dryRun) db.users[user.id] = sanitizeUserStatePayload(result.nextState, user);
+    }
+    if (!dryRun && usersChanged) await persistDatabase();
+  }
+
+  return {
+    ok: true,
+    dryRun,
+    channelId,
+    channelUrl,
+    host,
+    maxRecipes,
+    timeoutMs,
+    usersScanned,
+    usersChanged,
+    repairedRecipes,
+    sampleRepaired,
+    sampleFailed,
+  };
+}
+
 async function runSeoRecipeBackfillForUser(authUser, options = {}) {
   const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
   const forceReimport = Boolean(options.forceReimport);
@@ -21266,6 +21443,26 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/channel-imports-repair" && request.method === "POST") {
+      console.log("🔁 /api/admin/channel-imports-repair called");
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const dryRun = body?.dryRun !== false;
+        const maxRecipes = Math.max(1, Math.min(Number(body?.maxRecipes) || 50, 500));
+        const timeoutMs = Math.max(5000, Math.min(Number(body?.timeoutMs) || 25000, 120000));
+        const channelId = sanitizeText(body?.channelId || "");
+        const channelUrl = sanitizeText(body?.channelUrl || "");
+        const host = sanitizeText(body?.host || "");
+        const result = await repairChannelImportsForAllUsers({ dryRun, channelId, channelUrl, host, maxRecipes, timeoutMs });
+        return sendJson(response, 200, result);
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/channel-imports-repair:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Kanaal-imports repareren mislukt." });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/fix-ingredient-units" && request.method === "POST") {
       await requireAdmin(request);
       // Units that were often parsed incorrectly (singular form left, 's' prepended to ingredient name)
@@ -24104,6 +24301,7 @@ module.exports = {
     normalizeIngredientList,
     extractMarkdownSection,
     repairChicksLoveFoodImportsForAllUsers,
+    repairChannelImportsForAllUsers,
     findRecipeJsonLd,
     isAhAllerhandeRecipeUrl,
     ahSeoBackfillResultMatchesQuery,
