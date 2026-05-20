@@ -3824,6 +3824,28 @@ const HOME_SEASONAL_CHIP_POOL = {
   winter: ["Stamppot boerenkool", "Hutspot", "Erwtensoep", "Hachee", "Witlof ovenschotel", "Rode kool"],
 };
 
+const HOME_SEARCH_CHIP_ACRONYMS = new Set(["AH", "BBQ", "BLT", "IPA", "USA"]);
+
+function formatHomeSearchChipCasing(label) {
+  const raw = String(label || "").trim();
+  if (!raw) return "";
+  const letters = raw.replace(/[^a-zA-ZÀ-ÿ]/g, "");
+  const uppercaseLetters = raw.replace(/[^A-ZÀ-Þ]/g, "");
+  if (!letters || uppercaseLetters.length / letters.length < 0.65) return raw;
+
+  return raw
+    .toLowerCase()
+    .split(/(\s+|[-/])/)
+    .map((part, index) => {
+      if (!part || /^\s+$/.test(part) || part === "-" || part === "/") return part;
+      const upper = part.toUpperCase();
+      if (HOME_SEARCH_CHIP_ACRONYMS.has(upper)) return upper;
+      if (index === 0) return part.charAt(0).toUpperCase() + part.slice(1);
+      return part;
+    })
+    .join("");
+}
+
 function cleanHomeSearchChipLabel(value) {
   let label = String(value || "")
     .replace(/^[\s"'`*•·-]+/, "")
@@ -3831,6 +3853,7 @@ function cleanHomeSearchChipLabel(value) {
     .replace(/\s+/g, " ")
     .trim();
   label = label.replace(/[.。]+$/g, "").trim();
+  label = formatHomeSearchChipCasing(label);
   if (label.length < 3 || label.length > 38) return "";
   if (/^\d+$/.test(label)) return "";
   if (!/[a-zA-ZÀ-ÿ]/.test(label)) return "";
