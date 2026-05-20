@@ -751,6 +751,7 @@
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channels">Kanalen</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Testen</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk import</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="reimport">Reimport</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="seo">SEO</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="search-terms">Zoekwoorden</button>
         <span class="admin-tabs__sep" aria-hidden="true"></span>
@@ -1369,28 +1370,6 @@
           </div>
           <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
             <div class="section-header" style="margin-bottom:8px">
-              <h3 style="margin:0;font-size:14px">Kanaal opnieuw importeren</h3>
-              <div class="muted" style="font-size:12px">Herimporteert bestaande recepten van één kanaal uit alle accounts</div>
-            </div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
-              <select id="channelRepairSelect" style="min-width:260px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
-                <option value="">Chicks Love Food</option>
-              </select>
-              <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Max per gebruiker
-                <input id="clfRepairMaxRecipes" type="number" min="1" max="500" value="25" style="width:72px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
-              </label>
-              <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Timeout
-                <input id="clfRepairTimeoutMs" type="number" min="5000" max="120000" step="1000" value="15000" style="width:88px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
-                ms
-              </label>
-              <button type="button" class="btn btn-sm" onclick="repairChicksLoveFoodImports(true)">Dry-run</button>
-              <button type="button" class="btn btn-sm btn-primary" onclick="repairChicksLoveFoodImports(false)">Opnieuw importeren</button>
-            </div>
-            <div id="clfRepairStatus" class="muted" style="font-size:12px;margin-bottom:8px">Gebruik eerst dry-run. Recepten met verdachte output worden overgeslagen.</div>
-            <pre id="clfRepairOutput" class="mono" style="display:block;margin:0;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-height:240px;overflow:auto">—</pre>
-          </div>
-          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
-            <div class="section-header" style="margin-bottom:8px">
               <h3 style="margin:0;font-size:14px">SEO recepten opschonen</h3>
               <div class="muted" style="font-size:12px">Verwijdert slechte SEO-recepten: geen bron-URL, ongeldig recept of dubbele bron-URL</div>
             </div>
@@ -1526,6 +1505,34 @@
             </div>
 
             <div id="bulkImportLog" style="font-size:11px;font-family:monospace;background:#111;color:#adffa8;border-radius:10px;padding:14px;min-height:120px;max-height:400px;overflow-y:auto;line-height:1.7;white-space:pre-wrap;display:none"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Reimport tab ── -->
+      <div class="admin-tab-section" id="adminTabReimport" data-tab="reimport">
+        <div class="section">
+          <div class="section-header">
+            <h2>Kanaal opnieuw importeren</h2>
+            <div class="muted">Herimporteert bestaande recepten van één kanaal uit alle accounts.</div>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;background:rgba(255,255,255,0.72)">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+              <select id="channelRepairSelect" style="min-width:260px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
+                <option value="">Chicks Love Food</option>
+              </select>
+              <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Max per gebruiker
+                <input id="clfRepairMaxRecipes" type="number" min="1" max="500" value="25" style="width:72px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+              </label>
+              <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Timeout
+                <input id="clfRepairTimeoutMs" type="number" min="5000" max="120000" step="1000" value="15000" style="width:88px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
+                ms
+              </label>
+              <button type="button" class="btn btn-sm" onclick="repairChicksLoveFoodImports(true)">Dry-run</button>
+              <button type="button" class="btn btn-sm btn-primary" onclick="repairChicksLoveFoodImports(false)">Opnieuw importeren</button>
+            </div>
+            <div id="clfRepairStatus" class="muted" style="font-size:12px;margin-bottom:8px">Gebruik eerst dry-run. Recepten met verdachte output worden overgeslagen.</div>
+            <pre id="clfRepairOutput" class="mono" style="display:block;margin:0;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto">—</pre>
           </div>
         </div>
       </div>
