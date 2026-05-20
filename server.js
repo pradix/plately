@@ -6717,7 +6717,16 @@ const HTML_PROXY_URL = process.env.HTML_PROXY || "";
 const HTML_PROXY_SECRET = process.env.HTML_PROXY_SECRET || "PlatelyProxy";
 
 // Hosts that zijn geblokkeerd voor datacenter-IPs — route via CF Worker proxy
-const HTML_PROXY_HOSTS = new Set(["miljuschka.nl", "www.miljuschka.nl", "www.eefkooktzo.nl", "eefkooktzo.nl", "www.foodiesmagazine.nl", "foodiesmagazine.nl"]);
+const HTML_PROXY_HOSTS = new Set([
+  "miljuschka.nl",
+  "www.miljuschka.nl",
+  "www.eefkooktzo.nl",
+  "eefkooktzo.nl",
+  "www.foodiesmagazine.nl",
+  "foodiesmagazine.nl",
+  "chickslovefood.com",
+  "www.chickslovefood.com",
+]);
 
 /**
  * Serper Scrape API — werkt door Cloudflare heen, retourneert JSON-LD + volledige tekst.
@@ -16578,6 +16587,21 @@ function isChicksLoveFoodRecipeUrl(rawUrl) {
   }
 }
 
+function isGenericChicksLoveFoodTitle(title) {
+  return /^(diner|lunch|ontbijt|kids|5 or less|skinny six|sinner sunday|recept)$/i.test(sanitizeText(title || ""));
+}
+
+function isPlausibleChicksLoveFoodRepair(recipe) {
+  const ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients : [];
+  const instructions = Array.isArray(recipe?.instructions) ? recipe.instructions : [];
+  if (ingredients.length < 2 || instructions.length < 1 || instructions.length > 20) return false;
+  const instructionText = instructions.map((step) => sanitizeText(step || "")).join(" ");
+  if (/\b(privacy statement|cookie statement|cookieinstellingen|word gratis member|toon meer inspiratie)\b/i.test(instructionText)) {
+    return false;
+  }
+  return true;
+}
+
 async function repairChicksLoveFoodImportsForUser(user, options = {}) {
   const maxRecipes = Math.max(1, Math.min(Number(options.maxRecipes) || 100, 500));
   const timeoutMs = Math.max(5000, Math.min(Number(options.timeoutMs) || 25000, 120000));
@@ -16605,12 +16629,13 @@ async function repairChicksLoveFoodImportsForUser(user, options = {}) {
         ...recipe,
         ...fresh,
         id,
+        title: isGenericChicksLoveFoodTitle(fresh?.title) ? sanitizeText(recipe?.title || fresh?.title || "") : sanitizeText(fresh?.title || recipe?.title || ""),
         sourceUrl: sanitizeText(fresh?.sourceUrl || sourceUrl),
         image: sanitizeText(fresh?.image || recipe?.image || ""),
         platform: sanitizeText(fresh?.platform || recipe?.platform || "website"),
       });
-      if (!merged || !Array.isArray(merged.ingredients) || !Array.isArray(merged.instructions)) {
-        failed.push({ id, title: sanitizeText(recipe?.title || "Recept"), sourceUrl, error: "ongeldige_import" });
+      if (!merged || !isPlausibleChicksLoveFoodRepair(merged)) {
+        failed.push({ id, title: sanitizeText(recipe?.title || "Recept"), sourceUrl, error: "onbetrouwbare_import" });
         continue;
       }
       recipes[index] = merged;
