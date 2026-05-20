@@ -16591,6 +16591,33 @@ function isGenericChicksLoveFoodTitle(title) {
   return /^(diner|lunch|ontbijt|kids|5 or less|skinny six|sinner sunday|recept)$/i.test(sanitizeText(title || ""));
 }
 
+function buildChicksLoveFoodTitleFromUrl(rawUrl) {
+  try {
+    const slug = new URL(String(rawUrl || "")).pathname
+      .split("/")
+      .filter(Boolean)
+      .pop();
+    if (!slug) return "";
+    const words = slug
+      .replace(/-\d+$/, "")
+      .replace(/^(?:kids|5-or-less|skinny-six|sinner-sunday)-/i, "")
+      .split("-")
+      .filter(Boolean);
+    if (!words.length) return "";
+    const title = words.join(" ").replace(/\bingredienten\b/gi, "ingrediënten");
+    return title.charAt(0).toUpperCase() + title.slice(1);
+  } catch {
+    return "";
+  }
+}
+
+function cleanChicksLoveFoodTitle(primary, fallback, sourceUrl) {
+  const candidates = [primary, fallback, buildChicksLoveFoodTitleFromUrl(sourceUrl), "Recept"]
+    .map((title) => sanitizeText(title || "").replace(/\s*[-–:]+\s*$/g, "").trim())
+    .filter(Boolean);
+  return candidates.find((title) => !isGenericChicksLoveFoodTitle(title)) || candidates[0] || "Recept";
+}
+
 function isPlausibleChicksLoveFoodRepair(recipe) {
   const ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients : [];
   const instructions = Array.isArray(recipe?.instructions) ? recipe.instructions : [];
@@ -16629,7 +16656,7 @@ async function repairChicksLoveFoodImportsForUser(user, options = {}) {
         ...recipe,
         ...fresh,
         id,
-        title: isGenericChicksLoveFoodTitle(fresh?.title) ? sanitizeText(recipe?.title || fresh?.title || "") : sanitizeText(fresh?.title || recipe?.title || ""),
+        title: cleanChicksLoveFoodTitle(fresh?.title, recipe?.title, sourceUrl),
         sourceUrl: sanitizeText(fresh?.sourceUrl || sourceUrl),
         image: sanitizeText(fresh?.image || recipe?.image || ""),
         platform: sanitizeText(fresh?.platform || recipe?.platform || "website"),
