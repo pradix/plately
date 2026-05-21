@@ -3,7 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex,nofollow" />
+    <meta name="robots" content="index,follow" />
+    <meta name="description" content="Public Meta App Review page for Plately's Instagram oEmbed recipe import use case." />
+    <meta property="og:site_name" content="Plately" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://app.plately.nl/meta-oembed-review.html" />
+    <meta property="og:title" content="Plately Meta oEmbed Review" />
+    <meta property="og:description" content="Public review page showing how Plately uses Instagram oEmbed to import recipe captions from public Instagram posts and reels." />
+    <meta property="og:image" content="https://app.plately.nl/assets/icon-512.png?v=7" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta name="twitter:card" content="summary" />
     <title>Plately Meta oEmbed Review</title>
     <style>
       :root {
@@ -132,15 +142,20 @@
         <h2>Test Instagram Content</h2>
         <label>
           Public Instagram post or reel URL
-          <input id="igUrl" type="url" placeholder="https://www.instagram.com/reel/..." />
+          <input id="igUrl" type="url" value="https://www.instagram.com/p/DYUySvaI9X9/" placeholder="https://www.instagram.com/reel/..." />
         </label>
         <div class="actions">
           <button id="checkButton" type="button">Check oEmbed</button>
           <a class="button secondary" id="importLink" href="/">Open Plately Import Flow</a>
         </div>
         <p style="margin-top: 14px;">
-          For App Review, use the exact public Instagram URL supplied in the review notes. This page also accepts it as
-          <code>?ig=...</code> so reviewers can open one stable URL.
+          Default test content:
+          <code>https://www.instagram.com/p/DYUySvaI9X9/</code>.
+          This page also accepts another public Instagram URL as <code>?ig=...</code>.
+        </p>
+        <p>
+          Before Meta oEmbed approval is granted, the endpoint may return Meta error <code>(#10) Meta oEmbed Read must be reviewed and approved</code>.
+          That is the permission being requested. Once approved, the same flow returns oEmbed metadata for public Instagram content.
         </p>
         <p class="status" id="status"><span class="dot"></span><span>Ready</span></p>
         <pre id="result">Paste the public Instagram URL from the review notes and click "Check oEmbed".</pre>
@@ -150,7 +165,7 @@
         <h2>Reviewer Steps</h2>
         <ol>
           <li>Open this page: <code>https://app.plately.nl/meta-oembed-review.html</code>.</li>
-          <li>Paste the public Instagram post/reel URL from the review notes, or use the prefilled URL when present.</li>
+          <li>Use the prefilled public Instagram test URL, or paste another public Instagram post/reel URL.</li>
           <li>Click <strong>Check oEmbed</strong>. A successful response shows provider, author, thumbnail status, and embed HTML status.</li>
           <li>Click <strong>Open Plately Import Flow</strong>. The app opens with the same Instagram URL prefilled and starts the import flow.</li>
           <li>After import, Plately shows the recipe review screen with title, ingredients, and preparation steps where available.</li>
