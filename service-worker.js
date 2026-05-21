@@ -4,7 +4,7 @@
 // Previous SW versions caused stale auth state.
 
 // Update this string whenever you want to invalidate caches.
-self.__PLATELY_SW_VERSION__ = "1.0.21.33";
+self.__PLATELY_SW_VERSION__ = "1.0.21.34";
 const CACHE_VERSION = self.__PLATELY_SW_VERSION__;
 const STATIC_CACHE = `plately-static-${CACHE_VERSION}`;
 const HTML_CACHE = `plately-html-${CACHE_VERSION}`;
@@ -41,6 +41,25 @@ self.addEventListener("activate", (event) => {
       // ignore
     }
     await self.clients.claim();
+
+    // Critical fix releases should not depend on users closing/reopening the PWA.
+    // Once this SW controls existing tabs, reload same-origin app windows so they
+    // pick up the fresh HTML/app.js query version and client migrations.
+    try {
+      const windowClients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      await Promise.all(windowClients.map(async (client) => {
+        try {
+          const url = new URL(client.url);
+          if (url.origin !== self.location.origin) return;
+          if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")) return;
+          await client.navigate(client.url);
+        } catch {
+          // keep updating other windows
+        }
+      }));
+    } catch {
+      // ignore
+    }
   })());
 });
 
