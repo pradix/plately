@@ -474,6 +474,9 @@ loadEnvFile();
 const PORT = Number(process.env.PORT || 3000);
 const META_APP_ID = process.env.META_APP_ID || "";
 const META_APP_SECRET = process.env.META_APP_SECRET || "";
+const META_REVIEW_LOGIN_SECRET = String(process.env.META_REVIEW_LOGIN_SECRET || "").trim();
+const META_REVIEW_EMAIL = sanitizeEmail(process.env.META_REVIEW_EMAIL || "meta-review@plately.nl");
+const META_REVIEW_IMPORT_URL = String(process.env.META_REVIEW_IMPORT_URL || "https://www.instagram.com/p/DYUySvaI9X9/").trim();
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const DATABASE_URL = process.env.DATABASE_URL || "";
 /** Services ID (bv. nl.plately.web) — Sign in with Apple, alleen met DATABASE_URL */
@@ -3025,6 +3028,53 @@ async function createPostgresUser(email, password, currentState) {
     console.error(`❌ Error creating PostgreSQL user: ${error.message}`);
     throw error;
   }
+}
+
+function buildMetaReviewInitialState(email = META_REVIEW_EMAIL) {
+  const base = buildDefaultUserData(generateId("user"));
+  return {
+    ...base,
+    profile: sanitizeProfilePayload({
+      ...base.profile,
+      name: "Meta Review",
+      handle: "@metareview",
+      email,
+      favoriteSupermarket: "ah",
+    }),
+    onboardingSeenAt: new Date().toISOString(),
+  };
+}
+
+async function findOrCreateMetaReviewUser() {
+  const email = sanitizeEmail(META_REVIEW_EMAIL);
+  if (!isValidEmail(email)) {
+    throw new HttpError(500, "Meta review email is not configured correctly.");
+  }
+
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const existing = await pool.query(`SELECT * FROM plately_users WHERE lower(email) = lower($1) LIMIT 1`, [email]);
+    if (existing.rows[0]) return { user: existing.rows[0], postgres: true };
+
+    const password = crypto.randomBytes(24).toString("base64url");
+    const created = await createPostgresUser(email, password, buildMetaReviewInitialState(email));
+    return { user: created, postgres: true };
+  }
+
+  const db = await loadDatabase();
+  const existingEntry = Object.entries(db.users || {}).find(([, user]) => sanitizeEmail(user?.email || user?.profile?.email || "") === email);
+  if (existingEntry) {
+    return { user: { ...existingEntry[1], id: existingEntry[0], email }, postgres: false };
+  }
+
+  const userId = generateId("user");
+  const user = buildMetaReviewInitialState(email);
+  user.id = userId;
+  user.email = email;
+  db.users[userId] = user;
+  await persistDatabase();
+  return { user, postgres: false };
 }
 
 function getRequestPublicOrigin(request) {
@@ -19276,6 +19326,31 @@ const server = http.createServer(async (request, response) => {
       }
       await createAuthSession(response, user.id);
       response.writeHead(302, { Location: "/" });
+      response.end();
+      return;
+    }
+
+    if (requestUrl.pathname === "/auth/meta-review" && request.method === "GET") {
+      const secret = String(requestUrl.searchParams.get("s") || "").trim();
+      if (!META_REVIEW_LOGIN_SECRET || !secret || secret !== META_REVIEW_LOGIN_SECRET) {
+        response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        response.end("Not found");
+        return;
+      }
+
+      const { user, postgres } = await findOrCreateMetaReviewUser();
+      if (postgres) {
+        await createAuthSession(response, user.id);
+      } else {
+        await createDevAuthSession(response, user.id, sanitizeEmail(user.email || META_REVIEW_EMAIL));
+      }
+      void recordEvent("auth_login_meta_review", user.id, { purpose: "meta_oembed_review" });
+
+      const importUrl = encodeURIComponent(META_REVIEW_IMPORT_URL || "https://www.instagram.com/p/DYUySvaI9X9/");
+      response.writeHead(302, {
+        Location: `/?importUrl=${importUrl}&review=meta-oembed`,
+        "Cache-Control": "no-store",
+      });
       response.end();
       return;
     }
