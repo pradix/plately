@@ -17489,7 +17489,9 @@ async function buildStoreBasket(body) {
           buildMatchedChoiceFromProduct(store, item, product, i === 0 ? "Meest voordelig" : "Alternatief")
         )
         .filter(Boolean);
-      choices = storeChoices.length ? storeChoices : buildStoreProductChoices(store, item);
+      choices = storeChoices.length || store === "albert-heijn" ? storeChoices : buildStoreProductChoices(store, item);
+    } else if (store === "albert-heijn") {
+      choices = [];
     } else {
       const directChoice = result.product ? buildMatchedChoiceFromProduct(store, item, result.product) : null;
       const fallbackChoices = buildStoreProductChoices(store, item);
