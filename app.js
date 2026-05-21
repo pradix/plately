@@ -1180,6 +1180,7 @@ const basketSummary = document.getElementById("basketSummary");
 const basketList = document.getElementById("basketList");
 const basketNote = document.getElementById("basketNote");
 const basketContinueButton = document.getElementById("basketContinueButton");
+let basketRichChoiceRefreshKey = "";
 const mealPlanCurrentRecipe = document.getElementById("mealPlanCurrentRecipe");
 const mealPlanGrid = document.getElementById("mealPlanGrid");
 const cookbookList = document.getElementById("cookbookList");
@@ -2418,17 +2419,32 @@ function getBasketHandoffUrl(preview) {
   );
 }
 
+function getPickedBasketChoice(item) {
+  const choices = Array.isArray(item?.choices) ? item.choices : [];
+  if (!choices.length) return null;
+  return choices[item.selectedChoiceIndex || 0] || choices[0] || null;
+}
+
+function isRichAhBasketChoice(choice) {
+  return Boolean(choice?.productId && choice?.imageUrl);
+}
+
+function isDegradedAhBasketItem(item) {
+  return !isRichAhBasketChoice(getPickedBasketChoice(item));
+}
+
+function getDegradedAhBasketItemIndexes(items) {
+  return (Array.isArray(items) ? items : [])
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => isDegradedAhBasketItem(item))
+    .map(({ index }) => index);
+}
+
 function isDegradedAhBasketPayload(payload) {
   if (!payload || payload.store !== "albert-heijn") return false;
   const items = Array.isArray(payload.items) ? payload.items : [];
   if (!items.length) return true;
-  const richItems = items.filter((item) => {
-    const choices = Array.isArray(item?.choices) ? item.choices : [];
-    if (!choices.length) return false;
-    const picked = choices[item.selectedChoiceIndex || 0] || choices[0];
-    return Boolean(picked?.productId && picked?.imageUrl);
-  }).length;
-  return richItems < Math.ceil(items.length * 0.6);
+  return getDegradedAhBasketItemIndexes(items).length > 0;
 }
 
 async function fetchBasketPayload(endpoint, body, options = {}) {
@@ -2897,6 +2913,24 @@ function renderBasketPreview() {
   const productsHtml = sectionHtml.join("") || `<p style="text-align:center;padding:26px 18px;color:#888;font-size:0.95rem">Geen producten gevonden.</p>`;
   listEl.innerHTML = `${productsHtml}${pantryOptionalHtml}`;
 
+  if (preview?.store === "albert-heijn") {
+    const degradedIndexes = getDegradedAhBasketItemIndexes(preview.items || []);
+    if (degradedIndexes.length) {
+      const refreshKey = degradedIndexes
+        .map((idx) => `${idx}:${preview.items?.[idx]?.ingredientTitle || ""}:${preview.items?.[idx]?.ingredientAmount || ""}`)
+        .join("|");
+      if (refreshKey && refreshKey !== basketRichChoiceRefreshKey) {
+        basketRichChoiceRefreshKey = refreshKey;
+        window.setTimeout(async () => {
+          await ensureBasketChoicesLoaded(degradedIndexes, { refreshDegraded: true });
+          renderBasketPreview();
+        }, 50);
+      }
+    } else {
+      basketRichChoiceRefreshKey = "";
+    }
+  }
+
   // Calculate total
   const totalEur = (totalCents / 100).toFixed(2).replace(".", ",");
   if (totalEl) totalEl.textContent = `€ ${totalEur}`;
@@ -2916,7 +2950,7 @@ function renderBasketPreview() {
       ctaBtn.textContent = "Producten laden…";
       if (state.basketPreview?.store === "albert-heijn") {
         const idxs = (state.basketPreview.items || []).map((_, i) => i);
-        await ensureBasketChoicesLoaded(idxs);
+        await ensureBasketChoicesLoaded(idxs, { refreshDegraded: true });
       }
       const currentPreview = state.basketPreview || preview;
       const url = getBasketHandoffUrl(currentPreview);
@@ -3047,7 +3081,7 @@ function pickPreferredChoiceIndex(item, predicate) {
   return bestIdx ?? currentIdx;
 }
 
-async function ensureBasketChoicesLoaded(itemIndexes) {
+async function ensureBasketChoicesLoaded(itemIndexes, options = {}) {
   const preview = state.basketPreview;
   if (!preview || preview.store !== "albert-heijn") return;
   const items = Array.isArray(preview.items) ? preview.items : [];
@@ -3056,7 +3090,14 @@ async function ensureBasketChoicesLoaded(itemIndexes) {
 
   const missing = idxs
     .map((idx) => ({ idx, item: items[idx] }))
-    .filter(({ item }) => item && (!Array.isArray(item.choices) || item.choices.length === 0));
+    .filter(({ item }) =>
+      item &&
+      (
+        !Array.isArray(item.choices) ||
+        item.choices.length === 0 ||
+        (options.refreshDegraded && isDegradedAhBasketItem(item))
+      )
+    );
 
   if (!missing.length) return;
 
@@ -3065,24 +3106,24 @@ async function ensureBasketChoicesLoaded(itemIndexes) {
   const recipeTitle = preview.recipeTitle || getSingleRecipeContext(activeItems)?.recipeTitle || "Boodschappenlijst";
 
   try {
-    const payload = await fetchJson(`${state.apiBase}/api/ah-basket`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        store: "albert-heijn",
-        sourceUrl,
-        recipeTitle,
-        bio: Boolean(state.basketFilter?.bio),
-        beterLeven1: Boolean(state.basketFilter?.beterLeven1),
-        vegetarisch: Boolean(state.basketFilter?.vegetarisch),
-        vegan: Boolean(state.basketFilter?.vegan),
-        plantaardig: Boolean(state.basketFilter?.plantaardig),
-        items: missing.map(({ item }) => ({
-          title: item.ingredientTitle,
-          amount: item.ingredientAmount || "1",
-          recipeTitle: item.recipeTitle || "",
-        })),
-      }),
+    const payload = await fetchBasketPayload("/api/ah-basket", {
+      store: "albert-heijn",
+      sourceUrl,
+      recipeTitle,
+      bio: Boolean(state.basketFilter?.bio),
+      beterLeven1: Boolean(state.basketFilter?.beterLeven1),
+      vegetarisch: Boolean(state.basketFilter?.vegetarisch),
+      vegan: Boolean(state.basketFilter?.vegan),
+      plantaardig: Boolean(state.basketFilter?.plantaardig),
+      forceAhTokenRefresh: Boolean(options.refreshDegraded),
+      items: missing.map(({ item }) => ({
+        title: item.ingredientTitle,
+        amount: item.ingredientAmount || "1",
+        recipeTitle: item.recipeTitle || "",
+      })),
+    }, {
+      retryAh: true,
+      cacheBust: Date.now(),
     });
 
     const fetched = Array.isArray(payload?.items) ? payload.items : [];
