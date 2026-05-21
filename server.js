@@ -10415,7 +10415,7 @@ async function findAHProduct(ingredient) {
 }
 
 // Returns up to `count` product matches from AH for a single ingredient
-async function findAHProducts(ingredient, count = 12, queryOverride = null) {
+async function findAHProducts(ingredient, count = 12, queryOverride = null, options = {}) {
   const baseTerm = (normalizeIngredientForSearch(ingredient) || ingredient || "").trim();
   const searchTerm = (queryOverride || baseTerm).trim();
   // AH API vereist minimaal 2 tekens — kortere termen leveren "pattern mismatch" errors op.
@@ -10423,18 +10423,19 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
   const searchSize = Math.min(72, Math.max(count * 3, 24));
   const cacheKey = `${searchTerm}:${searchSize}`;
 
-  const cached = _getAHSearchCache(cacheKey);
+  const forceTokenRefresh = Boolean(options?.forceTokenRefresh);
+  const cached = forceTokenRefresh ? null : _getAHSearchCache(cacheKey);
   if (cached) return cached.slice(0, count);
 
   await _ahAcquire();
   try {
     // Double-check cache after acquiring slot (another request may have filled it).
-    const cachedNow = _getAHSearchCache(cacheKey);
+    const cachedNow = forceTokenRefresh ? null : _getAHSearchCache(cacheKey);
     if (cachedNow) { _ahRelease(); return cachedNow.slice(0, count); }
 
     let token;
     try {
-      token = await fetchAHAnonymousToken();
+      token = await fetchAHAnonymousToken({ forceRefresh: forceTokenRefresh });
     } catch {
       // Token-endpoint is geblokkeerd vanuit dit server-IP — val terug op website-scraping
       console.warn(`[AH] Token geblokkeerd voor "${searchTerm}", probeer Firecrawl web-fallback`);
@@ -11342,7 +11343,7 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
 // query variants in parallel so the basket alternatives screen can group by
 // dietary preference. Returns a deduplicated list of up to `maxCount` products
 // (gesorteerd: eerst voordeligste prijs, dan match-score, dan bonus).
-async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) {
+async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30, options = {}) {
   const rawBase = sanitizeText(ingredient || "");
   const base = normalizeIngredientForSearch(rawBase) || rawBase;
   if (!base) return [];
@@ -11382,7 +11383,7 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30) 
   const buckets = await Promise.all(
     variants.map(async (v) => {
       // Use raw ingredient text for scorer (baseLower/rawLower nuance); query override stays `v.query`.
-      const products = await findAHProducts(matchSeed, v.count || LABEL_COUNT, v.query);
+      const products = await findAHProducts(matchSeed, v.count || LABEL_COUNT, v.query, options);
       return { tag: v.tag, products };
     })
   );
@@ -17353,6 +17354,9 @@ async function buildStoreBasket(body) {
     vegan: Boolean(body.vegan),
     plantaardig: Boolean(body.plantaardig),
   };
+  const ahSearchOptions = {
+    forceTokenRefresh: Boolean(body.forceAhTokenRefresh),
+  };
 
   if (!items.length) {
     throw new HttpError(400, "Er staan geen boodschappen klaar om te bestellen.");
@@ -17417,15 +17421,15 @@ async function buildStoreBasket(body) {
 
         // Fetch a wider, label-tagged set of alternatives so the AH "Wissel"
         // sheet can group by Meest voordelig / Bio / Beter Leven / etc.
-        let products = await findAHAlternativesGrouped(ingredientName, preferences, 30);
+        let products = await findAHAlternativesGrouped(ingredientName, preferences, 30, ahSearchOptions);
 
         // If the broad fetch returned nothing, fall back to the legacy single
         // query so the basket is never empty for that item.
         if (!products || products.length === 0) {
           const searchQuery = buildAHSearchQuery(ingredientName, preferences);
-          products = await findAHProducts(searchQuery || ingredientName, 14);
+          products = await findAHProducts(searchQuery || ingredientName, 14, null, ahSearchOptions);
           if ((!products || products.length === 0) && searchQuery && searchQuery !== ingredientName) {
-            products = await findAHProducts(ingredientName, 14);
+            products = await findAHProducts(ingredientName, 14, null, ahSearchOptions);
           }
         }
         const picked = selectAhProductForGroceryHandoff(products, preferences);

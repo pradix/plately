@@ -2414,6 +2414,38 @@ function getBasketHandoffUrl(preview) {
   );
 }
 
+function isDegradedAhBasketPayload(payload) {
+  if (!payload || payload.store !== "albert-heijn") return false;
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  if (!items.length) return true;
+  const richItems = items.filter((item) => {
+    const choices = Array.isArray(item?.choices) ? item.choices : [];
+    if (!choices.length) return false;
+    const picked = choices[item.selectedChoiceIndex || 0] || choices[0];
+    return Boolean(picked?.productId && picked?.imageUrl);
+  }).length;
+  return richItems < Math.ceil(items.length * 0.6);
+}
+
+async function fetchBasketPayload(endpoint, body, options = {}) {
+  const cacheBust = options.cacheBust ? `?t=${encodeURIComponent(String(options.cacheBust))}` : "";
+  let payload = await fetchJson(`${state.apiBase}${endpoint}${cacheBust}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (options.retryAh && isDegradedAhBasketPayload(payload)) {
+    payload = await fetchJson(`${state.apiBase}${endpoint}?t=${encodeURIComponent(String(Date.now()))}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, forceAhTokenRefresh: true }),
+    });
+  }
+
+  return payload;
+}
+
 function parseAmountNumberClient(text) {
   const raw = String(text || "").toLowerCase().replace(",", ".");
   const fraction = raw.match(/\b(\d+)\s*\/\s*(\d+)\b/);
@@ -9693,21 +9725,19 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
 
   try {
     const _basketEndpoint = storeSlug === "jumbo" ? "/api/jumbo-basket" : "/api/ah-basket";
-    const payload = await fetchJson(`${state.apiBase}${_basketEndpoint}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        store: storeSlug,
-        sourceUrl: getSingleRecipeContext(activeItems)?.sourceUrl || "",
-        recipeTitle: getSingleRecipeContext(activeItems)?.recipeTitle || "Boodschappenlijst",
-        items: activeItems.map((item) => ({
-          title: item.title,
-          amount: item.amount,
-          recipeTitle: item.recipeTitle,
-        })),
-      }),
+    const basketRequestBody = {
+      store: storeSlug,
+      sourceUrl: getSingleRecipeContext(activeItems)?.sourceUrl || "",
+      recipeTitle: getSingleRecipeContext(activeItems)?.recipeTitle || "Boodschappenlijst",
+      items: activeItems.map((item) => ({
+        title: item.title,
+        amount: item.amount,
+        recipeTitle: item.recipeTitle,
+      })),
+    };
+    const payload = await fetchBasketPayload(_basketEndpoint, basketRequestBody, {
+      retryAh: storeSlug === "albert-heijn",
+      cacheBust: Date.now(),
     });
 
     if (!payload?.items?.length) {
@@ -9837,24 +9867,23 @@ async function refetchBasketWithPreferences(preferences) {
 
   try {
     const activeItems = getActiveGroceryItems();
-    const payload = await fetchJson(`${state.apiBase}/api/ah-basket`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        store: "albert-heijn",
-        sourceUrl: preview.sourceUrl || getSingleRecipeContext(activeItems)?.sourceUrl || "",
-        recipeTitle: preview.recipeTitle || getSingleRecipeContext(activeItems)?.recipeTitle || "Boodschappenlijst",
-        bio: Boolean(preferences?.bio),
-        beterLeven1: Boolean(preferences?.beterLeven1),
-        vegetarisch: Boolean(preferences?.vegetarisch),
-        vegan: Boolean(preferences?.vegan),
-        plantaardig: Boolean(preferences?.plantaardig),
-        items: activeItems.map((item) => ({
-          title: item.title,
-          amount: item.amount,
-          recipeTitle: item.recipeTitle,
-        })),
-      }),
+    const payload = await fetchBasketPayload("/api/ah-basket", {
+      store: "albert-heijn",
+      sourceUrl: preview.sourceUrl || getSingleRecipeContext(activeItems)?.sourceUrl || "",
+      recipeTitle: preview.recipeTitle || getSingleRecipeContext(activeItems)?.recipeTitle || "Boodschappenlijst",
+      bio: Boolean(preferences?.bio),
+      beterLeven1: Boolean(preferences?.beterLeven1),
+      vegetarisch: Boolean(preferences?.vegetarisch),
+      vegan: Boolean(preferences?.vegan),
+      plantaardig: Boolean(preferences?.plantaardig),
+      items: activeItems.map((item) => ({
+        title: item.title,
+        amount: item.amount,
+        recipeTitle: item.recipeTitle,
+      })),
+    }, {
+      retryAh: true,
+      cacheBust: Date.now(),
     });
 
     if (payload?.items?.length) {
