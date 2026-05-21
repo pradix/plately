@@ -2338,14 +2338,18 @@ function getStoreConfig(storeSlug = "albert-heijn") {
 function buildStoreSearchUrl(storeSlug, items) {
   // Gebruik het eerste ingredient als zoekterm — alle ingrediënten aaneenschakelen
   // levert vrijwel nooit bruikbare resultaten op bij AH of Jumbo.
-  const firstItem = (Array.isArray(items) ? items : []).find((item) => String(item?.title || "").trim());
-  const query = encodeURIComponent(String(firstItem?.title || "boodschappenlijst").trim());
+  const firstItem = (Array.isArray(items) ? items : []).find((item) => String(getGroceryItemTitleForBasket(item)).trim());
+  const query = encodeURIComponent(String(getGroceryItemTitleForBasket(firstItem) || "boodschappenlijst").trim());
 
   if ((storeSlug || "albert-heijn") === "jumbo") {
     return `https://www.jumbo.com/zoeken/?searchTerms=${query}`;
   }
 
   return `https://www.ah.nl/zoeken?query=${query}`;
+}
+
+function getGroceryItemTitleForBasket(item) {
+  return String(item?.title || item?.name || item?.ingredientTitle || item?.ingredientName || "").trim();
 }
 
 function closeBasketModal() {
@@ -9730,7 +9734,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
       sourceUrl: getSingleRecipeContext(activeItems)?.sourceUrl || "",
       recipeTitle: getSingleRecipeContext(activeItems)?.recipeTitle || "Boodschappenlijst",
       items: activeItems.map((item) => ({
-        title: item.title,
+        title: getGroceryItemTitleForBasket(item),
         amount: item.amount,
         recipeTitle: item.recipeTitle,
       })),
@@ -9877,7 +9881,7 @@ async function refetchBasketWithPreferences(preferences) {
       vegan: Boolean(preferences?.vegan),
       plantaardig: Boolean(preferences?.plantaardig),
       items: activeItems.map((item) => ({
-        title: item.title,
+        title: getGroceryItemTitleForBasket(item),
         amount: item.amount,
         recipeTitle: item.recipeTitle,
       })),

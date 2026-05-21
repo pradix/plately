@@ -4268,7 +4268,7 @@ function buildGenericChoices(store, ingredientTitle, amount) {
 }
 
 function buildStoreProductChoices(store, item) {
-  const ingredientTitle = sanitizeText(item.title || "Ingrediënt");
+  const ingredientTitle = getBasketItemTitle(item) || "Ingrediënt";
   const amount = sanitizeText(item.amount || "1 verpakking");
   const value = ingredientTitle.toLowerCase();
   const prefix = getStoreBrandPrefix(store);
@@ -4405,7 +4405,7 @@ function buildMatchedChoiceFromProduct(store, item, product, badge = "Gevonden")
     return null;
   }
 
-  const ingredientTitle = sanitizeText(item.title || "Ingrediënt");
+  const ingredientTitle = getBasketItemTitle(item) || "Ingrediënt";
   const productId = store === "albert-heijn" ? product.id || "" : product.sku || "";
   const choice = {
     title: sanitizeText(product.name || ingredientTitle),
@@ -11957,6 +11957,10 @@ function buildJumboFallbackUrl(items) {
     : "https://www.jumbo.com/mandje/";
 }
 
+function getBasketItemTitle(item) {
+  return sanitizeText(item?.title || item?.name || item?.ingredientTitle || item?.ingredientName || "");
+}
+
 function parseAhBasketPriceEuro(value) {
   const raw = sanitizeText(value || "");
   if (!raw) return Number.POSITIVE_INFINITY;
@@ -12044,7 +12048,7 @@ function selectAhProductForGroceryHandoff(products, prefs) {
 function buildStoreSearchUrl(store, items) {
   const query = encodeURIComponent(
     items
-      .map((item) => sanitizeText(item?.title || ""))
+      .map((item) => getBasketItemTitle(item))
       .filter(Boolean)
       .join(" ")
   );
@@ -17409,7 +17413,7 @@ async function buildStoreBasket(body) {
   if (store === "albert-heijn") {
     searchResults = await Promise.all(
       items.map(async (item) => {
-        const rawName = sanitizeText(item.title || "");
+        const rawName = getBasketItemTitle(item);
         const ingredientName = canonicalizeIngredientForStoreSearch(rawName);
         if (!ingredientName) return { ingredient: ingredientName, product: null, products: [] };
 
@@ -17443,11 +17447,11 @@ async function buildStoreBasket(body) {
 
         return { ingredient: ingredientName, product: picked, products: ordered, quantity: estimateAhHandoffQuantity(item, picked) };
       })
-    ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
+    ).catch(() => items.map((item) => ({ ingredient: getBasketItemTitle(item), product: null, products: [] })));
   } else if (store === "jumbo") {
     searchResults = await Promise.all(
       items.map(async (item) => {
-        const rawName = sanitizeText(item.title || "");
+        const rawName = getBasketItemTitle(item);
         const ingredientName = canonicalizeIngredientForStoreSearch(rawName);
         if (!ingredientName) return { ingredient: ingredientName, product: null, products: [] };
         if (KITCHEN_TOOL_INGREDIENT_RE.test(rawName) || NON_FOOD_INGREDIENT_PATTERN.test(rawName) || isPantryFiller(rawName)) {
@@ -17462,11 +17466,11 @@ async function buildStoreBasket(body) {
         const pickedJumbo = products[0] || null;
         return { ingredient: ingredientName, product: pickedJumbo, products, quantity: estimateAhHandoffQuantity(item, pickedJumbo) };
       })
-    ).catch(() => items.map((item) => ({ ingredient: sanitizeText(item.title || ""), product: null, products: [] })));
+    ).catch(() => items.map((item) => ({ ingredient: getBasketItemTitle(item), product: null, products: [] })));
   } else {
     const raw = await searchProductsForStore(
       store,
-      items.map((item) => splitCompoundIngredientWords(sanitizeText(item.title || ""))).filter(Boolean)
+      items.map((item) => splitCompoundIngredientWords(getBasketItemTitle(item))).filter(Boolean)
     ).catch(() => []);
     searchResults = raw.map((r) => ({ ...r, products: r.product ? [r.product] : [] }));
   }
@@ -17498,9 +17502,9 @@ async function buildStoreBasket(body) {
 
     return {
       id: `basket-item-${index}`,
-      ingredientTitle: canonicalizeIngredientForStoreSearch(item.title || "Ingrediënt"),
+      ingredientTitle: canonicalizeIngredientForStoreSearch(getBasketItemTitle(item) || "Ingrediënt"),
       ingredientAmount: sanitizeText(item.amount || "1 verpakking"),
-      confidence: result.product ? "Gevonden in winkel" : getMatchConfidenceLabel(item.title || ""),
+      confidence: result.product ? "Gevonden in winkel" : getMatchConfidenceLabel(getBasketItemTitle(item)),
       choices: choices.slice(0, choicesCap),
       selectedChoiceIndex: 0,
     };
