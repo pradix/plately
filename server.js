@@ -19330,7 +19330,7 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
-    if (requestUrl.pathname === "/auth/meta-review" && request.method === "GET") {
+    if (requestUrl.pathname === "/auth/meta-review" && (request.method === "GET" || request.method === "HEAD")) {
       const secret = String(requestUrl.searchParams.get("s") || "").trim();
       if (!META_REVIEW_LOGIN_SECRET || !secret || secret !== META_REVIEW_LOGIN_SECRET) {
         response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
