@@ -10033,9 +10033,10 @@ async function _fetchFreshAHToken() {
   return data.access_token;
 }
 
-async function fetchAHAnonymousToken() {
+async function fetchAHAnonymousToken(options = {}) {
+  const forceRefresh = Boolean(options?.forceRefresh);
   // Cache-hit: vers token beschikbaar
-  if (ahTokenCache.token && Date.now() < ahTokenCache.expiresAt - 60 * 60 * 1000) {
+  if (!forceRefresh && ahTokenCache.token && Date.now() < ahTokenCache.expiresAt - 60 * 60 * 1000) {
     return ahTokenCache.token;
   }
 
@@ -10450,15 +10451,30 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null) {
       `${AH_API_BASE}/mobile-services/product/search/v2` +
       `?query=${encodeURIComponent(searchTerm)}&size=${searchSize}&sortOn=RELEVANCE`;
 
-    const response = await fetch(searchUrl, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "x-application": "AHWEBSHOP",
-        ...FETCH_HEADERS,
-        ...AH_PROXY_HEADERS,
-      },
+    const buildSearchHeaders = (authToken) => ({
+      Authorization: `Bearer ${authToken}`,
+      "x-application": "AHWEBSHOP",
+      ...FETCH_HEADERS,
+      ...AH_PROXY_HEADERS,
+    });
+
+    let response = await fetch(searchUrl, {
+      headers: buildSearchHeaders(token),
       signal: AbortSignal.timeout(10000),
     });
+
+    if (response.status === 401) {
+      console.warn(`[AH] Product search 401 voor "${searchTerm}" — forceer token-refresh en probeer opnieuw`);
+      try {
+        token = await fetchAHAnonymousToken({ forceRefresh: true });
+        response = await fetch(searchUrl, {
+          headers: buildSearchHeaders(token),
+          signal: AbortSignal.timeout(10000),
+        });
+      } catch (refreshErr) {
+        console.warn(`[AH] Geforceerde token-refresh mislukt voor "${searchTerm}": ${refreshErr?.message || refreshErr}`);
+      }
+    }
 
     if (!response.ok) {
       console.warn(`[AH] Product search HTTP ${response.status} voor "${searchTerm}" — probeer Firecrawl fallback`);
