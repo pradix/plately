@@ -8572,6 +8572,42 @@ async function importInstagram(sourceUrl, note) {
   }), embedUrl: igEmbedUrl };
 }
 
+async function fetchInstagramOEmbedForReview(sourceUrl) {
+  if (!META_APP_ID || !META_APP_SECRET) {
+    throw new HttpError(503, "Instagram oEmbed is not configured on this deployment.");
+  }
+  let parsed;
+  try {
+    parsed = new URL(sourceUrl);
+  } catch {
+    throw new HttpError(400, "Provide a valid public Instagram post, reel, or TV URL.");
+  }
+  const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+  const isInstagram = host === "instagram.com" || host.endsWith(".instagram.com");
+  const isSupportedPath = /\/(?:p|reel|tv)\//i.test(parsed.pathname);
+  if (!isInstagram || !isSupportedPath) {
+    throw new HttpError(400, "Use a public Instagram post/reel/TV URL, for example https://www.instagram.com/reel/...");
+  }
+
+  const token = `${META_APP_ID}|${META_APP_SECRET}`;
+  const endpoint =
+    `https://graph.facebook.com/v23.0/instagram_oembed?url=${encodeURIComponent(parsed.toString())}` +
+    `&fields=author_name,author_url,html,thumbnail_url,title,provider_name,provider_url,type,version` +
+    `&access_token=${encodeURIComponent(token)}`;
+  const payload = await fetchJson(endpoint);
+  return {
+    providerName: sanitizeText(payload?.provider_name || "Instagram"),
+    providerUrl: sanitizeText(payload?.provider_url || "https://www.instagram.com/"),
+    type: sanitizeText(payload?.type || ""),
+    version: sanitizeText(payload?.version || ""),
+    authorName: sanitizeText(payload?.author_name || ""),
+    authorUrl: sanitizeText(payload?.author_url || ""),
+    title: sanitizeText(payload?.title || "").slice(0, 500),
+    thumbnailUrl: sanitizeText(payload?.thumbnail_url || ""),
+    hasEmbedHtml: Boolean(payload?.html),
+  };
+}
+
 async function importFacebook(sourceUrl, note) {
   let document;
   try {
@@ -18275,6 +18311,27 @@ const server = http.createServer(async (request, response) => {
           configured: Boolean(firecrawlApiKey()),
         },
       });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/meta-oembed-review" && request.method === "GET") {
+      try {
+        const sourceUrl = requestUrl.searchParams.get("url") || "";
+        const oembed = await fetchInstagramOEmbedForReview(sourceUrl);
+        sendJson(response, 200, {
+          ok: true,
+          feature: "Instagram oEmbed",
+          requestedUrl: sourceUrl,
+          oembed,
+        });
+      } catch (error) {
+        const status = error instanceof HttpError ? error.statusCode : 502;
+        sendJson(response, status, {
+          ok: false,
+          feature: "Instagram oEmbed",
+          error: error?.message || "Instagram oEmbed check failed.",
+        });
+      }
       return;
     }
 

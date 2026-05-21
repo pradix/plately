@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Plately Meta oEmbed Review</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #203a2b;
+        --muted: #667064;
+        --line: #dfe5dc;
+        --paper: #f6f2ec;
+        --card: #fff;
+        --brand: #4f7b55;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--paper);
+        color: var(--ink);
+        line-height: 1.5;
+      }
+      main {
+        width: min(920px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 42px 0 64px;
+      }
+      header {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        margin-bottom: 28px;
+      }
+      header img { width: 44px; height: 44px; border-radius: 10px; }
+      h1 { margin: 0; font-size: clamp(28px, 4vw, 42px); line-height: 1.05; }
+      h2 { margin: 0 0 12px; font-size: 20px; }
+      p { margin: 0 0 14px; color: var(--muted); }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 22px;
+        margin: 16px 0;
+        box-shadow: 0 12px 30px rgba(31, 42, 34, 0.06);
+      }
+      label { display: grid; gap: 8px; font-weight: 800; }
+      input {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 13px 14px;
+        font: inherit;
+        color: var(--ink);
+      }
+      .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+      button,
+      .button {
+        border: 0;
+        border-radius: 8px;
+        padding: 12px 16px;
+        background: var(--brand);
+        color: #fff;
+        font-weight: 800;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .button.secondary,
+      button.secondary {
+        background: #fff;
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+      ol { margin: 0; padding-left: 20px; color: var(--ink); }
+      li + li { margin-top: 8px; }
+      code {
+        background: #eef3ec;
+        border-radius: 6px;
+        padding: 2px 6px;
+        word-break: break-all;
+      }
+      pre {
+        margin: 12px 0 0;
+        padding: 14px;
+        border-radius: 8px;
+        background: #172018;
+        color: #edf7ee;
+        overflow: auto;
+        white-space: pre-wrap;
+        min-height: 64px;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-weight: 700;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: #b8b8b8;
+      }
+      .status.ok .dot { background: #4f9f5b; }
+      .status.err .dot { background: #c94d43; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="/assets/plately.png" alt="" />
+        <div>
+          <h1>Plately Meta oEmbed Review</h1>
+          <p>Public test page for the Instagram oEmbed use case in Plately.</p>
+        </div>
+      </header>
+
+      <section class="card">
+        <h2>Use Case</h2>
+        <p>
+          Plately lets users import a recipe from a public Instagram post or reel. The backend calls the official
+          <code>instagram_oembed</code> endpoint to read the public caption, author, embed HTML, and thumbnail.
+          Plately then extracts recipe fields so the user can review and save the recipe.
+        </p>
+        <p>No Instagram login credentials are stored by Plately. The test flow works with public Instagram content only.</p>
+      </section>
+
+      <section class="card">
+        <h2>Test Instagram Content</h2>
+        <label>
+          Public Instagram post or reel URL
+          <input id="igUrl" type="url" placeholder="https://www.instagram.com/reel/..." />
+        </label>
+        <div class="actions">
+          <button id="checkButton" type="button">Check oEmbed</button>
+          <a class="button secondary" id="importLink" href="/">Open Plately Import Flow</a>
+        </div>
+        <p style="margin-top: 14px;">
+          For App Review, use the exact public Instagram URL supplied in the review notes. This page also accepts it as
+          <code>?ig=...</code> so reviewers can open one stable URL.
+        </p>
+        <p class="status" id="status"><span class="dot"></span><span>Ready</span></p>
+        <pre id="result">Paste the public Instagram URL from the review notes and click "Check oEmbed".</pre>
+      </section>
+
+      <section class="card">
+        <h2>Reviewer Steps</h2>
+        <ol>
+          <li>Open this page: <code>https://app.plately.nl/meta-oembed-review.html</code>.</li>
+          <li>Paste the public Instagram post/reel URL from the review notes, or use the prefilled URL when present.</li>
+          <li>Click <strong>Check oEmbed</strong>. A successful response shows provider, author, thumbnail status, and embed HTML status.</li>
+          <li>Click <strong>Open Plately Import Flow</strong>. The app opens with the same Instagram URL prefilled and starts the import flow.</li>
+          <li>After import, Plately shows the recipe review screen with title, ingredients, and preparation steps where available.</li>
+        </ol>
+      </section>
+    </main>
+
+    <script>
+      const input = document.getElementById("igUrl");
+      const button = document.getElementById("checkButton");
+      const importLink = document.getElementById("importLink");
+      const result = document.getElementById("result");
+      const statusEl = document.getElementById("status");
+
+      function setStatus(kind, text) {
+        statusEl.className = "status" + (kind ? " " + kind : "");
+        statusEl.querySelector("span:last-child").textContent = text;
+      }
+
+      function syncImportLink() {
+        const url = input.value.trim();
+        importLink.href = url ? `/?importUrl=${encodeURIComponent(url)}` : "/";
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const fromQuery = params.get("ig") || params.get("url") || "";
+      if (fromQuery) input.value = fromQuery;
+      syncImportLink();
+      input.addEventListener("input", syncImportLink);
+
+      button.addEventListener("click", async () => {
+        const url = input.value.trim();
+        syncImportLink();
+        if (!url) {
+          setStatus("err", "Missing Instagram URL");
+          result.textContent = "Please paste a public Instagram post or reel URL.";
+          return;
+        }
+        setStatus("", "Checking oEmbed...");
+        result.textContent = "Loading...";
+        try {
+          const response = await fetch(`/api/meta-oembed-review?url=${encodeURIComponent(url)}`);
+          const data = await response.json();
+          result.textContent = JSON.stringify(data, null, 2);
+          setStatus(data.ok ? "ok" : "err", data.ok ? "oEmbed verified" : "oEmbed failed");
+        } catch (error) {
+          setStatus("err", "Request failed");
+          result.textContent = String(error && error.message ? error.message : error);
+        }
+      });
+
+      if (input.value.trim()) button.click();
+    </script>
+  </body>
+</html>
