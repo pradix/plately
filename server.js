@@ -2586,6 +2586,15 @@ function buildDefaultUserData(userId = generateId("user")) {
   };
 }
 
+function buildAnonymousSessionUser() {
+  const guest = buildDefaultUserData("guest-session");
+  return {
+    ...guest,
+    authenticated: false,
+    email: "",
+  };
+}
+
 async function ensureDataFile() {
   await resolveWritableDataPathsOnce();
 
@@ -18812,7 +18821,10 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
-        const user = withGlobalCustomChannels(await ensureUserSession(request, response), globalCustomChannels);
+        const guestUser = isPostgresEnabled()
+          ? buildAnonymousSessionUser()
+          : await ensureUserSession(request, response);
+        const user = withGlobalCustomChannels(guestUser, globalCustomChannels);
         sendJson(response, 200, {
           ok: true,
           user: {
@@ -18833,7 +18845,9 @@ const server = http.createServer(async (request, response) => {
         // Return guest session even if auth check fails
         try {
           const channelEnabled = await getChannelEnabledState().catch(() => ({ seed: {}, custom: {} }));
-          const user = await ensureUserSession(request, response);
+          const user = isPostgresEnabled()
+            ? buildAnonymousSessionUser()
+            : await ensureUserSession(request, response);
           sendJson(response, 200, {
             ok: true,
             user: {
