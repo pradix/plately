@@ -30,5 +30,14 @@ pm2 startOrReload ecosystem.config.js --update-env
 pm2 save
 
 echo "==> Health check"
-curl -fsS "https://app.plately.nl/api/health" >/dev/null
+for attempt in 1 2 3 4 5; do
+  if curl -fsS "https://app.plately.nl/api/health" >/dev/null; then
+    break
+  fi
+  if [ "$attempt" = "5" ]; then
+    echo "Health check failed after $attempt attempts." >&2
+    exit 1
+  fi
+  sleep 2
+done
 echo "Deploy complete."
