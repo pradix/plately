@@ -16,6 +16,7 @@ git restore --worktree --staged data/ah_token.json 2>/dev/null || true
 
 git switch "$BRANCH"
 git merge --ff-only "origin/$BRANCH"
+export GIT_COMMIT="$(git rev-parse --short HEAD)"
 
 if [ -f package-lock.json ]; then
   npm ci --omit=dev --no-audit --no-fund

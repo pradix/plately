@@ -15,6 +15,7 @@ module.exports = {
         HOST: "127.0.0.1",
         PORT: "3000",
         DATA_DIR: "/var/www/plately/data",
+        GIT_COMMIT: process.env.GIT_COMMIT || "",
       },
     },
   ],
