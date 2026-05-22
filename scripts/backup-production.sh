@@ -5,7 +5,10 @@ APP_DIR="${APP_DIR:-/var/www/plately}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/plately}"
 STAMP="$(date +%F-%H%M%S)"
 
-mkdir -p "$BACKUP_DIR"
+if ! mkdir -p "$BACKUP_DIR" 2>/dev/null; then
+  BACKUP_DIR="$APP_DIR/backups"
+  mkdir -p "$BACKUP_DIR"
+fi
 chmod 700 "$BACKUP_DIR" || true
 
 if [ -f "$APP_DIR/.env" ]; then
