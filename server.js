@@ -472,6 +472,7 @@ console.log(`🌍 NODE_ENV: ${process.env.NODE_ENV}`);
 loadEnvFile();
 
 const PORT = Number(process.env.PORT || 3000);
+const HOST = String(process.env.HOST || "127.0.0.1").trim() || "127.0.0.1";
 const META_APP_ID = process.env.META_APP_ID || "";
 const META_APP_SECRET = process.env.META_APP_SECRET || "";
 const META_REVIEW_LOGIN_SECRET = String(process.env.META_REVIEW_LOGIN_SECRET || "").trim();
@@ -24498,8 +24499,8 @@ if (require.main === module) {
   resolveWritableDataPathsOnce()
     .catch((e) => console.error("[boot] DATA_DIR-resolve:", e?.message || e))
     .finally(() => {
-      server.listen(PORT, () => {
-        console.log(`Plately draait op http://localhost:${PORT}`);
+      server.listen(PORT, HOST, () => {
+        console.log(`Plately draait op http://${HOST}:${PORT}`);
         // Migreer bestaande recepten naar plately_recipes (eenmalig, async)
         void migrateRecipesToTable();
         // Herbouw search_vectors naar Dutch stemming (eenmalig, async)
