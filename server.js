@@ -505,6 +505,7 @@ const MIME_TYPES = {
   ".jpeg": "image/jpeg",
   ".jpg": "image/jpeg",
   ".png": "image/png",
+  ".webp": "image/webp",
 };
 
 const HTTP_HEADERS = {
@@ -17718,6 +17719,39 @@ async function readRequestBody(request) {
 }
 
 const GZIP_EXTENSIONS = new Set([".html", ".css", ".js", ".svg", ".json", ".xml", ".txt", ".webmanifest"]);
+const STATIC_FILE_CACHE_MAX_BYTES = 24 * 1024 * 1024;
+const STATIC_FILE_CACHE_ITEM_MAX_BYTES = 4 * 1024 * 1024;
+const staticFileCache = new Map();
+let staticFileCacheBytes = 0;
+
+async function readStaticFileVariant(resolvedPath, canGzip) {
+  const stat = await fsp.stat(resolvedPath);
+  if (!stat.isFile()) {
+    const error = new Error("Not a file");
+    error.code = "ENOENT";
+    throw error;
+  }
+
+  const cacheKey = `${resolvedPath}:${canGzip ? "gzip" : "raw"}`;
+  const cached = staticFileCache.get(cacheKey);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return cached.body;
+  }
+
+  const raw = await fsp.readFile(resolvedPath);
+  const body = canGzip ? await gzipAsync(raw) : raw;
+
+  if (body.length <= STATIC_FILE_CACHE_ITEM_MAX_BYTES) {
+    staticFileCache.set(cacheKey, { body, mtimeMs: stat.mtimeMs, size: stat.size });
+    staticFileCacheBytes += body.length - (cached?.body?.length || 0);
+    if (staticFileCacheBytes > STATIC_FILE_CACHE_MAX_BYTES) {
+      staticFileCache.clear();
+      staticFileCacheBytes = 0;
+    }
+  }
+
+  return body;
+}
 
 async function serveStaticFile(requestPath, response, request) {
   const cleanPath = requestPath === "/" ? "/index.html" : requestPath;
@@ -17730,7 +17764,6 @@ async function serveStaticFile(requestPath, response, request) {
   }
 
   try {
-    const fileContents = await fsp.readFile(resolvedPath);
     const extension = path.extname(resolvedPath).toLowerCase();
     const basename = path.basename(resolvedPath);
 
@@ -17750,7 +17783,7 @@ async function serveStaticFile(requestPath, response, request) {
     // Gzip compress text-based files when the client supports it.
     const acceptEncoding = request?.headers?.["accept-encoding"] || "";
     const canGzip = GZIP_EXTENSIONS.has(extension) && /gzip/i.test(acceptEncoding);
-    const body = canGzip ? await gzipAsync(fileContents) : fileContents;
+    const body = await readStaticFileVariant(resolvedPath, canGzip);
 
     response.writeHead(200, {
       ...HTTP_HEADERS,

@@ -17,8 +17,8 @@
     "gen:vapid": "node scripts/generate-vapid-keys.js",
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node --test tests/*.test.js",
-    "smoke": "node -c app.js && node -c server.js && node --test tests/*.test.js",
+    "test": "NODE_ENV=test node --test tests/*.test.js",
+    "smoke": "node -c app.js && node -c server.js && NODE_ENV=test node --test tests/*.test.js",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install --with-deps chromium"
   }

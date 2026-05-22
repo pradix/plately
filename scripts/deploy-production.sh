@@ -18,9 +18,9 @@ git switch "$BRANCH"
 git merge --ff-only "origin/$BRANCH"
 
 if [ -f package-lock.json ]; then
-  npm ci --omit=dev
+  npm ci --omit=dev --no-audit --no-fund
 else
-  npm install --omit=dev
+  npm install --omit=dev --no-audit --no-fund
 fi
 
 node --check server.js
