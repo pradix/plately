@@ -981,6 +981,38 @@
         </div>
       </div>
 
+      <div class="section" id="adminOpsWrap" style="margin-top:16px">
+        <div class="section-header">
+          <h2>Operatie</h2>
+          <button class="btn btn-sm" type="button" onclick="loadAdminOpsHealth()">↻ Check</button>
+        </div>
+        <div class="stats-grid" style="margin-bottom:12px">
+          <div class="stat-card">
+            <div class="stat-value" id="opsHealthStatus">-</div>
+            <div class="stat-label">Health</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value mono" id="opsCommit">-</div>
+            <div class="stat-label">Live commit</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="opsPostgres">-</div>
+            <div class="stat-label">Postgres</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="opsAhProxy">-</div>
+            <div class="stat-label">AH proxy</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('storage')">Opslag & caches</button>
+          <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('reimport')">Reimport tools</button>
+          <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('seo')">SEO herstel</button>
+          <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('basket-stats')">Winkelwagen check</button>
+        </div>
+        <p class="muted" id="opsHealthMeta" style="font-size:12px;margin:10px 0 0">—</p>
+      </div>
+
       <div class="section" id="ahTokenSection" style="margin-top:16px">
         <div class="section-header">
           <h2>AH Token status</h2>
@@ -1836,8 +1868,11 @@
             <div id="storagePostgres" style="margin-bottom:28px"></div>
 
             <!-- In-memory caches -->
-            <h3 style="margin:0 0 10px;font-size:14px;font-weight:700">⚡ In-memory caches</h3>
-            <p class="muted" style="font-size:12px;margin:-6px 0 12px">Verdwijnen bij herstart — gebruikt voor snelheid, niet voor persistentie.</p>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px">
+              <h3 style="margin:0;font-size:14px;font-weight:700">⚡ In-memory caches</h3>
+              <button class="btn btn-sm btn-secondary" type="button" onclick="clearAdminCache('all')">Alle caches legen</button>
+            </div>
+            <p class="muted" style="font-size:12px;margin:-6px 0 12px">Verdwijnen bij herstart — gebruikt voor snelheid, niet voor persistentie. Leeg AH/foto-caches als productafbeeldingen of alternatieven oud blijven hangen.</p>
             <div id="storageCaches" style="display:flex;flex-direction:column;gap:6px;margin-bottom:28px"></div>
 
             <!-- Statische bestanden -->
@@ -2086,6 +2121,7 @@
         initInventoryUserFilter();
         loadInventory(); // independent block (own loading/error)
         await loadAdminDeployInfo();
+        loadAdminOpsHealth();
         loadAhTokenStatus();
         const lastUpdatedPill = document.getElementById("lastUpdatedPill");
         if (lastUpdatedPill) lastUpdatedPill.textContent = `Laatst bijgewerkt: ${formatDate(new Date())}`;
@@ -2096,6 +2132,36 @@
         document.getElementById("loading").style.display = "none";
         document.getElementById("error").style.display = "block";
         document.getElementById("error").textContent = "❌ " + error.message;
+      }
+    }
+
+    async function loadAdminOpsHealth() {
+      const statusEl = document.getElementById("opsHealthStatus");
+      const commitEl = document.getElementById("opsCommit");
+      const pgEl = document.getElementById("opsPostgres");
+      const ahEl = document.getElementById("opsAhProxy");
+      const metaEl = document.getElementById("opsHealthMeta");
+      if (statusEl) statusEl.textContent = "…";
+      if (metaEl) metaEl.textContent = "Healthcheck laden…";
+      try {
+        const response = await fetch("/api/health", { credentials: "include", cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Healthcheck mislukt");
+        const commit = String(data.version?.commit || "").trim();
+        if (statusEl) statusEl.textContent = "OK";
+        if (commitEl) commitEl.textContent = commit ? commit.slice(0, 7) : "—";
+        if (pgEl) pgEl.textContent = data.auth?.postgresEnabled ? "OK" : "JSON";
+        if (ahEl) ahEl.textContent = data.ah?.proxy?.configured ? "OK" : "—";
+        if (metaEl) {
+          const cachedToken = data.ah?.cachedToken?.expiresAt ? ` · AH token tot ${new Date(data.ah.cachedToken.expiresAt).toLocaleString("nl-NL")}` : "";
+          metaEl.textContent = `${data.env || "environment onbekend"} · DATA_DIR ${data.persistence?.dataDir || "—"}${cachedToken}`;
+        }
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "FOUT";
+        if (commitEl) commitEl.textContent = "—";
+        if (pgEl) pgEl.textContent = "—";
+        if (ahEl) ahEl.textContent = "—";
+        if (metaEl) metaEl.textContent = "Healthcheck mislukt: " + (error?.message || error);
       }
     }
 
@@ -6428,6 +6494,7 @@
         cachesEl.innerHTML = (data.caches || []).map(c => {
           const pct = c.maxEntries ? Math.min(100, Math.round(c.entries / c.maxEntries * 100)) : null;
           const ttlStr = c.ttlMinutes ? c.ttlMinutes + " min" : c.ttlHours ? c.ttlHours + "u" : "—";
+          const sizeStr = c.sizeBytes != null ? (c.sizeBytes > 1024 * 1024 ? (c.sizeBytes / 1024 / 1024).toFixed(1) + " MB" : Math.round(c.sizeBytes / 1024) + " KB") : "";
           const barColor = pct == null ? "#94a3b8" : pct > 90 ? "#dc3545" : pct > 70 ? "#f59e0b" : "#22c55e";
           return `<div style="background:rgba(0,0,0,0.025);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
@@ -6438,8 +6505,9 @@
               <div style="text-align:right;flex-shrink:0">
                 <span style="font-size:15px;font-weight:700">${c.entries}</span>
                 ${c.maxEntries ? `<span class="muted" style="font-size:12px"> / ${c.maxEntries}</span>` : ""}
-                <span class="muted" style="font-size:11px;display:block">TTL: ${ttlStr}</span>
+                <span class="muted" style="font-size:11px;display:block">TTL: ${ttlStr}${sizeStr ? ` · ${sizeStr}` : ""}</span>
               </div>
+              ${c.clearable ? `<button class="btn btn-sm btn-secondary" type="button" onclick="clearAdminCache('${c.key}')">Legen</button>` : ""}
             </div>
             ${pct != null ? `<div style="margin-top:6px;height:4px;background:#e5e7eb;border-radius:2px"><div style="height:4px;border-radius:2px;background:${barColor};width:${pct}%"></div></div>` : ""}
           </div>`;
@@ -6464,6 +6532,23 @@
             </div>
           </div>`;
         }).join("");
+      }
+    }
+
+    async function clearAdminCache(key) {
+      const label = key === "all" ? "alle caches" : "deze cache";
+      if (!confirm(`Weet je zeker dat je ${label} wilt legen? De app bouwt de cache automatisch opnieuw op.`)) return;
+      try {
+        const response = await fetch("/api/admin/cache-clear", adminFetchInit({
+          method: "POST",
+          body: JSON.stringify({ key })
+        }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Cache legen mislukt");
+        await loadStorageInfo();
+        alert("Cache geleegd.");
+      } catch (error) {
+        alert("Cache legen mislukt: " + (error?.message || error));
       }
     }
 

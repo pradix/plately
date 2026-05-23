@@ -3935,6 +3935,10 @@ function cleanHomeSearchChipLabel(value) {
   if (/^\d+$/.test(label)) return "";
   if (!/[a-zA-ZÀ-ÿ]/.test(label)) return "";
   if (/^(recept|recepten|zoeken|zoek|home|undefined|null)$/i.test(label)) return "";
+  if (/^\d+\s*x\b/i.test(label)) return "";
+  if (/\b\d+\s*x\b.*\brecepten\b/i.test(label)) return "";
+  if (/\b(best bekeken|populaire|favoriete|makkelijke|snelle)\b.*\brecepten\b/i.test(label)) return "";
+  if (/[–-]\s*\d+\s*recepten\b/i.test(label)) return "";
   return label;
 }
 

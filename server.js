@@ -17753,6 +17753,50 @@ async function readStaticFileVariant(resolvedPath, canGzip) {
   return body;
 }
 
+function getAdminCacheInfo() {
+  return [
+    { key: "ahSearch", label: "AH zoekresultaten", entries: _ahSearchCache.size, maxEntries: AH_SEARCH_CACHE_MAX, ttlHours: 24, clearable: true, description: "Productzoekresultaten Albert Heijn" },
+    { key: "jumboSearch", label: "Jumbo zoekresultaten", entries: _jumboSearchCache.size, maxEntries: JUMBO_SEARCH_CACHE_MAX, ttlHours: 12, clearable: true, description: "Productzoekresultaten Jumbo" },
+    { key: "photoCache", label: "Foto-URLs", entries: _photoCache.size, maxEntries: PHOTO_CACHE_MAX, ttlHours: 48, clearable: true, description: "Productafbeelding-URLs (AH)" },
+    { key: "imageProxy", label: "Afbeeldingsproxy", entries: _imageProxyCache.size, maxEntries: IMAGE_PROXY_CACHE_MAX, ttlHours: 24 * 7, clearable: true, description: "Geproxyde afbeeldingen (in buffer)" },
+    { key: "channelSearch", label: "Receptzoekresultaten", entries: channelSearchCache.size, maxEntries: CHANNEL_SEARCH_CACHE_MAX_ENTRIES, ttlMinutes: 90, clearable: true, description: "Zoekresultaten receptkanalen + ratings" },
+    { key: "recipeRating", label: "Recept-ratings", entries: recipeRatingLdCache.size, maxEntries: RECIPE_RATING_LD_CACHE_MAX_ENTRIES, ttlHours: 2, clearable: true, description: "LD+JSON ratings per recept-URL" },
+    { key: "seoRecipeSearch", label: "SEO-zoekresultaten", entries: seoRecipeSearchCache.size, maxEntries: null, ttlMinutes: 2, clearable: true, description: "Resultaten SEO-receptzoekopdrachten" },
+    { key: "staticFiles", label: "Statische bestanden", entries: staticFileCache.size, maxEntries: null, sizeBytes: staticFileCacheBytes, clearable: true, description: "Gelezen/gezipte HTML, CSS, JS en assets" },
+    { key: "storedRecipeRating", label: "Opgeslagen rating-index", entries: storedRecipeRatingIndexCache?.index?.size || 0, maxEntries: null, ttlMinutes: 2, clearable: true, description: "Bron-URL naar rating uit opgeslagen SEO-recepten" },
+  ];
+}
+
+function clearAdminCache(key) {
+  const before = getAdminCacheInfo();
+  const normalized = sanitizeText(key || "").trim();
+  const clearOne = (cacheKey) => {
+    if (cacheKey === "ahSearch") _ahSearchCache.clear();
+    else if (cacheKey === "jumboSearch") _jumboSearchCache.clear();
+    else if (cacheKey === "photoCache") _photoCache.clear();
+    else if (cacheKey === "imageProxy") _imageProxyCache.clear();
+    else if (cacheKey === "channelSearch") channelSearchCache.clear();
+    else if (cacheKey === "recipeRating") recipeRatingLdCache.clear();
+    else if (cacheKey === "seoRecipeSearch") seoRecipeSearchCache.clear();
+    else if (cacheKey === "storedRecipeRating") storedRecipeRatingIndexCache = null;
+    else if (cacheKey === "staticFiles") {
+      staticFileCache.clear();
+      staticFileCacheBytes = 0;
+    } else {
+      return false;
+    }
+    return true;
+  };
+
+  if (normalized === "all") {
+    for (const item of before) clearOne(item.key);
+  } else if (!clearOne(normalized)) {
+    throw new HttpError(400, "Onbekende cache.");
+  }
+
+  return { before, after: getAdminCacheInfo() };
+}
+
 async function serveStaticFile(requestPath, response, request) {
   const cleanPath = requestPath === "/" ? "/index.html" : requestPath;
   const relativePath = path.normalize(cleanPath).replace(/^(\.\.[/\\])+/, "").replace(/^[/\\]+/, "");
@@ -24399,6 +24443,17 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    // ── Cachebeheer ──────────────────────────────────────────────────────────
+    if (requestUrl.pathname === "/api/admin/cache-clear" && request.method === "POST") {
+      const admin = await requireAdmin(request);
+      const body = await readRequestBody(request);
+      const key = sanitizeText(body.key || "");
+      const result = clearAdminCache(key);
+      logAdminAction(admin.email, "clear_cache", { key });
+      sendJson(response, 200, { ok: true, key, ...result });
+      return;
+    }
+
     // ── Opslag-overzicht ──────────────────────────────────────────────────────
     if (requestUrl.pathname === "/api/admin/storage-info" && request.method === "GET") {
       await requireAdmin(request);
@@ -24483,15 +24538,7 @@ const server = http.createServer(async (request, response) => {
       }
 
       // ─ In-memory caches ─
-      const caches = [
-        { key: "ahSearch", label: "AH zoekresultaten", entries: _ahSearchCache.size, maxEntries: AH_SEARCH_CACHE_MAX, ttlHours: 24, description: "Productzoekresultaten Albert Heijn" },
-        { key: "jumboSearch", label: "Jumbo zoekresultaten", entries: _jumboSearchCache.size, maxEntries: JUMBO_SEARCH_CACHE_MAX, ttlHours: 12, description: "Productzoekresultaten Jumbo" },
-        { key: "photoCache", label: "Foto-URLs", entries: _photoCache.size, maxEntries: PHOTO_CACHE_MAX, ttlHours: 48, description: "Productafbeelding-URLs (AH)" },
-        { key: "imageProxy", label: "Afbeeldingsproxy", entries: _imageProxyCache.size, maxEntries: IMAGE_PROXY_CACHE_MAX, ttlHours: 24 * 7, description: "Geproxyde afbeeldingen (in buffer)" },
-        { key: "channelSearch", label: "Receptzoekresultaten", entries: channelSearchCache.size, maxEntries: CHANNEL_SEARCH_CACHE_MAX_ENTRIES, ttlMinutes: 15, description: "Zoekresultaten receptkanalen + ratings" },
-        { key: "recipeRating", label: "Recept-ratings", entries: recipeRatingLdCache.size, maxEntries: RECIPE_RATING_LD_CACHE_MAX_ENTRIES, ttlHours: 2, description: "LD+JSON ratings per recept-URL" },
-        { key: "seoRecipeSearch", label: "SEO-zoekresultaten", entries: seoRecipeSearchCache.size, maxEntries: null, ttlMinutes: 2, description: "Resultaten SEO-receptzoekopdrachten" },
-      ];
+      const caches = getAdminCacheInfo();
 
       // ─ Statische assets ─
       const staticAssets = [
