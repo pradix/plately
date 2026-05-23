@@ -16620,6 +16620,164 @@ function collectImportQualityForUsers(users) {
   return { totalRecipes, rows };
 }
 
+function collectAdminActionNeededForUsers(users) {
+  const samples = {
+    missingImage: [],
+    missingRating: [],
+    invalidRecipe: [],
+    duplicateSourceUrl: [],
+  };
+  const counts = {
+    users: 0,
+    recipes: 0,
+    missingImage: 0,
+    missingRating: 0,
+    invalidRecipe: 0,
+    duplicateSourceUrl: 0,
+    pendingCustomChannels: 0,
+    suspendedUsers: 0,
+  };
+  const sourceSeen = new Map();
+
+  const addSample = (key, recipe, user, extra = {}) => {
+    if (!samples[key] || samples[key].length >= 5) return;
+    samples[key].push({
+      title: sanitizeText(recipe?.title || "Recept").slice(0, 120),
+      sourceUrl: sanitizeText(recipe?.sourceUrl || recipe?.source || "").slice(0, 500),
+      userEmail: sanitizeEmail(user?.email || "") || sanitizeText(user?.email || "Guest"),
+      ...extra,
+    });
+  };
+
+  for (const user of users || []) {
+    counts.users += 1;
+    const appState = buildAppStateFromUser(user);
+    const profile = user?.profile && typeof user.profile === "object" ? user.profile : appState.profile || {};
+    if (profile.active === false) counts.suspendedUsers += 1;
+
+    for (const ch of Array.isArray(appState.customChannels) ? appState.customChannels : []) {
+      if (String(ch?.status || "approved") === "pending") counts.pendingCustomChannels += 1;
+    }
+
+    for (const recipe of Array.isArray(appState.importedRecipes) ? appState.importedRecipes : []) {
+      counts.recipes += 1;
+      const issues = getImportedRecipeIssues(recipe);
+      if (issues.includes("missing_image")) {
+        counts.missingImage += 1;
+        addSample("missingImage", recipe, user);
+      }
+      if (issues.some((issue) => issue !== "missing_image")) {
+        counts.invalidRecipe += 1;
+        addSample("invalidRecipe", recipe, user, { issues });
+      }
+      const rating = pickChannelSearchCandidateRating(recipe);
+      if (!rating) {
+        counts.missingRating += 1;
+        addSample("missingRating", recipe, user);
+      }
+      const sourceKey = normalizeRecipeSourceKey(recipe?.sourceUrl || recipe?.source || "");
+      if (sourceKey) {
+        const previous = sourceSeen.get(sourceKey);
+        if (previous) {
+          counts.duplicateSourceUrl += 1;
+          addSample("duplicateSourceUrl", recipe, user, { duplicateOf: previous.title || "" });
+        } else {
+          sourceSeen.set(sourceKey, {
+            title: sanitizeText(recipe?.title || ""),
+            userEmail: sanitizeText(user?.email || ""),
+          });
+        }
+      }
+    }
+  }
+
+  return { counts, samples };
+}
+
+function buildAdminActionItems({ userReport, qualityReport, importFailureCount }) {
+  const counts = userReport?.counts || {};
+  const items = [];
+  const add = (key, severity, title, count, actionLabel, tab, description) => {
+    if (!count) return;
+    items.push({ key, severity, title, count, actionLabel, tab, description });
+  };
+
+  add(
+    "invalidRecipe",
+    "high",
+    "Imports met receptproblemen",
+    counts.invalidRecipe,
+    "Bekijk importkwaliteit",
+    "activity",
+    "Recepten met ontbrekende bron, titel, ingredienten of bereidingsstappen."
+  );
+  add(
+    "missingImage",
+    "medium",
+    "Recepten zonder goede afbeelding",
+    counts.missingImage,
+    "SEO herstel",
+    "seo",
+    "Kan zoekresultaten en publieke receptpagina's minder aantrekkelijk maken."
+  );
+  add(
+    "missingRating",
+    "medium",
+    "Recepten zonder rating",
+    counts.missingRating,
+    "Ratings aanvullen",
+    "seo",
+    "Wordt gebruikt in zoekresultaten en rich snippets waar bronnen een rating hebben."
+  );
+  add(
+    "duplicateSourceUrl",
+    "medium",
+    "Dubbele bron-URLs",
+    counts.duplicateSourceUrl,
+    "Dedupe draaien",
+    "seo",
+    "Zelfde bron staat meer dan eens opgeslagen."
+  );
+  add(
+    "pendingCustomChannels",
+    "medium",
+    "Kanalen in behandeling",
+    counts.pendingCustomChannels,
+    "Kanalen beheren",
+    "channels",
+    "Gebruikers wachten op goedkeuring of afwijzing."
+  );
+  add(
+    "importFailures",
+    "high",
+    "Importfouten laatste 24 uur",
+    importFailureCount || 0,
+    "Bekijk fouten",
+    "activity",
+    "Recente mislukte imports gegroepeerd op bron."
+  );
+
+  const worstQuality = Array.isArray(qualityReport?.rows)
+    ? qualityReport.rows.find((row) => (row.issueCount || 0) > 0)
+    : null;
+  if (worstQuality) {
+    items.push({
+      key: "worstChannel",
+      severity: worstQuality.successRate < 60 ? "high" : "low",
+      title: `Slechtste kanaal: ${worstQuality.label || worstQuality.id}`,
+      count: worstQuality.issueCount || 0,
+      actionLabel: "Kanaal repareren",
+      tab: "reimport",
+      description: `${worstQuality.successRate || 0}% goed bij ${worstQuality.total || 0} recepten.`,
+    });
+  }
+
+  return items.sort((a, b) => {
+    const rank = { high: 3, medium: 2, low: 1 };
+    return (rank[b.severity] || 0) - (rank[a.severity] || 0) || (b.count || 0) - (a.count || 0);
+  });
+}
+
 function cleanSeoRecipesForUser(user) {
   const appState = buildAppStateFromUser(user);
   const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
@@ -21019,6 +21177,93 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 500, { ok: false, error: e.message });
       }
       return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/action-needed" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        let users = [];
+        let importFailureCount24h = 0;
+
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const usersRes = await pool.query(`SELECT * FROM plately_users`);
+          users = usersRes.rows || [];
+          const failuresRes = await pool.query(
+            `SELECT COUNT(*)::int AS cnt FROM plately_events WHERE type = 'import_failed' AND created_at >= NOW() - INTERVAL '24 hours'`
+          );
+          importFailureCount24h = Number(failuresRes.rows[0]?.cnt || 0);
+        } else {
+          const db = await loadDatabase();
+          users = Object.values(db.users || {});
+          importFailureCount24h = importErrors.filter((e) => {
+            const t = new Date(e?.timestamp || "").getTime();
+            return Number.isFinite(t) && Date.now() - t <= 24 * 60 * 60 * 1000;
+          }).length;
+        }
+
+        const userReport = collectAdminActionNeededForUsers(users);
+        const qualityReport = collectImportQualityForUsers(users);
+        const caches = getAdminCacheInfo();
+        const cacheWarnings = caches
+          .filter((c) => c.maxEntries && c.entries / c.maxEntries >= 0.8)
+          .map((c) => ({
+            key: c.key,
+            label: c.label,
+            entries: c.entries,
+            maxEntries: c.maxEntries,
+            fillPct: Math.round((c.entries / c.maxEntries) * 100),
+          }));
+        const ahTokenExpiresAt = ahTokenCache.expiresAt || null;
+        const ahTokenExpiresInHours = ahTokenExpiresAt ? Math.round((ahTokenExpiresAt - Date.now()) / 3600000) : null;
+        const items = buildAdminActionItems({
+          userReport,
+          qualityReport,
+          importFailureCount: importFailureCount24h,
+        });
+        if (ahTokenExpiresInHours != null && ahTokenExpiresInHours < 24) {
+          items.unshift({
+            key: "ahToken",
+            severity: "high",
+            title: "AH token verloopt bijna",
+            count: Math.max(0, ahTokenExpiresInHours),
+            actionLabel: "Token ophalen",
+            tab: "overview",
+            description: "Vernieuw het AH token om productzoekopdrachten stabiel te houden.",
+          });
+        }
+        for (const warning of cacheWarnings) {
+          items.push({
+            key: `cache:${warning.key}`,
+            severity: warning.fillPct >= 95 ? "medium" : "low",
+            title: `${warning.label} bijna vol`,
+            count: warning.fillPct,
+            actionLabel: "Caches beheren",
+            tab: "storage",
+            description: `${warning.entries}/${warning.maxEntries} entries in gebruik.`,
+          });
+        }
+
+        return sendJson(response, 200, {
+          ok: true,
+          generatedAt: new Date().toISOString(),
+          counts: {
+            ...userReport.counts,
+            importFailures24h: importFailureCount24h,
+            cacheWarnings: cacheWarnings.length,
+            ahTokenExpiresInHours,
+          },
+          items,
+          samples: userReport.samples,
+          worstChannels: (qualityReport.rows || []).slice(0, 5),
+          caches: cacheWarnings,
+        });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/action-needed:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Actiepunten laden mislukt." });
+      }
     }
 
     if (requestUrl.pathname === "/api/admin/overview" && request.method === "GET") {
