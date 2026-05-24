@@ -15337,19 +15337,23 @@ async function backfillImportedRecipeRatingsForAllUsers({
   dryRun = true,
   maxUsers = 250,
   maxRecipes = 1200,
+  maxFetches = maxRecipes,
   concurrency = 6,
   timeoutMs = 6500,
 } = {}) {
+  const fetchLimit = Math.max(1, Math.min(Number(maxFetches) || Number(maxRecipes) || 1200, Number(maxRecipes) || 1200, 8000));
   const out = {
     ok: true,
     dryRun: Boolean(dryRun),
     maxUsers,
     maxRecipes,
+    maxFetches: fetchLimit,
     concurrency,
     timeoutMs,
     scannedUsers: 0,
     scannedRecipes: 0,
     candidates: 0,
+    fetchedCandidates: 0,
     updatedRecipes: 0,
     updatedUsers: 0,
     skippedNotEligible: 0,
@@ -15451,6 +15455,8 @@ async function backfillImportedRecipeRatingsForAllUsers({
   }
 
   if (!candidates.length) return { ...out, message: "Geen recepten gevonden om ratings aan te vullen." };
+  const fetchCandidates = candidates.slice(0, fetchLimit);
+  out.fetchedCandidates = fetchCandidates.length;
 
   // 2) Fetch ratings (parallel)
   const ratingByKey = new Map(); // key: userId::recipeIndex -> ratingEntry
@@ -15458,8 +15464,8 @@ async function backfillImportedRecipeRatingsForAllUsers({
   async function worker() {
     for (;;) {
       const idx = next++;
-      if (idx >= candidates.length) return;
-      const c = candidates[idx];
+      if (idx >= fetchCandidates.length) return;
+      const c = fetchCandidates[idx];
       const uKey = normalizeRecipeRatingCacheUrl(c.sourceUrl);
       const cached = getCachedRecipeLdRating(uKey);
       if (cached !== undefined) {
@@ -15498,7 +15504,7 @@ async function backfillImportedRecipeRatingsForAllUsers({
     }
   }
   await Promise.all(
-    Array.from({ length: Math.min(Math.max(1, Number(concurrency) || 6), candidates.length) }, () => worker())
+    Array.from({ length: Math.min(Math.max(1, Number(concurrency) || 6), fetchCandidates.length) }, () => worker())
   );
 
   if (!ratingByKey.size) return { ...out, message: "Geen schema.org beoordelingen gevonden op de bronpagina's." };
@@ -15510,7 +15516,7 @@ async function backfillImportedRecipeRatingsForAllUsers({
     await ensurePostgresSchema();
     const pool = await getPostgresPool();
     const byUser = new Map();
-    for (const c of candidates) {
+    for (const c of fetchCandidates) {
       const rt = ratingByKey.get(`${c.userId}::${c.recipeIndex}`);
       if (!rt) continue;
       if (!byUser.has(c.userId)) byUser.set(c.userId, []);
@@ -22359,9 +22365,14 @@ const server = http.createServer(async (request, response) => {
         const dryRun = body?.dryRun !== false;
         const maxUsers = Number.isFinite(Number(body?.maxUsers)) ? Math.max(1, Math.min(Number(body.maxUsers), 2000)) : 250;
         const maxRecipes = Number.isFinite(Number(body?.maxRecipes)) ? Math.max(1, Math.min(Number(body.maxRecipes), 8000)) : 1200;
+        const maxFetches = Number.isFinite(Number(body?.maxFetches)) ? Math.max(1, Math.min(Number(body.maxFetches), maxRecipes, 8000)) : maxRecipes;
         const concurrency = Number.isFinite(Number(body?.concurrency)) ? Math.max(1, Math.min(Number(body.concurrency), 10)) : 6;
         const timeoutMs = Number.isFinite(Number(body?.timeoutMs)) ? Math.max(1500, Math.min(Number(body.timeoutMs), 20000)) : 6500;
-        const result = await backfillImportedRecipeRatingsForAllUsers({ dryRun, maxUsers, maxRecipes, concurrency, timeoutMs });
+        const startedAt = Date.now();
+        const result = await backfillImportedRecipeRatingsForAllUsers({ dryRun, maxUsers, maxRecipes, maxFetches, concurrency, timeoutMs });
+        console.log(
+          `✅ SEO ratings backfill klaar: updated=${result.updatedRecipes || 0}, fetched=${result.fetchedCandidates || 0}/${result.candidates || 0}, scanned=${result.scannedRecipes || 0}, ${Date.now() - startedAt}ms`
+        );
         return sendJson(response, 200, result);
       } catch (error) {
         const statusCode = error.statusCode || 400;

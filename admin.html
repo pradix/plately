@@ -2687,14 +2687,18 @@
       const users = formatNumber(data?.updatedUsers || 0);
       const found = formatNumber(data?.foundRatings || data?.updatedRecipes || 0);
       const scanned = formatNumber(data?.scannedRecipes || 0);
+      const fetched = formatNumber(data?.fetchedCandidates || data?.candidates || 0);
       const misses = formatNumber(data?.schemaMiss || 0);
       const errors = formatNumber(data?.httpErr || 0);
       const synced = Number(data?.syncedRecipeIndexUsers || 0);
       const syncText = synced ? ` · ${formatNumber(synced)} zoek-index users bijgewerkt` : "";
+      const moreText = Number(data?.candidates || 0) > Number(data?.fetchedCandidates || data?.candidates || 0)
+        ? " · klik nogmaals voor volgende batch"
+        : "";
       if (Number(data?.updatedRecipes || 0) > 0) {
-        return `✅ Ratings aangevuld: ${updated} recepten bij ${users} users · ${found} gevonden · ${scanned} gescand${syncText}`;
+        return `✅ Ratings aangevuld: ${updated} recepten bij ${users} users · ${found} gevonden · ${fetched} opgehaald · ${scanned} gescand${syncText}${moreText}`;
       }
-      return `ℹ️ Geen nieuwe ratings opgeslagen · ${scanned} gescand · ${misses} zonder schema-rating · ${errors} fetchfouten`;
+      return `ℹ️ Geen nieuwe ratings opgeslagen · ${fetched} opgehaald · ${scanned} gescand · ${misses} zonder schema-rating · ${errors} fetchfouten${moreText}`;
     }
 
     async function loadAdminActionNeeded() {
@@ -2853,15 +2857,6 @@
           detail: "Een of meer adminchecks kon niet geladen worden.",
           severity: "high",
           tab: "logs",
-        });
-      }
-      if (actionItems.length) {
-        cards.push({
-          label: "Actie nodig",
-          value: `${formatNumber(actionItems.length)} punten`,
-          detail: actionItems[0]?.title ? `${actionItems[0].title}: ${formatNumber(actionItems[0].count || 0)}` : "Bekijk de actiepunten.",
-          severity: highActionCount ? "high" : "warn",
-          tab: actionItems[0]?.tab || "overview",
         });
       }
       if (importSuccess < 100 || invalidRecipes || missingImages || duplicates) {
@@ -3031,7 +3026,7 @@
       const statusEl = document.getElementById("adminActionNeededStatus");
       const cleanKey = String(key || "");
       const confirmText = {
-        missingRating: "Ratings ophalen en opslaan voor bestaande recepten? Dit kan even duren.",
+        missingRating: "Ratings ophalen en opslaan voor bestaande recepten? Dit draait nu in een veilige batch, klik later nogmaals voor de volgende batch.",
         duplicateSourceUrl: "Dubbele bron-URLs nu verwijderen uit geïmporteerde recepten?",
         missingImage: "SEO-recepten zonder afbeelding nu proberen te repareren?",
         invalidRecipe: "SEO-recepten met problemen nu proberen te repareren?",
@@ -3048,12 +3043,19 @@
       try {
         let response;
         if (cleanKey === "missingRating") {
-          setStatus("⏳ Ratings ophalen en opslaan… dit kan even duren.");
-          response = await fetch("/api/admin/seo-recipe-ratings-backfill", adminFetchInit({
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ dryRun: false, maxUsers: 2000, maxRecipes: 2500, concurrency: 6, timeoutMs: 6500 }),
-          }));
+          setStatus("⏳ Ratings ophalen en opslaan… veilige batch gestart.");
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 90_000);
+          try {
+            response = await fetch("/api/admin/seo-recipe-ratings-backfill", adminFetchInit({
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: controller.signal,
+              body: JSON.stringify({ dryRun: false, maxUsers: 2000, maxRecipes: 2500, maxFetches: 300, concurrency: 4, timeoutMs: 5000 }),
+            }));
+          } finally {
+            clearTimeout(timeoutId);
+          }
         } else if (cleanKey === "duplicateSourceUrl") {
           response = await fetch("/api/admin/dedupe-imported-recipes", adminFetchInit({
             method: "POST",
@@ -3102,7 +3104,8 @@
         ]);
         setStatus(doneMessage);
       } catch (error) {
-        setStatus("❌ " + (error?.message || error));
+        const aborted = error && (error.name === "AbortError" || String(error).includes("AbortError"));
+        setStatus(aborted ? "⏱️ Batch duurde te lang en is gestopt. Probeer opnieuw met de SEO-tool voor kleinere aantallen." : "❌ " + (error?.message || error));
       }
     }
 
