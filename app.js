@@ -10614,6 +10614,21 @@ function finishAppBoot() {
   }, 240);
 }
 
+function schedulePostBootTask(label, task, timeout = 900) {
+  const run = () => {
+    try {
+      Promise.resolve(task()).catch((e) => console.warn(`[Boot] ${label} fout:`, e?.message || e));
+    } catch (e) {
+      console.warn(`[Boot] ${label} fout:`, e?.message || e);
+    }
+  };
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout });
+  } else {
+    window.setTimeout(run, Math.max(0, Math.min(timeout, 1200)));
+  }
+}
+
 // Multi-tab state sync: when another tab saves a new offline-state snapshot to
 // localStorage, silently pull it into the current tab so both tabs stay in sync
 // without a hard reload. Only fires for the offline-state key (the server is still
@@ -11051,10 +11066,16 @@ async function bootstrapSession() {
     }
 
     finishAppBoot();
-    refreshAppleSignInConfig().catch((e) => console.warn("[Boot] Apple Sign-In config fout:", e?.message));
-    refreshBackendStatus();
-    fetchEnabledSupermarkets().catch((e) => console.warn("[Boot] Supermarkets ophalen mislukt:", e?.message));
-    refreshFeaturePushState().catch((e) => console.warn("[Boot] Push feature-state fout:", e?.message));
+    schedulePostBootTask("Apple Sign-In config", refreshAppleSignInConfig, 1200);
+    schedulePostBootTask("Backend status", refreshBackendStatus, 1600);
+    schedulePostBootTask("Supermarkets", fetchEnabledSupermarkets, 1600);
+    schedulePostBootTask("Push feature-state", refreshFeaturePushState, 2200);
+    schedulePostBootTask("Service worker", registerServiceWorker, 2600);
+    schedulePostBootTask("Push toggles", () => {
+      bindFeaturePushToggle();
+      bindPushCategoryToggles();
+      bindPushTriggerToggles();
+    }, 2800);
 
     // Toon PWA-installatiemodal na 4s — niet eerder zodat de gebruiker eerst de app ziet
     if (state.auth.authenticated) {
@@ -15898,11 +15919,6 @@ document.querySelectorAll(".brand-logo").forEach((logo) => {
   logo.style.cursor = "pointer";
   logo.addEventListener("click", () => switchView("home"));
 });
-
-registerServiceWorker();
-bindFeaturePushToggle();
-bindPushCategoryToggles();
-bindPushTriggerToggles();
 
 // Prevent browser history navigation from restoring scroll position.
 try {

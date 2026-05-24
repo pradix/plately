@@ -10289,6 +10289,56 @@ function persistEnvKey(key, value) {
 
 // Fallback: sla het AH-token op in DATA_DIR als JSON — altijd schrijfbaar.
 const AH_TOKEN_FILE = () => path.join(DATA_DIR, "ah_token.json");
+const BASKET_MATCH_OVERRIDES_FILE = () => path.join(DATA_DIR, "basket_match_overrides.json");
+
+function getBasketMatchOverrideKey(store, ingredient) {
+  const normalizedStore = normalizeStoreSlug(store || "albert-heijn");
+  const normalizedIngredient = canonicalizeIngredientForStoreSearch(ingredient || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalizedIngredient ? `${normalizedStore}::${normalizedIngredient}` : "";
+}
+
+async function loadBasketMatchOverrides() {
+  try {
+    const raw = await fsp.readFile(BASKET_MATCH_OVERRIDES_FILE(), "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function saveBasketMatchOverrides(overrides) {
+  await fsp.mkdir(DATA_DIR, { recursive: true });
+  await fsp.writeFile(BASKET_MATCH_OVERRIDES_FILE(), JSON.stringify(overrides || {}, null, 2), "utf8");
+}
+
+function productMatchesBasketOverride(product, rule) {
+  if (!product || !rule) return false;
+  const productId = sanitizeText(product.id || product.sku || product.productId || "");
+  const productTitle = sanitizeText(product.name || product.title || "").toLowerCase();
+  const preferredId = sanitizeText(rule.productId || "");
+  const preferredTitle = sanitizeText(rule.productTitle || "").toLowerCase();
+  if (preferredId && productId && preferredId === productId) return true;
+  return Boolean(preferredTitle && productTitle && productTitle === preferredTitle);
+}
+
+function applyBasketMatchOverrideToProducts(store, ingredient, products, overrides) {
+  const list = Array.isArray(products) ? products.filter(Boolean) : [];
+  const key = getBasketMatchOverrideKey(store, ingredient);
+  const rule = key ? overrides?.[key] : null;
+  if (!rule || typeof rule !== "object") return { products: list, preferred: null, rule: null };
+
+  const blacklist = Array.isArray(rule.blacklist) ? rule.blacklist : [];
+  const filtered = list.filter((product) => {
+    if (!blacklist.length) return true;
+    return !blacklist.some((blocked) => productMatchesBasketOverride(product, blocked));
+  });
+  const preferred = filtered.find((product) => productMatchesBasketOverride(product, rule.preferred));
+  return { products: filtered, preferred: preferred || null, rule };
+}
 
 function persistAHToken(token, expiresAt) {
   persistEnvKey("AH_ANONYMOUS_TOKEN", token);
@@ -18115,6 +18165,7 @@ async function buildStoreBasket(body) {
 
   const recipeTitle = sanitizeText(body.recipeTitle || "Boodschappenlijst");
   const sourceUrl = sanitizeText(body.sourceUrl || "");
+  const basketMatchOverrides = await loadBasketMatchOverrides();
 
   if (sourceUrl) {
     try {
@@ -18183,7 +18234,9 @@ async function buildStoreBasket(body) {
             products = await findAHProducts(ingredientName, 14, null, ahSearchOptions);
           }
         }
-        const picked = selectAhProductForGroceryHandoff(products, preferences);
+        const override = applyBasketMatchOverrideToProducts(store, ingredientName, products, basketMatchOverrides);
+        products = override.products;
+        const picked = override.preferred || selectAhProductForGroceryHandoff(products, preferences);
 
         // Ensure the selected product is also the first choice shown in the UI.
         // The basket UI assumes `choices[0]` is the current pick (selectedChoiceIndex = 0).
@@ -18210,7 +18263,13 @@ async function buildStoreBasket(body) {
         if (!products || products.length === 0) {
           products = await findJumboProducts(ingredientName, 12);
         }
-        const pickedJumbo = products[0] || null;
+        const override = applyBasketMatchOverrideToProducts(store, ingredientName, products, basketMatchOverrides);
+        products = override.products;
+        const pickedJumbo = override.preferred || products[0] || null;
+        if (pickedJumbo && products.length > 1) {
+          const pickedKey = pickedJumbo.sku || pickedJumbo.name;
+          products = [pickedJumbo, ...products.filter((p) => (p?.sku || p?.name) !== pickedKey)];
+        }
         return { ingredient: ingredientName, product: pickedJumbo, products, quantity: estimateAhHandoffQuantity(item, pickedJumbo) };
       })
     ).catch(() => items.map((item) => ({ ingredient: getBasketItemTitle(item), product: null, products: [] })));
@@ -22948,6 +23007,83 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 500, { ok: false, error: error.message });
       }
       return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/basket-match-overrides" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        const overrides = await loadBasketMatchOverrides();
+        return sendJson(response, 200, { ok: true, overrides, count: Object.keys(overrides || {}).length });
+      } catch (error) {
+        return sendJson(response, 500, { ok: false, error: error.message || "Overrides laden mislukt." });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/basket-match-review" && request.method === "POST") {
+      try {
+        const admin = await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const store = normalizeStoreSlug(body.store || "albert-heijn");
+        const ingredient = canonicalizeIngredientForStoreSearch(body.ingredient || body.ingredientTitle || "");
+        const action = sanitizeText(body.action || "");
+        const productId = sanitizeText(body.productId || "");
+        const productTitle = sanitizeText(body.productTitle || body.title || "");
+        const key = getBasketMatchOverrideKey(store, ingredient);
+        if (!key || !ingredient) throw new HttpError(400, "Geen geldig ingrediënt.");
+        if (!["good", "bad", "prefer"].includes(action)) throw new HttpError(400, "Onbekende actie.");
+        if ((action === "bad" || action === "prefer" || action === "good") && !productId && !productTitle) {
+          throw new HttpError(400, "Geen product gekozen.");
+        }
+
+        const overrides = await loadBasketMatchOverrides();
+        const current = overrides[key] && typeof overrides[key] === "object" ? overrides[key] : {};
+        const productRef = {
+          productId,
+          productTitle,
+          updatedAt: new Date().toISOString(),
+          updatedBy: sanitizeText(admin?.email || admin?.id || ""),
+        };
+
+        if (action === "bad") {
+          const blacklist = Array.isArray(current.blacklist) ? current.blacklist : [];
+          const exists = blacklist.some((entry) =>
+            (productId && sanitizeText(entry.productId || "") === productId) ||
+            (productTitle && sanitizeText(entry.productTitle || "").toLowerCase() === productTitle.toLowerCase())
+          );
+          overrides[key] = {
+            ...current,
+            store,
+            ingredient,
+            blacklist: exists ? blacklist : [...blacklist, productRef].slice(-25),
+            updatedAt: productRef.updatedAt,
+            updatedBy: productRef.updatedBy,
+          };
+          if (productMatchesBasketOverride({ id: productId, sku: productId, name: productTitle }, current.preferred)) {
+            delete overrides[key].preferred;
+          }
+        } else {
+          overrides[key] = {
+            ...current,
+            store,
+            ingredient,
+            preferred: productRef,
+            updatedAt: productRef.updatedAt,
+            updatedBy: productRef.updatedBy,
+          };
+        }
+
+        await saveBasketMatchOverrides(overrides);
+        await logAdminAction(request, action === "bad" ? "basket_match_blacklist" : "basket_match_prefer", {
+          store,
+          ingredient,
+          productId,
+          productTitle,
+        });
+        return sendJson(response, 200, { ok: true, key, rule: overrides[key], count: Object.keys(overrides).length });
+      } catch (error) {
+        const statusCode = error.statusCode || 500;
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Match-review opslaan mislukt." });
+      }
     }
 
     if (requestUrl.pathname === "/api/admin/ah-basket-check" && request.method === "POST") {

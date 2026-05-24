@@ -485,6 +485,71 @@
       justify-content: flex-end;
     }
 
+    .basket-match-panel {
+      display: grid;
+      gap: 12px;
+      margin: 14px 0 18px;
+    }
+
+    .basket-match-controls {
+      display: grid;
+      grid-template-columns: minmax(170px, 1fr) minmax(130px, 0.5fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .basket-match-results {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 10px;
+    }
+
+    .basket-match-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 54px 1fr;
+      gap: 10px;
+      align-items: start;
+      min-width: 0;
+    }
+
+    .basket-match-card img,
+    .basket-match-card__placeholder {
+      width: 54px;
+      height: 54px;
+      border-radius: 8px;
+      object-fit: contain;
+      background: rgba(0,0,0,0.035);
+      display: grid;
+      place-items: center;
+      font-size: 22px;
+    }
+
+    .basket-match-card__title {
+      font-size: 13px;
+      font-weight: 850;
+      line-height: 1.25;
+      margin-bottom: 4px;
+    }
+
+    .basket-match-card__meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .basket-match-card__actions {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      margin-top: 2px;
+    }
+
     .admin-activity-spark {
       display: flex;
       align-items: flex-end;
@@ -892,6 +957,7 @@
       .container { padding: 14px; }
       .admin-tabs__rail { grid-template-columns: minmax(0, 1fr); }
       .admin-cockpit__strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .basket-match-controls { grid-template-columns: 1fr; }
       .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .two-col { grid-template-columns: 1fr; }
       .header-actions { width: 100%; justify-content: flex-start; }
@@ -2160,8 +2226,8 @@
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px" id="basketStatsSupermarktGrid"></div>
 
           <div style="margin-bottom:24px">
-            <h3 style="font-size:14px;font-weight:600;margin-bottom:10px">Mandje-debug</h3>
-            <div class="stats-grid" style="margin-bottom:12px">
+          <h3 style="font-size:14px;font-weight:600;margin-bottom:10px">Mandje-debug</h3>
+          <div class="stats-grid" style="margin-bottom:12px">
               <div class="stat-card">
                 <div class="stat-value" id="basketDebugItems">-</div>
                 <div class="stat-label">Items gemeten</div>
@@ -2182,9 +2248,29 @@
                 <div class="stat-value" id="basketDebugLowConfidence">-</div>
                 <div class="stat-label">Lage match</div>
               </div>
-            </div>
-            <div id="basketStatsDebugTable"></div>
           </div>
+          <div class="basket-match-panel">
+            <div class="section-header" style="margin-bottom:0">
+              <div>
+                <h3 style="font-size:14px;font-weight:700;margin:0">Boodschappenmatch controlepaneel</h3>
+                <p class="muted" style="margin:2px 0 0">Test een ingrediënt, kies een beter product of blacklist een foute match voor toekomstige mandjes.</p>
+              </div>
+              <button class="btn btn-sm" type="button" onclick="loadBasketMatchOverrides()">Overrides laden</button>
+            </div>
+            <div class="basket-match-controls">
+              <input id="basketMatchIngredient" class="admin-test__input" type="text" placeholder="Ingrediënt, bv. feta of blauwe bes" aria-label="Ingrediënt testen" />
+              <select id="basketMatchStore" class="admin-test__select" aria-label="Supermarkt">
+                <option value="albert-heijn" selected>AH</option>
+                <option value="jumbo">Jumbo</option>
+              </select>
+              <button class="btn btn-primary" type="button" onclick="runBasketMatchResearch()">Zoek alternatieven</button>
+            </div>
+            <div id="basketMatchStatus" class="muted"></div>
+            <div id="basketMatchResults" class="basket-match-results"></div>
+            <div id="basketMatchOverrides" class="muted"></div>
+          </div>
+          <div id="basketStatsDebugTable"></div>
+        </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
             <!-- Top producten -->
@@ -7418,6 +7504,136 @@
       }
     }
 
+    // ── Boodschappenmatch controlepaneel ──────────────────────────────────────────
+    let basketMatchLastChoices = [];
+
+    function setBasketMatchIngredient(ingredient, store = "albert-heijn") {
+      const input = document.getElementById("basketMatchIngredient");
+      const select = document.getElementById("basketMatchStore");
+      if (input) input.value = ingredient || "";
+      if (select && store) select.value = store === "jumbo" ? "jumbo" : "albert-heijn";
+      runBasketMatchResearch();
+    }
+
+    function getBasketChoiceScore(choice) {
+      const score = Number(choice?.matchMeta?.score);
+      return Number.isFinite(score) ? Math.round(score) : null;
+    }
+
+    function renderBasketMatchChoices(choices, store, ingredient) {
+      const wrap = document.getElementById("basketMatchResults");
+      if (!wrap) return;
+      basketMatchLastChoices = Array.isArray(choices) ? choices : [];
+      if (!basketMatchLastChoices.length) {
+        wrap.innerHTML = `<p class="muted">Geen alternatieven gevonden.</p>`;
+        return;
+      }
+      wrap.innerHTML = basketMatchLastChoices.slice(0, 12).map((choice, idx) => {
+        const title = choice.title || "Onbekend product";
+        const img = choice.imageUrl
+          ? `<img src="${escAdm(choice.imageUrl)}" alt="" loading="lazy" />`
+          : `<div class="basket-match-card__placeholder" aria-hidden="true">${escAdm(choice.emoji || "🛒")}</div>`;
+        const score = getBasketChoiceScore(choice);
+        const labels = Array.isArray(choice.labels) ? choice.labels.filter(Boolean).slice(0, 3).join(" · ") : "";
+        return `
+          <article class="basket-match-card">
+            ${img}
+            <div>
+              <div class="basket-match-card__title">${escAdm(title)}</div>
+              <div class="basket-match-card__meta">
+                ${escAdm(choice.price || "Prijs onbekend")} · ${score == null ? "score onbekend" : `score ${formatNumber(score)}`}
+                ${labels ? `<br>${escAdm(labels)}` : ""}
+              </div>
+            </div>
+            <div class="basket-match-card__actions">
+              <button class="btn btn-sm btn-success" type="button" onclick="saveBasketMatchReview('prefer', ${idx})">Kies alternatief</button>
+              <button class="btn btn-sm" type="button" onclick="saveBasketMatchReview('good', ${idx})">Goed</button>
+              <button class="btn btn-sm btn-danger" type="button" onclick="saveBasketMatchReview('bad', ${idx})">Fout</button>
+            </div>
+          </article>
+        `;
+      }).join("");
+      const status = document.getElementById("basketMatchStatus");
+      if (status) status.textContent = `${formatNumber(basketMatchLastChoices.length)} alternatieven voor ${ingredient} bij ${store === "jumbo" ? "Jumbo" : "AH"}.`;
+    }
+
+    async function runBasketMatchResearch() {
+      const input = document.getElementById("basketMatchIngredient");
+      const select = document.getElementById("basketMatchStore");
+      const status = document.getElementById("basketMatchStatus");
+      const ingredient = String(input?.value || "").trim();
+      const store = select?.value === "jumbo" ? "jumbo" : "albert-heijn";
+      if (!ingredient) {
+        if (status) status.textContent = "Vul eerst een ingrediënt in.";
+        return;
+      }
+      if (status) status.textContent = "Alternatieven zoeken…";
+      try {
+        const endpoint = store === "jumbo" ? "/api/jumbo-research" : "/api/ah-research";
+        const res = await fetch(endpoint, adminFetchInit({
+          method: "POST",
+          body: JSON.stringify({ ingredientTitle: ingredient, amount: "1 verpakking" })
+        }));
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Alternatieven laden mislukt");
+        renderBasketMatchChoices(data.choices || [], store, data.ingredientTitle || ingredient);
+      } catch (error) {
+        if (status) status.textContent = "Fout: " + (error?.message || error);
+      }
+    }
+
+    async function saveBasketMatchReview(action, choiceIndex, explicit = null) {
+      const input = document.getElementById("basketMatchIngredient");
+      const select = document.getElementById("basketMatchStore");
+      const status = document.getElementById("basketMatchStatus");
+      const ingredient = explicit?.ingredient || String(input?.value || "").trim();
+      const store = explicit?.store || (select?.value === "jumbo" ? "jumbo" : "albert-heijn");
+      const choice = explicit || basketMatchLastChoices[choiceIndex];
+      if (!ingredient || !choice) return;
+      if (action === "bad" && !confirm(`Deze match voortaan blokkeren?\n\n${choice.title || choice.productTitle || ""}`)) return;
+      try {
+        const res = await fetch("/api/admin/basket-match-review", adminFetchInit({
+          method: "POST",
+          body: JSON.stringify({
+            action,
+            store,
+            ingredient,
+            productId: choice.productId || "",
+            productTitle: choice.title || choice.productTitle || "",
+          })
+        }));
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Opslaan mislukt");
+        if (status) status.textContent = action === "bad" ? "Foute match geblokkeerd." : "Voorkeursmatch opgeslagen.";
+        loadBasketMatchOverrides();
+      } catch (error) {
+        if (status) status.textContent = "Fout: " + (error?.message || error);
+      }
+    }
+
+    async function loadBasketMatchOverrides() {
+      const el = document.getElementById("basketMatchOverrides");
+      if (!el) return;
+      el.textContent = "Overrides laden…";
+      try {
+        const res = await fetch("/api/admin/basket-match-overrides", adminFetchInit());
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Overrides laden mislukt");
+        const entries = Object.entries(data.overrides || {}).slice(-8).reverse();
+        if (!entries.length) {
+          el.textContent = "Nog geen handmatige matchregels.";
+          return;
+        }
+        el.innerHTML = `<div class="admin-chip-row">${entries.map(([key, rule]) => {
+          const pref = rule?.preferred?.productTitle ? ` → ${rule.preferred.productTitle}` : "";
+          const blocked = Array.isArray(rule?.blacklist) && rule.blacklist.length ? ` · ${rule.blacklist.length} geblokkeerd` : "";
+          return `<span class="admin-chip">${escAdm(key.replace("albert-heijn::", "AH · ").replace("jumbo::", "Jumbo · "))}${escAdm(pref)}${escAdm(blocked)}</span>`;
+        }).join("")}</div>`;
+      } catch (error) {
+        el.textContent = "Fout: " + (error?.message || error);
+      }
+    }
+
     // ── Winkelwagen statistieken ──────────────────────────────────────────────────
     async function loadBasketStats() {
       const days = document.getElementById("basketStatsDays")?.value || "30";
@@ -7432,6 +7648,7 @@
       if (productsTable) productsTable.innerHTML = "";
       if (brandsTable) brandsTable.innerHTML = "";
       if (debugTable) debugTable.innerHTML = "";
+      loadBasketMatchOverrides();
 
       try {
         const res = await fetch(`/api/admin/basket-stats?days=${days}`, adminFetchInit());
@@ -7522,7 +7739,13 @@
                   <td><strong>${escAdm(item.ingredient || "—")}</strong><div style="font-size:11px;color:var(--muted)">${escAdm(item.amount || "")}</div></td>
                   <td>${escAdm(item.selectedProduct || "—")}<div style="font-size:11px;color:var(--muted)">${formatNumber(item.alternatives || 0)} alternatief/alternatieven</div></td>
                   <td style="text-align:right">${item.matchScore == null ? "—" : formatNumber(item.matchScore)}</td>
-                  <td style="font-size:12px;max-width:360px">${escAdm(reasonText)}</td>
+                  <td style="font-size:12px;max-width:360px">
+                    ${escAdm(reasonText)}
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+                      <button class="btn btn-sm" type="button" onclick="setBasketMatchIngredient(${jsAdm(item.ingredient || "")}, ${jsAdm(row.store || item.store || "albert-heijn")})">Test</button>
+                      ${item.selectedProduct ? `<button class="btn btn-sm btn-danger" type="button" onclick="saveBasketMatchReview('bad', -1, { ingredient: ${jsAdm(item.ingredient || "")}, store: ${jsAdm(row.store || item.store || "albert-heijn")}, productId: ${jsAdm(item.selectedProductId || "")}, title: ${jsAdm(item.selectedProduct || "")} })">Blokkeer</button>` : ""}
+                    </div>
+                  </td>
                 </tr>`;
               }).join("")}</tbody>
             </table>`;
@@ -7536,6 +7759,10 @@
 
     function escAdm(s) {
       return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    function jsAdm(s) {
+      return JSON.stringify(String(s || "")).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
     }
 
   </script>
