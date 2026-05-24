@@ -2375,6 +2375,7 @@ function getBasketHandoffUrl(preview) {
     const selectedIds = (preview.items || [])
       .map((item) => {
         const choice = item.choices?.[item.selectedChoiceIndex || 0];
+        if (!isBasketChoiceSafeForHandoff(item, choice)) return "";
         const id = choice?.productId || choice?.id || "";
         if (!id) return "";
         const qty = estimateAhHandoffQuantityClient(item, choice);
@@ -2393,13 +2394,14 @@ function getBasketHandoffUrl(preview) {
         })
         .join("&")}`;
     }
-    return preview.directUrl || preview.fallbackUrl || "https://www.ah.nl/mijnlijst/";
+    return preview.fallbackUrl || "https://www.ah.nl/mijnlijst/";
   }
   if (preview.store === "jumbo") {
     // Bouw URL dynamisch van geselecteerde producten (zoals AH), zodat wisselen ook werkt
     const items = (preview.items || [])
       .map((item) => {
         const choice = item.choices?.[item.selectedChoiceIndex || 0];
+        if (!isBasketChoiceSafeForHandoff(item, choice)) return null;
         const sku = choice?.productId || choice?.sku || "";
         if (!sku) return null;
         const qty = Math.max(1, Math.min(24, estimateAhHandoffQuantityClient(item, choice)));
@@ -2409,7 +2411,7 @@ function getBasketHandoffUrl(preview) {
     if (items.length) {
       return `https://www.jumbo.com/mandje/?add=${encodeURIComponent(JSON.stringify(items))}`;
     }
-    return preview.directUrl || preview.fallbackUrl || "https://www.jumbo.com/mandje/";
+    return preview.fallbackUrl || "https://www.jumbo.com/mandje/";
   }
   const storeConfig = getStoreConfig(preview.store);
   return (
@@ -2445,6 +2447,12 @@ function isDegradedAhBasketPayload(payload) {
   const items = Array.isArray(payload.items) ? payload.items : [];
   if (!items.length) return true;
   return getDegradedAhBasketItemIndexes(items).length > 0;
+}
+
+function isBasketChoiceSafeForHandoff(item, choice) {
+  if (!choice) return false;
+  if (getBasketMatchQuality(choice) !== "low") return true;
+  return Boolean(item?.matchConfirmed);
 }
 
 async function fetchBasketPayload(endpoint, body, options = {}) {
@@ -2848,9 +2856,12 @@ function renderBasketPreview() {
 
     const matchQuality = getBasketMatchQuality(choice);
     const matchBadge = matchQuality === "low"
-      ? `<span class="basket-product__attention">Check match</span>`
+      ? `<span class="basket-product__attention">${item.matchConfirmed ? "Bevestigd" : "Niet meegestuurd"}</span>`
       : "";
     const confidenceBadge = renderBasketMatchConfidenceHtml(choice);
+    const matchHint = matchQuality === "low" && !item.matchConfirmed
+      ? `<p class="basket-product__for">Controleer of wissel deze match; hij gaat nog niet automatisch mee naar de winkel.</p>`
+      : "";
 
     const html = `
       <div class="basket-product ${matchQuality === "low" ? "basket-product--attention" : ""}" data-basket-item="${itemIndex}">
@@ -2867,6 +2878,7 @@ function renderBasketPreview() {
             ${choice.subtitle ? `<span>${escapeHtml(choice.subtitle)}</span>` : ""}
           </p>
           <p class="basket-product__for">voor ${escapeHtml(item.ingredientAmount || "")} ${escapeHtml(ingredientTitle)}</p>
+          ${matchHint}
           ${altCount > 1 ? `<button class="basket-product__wissel" type="button" data-basket-wissel="${itemIndex}" onclick="openAlternativesSheet(${itemIndex}); return false;">
             ${WISSEL_SVG}
             Wissel
@@ -2940,10 +2952,12 @@ function renderBasketPreview() {
     const isJumbo = preview?.store === "jumbo";
     ctaBtn.className = `basket-sheet__cta${isJumbo ? " basket-sheet__cta--jumbo" : ""}`;
     const _ctaFavStyle = 'display:inline-block;width:28px;height:28px;border-radius:6px;vertical-align:middle;margin:0 2px -2px';
-    const _ctaCount = (preview?.items || []).filter(i => i.product || i.choices?.length).length || 0;
+    const safeCount = (preview?.items || []).filter((item) => isBasketChoiceSafeForHandoff(item, item.choices?.[item.selectedChoiceIndex || 0])).length || 0;
+    const skippedCount = Math.max(0, (preview?.items || []).filter((item) => item.choices?.length).length - safeCount);
     ctaBtn.innerHTML = isJumbo
-      ? `Zet ${_ctaCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.jumbo.com&sz=128" alt="Jumbo" style="${_ctaFavStyle}"> mandje`
-      : `Zet ${_ctaCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.ah.nl&sz=128" alt="AH" style="${_ctaFavStyle}"> mandje`;
+      ? `Zet ${safeCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.jumbo.com&sz=128" alt="Jumbo" style="${_ctaFavStyle}"> mandje`
+      : `Zet ${safeCount} producten in <img src="https://www.google.com/s2/favicons?domain=www.ah.nl&sz=128" alt="AH" style="${_ctaFavStyle}"> mandje`;
+    ctaBtn.title = skippedCount ? `${skippedCount} verdachte match(es) worden pas meegestuurd nadat je ze bevestigt of wisselt.` : "";
     ctaBtn.onclick = async () => {
       ctaBtn.disabled = true;
       const previousHtml = ctaBtn.innerHTML;
@@ -3512,7 +3526,11 @@ function renderAlternativesSheet(item) {
     idx: Number.isInteger(choice.__originalChoiceIndex) ? choice.__originalChoiceIndex : idx,
     section: classifyAlternative(choice, item),
     priceNum: parseFloat(String(choice.price || "0").replace("€", "").replace(",", ".")) || 9999,
+    scoreNum: Number.isFinite(Number(choice?.matchMeta?.score)) ? Number(choice.matchMeta.score) : 9999,
   }));
+  const sortAlternativeEntries = (a, b) =>
+    (a.scoreNum - b.scoreNum) ||
+    (a.priceNum - b.priceNum);
 
   const activeFilter = state.altSheetFilter ?? null;
   if (activeFilter) {
@@ -3531,7 +3549,7 @@ function renderAlternativesSheet(item) {
 
     const filtered = annotated
       .filter(matches)
-      .sort((a, b) => a.priceNum - b.priceNum);
+      .sort(sortAlternativeEntries);
 
     const chipTitle = ALT_FILTER_CHIPS.find((c) => c.id === activeFilter)?.label || "Alternatieven";
     const selectedIdx = item.selectedChoiceIndex || 0;
@@ -3593,7 +3611,7 @@ function renderAlternativesSheet(item) {
     }
   }
   // "Meer alternatieven" = alle producten gesorteerd op prijs (altijd zichtbaar als master-overzicht).
-  for (const entry of [...annotated].sort((a, b) => a.priceNum - b.priceNum)) {
+  for (const entry of [...annotated].sort(sortAlternativeEntries)) {
     sections.get("more").push(entry);
   }
 
@@ -3630,8 +3648,8 @@ function renderAlternativesSheet(item) {
     .map((sec) => {
       const entries = sections.get(sec.id) || [];
       if (!entries.length) return "";
-      // Sort label sections by price ascending so the cheapest variant is shown first.
-      entries.sort((a, b) => a.priceNum - b.priceNum);
+      // Sort by match score first; price only breaks ties.
+      entries.sort(sortAlternativeEntries);
       const cards = entries.map((e) => cardHtml(e, e.idx === selectedIdx)).join("");
       return `
         <section class="alt-section">
@@ -13758,6 +13776,7 @@ bindEvent(document.getElementById("altOverlayList"), "click", (e) => {
   if (!item || !Number.isInteger(choiceIdx)) return;
   const prevIdx = Number.isInteger(item.selectedChoiceIndex) ? item.selectedChoiceIndex : 0;
   item.selectedChoiceIndex = choiceIdx;
+  item.matchConfirmed = true;
   trackClientEvent("client_ah_wissel_pick", { from: prevIdx, to: choiceIdx });
   closeAlternativesSheet();
   renderBasketPreview();

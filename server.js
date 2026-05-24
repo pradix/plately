@@ -10329,7 +10329,7 @@ function applyBasketMatchOverrideToProducts(store, ingredient, products, overrid
   const list = Array.isArray(products) ? products.filter(Boolean) : [];
   const key = getBasketMatchOverrideKey(store, ingredient);
   const rule = key ? overrides?.[key] : null;
-  if (!rule || typeof rule !== "object") return { products: list, preferred: null, rule: null };
+  if (!rule || typeof rule !== "object") return { products: list, preferred: null, rule: null, key: "" };
 
   const blacklist = Array.isArray(rule.blacklist) ? rule.blacklist : [];
   const filtered = list.filter((product) => {
@@ -10337,7 +10337,22 @@ function applyBasketMatchOverrideToProducts(store, ingredient, products, overrid
     return !blacklist.some((blocked) => productMatchesBasketOverride(product, blocked));
   });
   const preferred = filtered.find((product) => productMatchesBasketOverride(product, rule.preferred));
-  return { products: filtered, preferred: preferred || null, rule };
+  const blockedCount = Math.max(0, list.length - filtered.length);
+  return { products: filtered, preferred: preferred || null, rule, key, hit: Boolean(preferred || blockedCount > 0), blockedCount };
+}
+
+async function recordBasketMatchOverrideHits(overrides, hitKeys) {
+  const keys = Array.isArray(hitKeys) ? hitKeys.filter(Boolean) : [];
+  if (!keys.length || !overrides || typeof overrides !== "object") return;
+  const now = new Date().toISOString();
+  let touched = false;
+  for (const key of keys) {
+    if (!overrides[key] || typeof overrides[key] !== "object") continue;
+    overrides[key].hitCount = Number(overrides[key].hitCount || 0) + 1;
+    overrides[key].lastHitAt = now;
+    touched = true;
+  }
+  if (touched) await saveBasketMatchOverrides(overrides);
 }
 
 function persistAHToken(token, expiresAt) {
@@ -18166,6 +18181,7 @@ async function buildStoreBasket(body) {
   const recipeTitle = sanitizeText(body.recipeTitle || "Boodschappenlijst");
   const sourceUrl = sanitizeText(body.sourceUrl || "");
   const basketMatchOverrides = await loadBasketMatchOverrides();
+  const basketMatchOverrideHits = [];
 
   if (sourceUrl) {
     try {
@@ -18236,6 +18252,7 @@ async function buildStoreBasket(body) {
         }
         const override = applyBasketMatchOverrideToProducts(store, ingredientName, products, basketMatchOverrides);
         products = override.products;
+        if (override.hit) basketMatchOverrideHits.push(override.key);
         const picked = override.preferred || selectAhProductForGroceryHandoff(products, preferences);
 
         // Ensure the selected product is also the first choice shown in the UI.
@@ -18265,6 +18282,7 @@ async function buildStoreBasket(body) {
         }
         const override = applyBasketMatchOverrideToProducts(store, ingredientName, products, basketMatchOverrides);
         products = override.products;
+        if (override.hit) basketMatchOverrideHits.push(override.key);
         const pickedJumbo = override.preferred || products[0] || null;
         if (pickedJumbo && products.length > 1) {
           const pickedKey = pickedJumbo.sku || pickedJumbo.name;
@@ -18331,6 +18349,7 @@ async function buildStoreBasket(body) {
   });
 
   const foundResults = searchResults.filter((result) => result?.product);
+  await recordBasketMatchOverrideHits(basketMatchOverrides, basketMatchOverrideHits).catch(() => {});
   const directUrl =
     foundResults.length > 0
       ? store === "albert-heijn"
@@ -23016,6 +23035,26 @@ const server = http.createServer(async (request, response) => {
         return sendJson(response, 200, { ok: true, overrides, count: Object.keys(overrides || {}).length });
       } catch (error) {
         return sendJson(response, 500, { ok: false, error: error.message || "Overrides laden mislukt." });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/basket-match-overrides" && request.method === "DELETE") {
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const key = sanitizeText(body.key || getBasketMatchOverrideKey(body.store || "albert-heijn", body.ingredient || ""));
+        if (!key) throw new HttpError(400, "Geen override gekozen.");
+        const overrides = await loadBasketMatchOverrides();
+        const existed = Boolean(overrides[key]);
+        if (existed) {
+          delete overrides[key];
+          await saveBasketMatchOverrides(overrides);
+          await logAdminAction(request, "basket_match_override_delete", { key });
+        }
+        return sendJson(response, 200, { ok: true, deleted: existed, count: Object.keys(overrides).length });
+      } catch (error) {
+        const statusCode = error.statusCode || 500;
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Override verwijderen mislukt." });
       }
     }
 

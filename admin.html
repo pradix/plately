@@ -550,6 +550,36 @@
       margin-top: 2px;
     }
 
+    .basket-override-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .basket-override-table th,
+    .basket-override-table td {
+      padding: 9px 10px;
+      border-bottom: 1px solid rgba(0,0,0,0.055);
+      vertical-align: top;
+      text-align: left;
+      font-size: 12px;
+    }
+
+    .basket-override-table th {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 10px;
+      font-weight: 850;
+      background: rgba(0,0,0,0.025);
+    }
+
+    .basket-override-table tr:last-child td { border-bottom: 0; }
+
     .admin-activity-spark {
       display: flex;
       align-items: flex-end;
@@ -2267,7 +2297,7 @@
             </div>
             <div id="basketMatchStatus" class="muted"></div>
             <div id="basketMatchResults" class="basket-match-results"></div>
-            <div id="basketMatchOverrides" class="muted"></div>
+            <div id="basketMatchOverrides"></div>
           </div>
           <div id="basketStatsDebugTable"></div>
         </div>
@@ -7614,23 +7644,67 @@
     async function loadBasketMatchOverrides() {
       const el = document.getElementById("basketMatchOverrides");
       if (!el) return;
-      el.textContent = "Overrides laden…";
+      el.innerHTML = `<p class="muted">Overrides laden…</p>`;
       try {
         const res = await fetch("/api/admin/basket-match-overrides", adminFetchInit());
         const data = await res.json();
         if (!res.ok || !data.ok) throw new Error(data.error || "Overrides laden mislukt");
-        const entries = Object.entries(data.overrides || {}).slice(-8).reverse();
+        const entries = Object.entries(data.overrides || {})
+          .sort((a, b) => String(b[1]?.updatedAt || b[1]?.lastHitAt || "").localeCompare(String(a[1]?.updatedAt || a[1]?.lastHitAt || "")));
         if (!entries.length) {
-          el.textContent = "Nog geen handmatige matchregels.";
+          el.innerHTML = `<p class="muted">Nog geen handmatige matchregels.</p>`;
           return;
         }
-        el.innerHTML = `<div class="admin-chip-row">${entries.map(([key, rule]) => {
-          const pref = rule?.preferred?.productTitle ? ` → ${rule.preferred.productTitle}` : "";
-          const blocked = Array.isArray(rule?.blacklist) && rule.blacklist.length ? ` · ${rule.blacklist.length} geblokkeerd` : "";
-          return `<span class="admin-chip">${escAdm(key.replace("albert-heijn::", "AH · ").replace("jumbo::", "Jumbo · "))}${escAdm(pref)}${escAdm(blocked)}</span>`;
-        }).join("")}</div>`;
+        el.innerHTML = `
+          <table class="basket-override-table">
+            <thead>
+              <tr>
+                <th>Ingrediënt</th>
+                <th>Voorkeur</th>
+                <th>Geblokkeerd</th>
+                <th>Hits</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${entries.map(([key, rule]) => {
+                const store = key.startsWith("jumbo::") ? "Jumbo" : "AH";
+                const ingredient = String(rule?.ingredient || key.split("::")[1] || "");
+                const preferred = rule?.preferred?.productTitle || "—";
+                const blacklist = Array.isArray(rule?.blacklist) ? rule.blacklist : [];
+                const hitText = `${formatNumber(rule?.hitCount || 0)}${rule?.lastHitAt ? `<div class="muted">${new Date(rule.lastHitAt).toLocaleDateString("nl-NL")}</div>` : ""}`;
+                return `<tr>
+                  <td><strong>${escAdm(store)} · ${escAdm(ingredient)}</strong><div class="muted mono">${escAdm(key)}</div></td>
+                  <td>${escAdm(preferred)}</td>
+                  <td>${blacklist.length ? blacklist.slice(0, 3).map((b) => escAdm(b.productTitle || b.productId || "—")).join("<br>") : "—"}</td>
+                  <td>${hitText}</td>
+                  <td style="text-align:right;white-space:nowrap">
+                    <button class="btn btn-sm" type="button" onclick="setBasketMatchIngredient(${jsAdm(ingredient)}, ${jsAdm(rule?.store || (key.startsWith("jumbo::") ? "jumbo" : "albert-heijn"))})">Wijzig</button>
+                    <button class="btn btn-sm btn-danger" type="button" onclick="deleteBasketMatchOverride(${jsAdm(key)})">Verwijder</button>
+                  </td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>`;
       } catch (error) {
-        el.textContent = "Fout: " + (error?.message || error);
+        el.innerHTML = `<p class="muted">Fout: ${escAdm(error?.message || error)}</p>`;
+      }
+    }
+
+    async function deleteBasketMatchOverride(key) {
+      if (!key || !confirm("Deze handmatige matchregel verwijderen?")) return;
+      const status = document.getElementById("basketMatchStatus");
+      try {
+        const res = await fetch("/api/admin/basket-match-overrides", adminFetchInit({
+          method: "DELETE",
+          body: JSON.stringify({ key })
+        }));
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "Verwijderen mislukt");
+        if (status) status.textContent = "Matchregel verwijderd.";
+        loadBasketMatchOverrides();
+      } catch (error) {
+        if (status) status.textContent = "Fout: " + (error?.message || error);
       }
     }
 
