@@ -288,6 +288,94 @@
     .muted { color: var(--muted); font-size: 12px; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 
+    .admin-visual-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 10px;
+      margin: 0 0 12px;
+    }
+
+    .admin-visual-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(248,250,248,0.78));
+      min-width: 0;
+    }
+
+    .admin-visual-card__top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .admin-visual-card__label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .admin-visual-card__value {
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      color: rgba(0,0,0,0.86);
+      line-height: 1.05;
+    }
+
+    .admin-visual-card__badge {
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 10px;
+      font-weight: 850;
+      white-space: nowrap;
+      border: 1px solid rgba(0,0,0,0.08);
+      background: rgba(0,0,0,0.035);
+    }
+
+    .admin-meter {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.07);
+      overflow: hidden;
+      margin: 8px 0 7px;
+    }
+
+    .admin-meter > span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: var(--green);
+    }
+
+    .admin-meter--warn > span { background: #f59e0b; }
+    .admin-meter--bad > span { background: #dc3545; }
+    .admin-meter--info > span { background: #64748b; }
+
+    .admin-chip-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .admin-chip {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 750;
+      color: rgba(0,0,0,0.72);
+      background: rgba(0,0,0,0.045);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+
     .admin-activity-spark {
       display: flex;
       align-items: flex-end;
@@ -1035,6 +1123,7 @@
           </div>
         </div>
         <div id="adminCockpitIssues" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px"></div>
+        <div id="adminCockpitVisuals" class="admin-visual-grid"></div>
       </div>
 
       <div class="stats-grid">
@@ -2426,6 +2515,28 @@
       `;
     }
 
+    function renderAdminVisualCard({ label, value, badge, percent = null, meter = "ok", detail = "", chips = [] }) {
+      const pct = percent == null ? null : Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+      const meterClass = meter === "bad" ? "admin-meter--bad" : meter === "warn" ? "admin-meter--warn" : meter === "info" ? "admin-meter--info" : "";
+      const chipHtml = Array.isArray(chips) && chips.length
+        ? `<div class="admin-chip-row">${chips.map((chip) => `<span class="admin-chip">${escapeHtml(chip)}</span>`).join("")}</div>`
+        : "";
+      return `
+        <div class="admin-visual-card">
+          <div class="admin-visual-card__top">
+            <div>
+              <div class="admin-visual-card__label">${escapeHtml(label || "")}</div>
+              <div class="admin-visual-card__value">${escapeHtml(value || "—")}</div>
+            </div>
+            ${badge ? `<span class="admin-visual-card__badge">${escapeHtml(badge)}</span>` : ""}
+          </div>
+          ${pct == null ? "" : `<div class="admin-meter ${meterClass}"><span style="width:${pct}%"></span></div>`}
+          ${detail ? `<div class="muted" style="line-height:1.4">${escapeHtml(detail)}</div>` : ""}
+          ${chipHtml}
+        </div>
+      `;
+    }
+
     async function fetchAdminJson(url, init = undefined) {
       const response = await fetch(url, init || adminFetchInit());
       const data = await response.json().catch(() => ({}));
@@ -2436,8 +2547,10 @@
     async function loadAdminCockpit() {
       const metaEl = document.getElementById("adminCockpitMeta");
       const issuesEl = document.getElementById("adminCockpitIssues");
+      const visualsEl = document.getElementById("adminCockpitVisuals");
       if (metaEl) metaEl.textContent = "Gezondheid laden…";
       if (issuesEl) issuesEl.innerHTML = "";
+      if (visualsEl) visualsEl.innerHTML = "";
       ["cockpitOverall", "cockpitActionCount", "cockpitImportSuccess", "cockpitAhToken", "cockpitBasketCount", "cockpitCommit"].forEach((id) => setCockpitText(id, "…"));
 
       const results = await Promise.allSettled([
@@ -2467,6 +2580,15 @@
       const ahExpiresMs = Number(ah?.expiresInMs || 0);
       const ahExpiresSoon = ahHasToken && ahExpiresMs > 0 && ahExpiresMs < 1000 * 60 * 60 * 24 * 2;
       const basketCount = Number(basket?.totalBaskets || 0);
+      const basketDebug = basket?.debug || {};
+      const basketDebugItems = Number(basketDebug.items || 0);
+      const basketMatched = Number(basketDebug.matched || 0);
+      const basketProblemCount =
+        Number(basketDebug.notFound || 0) +
+        Number(basketDebug.missingImage || 0) +
+        Number(basketDebug.lowAlternatives || 0) +
+        Number(basketDebug.lowConfidence || 0);
+      const basketQuality = basketDebugItems ? Math.max(0, Math.round((basketMatched / basketDebugItems) * 100)) : 100;
       const hardFailures = results.filter((result) => result.status === "rejected").length;
       const highActionCount = actionItems.filter((item) => item.severity === "high").length;
       const overallBad = hardFailures > 0 || !health?.ok || !ahHasToken || highActionCount > 0;
@@ -2489,45 +2611,93 @@
           tab: "logs",
         });
       }
-      cards.push({
-        label: "Actie nodig",
-        value: actionItems.length ? `${formatNumber(actionItems.length)} punten` : "Rustig",
-        detail: actionItems[0]?.title ? `${actionItems[0].title}: ${formatNumber(actionItems[0].count || 0)}` : "Geen urgente acties gevonden.",
-        severity: highActionCount ? "high" : actionItems.length ? "warn" : "ok",
-        tab: actionItems.length ? (actionItems[0].tab || "overview") : "",
-      });
-      cards.push({
-        label: "Importkwaliteit",
-        value: `${formatNumber(importSuccess)}% goed`,
-        detail: `${formatNumber(totalRecipes)} recepten · ${formatNumber(invalidRecipes)} ongeldig · ${formatNumber(missingImages)} zonder afbeelding · ${formatNumber(duplicates)} dubbel`,
-        severity: importSuccess < 80 || invalidRecipes > 0 ? "high" : importSuccess < 95 || missingImages > 0 ? "warn" : "ok",
-        tab: "activity",
-      });
-      if (worstChannel) {
+      if (actionItems.length) {
+        cards.push({
+          label: "Actie nodig",
+          value: `${formatNumber(actionItems.length)} punten`,
+          detail: actionItems[0]?.title ? `${actionItems[0].title}: ${formatNumber(actionItems[0].count || 0)}` : "Bekijk de actiepunten.",
+          severity: highActionCount ? "high" : "warn",
+          tab: actionItems[0]?.tab || "overview",
+        });
+      }
+      if (importSuccess < 100 || invalidRecipes || missingImages || duplicates) {
+        cards.push({
+          label: "Importkwaliteit",
+          value: `${formatNumber(importSuccess)}% goed`,
+          detail: `${formatNumber(totalRecipes)} recepten · ${formatNumber(invalidRecipes)} ongeldig · ${formatNumber(missingImages)} zonder afbeelding · ${formatNumber(duplicates)} dubbel`,
+          severity: importSuccess < 80 || invalidRecipes > 0 ? "high" : "warn",
+          tab: "activity",
+        });
+      }
+      if (worstChannel && Number(worstChannel.issueCount || 0) > 0) {
         cards.push({
           label: "Slechtste kanaal",
           value: worstChannel.label || worstChannel.id || "Onbekend",
           detail: `${formatNumber(worstChannel.total || 0)} recepten · ${formatNumber(worstChannel.successRate || 0)}% succes`,
-          severity: Number(worstChannel.issueCount || 0) > 0 ? "warn" : "ok",
+          severity: "warn",
           tab: "activity",
         });
       }
-      cards.push({
-        label: "AH koppeling",
-        value: ahHasToken ? "Token actief" : "Geen token",
-        detail: ah?.expiresAt ? `Verloopt ${new Date(ah.expiresAt).toLocaleString("nl-NL")}` : "Geen verloopdatum beschikbaar.",
-        severity: !ahHasToken ? "high" : ahExpiresSoon ? "warn" : "ok",
-        tab: "supermarkets",
-      });
-      cards.push({
-        label: "Winkelwagen",
-        value: `${formatNumber(basketCount)} gebouwd`,
-        detail: basket?.days ? `In de afgelopen ${basket.days} dagen.` : "Nog geen recente winkelwagenstatistiek.",
-        severity: basketCount ? "ok" : "info",
-        tab: "basket-stats",
-      });
+      if (!ahHasToken || ahExpiresSoon) {
+        cards.push({
+          label: "AH koppeling",
+          value: ahHasToken ? "Token verloopt snel" : "Geen token",
+          detail: ah?.expiresAt ? `Verloopt ${new Date(ah.expiresAt).toLocaleString("nl-NL")}` : "Geen verloopdatum beschikbaar.",
+          severity: !ahHasToken ? "high" : "warn",
+          tab: "supermarkets",
+        });
+      }
+      if (basketProblemCount > 0) {
+        cards.push({
+          label: "Winkelwagen",
+          value: `${formatNumber(basketProblemCount)} signalen`,
+          detail: `${formatNumber(basketDebug.notFound || 0)} geen match · ${formatNumber(basketDebug.missingImage || 0)} zonder afbeelding · ${formatNumber(basketDebug.lowAlternatives || 0)} weinig alternatieven`,
+          severity: Number(basketDebug.notFound || 0) || Number(basketDebug.missingImage || 0) ? "high" : "warn",
+          tab: "basket-stats",
+        });
+      }
 
-      if (issuesEl) issuesEl.innerHTML = cards.map(renderCockpitIssueCard).join("");
+      const visualCards = [
+        renderAdminVisualCard({
+          label: "Importkwaliteit",
+          value: `${formatNumber(importSuccess)}%`,
+          badge: importSuccess >= 100 ? "Perfect" : importSuccess >= 90 ? "Goed" : "Werk aan",
+          percent: importSuccess,
+          meter: importSuccess >= 90 ? "ok" : importSuccess >= 75 ? "warn" : "bad",
+          detail: `${formatNumber(totalRecipes)} recepten gecontroleerd`,
+          chips: [
+            invalidRecipes ? `${formatNumber(invalidRecipes)} ongeldig` : "",
+            missingImages ? `${formatNumber(missingImages)} zonder afbeelding` : "",
+            duplicates ? `${formatNumber(duplicates)} dubbel` : "",
+          ].filter(Boolean),
+        }),
+        renderAdminVisualCard({
+          label: "Mandje-match",
+          value: `${formatNumber(basketQuality)}%`,
+          badge: `${formatNumber(basketDebugItems)} items`,
+          percent: basketQuality,
+          meter: basketQuality >= 90 ? "ok" : basketQuality >= 75 ? "warn" : "bad",
+          detail: `${formatNumber(basketMatched)} matches uit ${formatNumber(basketDebugItems)} gemeten items`,
+          chips: [
+            basketDebug.missingImage ? `${formatNumber(basketDebug.missingImage)} zonder afbeelding` : "",
+            basketDebug.lowAlternatives ? `${formatNumber(basketDebug.lowAlternatives)} weinig alternatieven` : "",
+            basketDebug.lowConfidence ? `${formatNumber(basketDebug.lowConfidence)} lage score` : "",
+          ].filter(Boolean),
+        }),
+        renderAdminVisualCard({
+          label: "AH token",
+          value: ahHasToken ? "Actief" : "Uit",
+          badge: ahExpiresSoon ? "Bijna verlopen" : ahHasToken ? "OK" : "Actie",
+          percent: ahHasToken ? (ahExpiresSoon ? 45 : 100) : 0,
+          meter: !ahHasToken ? "bad" : ahExpiresSoon ? "warn" : "ok",
+          detail: ah?.expiresAt ? `Verloopt ${new Date(ah.expiresAt).toLocaleString("nl-NL")}` : "Geen verloopdatum beschikbaar",
+        }),
+      ];
+
+      if (issuesEl) {
+        issuesEl.innerHTML = cards.length ? cards.map(renderCockpitIssueCard).join("") : "";
+      }
+      if (visualsEl) visualsEl.innerHTML = visualCards.join("");
       if (metaEl) {
         const ts = new Date();
         metaEl.textContent = `Bijgewerkt: ${formatDate(ts)} · ${health?.env || "omgeving onbekend"} · Postgres ${health?.auth?.postgresEnabled ? "aan" : "uit"}`;
