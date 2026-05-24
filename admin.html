@@ -103,6 +103,72 @@
       align-items: center;
     }
 
+    .admin-tabs {
+      margin: 0 0 14px;
+    }
+
+    .admin-tabs__rail {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      overflow-x: auto;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,0.76);
+      box-shadow: var(--shadow);
+    }
+
+    .admin-tabs__btn {
+      flex: 0 0 auto;
+      border: 1px solid rgba(0,0,0,0.08);
+      background: rgba(0,0,0,0.025);
+      color: rgba(0,0,0,0.72);
+      border-radius: 999px;
+      padding: 8px 11px;
+      font-size: 12px;
+      font-weight: 750;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .admin-tabs__btn[aria-selected="true"] {
+      background: var(--green);
+      color: #fff;
+      border-color: transparent;
+    }
+
+    .admin-tabs__btn:hover:not([aria-selected="true"]) {
+      background: rgba(120, 147, 111, 0.10);
+      border-color: rgba(120, 147, 111, 0.18);
+    }
+
+    .admin-tabs__sep {
+      flex: 0 0 1px;
+      height: 24px;
+      background: rgba(34, 32, 29, 0.12);
+      margin: 0 4px;
+      border-radius: 1px;
+    }
+
+    .admin-tabs__group-label {
+      flex: 0 0 auto;
+      color: rgba(65, 60, 54, 0.56);
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      padding: 0 2px;
+    }
+
+    .admin-section-note {
+      margin: -4px 0 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
     /* ── Buttons ───────────────────────────────────────────────────────────── */
     .btn {
       padding: 9px 12px;
@@ -739,27 +805,27 @@
 
     <nav class="admin-tabs" aria-label="Admin tabs">
       <div class="admin-tabs__rail" id="adminTabsRail" role="tablist" aria-label="Admin secties">
-        <!-- 📊 Overzicht -->
+        <span class="admin-tabs__group-label">Overzicht</span>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="true"  data-admin-tab="overview">Dashboard</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="activity">Activiteit</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="basket-stats">Winkelwagen</button>
         <span class="admin-tabs__sep" aria-hidden="true"></span>
-        <!-- 👥 Gebruikers -->
+        <span class="admin-tabs__group-label">Mensen</span>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="users">Gebruikers</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="notifications">Notificaties</button>
         <span class="admin-tabs__sep" aria-hidden="true"></span>
-        <!-- 📡 Content & kanalen -->
+        <span class="admin-tabs__group-label">Recepten</span>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channels">Kanalen</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Testen</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk import</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="reimport">Reimport</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk import</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="seo">SEO</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="search-terms">Zoekwoorden</button>
         <span class="admin-tabs__sep" aria-hidden="true"></span>
-        <!-- ⚙️ Configuratie -->
+        <span class="admin-tabs__group-label">Boodschappen</span>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="supermarkets">Supermarkten</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="notifications">Notificaties</button>
+        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="basket-stats">Winkelwagen</button>
         <span class="admin-tabs__sep" aria-hidden="true"></span>
-        <!-- 🔧 Systeem -->
+        <span class="admin-tabs__group-label">Systeem</span>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="storage">Opslag</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="logs">Logs</button>
         <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="audit-log">Audit</button>
@@ -1076,7 +1142,7 @@
 
       <div class="section" id="overviewSection">
         <div class="section-header">
-          <h2>Dashboard</h2>
+          <h2>Rapportage</h2>
           <div class="muted" id="overviewMeta">—</div>
         </div>
 
@@ -1124,7 +1190,7 @@
             <p class="muted" id="topChannelsNote" style="margin-top:8px"></p>
           </div>
 
-          <div style="margin-top:16px">
+          <div style="margin-top:16px" id="overviewImportsByChannelBlock">
             <h3 class="subhead">Imports per kanaal — admin account</h3>
             <div class="muted" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 8px">
               <button class="btn btn-sm" type="button" onclick="setImportsByChannelGroupBy('channel')" id="importsByChannelTabChannel">Per kanaal</button>
@@ -1134,7 +1200,7 @@
             <div id="importsByChannelTable"></div>
           </div>
 
-          <div style="margin-top:16px">
+          <div style="margin-top:16px" id="overviewImportQualityBlock">
             <div class="section-header" style="margin-bottom:8px">
               <h3 class="subhead" style="margin:0">Importkwaliteit per kanaal</h3>
               <button class="btn btn-sm" type="button" onclick="loadImportQuality()">Refresh</button>
@@ -1143,7 +1209,7 @@
             <div id="importQualityTable"></div>
           </div>
 
-          <div style="margin-top:16px">
+          <div style="margin-top:16px" id="overviewImportErrorsBlock">
             <div class="section-header" style="margin-bottom:8px">
               <h3 class="subhead" style="margin:0">Importfouten per kanaal</h3>
               <button class="btn btn-sm" type="button" onclick="loadImportErrors()">Refresh</button>
@@ -2347,9 +2413,6 @@
         })));
 
         renderTopChannelsTable("topChannelsByImports30d", top.channelsByImports30d || []);
-        loadImportsByChannel().catch(() => {});
-        loadImportQuality().catch(() => {});
-        loadImportErrors().catch(() => {});
 
         const hasChannels = Array.isArray(top.channelsByImports30d) && top.channelsByImports30d.length > 0;
         const noteEl = document.getElementById("topChannelsNote");
@@ -6079,6 +6142,69 @@
 
     const ADMIN_TABS_STORAGE_KEY = "plately-admin-last-tab";
 
+    function ensureAdminSectionNote(parent, text) {
+      if (!parent || !text) return;
+      const noteId = `admin-note-${parent.id || Math.random().toString(36).slice(2)}`;
+      if (document.getElementById(noteId)) return;
+      const note = document.createElement("p");
+      note.id = noteId;
+      note.className = "admin-section-note";
+      note.textContent = text;
+      parent.insertBefore(note, parent.firstElementChild || null);
+    }
+
+    function moveAdminBlock(blockId, tabId, { afterFirstSection = false, beforeFirst = false } = {}) {
+      const block = document.getElementById(blockId);
+      const tab = document.querySelector(`.admin-tab-section[data-tab="${tabId}"]`);
+      if (!block || !tab || block.parentElement === tab) return;
+      if (beforeFirst) {
+        tab.insertBefore(block, tab.firstElementChild || null);
+        return;
+      }
+      if (afterFirstSection) {
+        const firstSection = tab.querySelector(":scope > .section");
+        if (firstSection?.nextSibling) tab.insertBefore(block, firstSection.nextSibling);
+        else tab.appendChild(block);
+        return;
+      }
+      tab.appendChild(block);
+    }
+
+    function organizeAdminLayout() {
+      const overview = document.getElementById("adminTabOverview");
+      const activity = document.getElementById("adminTabActivity");
+      const seo = document.getElementById("adminTabSeo");
+      const supermarkets = document.getElementById("adminTabSupermarkets");
+      const storage = document.getElementById("adminTabStorage");
+
+      ensureAdminSectionNote(overview, "Dagelijkse cockpit: eerst gezondheid en actiepunten, daarna kerncijfers.");
+      ensureAdminSectionNote(activity, "Gebruik, importkwaliteit en foutmeldingen bij elkaar.");
+      ensureAdminSectionNote(seo, "Vindbaarheid, ratings, afbeeldingen en receptkwaliteit.");
+      ensureAdminSectionNote(supermarkets, "Supermarktconfiguratie, AH-token en winkelwagenwerking.");
+      ensureAdminSectionNote(storage, "Deploy, opslag, database, caches en runtime-bestanden.");
+
+      moveAdminBlock("ahTokenSection", "supermarkets", { afterFirstSection: true });
+      moveAdminBlock("ingredientFixSection", "seo", { afterFirstSection: true });
+      moveAdminBlock("adminDeployWrap", "storage", { beforeFirst: true });
+
+      if (activity && !document.getElementById("adminImportHealthSection")) {
+        const section = document.createElement("div");
+        section.className = "section";
+        section.id = "adminImportHealthSection";
+        section.innerHTML = `
+          <div class="section-header">
+            <h2>Importkwaliteit</h2>
+            <div class="muted">Kanalen, slechte imports en recente fouten</div>
+          </div>
+        `;
+        activity.appendChild(section);
+        ["overviewImportsByChannelBlock", "overviewImportQualityBlock", "overviewImportErrorsBlock"].forEach((id) => {
+          const block = document.getElementById(id);
+          if (block) section.appendChild(block);
+        });
+      }
+    }
+
     function setAdminTab(tabId, { persist = true } = {}) {
       const sections = Array.from(document.querySelectorAll(".admin-tab-section"));
       const btns = Array.from(document.querySelectorAll("[data-admin-tab]"));
@@ -6110,10 +6236,14 @@
       }
       if (next === "activity") {
         loadAnalytics();
+        loadImportsByChannel();
+        loadImportQuality();
+        loadImportErrors();
       }
       if (next === "seo") { loadSeoOverview(); }
       if (next === "basket-stats") loadBasketStats();
       if (next === "storage") loadStorageInfo();
+      if (next === "supermarkets") loadAhTokenStatus();
       if (next === "logs") {
         loadLogs();
       } else {
@@ -6125,6 +6255,7 @@
     }
 
     function initAdminTabs() {
+      organizeAdminLayout();
       const rail = document.getElementById("adminTabsRail");
       if (rail) {
         rail.addEventListener("click", (e) => {
