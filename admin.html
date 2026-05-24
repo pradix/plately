@@ -108,15 +108,28 @@
     }
 
     .admin-tabs__rail {
-      display: flex;
-      gap: 6px;
-      align-items: center;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(170px, 1fr));
+      gap: 8px;
+      align-items: stretch;
       overflow-x: auto;
       padding: 10px;
       border: 1px solid var(--border);
       border-radius: var(--radius);
       background: rgba(255,255,255,0.76);
       box-shadow: var(--shadow);
+    }
+
+    .admin-tabs__group {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 9px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.055);
+      background: rgba(255,255,255,0.66);
+      min-width: 170px;
     }
 
     .admin-tabs__btn {
@@ -143,23 +156,15 @@
       border-color: rgba(120, 147, 111, 0.18);
     }
 
-    .admin-tabs__sep {
-      flex: 0 0 1px;
-      height: 24px;
-      background: rgba(34, 32, 29, 0.12);
-      margin: 0 4px;
-      border-radius: 1px;
-    }
-
     .admin-tabs__group-label {
-      flex: 0 0 auto;
+      flex: 0 0 100%;
       color: rgba(65, 60, 54, 0.56);
       font-size: 10px;
       font-weight: 850;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       white-space: nowrap;
-      padding: 0 2px;
+      padding: 0 2px 2px;
     }
 
     .admin-section-note {
@@ -374,6 +379,110 @@
       color: rgba(0,0,0,0.72);
       background: rgba(0,0,0,0.045);
       border: 1px solid rgba(0,0,0,0.06);
+    }
+
+    .admin-cockpit {
+      border-radius: 12px;
+      border: 1px solid rgba(120, 147, 111, 0.18);
+      background:
+        linear-gradient(135deg, rgba(120,147,111,0.13), rgba(255,255,255,0.88) 42%),
+        #fff;
+      padding: 14px;
+    }
+
+    .admin-cockpit__strip {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .admin-cockpit__metric {
+      border-radius: 8px;
+      border: 1px solid rgba(0,0,0,0.065);
+      background: rgba(255,255,255,0.72);
+      padding: 10px 11px;
+      min-width: 0;
+    }
+
+    .admin-cockpit__metric strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1.1;
+      color: rgba(0,0,0,0.86);
+      letter-spacing: -0.01em;
+    }
+
+    .admin-cockpit__metric span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 850;
+    }
+
+    .admin-action-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 10px;
+    }
+
+    .admin-action-card {
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: grid;
+      gap: 8px;
+      border: 1px solid rgba(100,116,139,0.20);
+      background: rgba(100,116,139,0.08);
+      color: #334155;
+      min-width: 0;
+    }
+
+    .admin-action-card--warn {
+      border-color: rgba(245,158,11,0.28);
+      background: rgba(245,158,11,0.10);
+      color: #92400e;
+    }
+
+    .admin-action-card--high {
+      border-color: rgba(220,53,69,0.24);
+      background: rgba(220,53,69,0.09);
+      color: #991b1b;
+    }
+
+    .admin-action-card__head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .admin-action-card__label {
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .admin-action-card__value {
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.08;
+      margin-top: 2px;
+    }
+
+    .admin-action-card__detail {
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .admin-action-card__actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     .admin-activity-spark {
@@ -775,10 +884,14 @@
     }
 
     @media (max-width: 980px) {
+      .admin-tabs__rail { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
+      .admin-cockpit__strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
     @media (max-width: 720px) {
       .container { padding: 14px; }
+      .admin-tabs__rail { grid-template-columns: minmax(0, 1fr); }
+      .admin-cockpit__strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .two-col { grid-template-columns: 1fr; }
       .header-actions { width: 100%; justify-content: flex-start; }
@@ -893,30 +1006,36 @@
 
     <nav class="admin-tabs" aria-label="Admin tabs">
       <div class="admin-tabs__rail" id="adminTabsRail" role="tablist" aria-label="Admin secties">
-        <span class="admin-tabs__group-label">Overzicht</span>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="true"  data-admin-tab="overview">Dashboard</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="activity">Activiteit</button>
-        <span class="admin-tabs__sep" aria-hidden="true"></span>
-        <span class="admin-tabs__group-label">Mensen</span>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="users">Gebruikers</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="notifications">Notificaties</button>
-        <span class="admin-tabs__sep" aria-hidden="true"></span>
-        <span class="admin-tabs__group-label">Recepten</span>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channels">Kanalen</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Testen</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="reimport">Reimport</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk import</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="seo">SEO</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="search-terms">Zoekwoorden</button>
-        <span class="admin-tabs__sep" aria-hidden="true"></span>
-        <span class="admin-tabs__group-label">Boodschappen</span>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="supermarkets">Supermarkten</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="basket-stats">Winkelwagen</button>
-        <span class="admin-tabs__sep" aria-hidden="true"></span>
-        <span class="admin-tabs__group-label">Systeem</span>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="storage">Opslag</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="logs">Logs</button>
-        <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="audit-log">Audit</button>
+        <div class="admin-tabs__group">
+          <span class="admin-tabs__group-label">Cockpit</span>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="true"  data-admin-tab="overview">Dashboard</button>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="activity">Activiteit</button>
+        </div>
+        <div class="admin-tabs__group">
+          <span class="admin-tabs__group-label">Gebruikers</span>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="users">Accounts</button>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="notifications">Notificaties</button>
+        </div>
+        <div class="admin-tabs__group">
+          <span class="admin-tabs__group-label">Recepten & import</span>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channels">Kanalen</button>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Testen</button>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="reimport">Reimport</button>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk</button>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="seo">SEO</button>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="search-terms">Zoekwoorden</button>
+        </div>
+        <div class="admin-tabs__group">
+          <span class="admin-tabs__group-label">Boodschappen</span>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="supermarkets">Supermarkten</button>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="basket-stats">Winkelwagen</button>
+        </div>
+        <div class="admin-tabs__group">
+          <span class="admin-tabs__group-label">Systeem</span>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="storage">Opslag</button>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="logs">Logs</button>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="audit-log">Audit</button>
+        </div>
       </div>
     </nav>
 
@@ -1084,10 +1203,10 @@
       </div>
 
       <div class="admin-tab-section" id="adminTabOverview" data-tab="overview">
-      <div class="section" id="adminCockpitWrap" style="margin-bottom:16px">
+      <div class="section admin-cockpit" id="adminCockpitWrap" style="margin-bottom:16px">
         <div class="section-header">
           <div>
-            <h2>Gezondheid</h2>
+            <h2>Controlekamer</h2>
             <div class="muted" id="adminCockpitMeta">Alles in een oogopslag laden…</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1096,33 +1215,33 @@
             <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('basket-stats')">Winkelwagen</button>
           </div>
         </div>
-        <div class="stats-grid" style="margin-bottom:12px">
-          <div class="stat-card">
-            <div class="stat-value" id="cockpitOverall">-</div>
-            <div class="stat-label">Status</div>
+        <div class="admin-cockpit__strip">
+          <div class="admin-cockpit__metric">
+            <strong id="cockpitOverall">-</strong>
+            <span>Status</span>
           </div>
-          <div class="stat-card">
-            <div class="stat-value" id="cockpitActionCount">-</div>
-            <div class="stat-label">Actiepunten</div>
+          <div class="admin-cockpit__metric">
+            <strong id="cockpitActionCount">-</strong>
+            <span>Actiepunten</span>
           </div>
-          <div class="stat-card">
-            <div class="stat-value" id="cockpitImportSuccess">-</div>
-            <div class="stat-label">Importkwaliteit</div>
+          <div class="admin-cockpit__metric">
+            <strong id="cockpitImportSuccess">-</strong>
+            <span>Importkwaliteit</span>
           </div>
-          <div class="stat-card">
-            <div class="stat-value" id="cockpitAhToken">-</div>
-            <div class="stat-label">AH token</div>
+          <div class="admin-cockpit__metric">
+            <strong id="cockpitAhToken">-</strong>
+            <span>AH token</span>
           </div>
-          <div class="stat-card">
-            <div class="stat-value" id="cockpitBasketCount">-</div>
-            <div class="stat-label">Winkelwagens 30d</div>
+          <div class="admin-cockpit__metric">
+            <strong id="cockpitBasketCount">-</strong>
+            <span>Winkelwagens 30d</span>
           </div>
-          <div class="stat-card">
-            <div class="stat-value mono" id="cockpitCommit">-</div>
-            <div class="stat-label">Live commit</div>
+          <div class="admin-cockpit__metric">
+            <strong class="mono" id="cockpitCommit">-</strong>
+            <span>Live commit</span>
           </div>
         </div>
-        <div id="adminCockpitIssues" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px"></div>
+        <div id="adminCockpitIssues" class="admin-action-grid"></div>
         <div id="adminCockpitVisuals" class="admin-visual-grid"></div>
       </div>
 
@@ -2463,7 +2582,7 @@
         }
         if (!listEl) return;
         if (!items.length) {
-          listEl.innerHTML = `<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:12px 14px;font-size:13px;font-weight:700;color:#166534">Alles ziet er rustig uit.</div>`;
+          listEl.innerHTML = "";
           return;
         }
         listEl.innerHTML = items.slice(0, 8).map((item) => `
@@ -2493,24 +2612,18 @@
     }
 
     function renderCockpitIssueCard({ label, value, detail, severity = "info", tab = "" }) {
-      const colors = {
-        ok: ["#166534", "rgba(34,197,94,0.09)", "rgba(34,197,94,0.25)"],
-        warn: ["#92400e", "rgba(245,158,11,0.10)", "rgba(245,158,11,0.28)"],
-        high: ["#991b1b", "rgba(220,53,69,0.09)", "rgba(220,53,69,0.24)"],
-        info: ["#334155", "rgba(100,116,139,0.08)", "rgba(100,116,139,0.20)"],
-      };
-      const [fg, bg, border] = colors[severity] || colors.info;
+      const severityClass = severity === "high" ? "admin-action-card--high" : severity === "warn" ? "admin-action-card--warn" : "";
       const openButton = tab ? `<button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('${escapeHtml(tab)}')">Open</button>` : "";
       return `
-        <div style="border:1px solid ${border};background:${bg};border-radius:8px;padding:12px 14px;color:${fg};display:grid;gap:8px">
-          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+        <div class="admin-action-card ${severityClass}">
+          <div class="admin-action-card__head">
             <div>
-              <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.02em">${escapeHtml(label)}</div>
-              <div style="font-size:22px;font-weight:900;margin-top:2px">${escapeHtml(value)}</div>
+              <div class="admin-action-card__label">${escapeHtml(label)}</div>
+              <div class="admin-action-card__value">${escapeHtml(value)}</div>
             </div>
-            ${openButton}
+            <div class="admin-action-card__actions">${openButton}</div>
           </div>
-          <div style="font-size:12px;line-height:1.45">${escapeHtml(detail || "")}</div>
+          <div class="admin-action-card__detail">${escapeHtml(detail || "")}</div>
         </div>
       `;
     }
@@ -2657,11 +2770,12 @@
         });
       }
 
-      const visualCards = [
-        renderAdminVisualCard({
+      const visualCards = [];
+      if (importSuccess < 100 || invalidRecipes || missingImages || duplicates) {
+        visualCards.push(renderAdminVisualCard({
           label: "Importkwaliteit",
           value: `${formatNumber(importSuccess)}%`,
-          badge: importSuccess >= 100 ? "Perfect" : importSuccess >= 90 ? "Goed" : "Werk aan",
+          badge: importSuccess >= 90 ? "Goed" : "Werk aan",
           percent: importSuccess,
           meter: importSuccess >= 90 ? "ok" : importSuccess >= 75 ? "warn" : "bad",
           detail: `${formatNumber(totalRecipes)} recepten gecontroleerd`,
@@ -2670,8 +2784,10 @@
             missingImages ? `${formatNumber(missingImages)} zonder afbeelding` : "",
             duplicates ? `${formatNumber(duplicates)} dubbel` : "",
           ].filter(Boolean),
-        }),
-        renderAdminVisualCard({
+        }));
+      }
+      if (basketProblemCount > 0 || basketQuality < 100) {
+        visualCards.push(renderAdminVisualCard({
           label: "Mandje-match",
           value: `${formatNumber(basketQuality)}%`,
           badge: `${formatNumber(basketDebugItems)} items`,
@@ -2683,16 +2799,18 @@
             basketDebug.lowAlternatives ? `${formatNumber(basketDebug.lowAlternatives)} weinig alternatieven` : "",
             basketDebug.lowConfidence ? `${formatNumber(basketDebug.lowConfidence)} lage score` : "",
           ].filter(Boolean),
-        }),
-        renderAdminVisualCard({
+        }));
+      }
+      if (!ahHasToken || ahExpiresSoon) {
+        visualCards.push(renderAdminVisualCard({
           label: "AH token",
           value: ahHasToken ? "Actief" : "Uit",
           badge: ahExpiresSoon ? "Bijna verlopen" : ahHasToken ? "OK" : "Actie",
           percent: ahHasToken ? (ahExpiresSoon ? 45 : 100) : 0,
           meter: !ahHasToken ? "bad" : ahExpiresSoon ? "warn" : "ok",
           detail: ah?.expiresAt ? `Verloopt ${new Date(ah.expiresAt).toLocaleString("nl-NL")}` : "Geen verloopdatum beschikbaar",
-        }),
-      ];
+        }));
+      }
 
       if (issuesEl) {
         issuesEl.innerHTML = cards.length ? cards.map(renderCockpitIssueCard).join("") : "";
