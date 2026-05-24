@@ -3060,8 +3060,167 @@ function buildMetaReviewInitialState(email = META_REVIEW_EMAIL) {
   };
 }
 
-function buildDemoInitialState(email = DEMO_LOGIN_EMAIL) {
-  const base = buildDefaultUserData(generateId("user"));
+function buildDemoRecipes() {
+  return [
+    {
+      id: "demo-recipe-romige-pasta-pesto",
+      title: "Romige pasta pesto met kip",
+      description: "Een snelle doordeweekse pasta met kip, tomaat en veel basilicum.",
+      time: "25 min",
+      kcal: "620 kcal",
+      servings: "4 personen",
+      mealTag: "Avond",
+      sourceUrl: "https://app.plately.nl/demo/recepten/romige-pasta-pesto",
+      image: "assets/ingredients/pasta.svg",
+      alt: "Pasta pesto met kip",
+      platform: "demo",
+      author: "Plately Demo",
+      ratingValue: 5,
+      ratingCount: 128,
+      ingredients: [
+        { quantity: "300", unit: "g", name: "penne" },
+        { quantity: "350", unit: "g", name: "kipfilet" },
+        { quantity: "150", unit: "g", name: "groene pesto" },
+        { quantity: "250", unit: "g", name: "cherrytomaten" },
+        { quantity: "75", unit: "g", name: "rucola" },
+        { quantity: "40", unit: "g", name: "Parmezaanse kaas" },
+      ],
+      instructions: [
+        "Kook de penne volgens de aanwijzingen op de verpakking.",
+        "Snijd de kip in blokjes en bak goudbruin in een koekenpan.",
+        "Halveer de cherrytomaten en bak ze kort mee.",
+        "Schep pesto en een scheut kookvocht door de pasta.",
+        "Meng kip, tomaat en rucola erdoor en serveer met Parmezaanse kaas.",
+      ],
+    },
+    {
+      id: "demo-recipe-shakshuka-feta",
+      title: "Shakshuka met feta",
+      description: "Een kruidige eenpansmaaltijd met paprika, tomaat en eieren.",
+      time: "30 min",
+      kcal: "430 kcal",
+      servings: "2 personen",
+      mealTag: "Lunch",
+      sourceUrl: "https://app.plately.nl/demo/recepten/shakshuka-feta",
+      image: "assets/ingredients/egg.svg",
+      alt: "Shakshuka met feta",
+      platform: "demo",
+      author: "Plately Demo",
+      ratingValue: 4,
+      ratingCount: 86,
+      ingredients: [
+        { quantity: "1", unit: "", name: "rode paprika" },
+        { quantity: "1", unit: "", name: "ui" },
+        { quantity: "2", unit: "tenen", name: "knoflook" },
+        { quantity: "400", unit: "g", name: "tomatenblokjes" },
+        { quantity: "4", unit: "", name: "eieren" },
+        { quantity: "75", unit: "g", name: "feta" },
+      ],
+      instructions: [
+        "Fruit ui, paprika en knoflook in een ruime pan.",
+        "Voeg tomatenblokjes en kruiden toe en laat 10 minuten pruttelen.",
+        "Maak kuiltjes in de saus en breek de eieren erin.",
+        "Laat met de deksel op de pan garen tot het eiwit gestold is.",
+        "Verkruimel feta over de shakshuka en serveer direct.",
+      ],
+    },
+    {
+      id: "demo-recipe-groene-curry",
+      title: "Groene curry met groenten",
+      description: "Veel groenten, kokosmelk en rijst in een makkelijke curry.",
+      time: "35 min",
+      kcal: "540 kcal",
+      servings: "4 personen",
+      mealTag: "Avond",
+      sourceUrl: "https://app.plately.nl/demo/recepten/groene-curry",
+      image: "assets/ingredients/greens.svg",
+      alt: "Groene curry met groenten",
+      platform: "demo",
+      author: "Plately Demo",
+      ratingValue: 5,
+      ratingCount: 214,
+      ingredients: [
+        { quantity: "300", unit: "g", name: "rijst" },
+        { quantity: "400", unit: "ml", name: "kokosmelk" },
+        { quantity: "2", unit: "el", name: "groene currypasta" },
+        { quantity: "200", unit: "g", name: "sperziebonen" },
+        { quantity: "1", unit: "", name: "courgette" },
+        { quantity: "1", unit: "", name: "limoen" },
+      ],
+      instructions: [
+        "Kook de rijst gaar.",
+        "Bak de currypasta kort aan en voeg kokosmelk toe.",
+        "Snijd de groenten en laat ze in de curry gaar worden.",
+        "Breng op smaak met limoensap.",
+        "Serveer de curry met rijst.",
+      ],
+    },
+    {
+      id: "demo-recipe-ontbijt-toast",
+      title: "Avocado toast met ei",
+      description: "Een snel ontbijt met avocado, citroen en zachtgekookt ei.",
+      time: "15 min",
+      kcal: "390 kcal",
+      servings: "2 personen",
+      mealTag: "Ontbijt",
+      sourceUrl: "https://app.plately.nl/demo/recepten/avocado-toast-ei",
+      image: "assets/toast.svg",
+      alt: "Avocado toast met ei",
+      platform: "demo",
+      author: "Plately Demo",
+      ratingValue: 4,
+      ratingCount: 52,
+      ingredients: [
+        { quantity: "4", unit: "sneden", name: "volkorenbrood" },
+        { quantity: "2", unit: "", name: "avocado's" },
+        { quantity: "2", unit: "", name: "eieren" },
+        { quantity: "1", unit: "", name: "citroen" },
+        { quantity: "1", unit: "tl", name: "chilivlokken" },
+      ],
+      instructions: [
+        "Kook de eieren 6 minuten en laat ze schrikken.",
+        "Prak avocado met citroensap, peper en zout.",
+        "Rooster het brood krokant.",
+        "Verdeel avocado en ei over de toast.",
+        "Maak af met chilivlokken.",
+      ],
+    },
+  ];
+}
+
+function buildDemoGroceryItems(recipes) {
+  const byId = Object.fromEntries((Array.isArray(recipes) ? recipes : []).map((recipe) => [recipe.id, recipe]));
+  const makeItem = (id, title, amount, recipeId, group) => ({
+    id,
+    title,
+    amount,
+    recipeId,
+    recipeTitle: byId[recipeId]?.title || "",
+    recipeSourceUrl: byId[recipeId]?.sourceUrl || "",
+    recipePlatform: "demo",
+    group,
+    checked: false,
+  });
+  return [
+    makeItem("demo-grocery-penne", "Penne", "300 g", "demo-recipe-romige-pasta-pesto", "pantry"),
+    makeItem("demo-grocery-kipfilet", "Kipfilet", "350 g", "demo-recipe-romige-pasta-pesto", "meat"),
+    makeItem("demo-grocery-pesto", "Groene pesto", "150 g", "demo-recipe-romige-pasta-pesto", "pantry"),
+    makeItem("demo-grocery-cherrytomaten", "Cherrytomaten", "250 g", "demo-recipe-romige-pasta-pesto", "produce"),
+    makeItem("demo-grocery-paprika", "Rode paprika", "1 stuk", "demo-recipe-shakshuka-feta", "produce"),
+    makeItem("demo-grocery-eieren", "Eieren", "6 stuks", "demo-recipe-shakshuka-feta", "dairy"),
+    makeItem("demo-grocery-feta", "Feta", "75 g", "demo-recipe-shakshuka-feta", "dairy"),
+    makeItem("demo-grocery-kokosmelk", "Kokosmelk", "400 ml", "demo-recipe-groene-curry", "pantry"),
+    makeItem("demo-grocery-courgette", "Courgette", "1 stuk", "demo-recipe-groene-curry", "produce"),
+    makeItem("demo-grocery-volkorenbrood", "Volkorenbrood", "1 brood", "demo-recipe-ontbijt-toast", "bakery"),
+  ];
+}
+
+function buildDemoInitialState(email = DEMO_LOGIN_EMAIL, userId = generateId("user")) {
+  const base = buildDefaultUserData(userId);
+  const recipes = buildDemoRecipes();
+  const groceryItems = buildDemoGroceryItems(recipes);
+  const weekCookbookId = "demo-cookbook-week";
+  const quickCookbookId = "demo-cookbook-snel";
   return {
     ...base,
     profile: sanitizeProfilePayload({
@@ -3071,7 +3230,84 @@ function buildDemoInitialState(email = DEMO_LOGIN_EMAIL) {
       email,
       favoriteSupermarket: "ah",
     }),
+    importedRecipes: recipes.map((recipe) => sanitizeRecipeForStorage(recipe)).filter(Boolean),
+    cookbooks: [
+      { id: weekCookbookId, name: "Demo weekmenu", recipeIds: recipes.slice(0, 3).map((recipe) => recipe.id) },
+      { id: quickCookbookId, name: "Snel klaar", recipeIds: ["demo-recipe-romige-pasta-pesto", "demo-recipe-ontbijt-toast"] },
+    ],
+    selectedCookbookId: weekCookbookId,
+    mealPlan: {
+      ...DEFAULT_MEAL_PLAN,
+      maandag: "demo-recipe-romige-pasta-pesto",
+      woensdag: "demo-recipe-shakshuka-feta",
+      vrijdag: "demo-recipe-groene-curry",
+      zondag: "demo-recipe-ontbijt-toast",
+    },
+    groceryItems: groceryItems.map((item, index) => sanitizeGroceryItemForStorage(item, index)),
+    groceryLists: [
+      {
+        id: "demo-grocery-list-week",
+        name: "Demo weekboodschappen",
+        items: groceryItems.map((item, index) => sanitizeGroceryItemForStorage(item, index)),
+      },
+    ],
+    activeGroceryListId: "demo-grocery-list-week",
+    featuredRecipeId: "demo-recipe-romige-pasta-pesto",
+    selectedRecipeId: "demo-recipe-romige-pasta-pesto",
+    followedChannelIds: ["ah", "chicks-love-food", "uit-paulines-keuken"],
     onboardingSeenAt: new Date().toISOString(),
+  };
+}
+
+async function resetDemoUserState() {
+  const email = sanitizeEmail(DEMO_LOGIN_EMAIL);
+  if (!isValidEmail(email)) {
+    throw new HttpError(500, "Demo email is niet goed geconfigureerd.");
+  }
+
+  const { user, postgres } = await findOrCreateDemoUser();
+  const userId = sanitizeText(user?.id || "");
+  if (!userId) throw new HttpError(500, "Demo gebruiker kon niet worden bepaald.");
+  const nextState = sanitizeUserStatePayload(buildDemoInitialState(email, userId), buildDefaultUserData(userId));
+
+  if (postgres) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const updated = await pool.query(
+      `
+        UPDATE plately_users
+        SET email = $2,
+            profile = $3::jsonb,
+            app_state = $4::jsonb,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `,
+      [userId, email, JSON.stringify(nextState.profile), JSON.stringify(nextState)]
+    );
+    await syncUserRecipesToTable(userId, nextState.importedRecipes, pool);
+    return { user: updated.rows[0] || user, state: nextState, postgres: true };
+  }
+
+  const db = await loadDatabase();
+  db.users[userId] = { ...nextState, id: userId, email };
+  await persistDatabase();
+  return { user: db.users[userId], state: nextState, postgres: false };
+}
+
+function buildDemoLoginInfo(request) {
+  const configured = Boolean(DEMO_LOGIN_SECRET);
+  const expired = isDemoLoginExpired();
+  const origin = getRequestPublicOrigin(request) || "";
+  const loginPath = configured ? `/auth/demo?s=${encodeURIComponent(DEMO_LOGIN_SECRET)}` : "";
+  return {
+    configured,
+    expired,
+    email: sanitizeEmail(DEMO_LOGIN_EMAIL),
+    expiresAt: sanitizeText(DEMO_LOGIN_EXPIRES_AT || ""),
+    redirect: sanitizeText(DEMO_LOGIN_REDIRECT || "/"),
+    loginPath,
+    loginUrl: origin && loginPath ? `${origin}${loginPath}` : loginPath,
   };
 }
 
@@ -20925,6 +21161,43 @@ const server = http.createServer(async (request, response) => {
       try {
         await requireAdmin(request);
         sendJson(response, 200, buildPlatelyDeployInfoPayload());
+      } catch (error) {
+        const status = error instanceof HttpError ? error.statusCode : 500;
+        sendJson(response, status, { ok: false, error: error.message || "Error" });
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/demo-login" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        sendJson(response, 200, { ok: true, demo: buildDemoLoginInfo(request) });
+      } catch (error) {
+        const status = error instanceof HttpError ? error.statusCode : 500;
+        sendJson(response, status, { ok: false, error: error.message || "Error" });
+      }
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/demo-login/reset" && request.method === "POST") {
+      try {
+        const adminUser = await requireAdmin(request);
+        const result = await resetDemoUserState();
+        logAdminAction(adminUser?.email || "admin", "reset_demo_user", {
+          email: sanitizeEmail(DEMO_LOGIN_EMAIL),
+          recipes: result.state.importedRecipes.length,
+          groceries: result.state.groceryItems.length,
+          postgres: Boolean(result.postgres),
+        });
+        sendJson(response, 200, {
+          ok: true,
+          demo: buildDemoLoginInfo(request),
+          counts: {
+            recipes: result.state.importedRecipes.length,
+            cookbooks: result.state.cookbooks.length,
+            groceryItems: result.state.groceryItems.length,
+          },
+        });
       } catch (error) {
         const status = error instanceof HttpError ? error.statusCode : 500;
         sendJson(response, status, { ok: false, error: error.message || "Error" });

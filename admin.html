@@ -1088,6 +1088,37 @@
         <div id="adminActionNeededList" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
 
+      <div class="section" id="adminDemoLoginWrap" style="margin-top:16px">
+        <div class="section-header">
+          <h2>Demo-account</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-sm" type="button" onclick="loadAdminDemoLogin()">↻ Check</button>
+            <button class="btn btn-sm btn-secondary" type="button" onclick="copyAdminDemoLoginLink()">Kopieer link</button>
+            <button class="btn btn-sm" type="button" onclick="resetAdminDemoLogin()">Reset demo</button>
+          </div>
+        </div>
+        <div class="stats-grid" style="margin-bottom:10px">
+          <div class="stat-card">
+            <div class="stat-value" id="demoLoginStatus">-</div>
+            <div class="stat-label">Status</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="demoLoginRecipes">-</div>
+            <div class="stat-label">Recepten na reset</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="demoLoginGroceries">-</div>
+            <div class="stat-label">Boodschappen na reset</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="demoLoginExpiry">-</div>
+            <div class="stat-label">Verloopt</div>
+          </div>
+        </div>
+        <div class="mono" id="demoLoginLink" style="font-size:12px;word-break:break-all;background:rgba(0,0,0,0.035);border:1px solid var(--border);border-radius:8px;padding:10px">Demo-link laden…</div>
+        <p class="muted" id="demoLoginMeta" style="font-size:12px;margin:10px 0 0">—</p>
+      </div>
+
       <div class="section" id="ahTokenSection" style="margin-top:16px">
         <div class="section-header">
           <h2>AH Token status</h2>
@@ -2198,6 +2229,7 @@
         await loadAdminDeployInfo();
         loadAdminOpsHealth();
         loadAdminActionNeeded();
+        loadAdminDemoLogin();
         loadAhTokenStatus();
         const lastUpdatedPill = document.getElementById("lastUpdatedPill");
         if (lastUpdatedPill) lastUpdatedPill.textContent = `Laatst bijgewerkt: ${formatDate(new Date())}`;
@@ -2294,6 +2326,80 @@
         `).join("");
       } catch (error) {
         if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
+      }
+    }
+
+    let adminDemoLoginUrl = "";
+
+    function renderAdminDemoLogin(data, counts = null) {
+      const demo = data?.demo || {};
+      adminDemoLoginUrl = String(demo.loginUrl || demo.loginPath || "");
+      const statusEl = document.getElementById("demoLoginStatus");
+      const recipesEl = document.getElementById("demoLoginRecipes");
+      const groceriesEl = document.getElementById("demoLoginGroceries");
+      const expiryEl = document.getElementById("demoLoginExpiry");
+      const linkEl = document.getElementById("demoLoginLink");
+      const metaEl = document.getElementById("demoLoginMeta");
+
+      if (statusEl) {
+        statusEl.textContent = !demo.configured ? "UIT" : demo.expired ? "VERLOPEN" : "ACTIEF";
+      }
+      if (recipesEl) recipesEl.textContent = counts?.recipes != null ? formatNumber(counts.recipes) : "4";
+      if (groceriesEl) groceriesEl.textContent = counts?.groceryItems != null ? formatNumber(counts.groceryItems) : "10";
+      if (expiryEl) {
+        expiryEl.textContent = demo.expiresAt ? new Date(demo.expiresAt).toLocaleDateString("nl-NL") : "Geen";
+      }
+      if (linkEl) {
+        linkEl.textContent = adminDemoLoginUrl || "Geen demo-link geconfigureerd.";
+      }
+      if (metaEl) {
+        metaEl.textContent = `${demo.email || "demo email onbekend"} · redirect ${demo.redirect || "/"}`;
+      }
+    }
+
+    async function loadAdminDemoLogin() {
+      const statusEl = document.getElementById("demoLoginStatus");
+      const metaEl = document.getElementById("demoLoginMeta");
+      if (statusEl) statusEl.textContent = "…";
+      if (metaEl) metaEl.textContent = "Demo-account laden…";
+      try {
+        const response = await fetch("/api/admin/demo-login", adminFetchInit());
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Demo-info laden mislukt");
+        renderAdminDemoLogin(data);
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "FOUT";
+        if (metaEl) metaEl.textContent = "Demo-info mislukt: " + (error?.message || error);
+      }
+    }
+
+    async function copyAdminDemoLoginLink() {
+      if (!adminDemoLoginUrl) await loadAdminDemoLogin();
+      if (!adminDemoLoginUrl) {
+        alert("Geen demo-link beschikbaar.");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(adminDemoLoginUrl);
+        const metaEl = document.getElementById("demoLoginMeta");
+        if (metaEl) metaEl.textContent = "Demo-link gekopieerd.";
+      } catch {
+        prompt("Kopieer deze demo-link:", adminDemoLoginUrl);
+      }
+    }
+
+    async function resetAdminDemoLogin() {
+      if (!confirm("Demo-account terugzetten naar voorbeeldrecepten, weekmenu en boodschappenlijst?")) return;
+      const metaEl = document.getElementById("demoLoginMeta");
+      if (metaEl) metaEl.textContent = "Demo-account resetten…";
+      try {
+        const response = await fetch("/api/admin/demo-login/reset", adminFetchInit({ method: "POST" }));
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "Demo reset mislukt");
+        renderAdminDemoLogin(data, data.counts || null);
+        if (metaEl) metaEl.textContent = `Demo-account is reset: ${formatNumber(data.counts?.recipes || 0)} recepten, ${formatNumber(data.counts?.groceryItems || 0)} boodschappen.`;
+      } catch (error) {
+        if (metaEl) metaEl.textContent = "Demo reset mislukt: " + (error?.message || error);
       }
     }
 
