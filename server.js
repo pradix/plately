@@ -478,6 +478,10 @@ const META_APP_SECRET = process.env.META_APP_SECRET || "";
 const META_REVIEW_LOGIN_SECRET = String(process.env.META_REVIEW_LOGIN_SECRET || "").trim();
 const META_REVIEW_EMAIL = sanitizeEmail(process.env.META_REVIEW_EMAIL || "meta-review@plately.nl");
 const META_REVIEW_IMPORT_URL = String(process.env.META_REVIEW_IMPORT_URL || "https://www.instagram.com/p/DYUySvaI9X9/").trim();
+const DEMO_LOGIN_SECRET = String(process.env.DEMO_LOGIN_SECRET || "").trim();
+const DEMO_LOGIN_EMAIL = sanitizeEmail(process.env.DEMO_LOGIN_EMAIL || "demo@plately.nl");
+const DEMO_LOGIN_REDIRECT = String(process.env.DEMO_LOGIN_REDIRECT || "/").trim() || "/";
+const DEMO_LOGIN_EXPIRES_AT = String(process.env.DEMO_LOGIN_EXPIRES_AT || "").trim();
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const DATABASE_URL = process.env.DATABASE_URL || "";
 /** Services ID (bv. nl.plately.web) — Sign in with Apple, alleen met DATABASE_URL */
@@ -3056,6 +3060,21 @@ function buildMetaReviewInitialState(email = META_REVIEW_EMAIL) {
   };
 }
 
+function buildDemoInitialState(email = DEMO_LOGIN_EMAIL) {
+  const base = buildDefaultUserData(generateId("user"));
+  return {
+    ...base,
+    profile: sanitizeProfilePayload({
+      ...base.profile,
+      name: "Plately Demo",
+      handle: "@demo",
+      email,
+      favoriteSupermarket: "ah",
+    }),
+    onboardingSeenAt: new Date().toISOString(),
+  };
+}
+
 async function findOrCreateMetaReviewUser() {
   const email = sanitizeEmail(META_REVIEW_EMAIL);
   if (!isValidEmail(email)) {
@@ -3086,6 +3105,44 @@ async function findOrCreateMetaReviewUser() {
   db.users[userId] = user;
   await persistDatabase();
   return { user, postgres: false };
+}
+
+async function findOrCreateDemoUser() {
+  const email = sanitizeEmail(DEMO_LOGIN_EMAIL);
+  if (!isValidEmail(email)) {
+    throw new HttpError(500, "Demo email is niet goed geconfigureerd.");
+  }
+
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const existing = await pool.query(`SELECT * FROM plately_users WHERE lower(email) = lower($1) LIMIT 1`, [email]);
+    if (existing.rows[0]) return { user: existing.rows[0], postgres: true };
+
+    const password = crypto.randomBytes(24).toString("base64url");
+    const created = await createPostgresUser(email, password, buildDemoInitialState(email));
+    return { user: created, postgres: true };
+  }
+
+  const db = await loadDatabase();
+  const existingEntry = Object.entries(db.users || {}).find(([, user]) => sanitizeEmail(user?.email || user?.profile?.email || "") === email);
+  if (existingEntry) {
+    return { user: { ...existingEntry[1], id: existingEntry[0], email }, postgres: false };
+  }
+
+  const userId = generateId("user");
+  const user = buildDemoInitialState(email);
+  user.id = userId;
+  user.email = email;
+  db.users[userId] = user;
+  await persistDatabase();
+  return { user, postgres: false };
+}
+
+function isDemoLoginExpired() {
+  if (!DEMO_LOGIN_EXPIRES_AT) return false;
+  const expiresAt = Date.parse(DEMO_LOGIN_EXPIRES_AT);
+  return Number.isFinite(expiresAt) && Date.now() > expiresAt;
 }
 
 function getRequestPublicOrigin(request) {
@@ -19599,6 +19656,31 @@ const server = http.createServer(async (request, response) => {
       const importUrl = encodeURIComponent(META_REVIEW_IMPORT_URL || "https://www.instagram.com/p/DYUySvaI9X9/");
       response.writeHead(302, {
         Location: `/?importUrl=${importUrl}&review=meta-oembed`,
+        "Cache-Control": "no-store",
+      });
+      response.end();
+      return;
+    }
+
+    if (requestUrl.pathname === "/auth/demo" && (request.method === "GET" || request.method === "HEAD")) {
+      const secret = String(requestUrl.searchParams.get("s") || "").trim();
+      if (!DEMO_LOGIN_SECRET || !secret || secret !== DEMO_LOGIN_SECRET || isDemoLoginExpired()) {
+        response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        response.end("Not found");
+        return;
+      }
+
+      const { user, postgres } = await findOrCreateDemoUser();
+      if (postgres) {
+        await createAuthSession(response, user.id);
+      } else {
+        await createDevAuthSession(response, user.id, sanitizeEmail(user.email || DEMO_LOGIN_EMAIL));
+      }
+      void recordEvent("auth_login_demo", user.id, { purpose: "demo_video" });
+
+      const redirect = DEMO_LOGIN_REDIRECT.startsWith("/") ? DEMO_LOGIN_REDIRECT : "/";
+      response.writeHead(302, {
+        Location: redirect,
         "Cache-Control": "no-store",
       });
       response.end();
