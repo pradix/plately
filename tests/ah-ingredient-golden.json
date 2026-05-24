@@ -117,5 +117,29 @@
   { "id": "sinaasappel-not-juice", "ingredient": "sinaasappel", "title": "AH Sinaasappelsap vers geperst", "match": false },
   { "id": "kaas-not-fondue", "ingredient": "kaas", "title": "AH Kaasfondue gourmet", "match": false },
   { "id": "yoghurt-not-frozen", "ingredient": "yoghurt", "title": "AH Frozen yoghurt aardbei", "match": false },
-  { "id": "vis-not-visolie", "ingredient": "vis", "title": "Davitamon Visolie capsules", "match": false }
+  { "id": "vis-not-visolie", "ingredient": "vis", "title": "Davitamon Visolie capsules", "match": false },
+  { "id": "olie-not-artisjok-in-olie", "ingredient": "olie", "title": "AH Gegrilde artisjok in olie", "match": false },
+  { "id": "olie-olijfolie", "ingredient": "olie", "title": "AH Olijfolie mild", "match": true },
+  {
+    "id": "italiaanse-kruiden-not-tomatensaus",
+    "matchAnyTerms": { "raw": "Italiaanse kruiden", "base": "italiaanse kruiden" },
+    "title": "AH Basis tomatensaus Italiaanse kruiden",
+    "match": false
+  },
+  {
+    "id": "italiaanse-kruiden-strooier",
+    "matchAnyTerms": { "raw": "Italiaanse kruiden", "base": "italiaanse kruiden" },
+    "title": "Euroma Italiaanse kruiden strooier",
+    "match": true
+  },
+  { "id": "rode-paprika-not-gegrild", "ingredient": "rode paprika", "title": "AH Gegrilde rode paprika", "match": false },
+  { "id": "rode-paprika-fresh", "ingredient": "rode paprika", "title": "AH Rode paprika", "match": true },
+  { "id": "quinoa-not-rijstwafel", "ingredient": "quinoa", "title": "AH Biologisch Rijstwafels quinoa", "match": false },
+  { "id": "quinoa-dry", "ingredient": "quinoa", "title": "AH Quinoa", "match": true },
+  { "id": "blauwe-bes-not-drink-smaak", "ingredient": "blauwe bes", "title": "DubbelFrisss 1kcal bubblegum & blauwe bes smaak", "match": false },
+  { "id": "blauwe-bes-fresh", "ingredient": "blauwe bes", "title": "AH Blauwe bessen", "match": true },
+  { "id": "framboos-not-kwark", "ingredient": "framboos", "title": "AH Protein kwark met yoghurt framboos", "match": false },
+  { "id": "framboos-fresh", "ingredient": "framboos", "title": "AH Frambozen", "match": true },
+  { "id": "feta-not-borek", "ingredient": "feta", "title": "AH Spinazie feta börek", "match": false },
+  { "id": "feta-pack", "ingredient": "feta", "title": "Dodoni Feta kaas", "match": true }
 ]

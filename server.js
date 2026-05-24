@@ -10926,6 +10926,17 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null, opti
       /^biologisch(?:e)?\s+melk$/i.test(baseLower);
     const wantsCoconutMilk = /\bkokosmelk\b/.test(baseLower) || /\bkokosmelk\b/.test(rawLower);
     const isPlainRiceQuery = baseLower === "rijst" || /\b(basmati|jasmijn|zilvervlies|volkoren)\s*rijst$/i.test(baseLower);
+    const isPlainQuinoaQuery =
+      /^(?:biologisch(?:e)?\s+)?quinoa$/i.test(baseLower) ||
+      (/\bquinoa\b/i.test(rawLower) && !/\b(wafel|wafels|rijstwafel|crackers?|chips|reep|repen|granola|muesli)\b/i.test(rawLower));
+    const isPlainOilQuery =
+      /^(?:biologisch(?:e)?\s+)?(?:olie|olijfolie|zonnebloemolie|arachideolie|sesamolie|kokosolie|slaolie|bakolie)$/i.test(baseLower) ||
+      /^(?:\d+\s*(?:el|eetlepels?|tl|theelepels?)\s+)?(?:olie|olijfolie|zonnebloemolie|arachideolie|sesamolie|kokosolie|slaolie|bakolie)$/i.test(rawLower);
+    const isFetaQuery = baseLower === "feta" || /\bfeta\b/i.test(rawLower);
+    const isDryHerbMixQuery =
+      /\b(?:italiaanse|provencaalse|provençaalse|mediterrane|griekse)\s+kruiden\b/i.test(baseLower) ||
+      /\b(?:italiaanse|provencaalse|provençaalse|mediterrane|griekse)\s+kruiden\b/i.test(rawLower) ||
+      baseLower === "kruiden";
     const isPlainFlourQuery = baseLower === "bloem" && !/\b(amandel|spelt|volkoren|rijst|haver|kokos|ma[iï]s|tapioca|boekweit)\b/.test(rawLower);
     const wantsGemberPowder =
       /\bgemberpoeder\b/.test(baseLower) ||
@@ -10967,7 +10978,7 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null, opti
 
     // Fruit: zoekterm is een stuk fruit dat vers/heel gekocht wordt.
     const isFruitQuery =
-      /^(?:biologisch\s+)?(?:\d+\s+)?(?:verse?\s+)?(appel(?:s|tje|tjes)?|peer(?:en)?|banaan|bananen|mango(?:'?s)?|aardbei(?:en)?|bosbes(?:sen)?|frambozen?|bramen?|druif|druiven|kersen?|pruimen?|sinaasappel(?:s)?|mandarijn(?:en)?|clementine(?:s)?|grapefruit|watermeloen|meloenen?|ananas|kiwi(?:'?s)?|vijg(?:en)?|abrikoos|abrikozen|perzik(?:en)?|papaja|passievrucht|granaatappel|lychee|feijoa|nectarine(?:s)?)$/.test(baseLower);
+      /^(?:biologisch\s+)?(?:\d+\s+)?(?:verse?\s+)?(appel(?:s|tje|tjes)?|peer(?:en)?|banaan|bananen|mango(?:'?s)?|aardbei(?:en)?|blauwe\s+bes(?:sen)?|bosbes(?:sen)?|framboos|frambozen|bramen?|druif|druiven|kersen?|pruimen?|sinaasappel(?:s)?|mandarijn(?:en)?|clementine(?:s)?|grapefruit|watermeloen|meloenen?|ananas|kiwi(?:'?s)?|vijg(?:en)?|abrikoos|abrikozen|perzik(?:en)?|papaja|passievrucht|granaatappel|lychee|feijoa|nectarine(?:s)?)$/.test(baseLower);
 
     // Vlees/vis: zoekterm is een stuk vlees of vis.
     const isMeatOrFishQuery =
@@ -11141,6 +11152,14 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null, opti
         if (/\b(per\s+stuk|los\b|vers(?:e)?\b|stuks?|biologisch)\b/i.test(title)) {
           score -= 10;
           adjustments.push({ kind: "bonus", label: "Vers fruit (stuk/los)", delta: -10 });
+        }
+        if (/\b(kwark|yoghurt|protein|smaak|bubblegum|limonade|siroop|frisdrank|drink|sap)\b/i.test(title)) {
+          score += 155;
+          adjustments.push({ kind: "penalty", label: "Fruit als smaak in zuivel/drank", delta: 155 });
+        }
+        if (/\b(blauwe\s+bessen|bosbessen|frambozen)\b/i.test(title) && !/\b(smaak|kwark|yoghurt|drink|sap|jam|ijs)\b/i.test(title)) {
+          score -= 18;
+          adjustments.push({ kind: "bonus", label: "Vers zacht fruit", delta: -18 });
         }
       }
 
@@ -11444,6 +11463,54 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null, opti
         }
       }
 
+      // Quinoa: user expects dry quinoa, not rice cakes, crackers, bars or breakfast products with quinoa.
+      if (isPlainQuinoaQuery) {
+        if (/\b(rijstwafels?|wafels?|crackers?|chips|repen?|reep|granola|muesli|ontbijt|snack)\b/i.test(title)) {
+          score += 170;
+          adjustments.push({ kind: "penalty", label: "Quinoa als bij-ingredient in snack/ontbijt", delta: 170 });
+        }
+        if (/\bquinoa\b/i.test(title) && !/\b(rijstwafels?|wafels?|crackers?|chips|repen?|granola|muesli)\b/i.test(title)) {
+          score -= 18;
+          adjustments.push({ kind: "bonus", label: "Quinoa als los product", delta: -18 });
+        }
+      }
+
+      // Olie: prefer actual cooking oils. Products "in olie" are jarred vegetables/antipasti, not oil.
+      if (isPlainOilQuery) {
+        if (/\bin\s+olie\b/i.test(title) || /\b(artisjok|artisjokken|olijven?|antipasti|gegrilde?\s+paprika|gegrilde?)\b/i.test(title)) {
+          score += 210;
+          adjustments.push({ kind: "penalty", label: "Product in olie / antipasti, geen fles olie", delta: 210 });
+        }
+        if (/\b(olijfolie|zonnebloemolie|arachideolie|sesamolie|kokosolie|slaolie|bakolie)\b/i.test(title) || /^ah\s+olie\b/i.test(title)) {
+          score -= 34;
+          adjustments.push({ kind: "bonus", label: "Kookolie product", delta: -34 });
+        }
+      }
+
+      // Droge kruidenmix: avoid sauces/meals where herbs are only a flavor.
+      if (isDryHerbMixQuery) {
+        if (/\b(tomatensaus|saus|basis|pasta|maaltijd|dressing|marinade|soep|pastasaus)\b/i.test(title)) {
+          score += 220;
+          adjustments.push({ kind: "penalty", label: "Kruiden als smaak in saus/maaltijd", delta: 220 });
+        }
+        if (/\b(kruidenmix|italiaanse\s+kruiden|provencaalse\s+kruiden|provençaalse\s+kruiden|strooier|gedroogd|potje)\b/i.test(title)) {
+          score -= 26;
+          adjustments.push({ kind: "bonus", label: "Droge kruiden/strooier", delta: -26 });
+        }
+      }
+
+      // Feta: prefer a pack/block of feta, not prepared snacks or dishes containing feta.
+      if (isFetaQuery) {
+        if (/\b(börek|borek|spinazie|snack|pizza|wraps?|quiche|salade|broodje|filodeeg|bladerdeeg|hapjes?)\b/i.test(title)) {
+          score += 185;
+          adjustments.push({ kind: "penalty", label: "Bereid product met feta", delta: 185 });
+        }
+        if (/\bfeta\b/i.test(title) && !/\b(börek|borek|spinazie|pizza|wraps?|quiche|salade|broodje)\b/i.test(title)) {
+          score -= 22;
+          adjustments.push({ kind: "bonus", label: "Feta verpakking", delta: -22 });
+        }
+      }
+
       // Bloem: default "bloem" is tarwebloem; penalize specialty flours unless named in ingredient.
       if (isPlainFlourQuery) {
         if (/\b(amandel|haver|spelt|rijst|kokos|ma[iï]s|tapioca|boekweit|rogge)(?:meel|bloem)\b/.test(title)) {
@@ -11555,8 +11622,12 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null, opti
         const processedFreshVeg =
           /\b(?:gegrild|gefrituurde?|gefrituurd|op\s+zuur|gepekeld|ingesneden|ingemaakt|augurk|op\s+sap|op\s+wijn|gevuld|opgiet(?:en)?|spread|dip\b|hummus|humus|pesto|dressing|marinade|tomatenpuree|passata|(?:tomaten\s*)?puree|ketchup|\bblik\b|bouillon|opgemaakt|voorgesneden|reepjes|op\s+zak|zakje|antipasti|carpaccio|soep|chips|snack|sticks|gehakt)\b/i;
         if (processedFreshVeg.test(title)) {
-          score += 48;
-          adjustments.push({ kind: "penalty", label: "Verwerkte groente (niet puur vers)", delta: 48 });
+          score += 92;
+          adjustments.push({ kind: "penalty", label: "Verwerkte groente (niet puur vers)", delta: 92 });
+        }
+        if (/\b(gegrilde?|geroosterde?|antipasti|in\s+olie)\b/i.test(title)) {
+          score += 130;
+          adjustments.push({ kind: "penalty", label: "Gegrild/ingelegd i.p.v. verse groente", delta: 130 });
         }
         if (/\b(?:per\s+stuk|los(?:\s+verkocht)?|rimpel)\b/i.test(title)) {
           score -= 10;
@@ -11921,7 +11992,7 @@ function _scoreJumboProduct(productName, searchBase) {
     || /\w+sap$/.test(base);
 
   const isEggQuery   = /^(?:biologisch\s+)?(?:scharrel)?eieren?$/.test(base) || base === "ei" || base === "eieren";
-  const isFruitQuery = /^(?:biologisch\s+)?(?:\d+\s+)?(?:verse?\s+)?(appel(?:s|tje|tjes)?|peer(?:en)?|banaan|bananen|mango(?:'?s)?|aardbei(?:en)?|bosbes(?:sen)?|frambozen?|bramen?|druif|druiven|kersen?|pruimen?|sinaasappel(?:s)?|mandarijn(?:en)?|clementine(?:s)?|grapefruit|watermeloen|meloenen?|ananas|kiwi(?:'?s)?|vijg(?:en)?|abrikoos|abrikozen|perzik(?:en)?|papaja|passievrucht|granaatappel|lychee|nectarine(?:s)?)$/.test(base);
+  const isFruitQuery = /^(?:biologisch\s+)?(?:\d+\s+)?(?:verse?\s+)?(appel(?:s|tje|tjes)?|peer(?:en)?|banaan|bananen|mango(?:'?s)?|aardbei(?:en)?|blauwe\s+bes(?:sen)?|bosbes(?:sen)?|framboos|frambozen|bramen?|druif|druiven|kersen?|pruimen?|sinaasappel(?:s)?|mandarijn(?:en)?|clementine(?:s)?|grapefruit|watermeloen|meloenen?|ananas|kiwi(?:'?s)?|vijg(?:en)?|abrikoos|abrikozen|perzik(?:en)?|papaja|passievrucht|granaatappel|lychee|nectarine(?:s)?)$/.test(base);
   const isMeatOrFishQuery = /^(?:biologisch\s+)?(?:verse?\s+)?(?:\d+\s+g?\s*)?(kip(?:filet|poot|vleugel|dij|borst|stuk)?|kippenborst|kippendij|heel\s+kipje?|kip\b|rund(?:vlees|gehakt|filet|entrecote|ossenhaas|biefstuk)?|rundergehakt|biefstuk|entrecote|ossenhaas|varken(?:s(?:vlees|haas|filet|carbonade)?)?|half(?:om)?half\s+gehakt|gehakt\b|lam(?:vlees|bout|karbonades?|filet)?|lamsvlees|zalm(?:filet|moot)?|kabeljauw(?:filet)?|tonijn|tilapia|forel(?:filet)?|garnalen|mosselen|inktvis|heilbot|pangasius|haring|makreel|snoekbaars|spek\b|bacon\b|kalkoen(?:filet)?|eend(?:enborst)?)$/.test(base);
   const isNutOrSeedQuery = /^(?:biologisch\s+)?(?:gemalen\s+|geroosterde?\s+|ongezouten\s+|gehakte?\s+)?(amandelen?|walnoten?|cashewnoten?|hazelnoten?|paranoten?|pinda(?:'?s)?|pecannoten?|pistachenoten?|macadamianoten?|pijnboompitten?|pompoenpitten?|zonnebloempitten?|sesamzaad|lijnzaad|chiazaad|maanzaad|hennepzaad)$/.test(base);
   const isBroadFreshVegQuery = /^(?:biologisch\s+)?(?:verse?\s+)?(?:\d+\s+)?(wortel(?:s|tjes)?|wortelen|broccoli|bloemkool|spruitjes?|spitskool|savooikool|rode\s+kool|witte\s+kool|rodekool|witkool|boerenkool|prei(?:en)?|selderij|knolselderij|venkel|asperges?|sperziebonen?|snijbonen?|peultjes?|sugarsnaps?|broccolini|romanesco|bataat|zoete\s+aardappel(?:s)?|aardappel(?:en|tjes)?|rapen?|pastina(?:ak|ken)?|radijs(?:jes)?|koolrabi|spinazie|andijvie|witlof|rucola|veldsla|ijsbergsla|sla\b|snijsla|kropsla|mais(?:kolf(?:ven)?)?|maiskolf|champignon(?:s)?|portobello|oesterzwam(?:men)?|shiitake(?:s)?)$/.test(base);
@@ -11935,6 +12006,10 @@ function _scoreJumboProduct(productName, searchBase) {
   const isPlainMilkQuery = base === "melk" || /^(?:volle|halfvolle|magere)\s+melk$/i.test(base) || /^biologisch(?:e)?\s+melk$/i.test(base);
   const wantsCoconutMilk = /\bkokosmelk\b/.test(base);
   const isPlainRiceQuery = base === "rijst" || /\b(basmati|jasmijn|zilvervlies|volkoren)\s*rijst$/i.test(base);
+  const isPlainQuinoaQuery = /^(?:biologisch(?:e)?\s+)?quinoa$/i.test(base);
+  const isPlainOilQuery = /^(?:biologisch(?:e)?\s+)?(?:olie|olijfolie|zonnebloemolie|arachideolie|sesamolie|kokosolie|slaolie|bakolie)$/i.test(base);
+  const isFetaQuery = base === "feta";
+  const isDryHerbMixQuery = /\b(?:italiaanse|provencaalse|provençaalse|mediterrane|griekse)\s+kruiden\b/i.test(base) || base === "kruiden";
   const isPlainFlourQuery = base === "bloem" && !/\b(amandel|spelt|volkoren|rijst|haver|kokos|ma[iï]s|tapioca|boekweit)\b/.test(base);
   const wantsGemberPowder = /\bgemberpoeder\b/.test(base) || /\bgemalen\s+gember\b/.test(base);
   const isPlainFreshGemberQuery = !wantsGemberPowder && (base === "gember" || base === "verse gember" || /^verse\s+gember$/i.test(base));
@@ -12026,6 +12101,8 @@ function _scoreJumboProduct(productName, searchBase) {
   if (isFruitQuery) {
     if (PROCESSED_SUFFIXES_RE.test(title) || /(?:sap|moes|taart|flap|gebak|cake|ijs|stroop|jam|smoothie|nectar|frisdrank|siroop|vlokken|gedroogd|chips|snack|compote|chutney|confiture|marmelade)\b/i.test(title)) score += 70;
     if (/\b(knijpfruit|knijpzakje|babyvoeding)\b/i.test(title)) score += 120;
+    if (/\b(kwark|yoghurt|protein|smaak|bubblegum|limonade|siroop|frisdrank|drink|sap)\b/i.test(title)) score += 155;
+    if (/\b(blauwe\s+bessen|bosbessen|frambozen)\b/i.test(title) && !/\b(smaak|kwark|yoghurt|drink|sap|jam|ijs)\b/i.test(title)) score -= 18;
     if (/\b(per\s+stuk|los\b|vers(?:e)?\b|stuks?|biologisch)\b/i.test(title)) score -= 10;
   }
 
@@ -12052,7 +12129,7 @@ function _scoreJumboProduct(productName, searchBase) {
   if (isPlainFreshVegIngredient) {
     const compoundVegSoup = /(?:tomaten|tomaat|courgu?ettes?|aubergines?|komkommers?|paprika(?:s)?)\w*(?:soep|bisque)\b/i;
     if (compoundVegSoup.test(title)) score += 85;
-    if (/\b(?:gegrild|op\s+zuur|gepekeld|ingesneden|spread|dip\b|hummus|pesto|ketchup|\bblik\b|soep|chips|snack|sticks|gehakt)\b/i.test(title)) score += 48;
+    if (/\b(?:gegrild|geroosterd|op\s+zuur|gepekeld|ingesneden|in\s+olie|antipasti|spread|dip\b|hummus|pesto|ketchup|\bblik\b|soep|chips|snack|sticks|gehakt)\b/i.test(title)) score += 170;
     if (/\b(?:per\s+stuk|los\b|rimpel)\b/i.test(title)) score -= 10;
   }
 
@@ -12147,6 +12224,23 @@ function _scoreJumboProduct(productName, searchBase) {
   if (isPlainRiceQuery) {
     if (/\b(rijstwafel|rijstkoek|rijstpapier|rijstnoedel|mihoen)\b/.test(title)) score += 62;
     if (/\b(basmati|jasmijn|zilvervlies|volkoren|risotto|sushi|pandang)\b/.test(title) && /\brijst\b/.test(title)) score -= 8;
+  }
+
+  if (isPlainQuinoaQuery) {
+    if (/\b(rijstwafels?|wafels?|crackers?|chips|repen?|reep|granola|muesli|ontbijt|snack)\b/i.test(title)) score += 170;
+    if (/\bquinoa\b/i.test(title) && !/\b(rijstwafels?|wafels?|crackers?|chips|repen?|granola|muesli)\b/i.test(title)) score -= 18;
+  }
+  if (isPlainOilQuery) {
+    if (/\bin\s+olie\b/i.test(title) || /\b(artisjok|artisjokken|olijven?|antipasti|gegrilde?\s+paprika|gegrilde?)\b/i.test(title)) score += 210;
+    if (/\b(olijfolie|zonnebloemolie|arachideolie|sesamolie|kokosolie|slaolie|bakolie)\b/i.test(title)) score -= 34;
+  }
+  if (isDryHerbMixQuery) {
+    if (/\b(tomatensaus|saus|basis|pasta|maaltijd|dressing|marinade|soep|pastasaus)\b/i.test(title)) score += 220;
+    if (/\b(kruidenmix|italiaanse\s+kruiden|provencaalse\s+kruiden|provençaalse\s+kruiden|strooier|gedroogd|potje)\b/i.test(title)) score -= 26;
+  }
+  if (isFetaQuery) {
+    if (/\b(börek|borek|spinazie|snack|pizza|wraps?|quiche|salade|broodje|filodeeg|bladerdeeg|hapjes?)\b/i.test(title)) score += 185;
+    if (/\bfeta\b/i.test(title) && !/\b(börek|borek|spinazie|pizza|wraps?|quiche|salade|broodje)\b/i.test(title)) score -= 22;
   }
 
   // ── 17. Bloem ─────────────────────────────────────────────────────────────
