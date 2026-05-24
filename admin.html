@@ -2181,6 +2181,16 @@
       return `<span style="background:${color};color:white;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800;letter-spacing:.02em">${label}</span>`;
     }
 
+    function getActionNeededFixLabel(key) {
+      if (key === "missingRating") return "Vul ratings aan";
+      if (key === "duplicateSourceUrl") return "Dedupe nu";
+      if (key === "missingImage") return "Herstel images";
+      if (key === "invalidRecipe" || key === "worstChannel") return "Repareer SEO";
+      if (key === "ahToken") return "Haal token op";
+      if (String(key || "").startsWith("cache:")) return "Leeg cache";
+      return "";
+    }
+
     async function loadAdminActionNeeded() {
       const statusEl = document.getElementById("adminActionNeededStatus");
       const listEl = document.getElementById("adminActionNeededList");
@@ -2210,11 +2220,83 @@
               </div>
               <div class="muted" style="font-size:12px;margin-top:4px">${escapeHtml(item.description || "")}</div>
             </div>
-            <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('${escapeHtml(item.tab || "overview")}')">${escapeHtml(item.actionLabel || "Open")}</button>
+            <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+              ${getActionNeededFixLabel(item.key) ? `<button class="btn btn-sm" type="button" onclick="runActionNeededFix('${escapeHtml(item.key || "")}')">${escapeHtml(getActionNeededFixLabel(item.key))}</button>` : ""}
+              <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('${escapeHtml(item.tab || "overview")}')">${escapeHtml(item.actionLabel || "Open")}</button>
+            </div>
           </div>
         `).join("");
       } catch (error) {
         if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
+      }
+    }
+
+    async function runActionNeededFix(key) {
+      const statusEl = document.getElementById("adminActionNeededStatus");
+      const cleanKey = String(key || "");
+      const confirmText = {
+        missingRating: "Ratings ophalen en opslaan voor bestaande recepten? Dit kan even duren.",
+        duplicateSourceUrl: "Dubbele bron-URLs nu verwijderen uit geïmporteerde recepten?",
+        missingImage: "SEO-recepten zonder afbeelding nu proberen te repareren?",
+        invalidRecipe: "SEO-recepten met problemen nu proberen te repareren?",
+        worstChannel: "Slechtste SEO-recepten nu proberen te repareren?",
+        ahToken: "Nieuw AH-token ophalen via de proxy?",
+      };
+      const message = cleanKey.startsWith("cache:")
+        ? "Deze cache nu legen?"
+        : (confirmText[cleanKey] || "Deze herstelactie uitvoeren?");
+      if (!confirm(message)) return;
+
+      const setStatus = (text) => { if (statusEl) statusEl.textContent = text; };
+      setStatus("⏳ Herstelactie uitvoeren…");
+      try {
+        let response;
+        if (cleanKey === "missingRating") {
+          response = await fetch("/api/admin/seo-recipe-ratings-backfill", adminFetchInit({
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dryRun: false, maxUsers: 250, maxRecipes: 1200, concurrency: 6, timeoutMs: 6500 }),
+          }));
+        } else if (cleanKey === "duplicateSourceUrl") {
+          response = await fetch("/api/admin/dedupe-imported-recipes", adminFetchInit({
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dryRun: false }),
+          }));
+        } else if (cleanKey === "missingImage") {
+          response = await fetch("/api/admin/seo-recipes-repair", adminFetchInit({
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dryRun: false, mode: "image", maxRecipes: 30, lowestFirst: true }),
+          }));
+        } else if (cleanKey === "invalidRecipe" || cleanKey === "worstChannel") {
+          response = await fetch("/api/admin/seo-recipes-repair", adminFetchInit({
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dryRun: false, mode: "reimport", maxRecipes: 20, lowestFirst: true }),
+          }));
+        } else if (cleanKey === "ahToken") {
+          response = await fetch("/api/admin/ah-token-fetch", { method: "POST", ...adminFetchInit() });
+        } else if (cleanKey.startsWith("cache:")) {
+          response = await fetch("/api/admin/cache-clear", adminFetchInit({
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: cleanKey.slice("cache:".length) }),
+          }));
+        } else {
+          throw new Error("Geen automatische herstelactie voor dit punt.");
+        }
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || data.message || "Herstelactie mislukt");
+        setStatus("✅ Herstelactie klaar. Actiepunten opnieuw laden…");
+        await Promise.allSettled([
+          loadAdminActionNeeded(),
+          loadAdminOpsHealth(),
+          loadAhTokenStatus(),
+        ]);
+      } catch (error) {
+        setStatus("❌ " + (error?.message || error));
       }
     }
 
