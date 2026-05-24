@@ -1951,6 +1951,33 @@
           <!-- Per supermarkt -->
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px" id="basketStatsSupermarktGrid"></div>
 
+          <div style="margin-bottom:24px">
+            <h3 style="font-size:14px;font-weight:600;margin-bottom:10px">Mandje-debug</h3>
+            <div class="stats-grid" style="margin-bottom:12px">
+              <div class="stat-card">
+                <div class="stat-value" id="basketDebugItems">-</div>
+                <div class="stat-label">Items gemeten</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="basketDebugMatched">-</div>
+                <div class="stat-label">Match gevonden</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="basketDebugMissingImage">-</div>
+                <div class="stat-label">Zonder afbeelding</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="basketDebugLowAlternatives">-</div>
+                <div class="stat-label">Weinig alternatieven</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="basketDebugLowConfidence">-</div>
+                <div class="stat-label">Lage match</div>
+              </div>
+            </div>
+            <div id="basketStatsDebugTable"></div>
+          </div>
+
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
             <!-- Top producten -->
             <div>
@@ -7110,11 +7137,13 @@
       const supermarktGrid = document.getElementById("basketStatsSupermarktGrid");
       const productsTable = document.getElementById("basketStatsProductsTable");
       const brandsTable = document.getElementById("basketStatsBrandsTable");
+      const debugTable = document.getElementById("basketStatsDebugTable");
 
       if (status) status.textContent = "Laden…";
       if (supermarktGrid) supermarktGrid.innerHTML = "";
       if (productsTable) productsTable.innerHTML = "";
       if (brandsTable) brandsTable.innerHTML = "";
+      if (debugTable) debugTable.innerHTML = "";
 
       try {
         const res = await fetch(`/api/admin/basket-stats?days=${days}`, adminFetchInit());
@@ -7122,6 +7151,12 @@
         if (!data.ok) throw new Error(data.error || "Onbekende fout");
 
         if (status) status.textContent = `${data.totalBaskets} winkelwagens gebouwd in de afgelopen ${data.days} dagen.`;
+        const debug = data.debug || {};
+        setText("basketDebugItems", formatNumber(debug.items || 0));
+        setText("basketDebugMatched", `${formatNumber(debug.matched || 0)} / ${formatNumber(debug.items || 0)}`);
+        setText("basketDebugMissingImage", formatNumber(debug.missingImage || 0));
+        setText("basketDebugLowAlternatives", formatNumber(debug.lowAlternatives || 0));
+        setText("basketDebugLowConfidence", formatNumber(debug.lowConfidence || 0));
 
         // Supermarkt tiles
         if (supermarktGrid) {
@@ -7166,6 +7201,45 @@
 
         renderTable(data.topProducts, "name", productsTable);
         renderTable(data.topBrands, "brand", brandsTable);
+
+        if (debugTable) {
+          const recent = Array.isArray(data.recentDebug) ? data.recentDebug : [];
+          if (!recent.length) {
+            debugTable.innerHTML = "<p style='color:var(--muted);font-size:13px'>Geen recente mandje-problemen gevonden.</p>";
+          } else {
+            const storeLabel = (store) => store === "jumbo" ? "Jumbo" : store === "albert-heijn" ? "AH" : (store || "—");
+            debugTable.innerHTML = `<table class="users-table" style="width:100%">
+              <thead>
+                <tr>
+                  <th>Tijd</th>
+                  <th>Store</th>
+                  <th>Ingrediënt</th>
+                  <th>Gekozen product</th>
+                  <th style="text-align:right">Score</th>
+                  <th>Waarom</th>
+                </tr>
+              </thead>
+              <tbody>${recent.slice(0, 40).map((row) => {
+                const item = row.item || {};
+                const reasons = Array.isArray(item.reasons) ? item.reasons.filter(Boolean) : [];
+                const flags = [];
+                if (item.found === false) flags.push("geen match");
+                if (item.found && item.hasImage === false) flags.push("geen afbeelding");
+                if (Number(item.alternatives || 0) < 1) flags.push("weinig alternatieven");
+                if (Number(item.matchScore || 0) > 56) flags.push("lage score");
+                const reasonText = [...new Set([...flags, ...reasons])].slice(0, 4).join(" · ") || "—";
+                return `<tr>
+                  <td style="white-space:nowrap;color:var(--muted);font-size:12px">${row.createdAt ? new Date(row.createdAt).toLocaleString("nl-NL") : "—"}</td>
+                  <td>${escAdm(storeLabel(row.store || item.store))}</td>
+                  <td><strong>${escAdm(item.ingredient || "—")}</strong><div style="font-size:11px;color:var(--muted)">${escAdm(item.amount || "")}</div></td>
+                  <td>${escAdm(item.selectedProduct || "—")}<div style="font-size:11px;color:var(--muted)">${formatNumber(item.alternatives || 0)} alternatief/alternatieven</div></td>
+                  <td style="text-align:right">${item.matchScore == null ? "—" : formatNumber(item.matchScore)}</td>
+                  <td style="font-size:12px;max-width:360px">${escAdm(reasonText)}</td>
+                </tr>`;
+              }).join("")}</tbody>
+            </table>`;
+          }
+        }
 
       } catch (err) {
         if (status) status.textContent = `Fout: ${err.message}`;

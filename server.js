@@ -12462,6 +12462,54 @@ function selectAhProductForGroceryHandoff(products, prefs) {
   return pickAhBasketDefaultProduct(strictPool, prefs) || picked;
 }
 
+function buildBasketItemDebug(store, item, result, choices) {
+  const choiceList = Array.isArray(choices) ? choices : [];
+  const selected = choiceList[0] || null;
+  const product = result?.product || null;
+  const products = Array.isArray(result?.products) ? result.products : [];
+  const matchMeta = selected?.matchMeta || product?.matchMeta || null;
+  const score = Number(matchMeta?.score);
+  const penalties = Array.isArray(matchMeta?.appliedPenalties) ? matchMeta.appliedPenalties : [];
+  const bonuses = Array.isArray(matchMeta?.appliedBonuses) ? matchMeta.appliedBonuses : [];
+  const normalizedIngredient = canonicalizeIngredientForStoreSearch(getBasketItemTitle(item) || "");
+  const reasons = [];
+
+  if (result?.skipped) reasons.push("Overgeslagen: keukengerei, non-food of pantry-filler.");
+  if (!normalizedIngredient) reasons.push("Geen bruikbare ingrediëntnaam.");
+  if (!product) reasons.push("Geen winkelproduct gevonden.");
+  if (product && !selected?.imageUrl) reasons.push("Gekozen product heeft geen afbeelding.");
+  if (product && choiceList.length <= 1) reasons.push("Weinig of geen alternatieve producten gevonden.");
+  if (Number.isFinite(score) && score > 56) reasons.push(`Lage matchkwaliteit: score ${Math.round(score)}.`);
+  penalties.slice(0, 3).forEach((penalty) => {
+    const label = sanitizeText(penalty?.label || "");
+    if (label) reasons.push(label);
+  });
+
+  return {
+    store,
+    ingredient: normalizedIngredient || getBasketItemTitle(item),
+    amount: sanitizeText(item?.amount || item?.ingredientAmount || ""),
+    found: Boolean(product),
+    skipped: Boolean(result?.skipped),
+    selectedProduct: sanitizeText(selected?.title || product?.name || ""),
+    selectedProductId: sanitizeText(selected?.productId || product?.id || product?.sku || ""),
+    hasImage: Boolean(selected?.imageUrl),
+    alternatives: Math.max(0, choiceList.length - 1),
+    rawAlternatives: products.length,
+    matchScore: Number.isFinite(score) ? Math.round(score) : null,
+    labels: Array.isArray(selected?.labels) ? selected.labels.slice(0, 8).map(sanitizeText).filter(Boolean) : [],
+    penalties: penalties.slice(0, 6).map((penalty) => ({
+      label: sanitizeText(penalty?.label || ""),
+      delta: Number(penalty?.delta) || 0,
+    })).filter((penalty) => penalty.label),
+    bonuses: bonuses.slice(0, 4).map((bonus) => ({
+      label: sanitizeText(bonus?.label || ""),
+      delta: Number(bonus?.delta) || 0,
+    })).filter((bonus) => bonus.label),
+    reasons: [...new Set(reasons)].slice(0, 8),
+  };
+}
+
 function buildStoreSearchUrl(store, items) {
   const query = encodeURIComponent(
     items
@@ -17902,21 +17950,51 @@ async function _recordBasketEvent(request, basket) {
         const words = name.split(/\s+/);
         const brand = words.length >= 2 ? words[0] : name;
         return {
+          store,
           name,
           brand: sanitizeText(brand),
           price: sanitizeText(choice.price || ""),
           id: sanitizeText(choice.productId || choice.sku || ""),
           ingredient: sanitizeText(item.ingredientTitle || ""),
+          hasImage: Boolean(choice.imageUrl),
+          alternatives: Math.max(0, Array.isArray(item.choices) ? item.choices.length - 1 : 0),
+          matchScore: Number.isFinite(Number(choice.matchMeta?.score)) ? Math.round(Number(choice.matchMeta.score)) : null,
         };
       })
       .filter(Boolean);
 
-    if (!products.length) return;
+    const diagnostics = Array.isArray(basket?.diagnostics)
+      ? basket.diagnostics.map((entry) => ({
+          store,
+          ingredient: sanitizeText(entry?.ingredient || ""),
+          amount: sanitizeText(entry?.amount || ""),
+          found: Boolean(entry?.found),
+          skipped: Boolean(entry?.skipped),
+          selectedProduct: sanitizeText(entry?.selectedProduct || ""),
+          selectedProductId: sanitizeText(entry?.selectedProductId || ""),
+          hasImage: Boolean(entry?.hasImage),
+          alternatives: Number.isFinite(Number(entry?.alternatives)) ? Number(entry.alternatives) : 0,
+          rawAlternatives: Number.isFinite(Number(entry?.rawAlternatives)) ? Number(entry.rawAlternatives) : 0,
+          matchScore: Number.isFinite(Number(entry?.matchScore)) ? Number(entry.matchScore) : null,
+          labels: Array.isArray(entry?.labels) ? entry.labels.map(sanitizeText).filter(Boolean).slice(0, 8) : [],
+          penalties: Array.isArray(entry?.penalties) ? entry.penalties.slice(0, 6) : [],
+          bonuses: Array.isArray(entry?.bonuses) ? entry.bonuses.slice(0, 4) : [],
+          reasons: Array.isArray(entry?.reasons) ? entry.reasons.map(sanitizeText).filter(Boolean).slice(0, 8) : [],
+        })).filter((entry) => entry.ingredient)
+      : [];
+
+    if (!products.length && !diagnostics.length) return;
 
     await recordEvent("basket_built", authUser?.id || null, {
       store,
       productCount: products.length,
+      itemCount: diagnostics.length || items.length,
+      matchedItemCount: diagnostics.filter((entry) => entry.found).length || products.length,
+      missingImageCount: diagnostics.filter((entry) => entry.found && !entry.hasImage).length,
+      lowAlternativeCount: diagnostics.filter((entry) => entry.found && Number(entry.alternatives || 0) < 1).length,
+      lowConfidenceCount: diagnostics.filter((entry) => Number(entry.matchScore) > 56).length,
       products,
+      diagnostics,
     });
   } catch {
     // Negeer tracking fouten — blokkeer nooit de basket response
@@ -18054,7 +18132,18 @@ async function buildStoreBasket(body) {
     const result = searchResults[index] || { product: null, products: [] };
 
     // Skip keukengerei dat toch de filter is doorgekomen.
-    if (result.skipped) return null;
+    if (result.skipped) {
+      return {
+        id: `basket-item-${index}`,
+        ingredientTitle: canonicalizeIngredientForStoreSearch(getBasketItemTitle(item) || "Ingrediënt"),
+        ingredientAmount: sanitizeText(item.amount || "1 verpakking"),
+        confidence: "Overgeslagen",
+        choices: [],
+        selectedChoiceIndex: 0,
+        skipped: true,
+        debug: buildBasketItemDebug(store, item, result, []),
+      };
+    }
 
     let choices;
 
@@ -18084,6 +18173,7 @@ async function buildStoreBasket(body) {
       confidence: result.product ? "Gevonden in winkel" : getMatchConfidenceLabel(getBasketItemTitle(item)),
       choices: choices.slice(0, choicesCap),
       selectedChoiceIndex: 0,
+      debug: buildBasketItemDebug(store, item, result, choices.slice(0, choicesCap)),
     };
   });
 
@@ -18107,7 +18197,8 @@ async function buildStoreBasket(body) {
       foundResults.length
         ? "Plately heeft echte winkelmatches gevonden. Controleer eventueel per ingrediënt en ga daarna door."
         : "Plately heeft nog niet voor elk ingrediënt een exacte winkelmatch gevonden. Controleer per ingrediënt en open daarna de winkel.",
-    items: matchedItems.filter(Boolean),
+    items: matchedItems.filter((item) => item && !item.skipped),
+    diagnostics: matchedItems.filter(Boolean).map((item) => item.debug).filter(Boolean),
   };
 }
 
@@ -22698,6 +22789,43 @@ const server = http.createServer(async (request, response) => {
             AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
         `, [days]);
 
+        const debugSummaryRes = await pool.query(`
+          SELECT
+            COUNT(*)::int AS items,
+            COUNT(*) FILTER (WHERE diag->>'found' = 'true')::int AS matched,
+            COUNT(*) FILTER (WHERE diag->>'skipped' = 'true')::int AS skipped,
+            COUNT(*) FILTER (WHERE diag->>'found' <> 'true')::int AS not_found,
+            COUNT(*) FILTER (WHERE diag->>'found' = 'true' AND diag->>'hasImage' <> 'true')::int AS missing_image,
+            COUNT(*) FILTER (WHERE diag->>'found' = 'true' AND COALESCE((diag->>'alternatives')::int, 0) < 1)::int AS low_alternatives,
+            COUNT(*) FILTER (WHERE COALESCE((diag->>'matchScore')::int, 0) > 56)::int AS low_confidence
+          FROM plately_events e
+          CROSS JOIN LATERAL jsonb_array_elements(COALESCE(e.meta->'diagnostics', '[]'::jsonb)) AS diag
+          WHERE e.type = 'basket_built'
+            AND e.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+        `, [days]);
+
+        const recentDebugRes = await pool.query(`
+          SELECT
+            e.created_at,
+            e.user_id,
+            e.meta->>'store' AS store,
+            diag AS item
+          FROM plately_events e
+          CROSS JOIN LATERAL jsonb_array_elements(COALESCE(e.meta->'diagnostics', '[]'::jsonb)) AS diag
+          WHERE e.type = 'basket_built'
+            AND e.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+            AND (
+              diag->>'found' <> 'true'
+              OR diag->>'hasImage' <> 'true'
+              OR COALESCE((diag->>'alternatives')::int, 0) < 1
+              OR COALESCE((diag->>'matchScore')::int, 0) > 56
+            )
+          ORDER BY e.created_at DESC
+          LIMIT 60
+        `, [days]);
+
+        const debugRow = debugSummaryRes.rows[0] || {};
+
         sendJson(response, 200, {
           ok: true,
           days,
@@ -22705,6 +22833,21 @@ const server = http.createServer(async (request, response) => {
           topProducts: topProductsRes.rows,
           topBrands: topBrandsRes.rows,
           bySupermarkt: bySupermarktRes.rows,
+          debug: {
+            items: Number(debugRow.items) || 0,
+            matched: Number(debugRow.matched) || 0,
+            skipped: Number(debugRow.skipped) || 0,
+            notFound: Number(debugRow.not_found) || 0,
+            missingImage: Number(debugRow.missing_image) || 0,
+            lowAlternatives: Number(debugRow.low_alternatives) || 0,
+            lowConfidence: Number(debugRow.low_confidence) || 0,
+          },
+          recentDebug: (recentDebugRes.rows || []).map((row) => ({
+            createdAt: row.created_at,
+            userId: sanitizeText(row.user_id || ""),
+            store: sanitizeText(row.store || ""),
+            item: row.item && typeof row.item === "object" ? row.item : {},
+          })),
         });
       } catch (error) {
         console.error("❌ Error in /api/admin/basket-stats:", error.message);
