@@ -996,6 +996,47 @@
       </div>
 
       <div class="admin-tab-section" id="adminTabOverview" data-tab="overview">
+      <div class="section" id="adminCockpitWrap" style="margin-bottom:16px">
+        <div class="section-header">
+          <div>
+            <h2>Gezondheid</h2>
+            <div class="muted" id="adminCockpitMeta">Alles in een oogopslag laden…</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-sm" type="button" onclick="loadAdminCockpit()">↻ Alles checken</button>
+            <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('activity')">Importlog</button>
+            <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('basket-stats')">Winkelwagen</button>
+          </div>
+        </div>
+        <div class="stats-grid" style="margin-bottom:12px">
+          <div class="stat-card">
+            <div class="stat-value" id="cockpitOverall">-</div>
+            <div class="stat-label">Status</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="cockpitActionCount">-</div>
+            <div class="stat-label">Actiepunten</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="cockpitImportSuccess">-</div>
+            <div class="stat-label">Importkwaliteit</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="cockpitAhToken">-</div>
+            <div class="stat-label">AH token</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="cockpitBasketCount">-</div>
+            <div class="stat-label">Winkelwagens 30d</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value mono" id="cockpitCommit">-</div>
+            <div class="stat-label">Live commit</div>
+          </div>
+        </div>
+        <div id="adminCockpitIssues" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px"></div>
+      </div>
+
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-value" id="totalUsers">-</div>
@@ -2227,6 +2268,7 @@
         initInventoryUserFilter();
         loadInventory(); // independent block (own loading/error)
         await loadAdminDeployInfo();
+        loadAdminCockpit();
         loadAdminOpsHealth();
         loadAdminActionNeeded();
         loadAdminDemoLogin();
@@ -2326,6 +2368,142 @@
         `).join("");
       } catch (error) {
         if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
+      }
+    }
+
+    function setCockpitText(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    }
+
+    function renderCockpitIssueCard({ label, value, detail, severity = "info", tab = "" }) {
+      const colors = {
+        ok: ["#166534", "rgba(34,197,94,0.09)", "rgba(34,197,94,0.25)"],
+        warn: ["#92400e", "rgba(245,158,11,0.10)", "rgba(245,158,11,0.28)"],
+        high: ["#991b1b", "rgba(220,53,69,0.09)", "rgba(220,53,69,0.24)"],
+        info: ["#334155", "rgba(100,116,139,0.08)", "rgba(100,116,139,0.20)"],
+      };
+      const [fg, bg, border] = colors[severity] || colors.info;
+      const openButton = tab ? `<button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('${escapeHtml(tab)}')">Open</button>` : "";
+      return `
+        <div style="border:1px solid ${border};background:${bg};border-radius:8px;padding:12px 14px;color:${fg};display:grid;gap:8px">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+            <div>
+              <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.02em">${escapeHtml(label)}</div>
+              <div style="font-size:22px;font-weight:900;margin-top:2px">${escapeHtml(value)}</div>
+            </div>
+            ${openButton}
+          </div>
+          <div style="font-size:12px;line-height:1.45">${escapeHtml(detail || "")}</div>
+        </div>
+      `;
+    }
+
+    async function fetchAdminJson(url, init = undefined) {
+      const response = await fetch(url, init || adminFetchInit());
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) throw new Error(data.error || data.message || `${url} laden mislukt`);
+      return data;
+    }
+
+    async function loadAdminCockpit() {
+      const metaEl = document.getElementById("adminCockpitMeta");
+      const issuesEl = document.getElementById("adminCockpitIssues");
+      if (metaEl) metaEl.textContent = "Gezondheid laden…";
+      if (issuesEl) issuesEl.innerHTML = "";
+      ["cockpitOverall", "cockpitActionCount", "cockpitImportSuccess", "cockpitAhToken", "cockpitBasketCount", "cockpitCommit"].forEach((id) => setCockpitText(id, "…"));
+
+      const results = await Promise.allSettled([
+        fetchAdminJson("/api/health", { credentials: "include", cache: "no-store" }),
+        fetchAdminJson("/api/admin/action-needed"),
+        fetchAdminJson("/api/admin/import-quality"),
+        fetchAdminJson("/api/admin/ah-token-status"),
+        fetchAdminJson("/api/admin/basket-stats?days=30"),
+      ]);
+      const [healthRes, actionRes, qualityRes, ahRes, basketRes] = results;
+      const health = healthRes.status === "fulfilled" ? healthRes.value : null;
+      const action = actionRes.status === "fulfilled" ? actionRes.value : null;
+      const quality = qualityRes.status === "fulfilled" ? qualityRes.value : null;
+      const ah = ahRes.status === "fulfilled" ? ahRes.value : null;
+      const basket = basketRes.status === "fulfilled" ? basketRes.value : null;
+
+      const actionItems = Array.isArray(action?.items) ? action.items : [];
+      const qualityRows = Array.isArray(quality?.rows) ? quality.rows : [];
+      const totalRecipes = Number(quality?.totalRecipes || 0);
+      const validRecipes = qualityRows.reduce((sum, row) => sum + Number(row.valid || 0), 0);
+      const importSuccess = totalRecipes ? Math.round((validRecipes / totalRecipes) * 100) : 100;
+      const missingImages = qualityRows.reduce((sum, row) => sum + Number(row.missingImage || 0), 0);
+      const invalidRecipes = qualityRows.reduce((sum, row) => sum + Number(row.invalidRecipe || 0), 0);
+      const duplicates = qualityRows.reduce((sum, row) => sum + Number(row.duplicateSourceUrl || 0), 0);
+      const worstChannel = qualityRows[0] || null;
+      const ahHasToken = Boolean(ah?.hasToken);
+      const ahExpiresMs = Number(ah?.expiresInMs || 0);
+      const ahExpiresSoon = ahHasToken && ahExpiresMs > 0 && ahExpiresMs < 1000 * 60 * 60 * 24 * 2;
+      const basketCount = Number(basket?.totalBaskets || 0);
+      const hardFailures = results.filter((result) => result.status === "rejected").length;
+      const highActionCount = actionItems.filter((item) => item.severity === "high").length;
+      const overallBad = hardFailures > 0 || !health?.ok || !ahHasToken || highActionCount > 0;
+      const overallWarn = !overallBad && (actionItems.length > 0 || importSuccess < 90 || ahExpiresSoon);
+
+      setCockpitText("cockpitOverall", overallBad ? "LET OP" : overallWarn ? "CHECK" : "OK");
+      setCockpitText("cockpitActionCount", formatNumber(actionItems.length));
+      setCockpitText("cockpitImportSuccess", `${formatNumber(importSuccess)}%`);
+      setCockpitText("cockpitAhToken", ahHasToken ? (ahExpiresSoon ? "Bijna" : "OK") : "Geen");
+      setCockpitText("cockpitBasketCount", formatNumber(basketCount));
+      setCockpitText("cockpitCommit", String(health?.version?.commit || "").slice(0, 7) || "—");
+
+      const cards = [];
+      if (hardFailures) {
+        cards.push({
+          label: "Endpoint fouten",
+          value: formatNumber(hardFailures),
+          detail: "Een of meer adminchecks kon niet geladen worden.",
+          severity: "high",
+          tab: "logs",
+        });
+      }
+      cards.push({
+        label: "Actie nodig",
+        value: actionItems.length ? `${formatNumber(actionItems.length)} punten` : "Rustig",
+        detail: actionItems[0]?.title ? `${actionItems[0].title}: ${formatNumber(actionItems[0].count || 0)}` : "Geen urgente acties gevonden.",
+        severity: highActionCount ? "high" : actionItems.length ? "warn" : "ok",
+        tab: actionItems.length ? (actionItems[0].tab || "overview") : "",
+      });
+      cards.push({
+        label: "Importkwaliteit",
+        value: `${formatNumber(importSuccess)}% goed`,
+        detail: `${formatNumber(totalRecipes)} recepten · ${formatNumber(invalidRecipes)} ongeldig · ${formatNumber(missingImages)} zonder afbeelding · ${formatNumber(duplicates)} dubbel`,
+        severity: importSuccess < 80 || invalidRecipes > 0 ? "high" : importSuccess < 95 || missingImages > 0 ? "warn" : "ok",
+        tab: "activity",
+      });
+      if (worstChannel) {
+        cards.push({
+          label: "Slechtste kanaal",
+          value: worstChannel.label || worstChannel.id || "Onbekend",
+          detail: `${formatNumber(worstChannel.total || 0)} recepten · ${formatNumber(worstChannel.successRate || 0)}% succes`,
+          severity: Number(worstChannel.issueCount || 0) > 0 ? "warn" : "ok",
+          tab: "activity",
+        });
+      }
+      cards.push({
+        label: "AH koppeling",
+        value: ahHasToken ? "Token actief" : "Geen token",
+        detail: ah?.expiresAt ? `Verloopt ${new Date(ah.expiresAt).toLocaleString("nl-NL")}` : "Geen verloopdatum beschikbaar.",
+        severity: !ahHasToken ? "high" : ahExpiresSoon ? "warn" : "ok",
+        tab: "supermarkets",
+      });
+      cards.push({
+        label: "Winkelwagen",
+        value: `${formatNumber(basketCount)} gebouwd`,
+        detail: basket?.days ? `In de afgelopen ${basket.days} dagen.` : "Nog geen recente winkelwagenstatistiek.",
+        severity: basketCount ? "ok" : "info",
+        tab: "basket-stats",
+      });
+
+      if (issuesEl) issuesEl.innerHTML = cards.map(renderCockpitIssueCard).join("");
+      if (metaEl) {
+        const ts = new Date();
+        metaEl.textContent = `Bijgewerkt: ${formatDate(ts)} · ${health?.env || "omgeving onbekend"} · Postgres ${health?.auth?.postgresEnabled ? "aan" : "uit"}`;
       }
     }
 
@@ -2463,6 +2641,7 @@
         if (!response.ok || !data.ok) throw new Error(data.error || data.message || "Herstelactie mislukt");
         setStatus("✅ Herstelactie klaar. Actiepunten opnieuw laden…");
         await Promise.allSettled([
+          loadAdminCockpit(),
           loadAdminActionNeeded(),
           loadAdminOpsHealth(),
           loadAhTokenStatus(),
