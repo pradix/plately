@@ -15358,6 +15358,7 @@ async function backfillImportedRecipeRatingsForAllUsers({
     httpErr: 0,
     schemaMiss: 0,
     cacheHitWithRating: 0,
+    syncedRecipeIndexUsers: 0,
   };
 
   const candidates = [];
@@ -15546,6 +15547,8 @@ async function backfillImportedRecipeRatingsForAllUsers({
         `,
         [userId, JSON.stringify(appState)]
       );
+      await syncUserRecipesToTable(userId, recipes, pool);
+      out.syncedRecipeIndexUsers += 1;
       touchedUsers.add(userId);
       out.updatedRecipes += changed;
     }

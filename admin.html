@@ -2673,13 +2673,28 @@
     }
 
     function getActionNeededFixLabel(key) {
-      if (key === "missingRating") return "Vul ratings aan";
+      if (key === "missingRating") return "Ratings aanvullen";
       if (key === "duplicateSourceUrl") return "Dedupe nu";
       if (key === "missingImage") return "Herstel images";
       if (key === "invalidRecipe" || key === "worstChannel") return "Repareer SEO";
       if (key === "ahToken") return "Haal token op";
       if (String(key || "").startsWith("cache:")) return "Leeg cache";
       return "";
+    }
+
+    function formatRatingsBackfillSummary(data) {
+      const updated = formatNumber(data?.updatedRecipes || 0);
+      const users = formatNumber(data?.updatedUsers || 0);
+      const found = formatNumber(data?.foundRatings || data?.updatedRecipes || 0);
+      const scanned = formatNumber(data?.scannedRecipes || 0);
+      const misses = formatNumber(data?.schemaMiss || 0);
+      const errors = formatNumber(data?.httpErr || 0);
+      const synced = Number(data?.syncedRecipeIndexUsers || 0);
+      const syncText = synced ? ` · ${formatNumber(synced)} zoek-index users bijgewerkt` : "";
+      if (Number(data?.updatedRecipes || 0) > 0) {
+        return `✅ Ratings aangevuld: ${updated} recepten bij ${users} users · ${found} gevonden · ${scanned} gescand${syncText}`;
+      }
+      return `ℹ️ Geen nieuwe ratings opgeslagen · ${scanned} gescand · ${misses} zonder schema-rating · ${errors} fetchfouten`;
     }
 
     async function loadAdminActionNeeded() {
@@ -3033,10 +3048,11 @@
       try {
         let response;
         if (cleanKey === "missingRating") {
+          setStatus("⏳ Ratings ophalen en opslaan… dit kan even duren.");
           response = await fetch("/api/admin/seo-recipe-ratings-backfill", adminFetchInit({
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ dryRun: false, maxUsers: 250, maxRecipes: 1200, concurrency: 6, timeoutMs: 6500 }),
+            body: JSON.stringify({ dryRun: false, maxUsers: 2000, maxRecipes: 2500, concurrency: 6, timeoutMs: 6500 }),
           }));
         } else if (cleanKey === "duplicateSourceUrl") {
           response = await fetch("/api/admin/dedupe-imported-recipes", adminFetchInit({
@@ -3068,15 +3084,23 @@
           throw new Error("Geen automatische herstelactie voor dit punt.");
         }
 
-        const data = await response.json().catch(() => ({}));
+        const text = await response.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { _parseError: true, bodyPreview: text.slice(0, 800) };
+        }
         if (!response.ok || !data.ok) throw new Error(data.error || data.message || "Herstelactie mislukt");
-        setStatus("✅ Herstelactie klaar. Actiepunten opnieuw laden…");
+        const doneMessage = cleanKey === "missingRating" ? formatRatingsBackfillSummary(data) : "✅ Herstelactie klaar.";
+        setStatus(`${doneMessage} Actiepunten opnieuw laden…`);
         await Promise.allSettled([
           loadAdminCockpit(),
           loadAdminActionNeeded(),
           loadAdminOpsHealth(),
           loadAhTokenStatus(),
         ]);
+        setStatus(doneMessage);
       } catch (error) {
         setStatus("❌ " + (error?.message || error));
       }
