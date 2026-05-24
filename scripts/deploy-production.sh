@@ -18,10 +18,30 @@ git switch "$BRANCH"
 git merge --ff-only "origin/$BRANCH"
 export GIT_COMMIT="$(git rev-parse --short HEAD)"
 
-if [ -f package-lock.json ]; then
-  npm ci --omit=dev --no-audit --no-fund
-else
-  npm install --omit=dev --no-audit --no-fund
+install_runtime_deps() {
+  if [ -f package-lock.json ]; then
+    npm ci --omit=dev --no-audit --no-fund
+  else
+    npm install --omit=dev --no-audit --no-fund
+  fi
+}
+
+verify_runtime_deps() {
+  node - <<'NODE'
+const required = ["pg", "nodemailer", "web-push"];
+for (const mod of required) {
+  require.resolve(mod);
+}
+console.log(`Runtime dependencies OK: ${required.join(", ")}`);
+NODE
+}
+
+install_runtime_deps
+if ! verify_runtime_deps; then
+  echo "Runtime dependencies are incomplete; rebuilding node_modules once." >&2
+  rm -rf node_modules
+  install_runtime_deps
+  verify_runtime_deps
 fi
 
 node --check server.js
