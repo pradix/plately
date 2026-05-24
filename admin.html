@@ -213,6 +213,152 @@
 
     .btn-sm { padding: 6px 10px; font-size: 12px; }
 
+    .admin-progress {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      width: min(520px, calc(100vw - 28px));
+      z-index: 1000;
+      background: rgba(255,255,255,0.98);
+      border: 1px solid rgba(0,0,0,0.10);
+      border-radius: 16px;
+      box-shadow: 0 18px 60px rgba(0,0,0,0.22);
+      overflow: hidden;
+      transform: translateY(14px);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform .18s ease, opacity .18s ease;
+    }
+
+    .admin-progress.is-open {
+      transform: translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .admin-progress__header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid rgba(0,0,0,0.07);
+      background: rgba(120,147,111,0.08);
+    }
+
+    .admin-progress__title {
+      font-weight: 850;
+      font-size: 14px;
+      color: rgba(35,55,42,0.96);
+    }
+
+    .admin-progress__subtitle {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .admin-progress__close {
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      border: 1px solid rgba(0,0,0,0.09);
+      background: rgba(255,255,255,0.85);
+      cursor: pointer;
+      font-weight: 900;
+      color: rgba(0,0,0,0.62);
+      flex: 0 0 auto;
+    }
+
+    .admin-progress__body { padding: 14px 16px 16px; }
+
+    .admin-progress__bar {
+      height: 8px;
+      background: rgba(0,0,0,0.07);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 10px 0 12px;
+    }
+
+    .admin-progress__bar span {
+      display: block;
+      width: 6%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--green);
+      transition: width .2s ease;
+    }
+
+    .admin-progress.is-running .admin-progress__bar span {
+      background: linear-gradient(90deg, var(--green), #a9be9e, var(--green));
+      background-size: 180% 100%;
+      animation: adminProgressFlow 1s linear infinite;
+    }
+
+    @keyframes adminProgressFlow {
+      from { background-position: 0% 0; }
+      to { background-position: 180% 0; }
+    }
+
+    .admin-progress__stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .admin-progress__stat {
+      min-width: 0;
+      border: 1px solid rgba(0,0,0,0.07);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.025);
+    }
+
+    .admin-progress__stat strong {
+      display: block;
+      font-size: 16px;
+      line-height: 1.1;
+      color: var(--green-ink);
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .admin-progress__stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 3px;
+    }
+
+    .admin-progress__detail {
+      color: rgba(0,0,0,0.72);
+      font-size: 12px;
+      line-height: 1.45;
+      min-height: 18px;
+    }
+
+    .admin-progress__raw {
+      display: none;
+      margin: 12px 0 0;
+      max-height: 180px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 11px;
+      line-height: 1.4;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.07);
+      background: rgba(0,0,0,0.03);
+    }
+
+    .admin-progress__footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 0 16px 16px;
+    }
+
     /* ── KPIs ──────────────────────────────────────────────────────────────── */
     .stats-grid {
       display: grid;
@@ -1099,6 +1245,39 @@
     </header>
 
     <div id="error" class="error" style="display: none;"></div>
+
+    <div class="admin-progress" id="adminProgressWindow" role="status" aria-live="polite" aria-label="Actie voortgang">
+      <div class="admin-progress__header">
+        <div>
+          <div class="admin-progress__title" id="adminProgressTitle">Actie uitvoeren</div>
+          <div class="admin-progress__subtitle" id="adminProgressSubtitle">Voorbereiden…</div>
+        </div>
+        <button class="admin-progress__close" type="button" onclick="closeAdminProgressWindow()" aria-label="Sluiten">×</button>
+      </div>
+      <div class="admin-progress__body">
+        <div class="admin-progress__stats">
+          <div class="admin-progress__stat">
+            <strong id="adminProgressElapsed">0s</strong>
+            <span>Tijd</span>
+          </div>
+          <div class="admin-progress__stat">
+            <strong id="adminProgressPhase">Start</strong>
+            <span>Fase</span>
+          </div>
+          <div class="admin-progress__stat">
+            <strong id="adminProgressCount">-</strong>
+            <span>Aantal</span>
+          </div>
+        </div>
+        <div class="admin-progress__bar" aria-hidden="true"><span id="adminProgressBar"></span></div>
+        <div class="admin-progress__detail" id="adminProgressDetail">Actie wordt voorbereid.</div>
+        <pre class="admin-progress__raw mono" id="adminProgressRaw"></pre>
+      </div>
+      <div class="admin-progress__footer">
+        <button class="btn btn-sm" type="button" id="adminProgressCancelBtn" onclick="cancelAdminProgressAction()" disabled>Stop</button>
+        <button class="btn btn-sm btn-primary" type="button" onclick="closeAdminProgressWindow()">Verberg</button>
+      </div>
+    </div>
 
     <nav class="admin-tabs" aria-label="Admin tabs">
       <div class="admin-tabs__rail" id="adminTabsRail" role="tablist" aria-label="Admin secties">
@@ -2701,6 +2880,103 @@
       return `ℹ️ Geen nieuwe ratings opgeslagen · ${fetched} opgehaald · ${scanned} gescand · ${misses} zonder schema-rating · ${errors} fetchfouten${moreText}`;
     }
 
+    const adminProgress = {
+      startedAt: 0,
+      timer: null,
+      controller: null,
+      running: false,
+    };
+
+    function formatAdminProgressElapsed(ms) {
+      const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+      const min = Math.floor(total / 60);
+      const sec = total % 60;
+      return min ? `${min}m ${String(sec).padStart(2, "0")}s` : `${sec}s`;
+    }
+
+    function setAdminProgressText(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    }
+
+    function startAdminProgressWindow({ title = "Actie uitvoeren", subtitle = "", detail = "", count = "-", controller = null } = {}) {
+      const win = document.getElementById("adminProgressWindow");
+      const raw = document.getElementById("adminProgressRaw");
+      const cancelBtn = document.getElementById("adminProgressCancelBtn");
+      adminProgress.startedAt = Date.now();
+      adminProgress.running = true;
+      adminProgress.controller = controller || null;
+      if (adminProgress.timer) clearInterval(adminProgress.timer);
+      setAdminProgressText("adminProgressTitle", title);
+      setAdminProgressText("adminProgressSubtitle", subtitle || "Bezig…");
+      setAdminProgressText("adminProgressElapsed", "0s");
+      setAdminProgressText("adminProgressPhase", "Start");
+      setAdminProgressText("adminProgressCount", count);
+      setAdminProgressText("adminProgressDetail", detail || "Actie wordt gestart.");
+      const bar = document.getElementById("adminProgressBar");
+      if (bar) bar.style.width = "8%";
+      if (raw) {
+        raw.textContent = "";
+        raw.style.display = "none";
+      }
+      if (cancelBtn) cancelBtn.disabled = !adminProgress.controller;
+      if (win) {
+        win.classList.add("is-open", "is-running");
+      }
+      adminProgress.timer = setInterval(() => {
+        setAdminProgressText("adminProgressElapsed", formatAdminProgressElapsed(Date.now() - adminProgress.startedAt));
+      }, 250);
+    }
+
+    function updateAdminProgressWindow({ phase, subtitle, detail, count, percent, raw } = {}) {
+      if (phase != null) setAdminProgressText("adminProgressPhase", String(phase));
+      if (subtitle != null) setAdminProgressText("adminProgressSubtitle", String(subtitle));
+      if (detail != null) setAdminProgressText("adminProgressDetail", String(detail));
+      if (count != null) setAdminProgressText("adminProgressCount", String(count));
+      const bar = document.getElementById("adminProgressBar");
+      if (bar && percent != null) {
+        bar.style.width = `${Math.max(4, Math.min(100, Math.round(Number(percent) || 0)))}%`;
+      }
+      const rawEl = document.getElementById("adminProgressRaw");
+      if (rawEl && raw != null) {
+        rawEl.textContent = typeof raw === "string" ? raw : JSON.stringify(raw, null, 2);
+        rawEl.style.display = "block";
+      }
+    }
+
+    function finishAdminProgressWindow({ success = true, title, subtitle, detail, count, raw } = {}) {
+      adminProgress.running = false;
+      adminProgress.controller = null;
+      if (adminProgress.timer) clearInterval(adminProgress.timer);
+      adminProgress.timer = null;
+      const win = document.getElementById("adminProgressWindow");
+      if (win) win.classList.remove("is-running");
+      const cancelBtn = document.getElementById("adminProgressCancelBtn");
+      if (cancelBtn) cancelBtn.disabled = true;
+      if (title) setAdminProgressText("adminProgressTitle", title);
+      updateAdminProgressWindow({
+        phase: success ? "Klaar" : "Fout",
+        subtitle: subtitle || (success ? "Actie afgerond" : "Actie mislukt"),
+        detail: detail || (success ? "De actie is afgerond." : "De actie kon niet worden afgerond."),
+        count,
+        percent: success ? 100 : 100,
+        raw,
+      });
+    }
+
+    function closeAdminProgressWindow() {
+      const win = document.getElementById("adminProgressWindow");
+      if (win) win.classList.remove("is-open");
+    }
+
+    function cancelAdminProgressAction() {
+      if (adminProgress.controller) {
+        try {
+          adminProgress.controller.abort();
+        } catch (_) {}
+      }
+    }
+
     async function loadAdminActionNeeded() {
       const statusEl = document.getElementById("adminActionNeededStatus");
       const listEl = document.getElementById("adminActionNeededList");
@@ -3039,12 +3315,29 @@
       if (!confirm(message)) return;
 
       const setStatus = (text) => { if (statusEl) statusEl.textContent = text; };
+      const progressTitle = getActionNeededFixLabel(cleanKey) || "Herstelactie";
       setStatus("⏳ Herstelactie uitvoeren…");
+      startAdminProgressWindow({
+        title: progressTitle,
+        subtitle: "Actie gestart",
+        detail: "Admin voert de herstelactie uit.",
+        count: "-",
+      });
       try {
         let response;
         if (cleanKey === "missingRating") {
           setStatus("⏳ Ratings ophalen en opslaan… veilige batch gestart.");
           const controller = new AbortController();
+          adminProgress.controller = controller;
+          const cancelBtn = document.getElementById("adminProgressCancelBtn");
+          if (cancelBtn) cancelBtn.disabled = false;
+          updateAdminProgressWindow({
+            phase: "Ophalen",
+            subtitle: "Ratings aanvullen",
+            detail: "Maximaal 300 bronpagina's worden in deze batch opgehaald.",
+            count: "0 / 300",
+            percent: 18,
+          });
           const timeoutId = setTimeout(() => controller.abort(), 90_000);
           try {
             response = await fetch("/api/admin/seo-recipe-ratings-backfill", adminFetchInit({
@@ -3057,26 +3350,31 @@
             clearTimeout(timeoutId);
           }
         } else if (cleanKey === "duplicateSourceUrl") {
+          updateAdminProgressWindow({ phase: "Ontdubbelen", detail: "Dubbele bron-URLs worden verwijderd.", percent: 30 });
           response = await fetch("/api/admin/dedupe-imported-recipes", adminFetchInit({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ dryRun: false }),
           }));
         } else if (cleanKey === "missingImage") {
+          updateAdminProgressWindow({ phase: "Afbeeldingen", detail: "Recepten zonder afbeelding worden gerepareerd.", percent: 30 });
           response = await fetch("/api/admin/seo-recipes-repair", adminFetchInit({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ dryRun: false, mode: "image", maxRecipes: 30, lowestFirst: true }),
           }));
         } else if (cleanKey === "invalidRecipe" || cleanKey === "worstChannel") {
+          updateAdminProgressWindow({ phase: "Reimport", detail: "Slechtste SEO-recepten worden opnieuw geïmporteerd.", percent: 30 });
           response = await fetch("/api/admin/seo-recipes-repair", adminFetchInit({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ dryRun: false, mode: "reimport", maxRecipes: 20, lowestFirst: true }),
           }));
         } else if (cleanKey === "ahToken") {
+          updateAdminProgressWindow({ phase: "Token", detail: "Nieuw AH-token ophalen via de proxy.", percent: 30 });
           response = await fetch("/api/admin/ah-token-fetch", { method: "POST", ...adminFetchInit() });
         } else if (cleanKey.startsWith("cache:")) {
+          updateAdminProgressWindow({ phase: "Cache", detail: "Cache wordt geleegd.", percent: 35 });
           response = await fetch("/api/admin/cache-clear", adminFetchInit({
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -3086,6 +3384,7 @@
           throw new Error("Geen automatische herstelactie voor dit punt.");
         }
 
+        updateAdminProgressWindow({ phase: "Verwerken", detail: "Serverantwoord verwerken.", percent: 72 });
         const text = await response.text();
         let data;
         try {
@@ -3096,6 +3395,13 @@
         if (!response.ok || !data.ok) throw new Error(data.error || data.message || "Herstelactie mislukt");
         const doneMessage = cleanKey === "missingRating" ? formatRatingsBackfillSummary(data) : "✅ Herstelactie klaar.";
         setStatus(`${doneMessage} Actiepunten opnieuw laden…`);
+        updateAdminProgressWindow({
+          phase: "Verversen",
+          detail: "Cockpit en actiepunten opnieuw laden.",
+          count: cleanKey === "missingRating" ? `${formatNumber(data.updatedRecipes || 0)} opgeslagen` : "-",
+          percent: 88,
+          raw: data,
+        });
         await Promise.allSettled([
           loadAdminCockpit(),
           loadAdminActionNeeded(),
@@ -3103,9 +3409,23 @@
           loadAhTokenStatus(),
         ]);
         setStatus(doneMessage);
+        finishAdminProgressWindow({
+          success: true,
+          subtitle: "Actie afgerond",
+          detail: doneMessage,
+          count: cleanKey === "missingRating" ? `${formatNumber(data.fetchedCandidates || data.candidates || 0)} opgehaald` : "Klaar",
+          raw: data,
+        });
       } catch (error) {
         const aborted = error && (error.name === "AbortError" || String(error).includes("AbortError"));
-        setStatus(aborted ? "⏱️ Batch duurde te lang en is gestopt. Probeer opnieuw met de SEO-tool voor kleinere aantallen." : "❌ " + (error?.message || error));
+        const errorMessage = aborted ? "⏱️ Batch duurde te lang en is gestopt. Probeer opnieuw met de SEO-tool voor kleinere aantallen." : "❌ " + (error?.message || error);
+        setStatus(errorMessage);
+        finishAdminProgressWindow({
+          success: false,
+          subtitle: aborted ? "Gestopt" : "Actie mislukt",
+          detail: errorMessage,
+          count: "Fout",
+        });
       }
     }
 
@@ -5242,12 +5562,24 @@
       setBusy(true);
       cancelSeoRecipeRatingsBackfill();
       seoRatingsAbortController = new AbortController();
+      startAdminProgressWindow({
+        title: dryRun ? "Ratings dry-run" : "Ratings aanvullen",
+        subtitle: dryRun ? "Controleren zonder opslaan" : "Beoordelingen ophalen en opslaan",
+        detail: `${formatNumber(maxRecipes)} recepten scannen · maximaal ${formatNumber(maxUsers)} users`,
+        count: `0 / ${formatNumber(maxRecipes)}`,
+        controller: seoRatingsAbortController,
+      });
       if (outEl) outEl.textContent = dryRun ? "⏳ Dry-run gestart…" : "⏳ Uitvoeren gestart…";
       const startedAt = Date.now();
       if (seoRatingsElapsedTimer) clearInterval(seoRatingsElapsedTimer);
       seoRatingsElapsedTimer = setInterval(() => {
         const sec = Math.floor((Date.now() - startedAt) / 1000);
         if (statusEl) statusEl.textContent = `${dryRun ? "⏳ Dry-run bezig" : "⏳ Bezig"} • ${sec}s`;
+        updateAdminProgressWindow({
+          phase: dryRun ? "Dry-run" : "Ophalen",
+          detail: `${dryRun ? "Zoekt" : "Haalt"} ratings op bij bronsites. Verstreken: ${sec}s`,
+          percent: Math.min(78, 12 + sec),
+        });
       }, 250);
 
       try {
@@ -5278,6 +5610,13 @@
           const sec = Math.floor((Date.now() - startedAt) / 1000);
           statusEl.textContent = `${dryRun ? "✅ Dry-run klaar" : "✅ Klaar"} • ${sec}s`;
         }
+        finishAdminProgressWindow({
+          success: true,
+          subtitle: dryRun ? "Dry-run klaar" : "Ratingsactie klaar",
+          detail: formatRatingsBackfillSummary(data),
+          count: `${formatNumber(data.fetchedCandidates || data.candidates || 0)} opgehaald`,
+          raw: data,
+        });
         if (outEl) {
           try {
             outEl.textContent = JSON.stringify(data, null, 2);
@@ -5289,6 +5628,12 @@
         const aborted = e && (e.name === "AbortError" || String(e).includes("AbortError"));
         if (statusEl) statusEl.textContent = aborted ? "⛔️ Geannuleerd" : "❌ " + (e.message || String(e));
         if (outEl && !aborted) outEl.textContent = "";
+        finishAdminProgressWindow({
+          success: false,
+          subtitle: aborted ? "Geannuleerd" : "Actie mislukt",
+          detail: aborted ? "De ratingsactie is geannuleerd." : (e.message || String(e)),
+          count: aborted ? "Gestopt" : "Fout",
+        });
       } finally {
         if (seoRatingsElapsedTimer) clearInterval(seoRatingsElapsedTimer);
         seoRatingsElapsedTimer = null;
