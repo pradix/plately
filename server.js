@@ -3353,7 +3353,27 @@ async function findOrCreateDemoUser() {
     await ensurePostgresSchema();
     const pool = await getPostgresPool();
     const existing = await pool.query(`SELECT * FROM plately_users WHERE lower(email) = lower($1) LIMIT 1`, [email]);
-    if (existing.rows[0]) return { user: existing.rows[0], postgres: true };
+    if (existing.rows[0]) {
+      const existingUser = existing.rows[0];
+      const existingState = existingUser.app_state && typeof existingUser.app_state === "object" ? existingUser.app_state : {};
+      const needsBootstrap = !Array.isArray(existingState.importedRecipes) || existingState.importedRecipes.length === 0;
+      if (!needsBootstrap) return { user: existingUser, postgres: true };
+
+      const nextState = sanitizeUserStatePayload(buildDemoInitialState(email, existingUser.id), buildDefaultUserData(existingUser.id));
+      const updated = await pool.query(
+        `
+          UPDATE plately_users
+          SET profile = $2::jsonb,
+              app_state = $3::jsonb,
+              updated_at = NOW()
+          WHERE id = $1
+          RETURNING *
+        `,
+        [existingUser.id, JSON.stringify(nextState.profile), JSON.stringify(nextState)]
+      );
+      await syncUserRecipesToTable(existingUser.id, nextState.importedRecipes, pool);
+      return { user: updated.rows[0] || existingUser, postgres: true };
+    }
 
     const password = crypto.randomBytes(24).toString("base64url");
     const created = await createPostgresUser(email, password, buildDemoInitialState(email));
@@ -3363,7 +3383,14 @@ async function findOrCreateDemoUser() {
   const db = await loadDatabase();
   const existingEntry = Object.entries(db.users || {}).find(([, user]) => sanitizeEmail(user?.email || user?.profile?.email || "") === email);
   if (existingEntry) {
-    return { user: { ...existingEntry[1], id: existingEntry[0], email }, postgres: false };
+    const [userId, existingUser] = existingEntry;
+    const needsBootstrap = !Array.isArray(existingUser.importedRecipes) || existingUser.importedRecipes.length === 0;
+    if (!needsBootstrap) return { user: { ...existingUser, id: userId, email }, postgres: false };
+
+    const nextState = sanitizeUserStatePayload(buildDemoInitialState(email, userId), buildDefaultUserData(userId));
+    db.users[userId] = { ...nextState, id: userId, email };
+    await persistDatabase();
+    return { user: db.users[userId], postgres: false };
   }
 
   const userId = generateId("user");
