@@ -2237,6 +2237,17 @@
             </div>
           </div>
         </div>
+        <div class="section" id="adminJobsSection" style="margin-top:14px">
+          <div class="section-header">
+            <div>
+              <h2>Achtergrondtaken</h2>
+              <div class="muted">Laatste herstelacties die server-side lopen of afgerond zijn</div>
+            </div>
+            <button class="btn btn-sm" type="button" onclick="loadAdminJobs()">↻ Verversen</button>
+          </div>
+          <div id="adminJobsStatus" class="muted" style="font-size:12px;margin-bottom:8px">Nog niet geladen.</div>
+          <div id="adminJobsList" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
       </div>
 
       <div class="admin-tab-section" id="adminTabLogs" data-tab="logs">
@@ -3023,6 +3034,7 @@
     const adminProgress = {
       startedAt: 0,
       timer: null,
+      jobPollTimer: null,
       controller: null,
       running: false,
     };
@@ -3046,6 +3058,8 @@
       adminProgress.startedAt = Date.now();
       adminProgress.running = true;
       adminProgress.controller = controller || null;
+      if (adminProgress.jobPollTimer) clearInterval(adminProgress.jobPollTimer);
+      adminProgress.jobPollTimer = null;
       if (adminProgress.timer) clearInterval(adminProgress.timer);
       setAdminProgressText("adminProgressTitle", title);
       setAdminProgressText("adminProgressSubtitle", subtitle || "Bezig…");
@@ -3087,6 +3101,8 @@
     function finishAdminProgressWindow({ success = true, title, subtitle, detail, count, raw } = {}) {
       adminProgress.running = false;
       adminProgress.controller = null;
+      if (adminProgress.jobPollTimer) clearInterval(adminProgress.jobPollTimer);
+      adminProgress.jobPollTimer = null;
       if (adminProgress.timer) clearInterval(adminProgress.timer);
       adminProgress.timer = null;
       const win = document.getElementById("adminProgressWindow");
@@ -3114,6 +3130,113 @@
         try {
           adminProgress.controller.abort();
         } catch (_) {}
+      }
+    }
+
+    async function trackAdminJob(jobId, { title = "Achtergrondtaak", onDone = null } = {}) {
+      const id = String(jobId || "").trim();
+      if (!id) return;
+      if (adminProgress.jobPollTimer) clearInterval(adminProgress.jobPollTimer);
+      updateAdminProgressWindow({
+        phase: "Achtergrond",
+        subtitle: title,
+        detail: "Taak loopt door op de server. Je kunt dit venster verbergen.",
+        count: id.slice(0, 8),
+        percent: 8,
+      });
+      const poll = async () => {
+        try {
+          const response = await fetch(`/api/admin/jobs/${encodeURIComponent(id)}`, adminFetchInit());
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data.ok) throw new Error(data.error || "Jobstatus laden mislukt");
+          const job = data.job || {};
+          const progress = job.progress || {};
+          updateAdminProgressWindow({
+            phase: progress.phase || job.status || "Bezig",
+            subtitle: job.label || title,
+            detail: progress.detail || "",
+            count: progress.count || id.slice(0, 8),
+            percent: progress.percent || (job.status === "done" ? 100 : 20),
+            raw: job.result || null,
+          });
+          if (job.status === "done" || job.status === "failed") {
+            if (adminProgress.jobPollTimer) clearInterval(adminProgress.jobPollTimer);
+            adminProgress.jobPollTimer = null;
+            const result = job.result || {};
+            const detail = job.status === "done"
+              ? (job.type === "ratingsBackfill" ? formatRatingsBackfillSummary(result) : "Achtergrondtaak afgerond.")
+              : (job.error || "Achtergrondtaak mislukt.");
+            finishAdminProgressWindow({
+              success: job.status === "done",
+              subtitle: job.status === "done" ? "Achtergrondtaak klaar" : "Achtergrondtaak mislukt",
+              detail,
+              count: job.status === "done" && job.type === "ratingsBackfill" ? `${formatNumber(result.fetchedCandidates || result.candidates || 0)} opgehaald` : job.status,
+              raw: job.status === "done" ? result : job,
+            });
+            if (typeof onDone === "function") await onDone(job);
+          }
+        } catch (error) {
+          if (adminProgress.jobPollTimer) clearInterval(adminProgress.jobPollTimer);
+          adminProgress.jobPollTimer = null;
+          finishAdminProgressWindow({
+            success: false,
+            subtitle: "Jobstatus mislukt",
+            detail: error?.message || String(error),
+            count: "Fout",
+          });
+        }
+      };
+      await poll();
+      adminProgress.jobPollTimer = setInterval(poll, 1500);
+    }
+
+    function renderAdminJobs(jobs) {
+      const listEl = document.getElementById("adminJobsList");
+      const statusEl = document.getElementById("adminJobsStatus");
+      const items = Array.isArray(jobs) ? jobs : [];
+      if (statusEl) statusEl.textContent = `${formatNumber(items.length)} taak/taken · bewaard tot server herstart of opruiming`;
+      if (!listEl) return;
+      if (!items.length) {
+        listEl.innerHTML = `<div class="muted" style="font-size:12px">Nog geen achtergrondtaken.</div>`;
+        return;
+      }
+      listEl.innerHTML = items.map((job) => {
+        const progress = job.progress || {};
+        const status = String(job.status || "");
+        const color = status === "done" ? "#2e7d32" : status === "failed" ? "#b71c1c" : status === "running" ? "#78936f" : "#64748b";
+        const created = job.createdAt ? new Date(job.createdAt).toLocaleString("nl-NL") : "—";
+        const percent = Math.max(0, Math.min(100, Math.round(Number(progress.percent || (status === "done" ? 100 : 0)))));
+        return `
+          <div style="border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.78);padding:10px 12px">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+              <div>
+                <strong>${escapeHtml(job.label || job.type || "Achtergrondtaak")}</strong>
+                <div class="muted" style="font-size:12px;margin-top:2px">${escapeHtml(progress.detail || job.error || "")}</div>
+              </div>
+              <span style="background:${color};color:white;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:850">${escapeHtml(status || "onbekend")}</span>
+            </div>
+            <div class="admin-progress__bar" style="margin:9px 0 8px"><span style="width:${percent}%"></span></div>
+            <div class="muted" style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px">
+              <span>${escapeHtml(progress.phase || "—")}</span>
+              <span>${escapeHtml(progress.count || "")}</span>
+              <span>${escapeHtml(created)}</span>
+              <span class="mono">${escapeHtml(String(job.id || "").slice(0, 8))}</span>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function loadAdminJobs() {
+      const statusEl = document.getElementById("adminJobsStatus");
+      if (statusEl) statusEl.textContent = "Achtergrondtaken laden…";
+      try {
+        const response = await fetch("/api/admin/jobs", adminFetchInit());
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || "Achtergrondtaken laden mislukt");
+        renderAdminJobs(data.jobs || []);
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
       }
     }
 
@@ -3492,7 +3615,7 @@
               method: "POST",
               headers: { "Content-Type": "application/json" },
               signal: controller.signal,
-              body: JSON.stringify({ dryRun: false, maxUsers: 2000, maxRecipes: 2500, maxFetches: 300, concurrency: 4, timeoutMs: 5000 }),
+              body: JSON.stringify({ background: true, dryRun: false, maxUsers: 2000, maxRecipes: 2500, maxFetches: 300, concurrency: 4, timeoutMs: 5000 }),
             }));
           } finally {
             clearTimeout(timeoutId);
@@ -3541,6 +3664,26 @@
           data = { _parseError: true, bodyPreview: text.slice(0, 800) };
         }
         if (!response.ok || !data.ok) throw new Error(data.error || data.message || "Herstelactie mislukt");
+        if (data.background && data.job?.id) {
+          const jobId = data.job.id;
+          setStatus(`⏳ Achtergrondtaak gestart: ${jobId.slice(0, 8)}…`);
+          await trackAdminJob(jobId, {
+            title: "Ratings aanvullen",
+            onDone: async (job) => {
+              const result = job.result || {};
+              const doneMessage = job.status === "done" ? formatRatingsBackfillSummary(result) : `❌ ${job.error || "Achtergrondtaak mislukt."}`;
+              setStatus(`${doneMessage} Actiepunten opnieuw laden…`);
+              await Promise.allSettled([
+                loadAdminCockpit(),
+                loadAdminActionNeeded(),
+                loadAdminOpsHealth(),
+                loadAhTokenStatus(),
+              ]);
+              setStatus(doneMessage);
+            },
+          });
+          return;
+        }
         const doneMessage = cleanKey === "missingRating" ? formatRatingsBackfillSummary(data) : "✅ Herstelactie klaar.";
         setStatus(`${doneMessage} Actiepunten opnieuw laden…`);
         updateAdminProgressWindow({
@@ -5736,6 +5879,7 @@
           headers: { "Content-Type": "application/json" },
           signal: seoRatingsAbortController.signal,
           body: JSON.stringify({
+            background: true,
             dryRun: Boolean(dryRun),
             maxUsers,
             maxRecipes,
@@ -5753,6 +5897,28 @@
         if (!response.ok || !data.ok) {
           const msg = data?.error || data?.message || `HTTP ${response.status}`;
           throw new Error(msg);
+        }
+        if (data.background && data.job?.id) {
+          if (statusEl) statusEl.textContent = `⏳ Achtergrondtaak gestart: ${data.job.id.slice(0, 8)}…`;
+          if (outEl) outEl.textContent = JSON.stringify(data, null, 2);
+          await trackAdminJob(data.job.id, {
+            title: dryRun ? "Ratings dry-run" : "Ratings aanvullen",
+            onDone: async (job) => {
+              if (statusEl) {
+                const sec = Math.floor((Date.now() - startedAt) / 1000);
+                statusEl.textContent = `${job.status === "done" ? "✅ Klaar" : "❌ Mislukt"} • ${sec}s`;
+              }
+              if (outEl) {
+                try {
+                  outEl.textContent = JSON.stringify(job.result || job, null, 2);
+                } catch {
+                  outEl.textContent = String(job.result || job);
+                }
+              }
+              await Promise.allSettled([loadAdminCockpit(), loadAdminActionNeeded()]);
+            },
+          });
+          return;
         }
         if (statusEl) {
           const sec = Math.floor((Date.now() - startedAt) / 1000);
@@ -7485,6 +7651,7 @@
         loadImportQuality();
         loadImportErrors();
       }
+      if (next === "repair") loadAdminJobs();
       if (next === "seo") { loadSeoOverview(); }
       if (next === "basket-stats") loadBasketStats();
       if (next === "storage") loadStorageInfo();

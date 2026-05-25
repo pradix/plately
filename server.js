@@ -15099,6 +15099,99 @@ function invalidateStoredRecipeRatingCaches() {
   channelSearchCache.clear();
 }
 
+const adminJobs = new Map();
+const ADMIN_JOB_TTL_MS = 1000 * 60 * 60 * 6;
+const ADMIN_JOB_MAX = 60;
+
+function pruneAdminJobs() {
+  const now = Date.now();
+  for (const [id, job] of adminJobs.entries()) {
+    const finishedAt = job?.finishedAt ? new Date(job.finishedAt).getTime() : 0;
+    const createdAt = job?.createdAt ? new Date(job.createdAt).getTime() : now;
+    if ((finishedAt && now - finishedAt > ADMIN_JOB_TTL_MS) || now - createdAt > ADMIN_JOB_TTL_MS * 2) {
+      adminJobs.delete(id);
+    }
+  }
+  if (adminJobs.size <= ADMIN_JOB_MAX) return;
+  const ordered = [...adminJobs.entries()].sort((a, b) =>
+    new Date(a[1]?.createdAt || 0).getTime() - new Date(b[1]?.createdAt || 0).getTime()
+  );
+  while (ordered.length && adminJobs.size > ADMIN_JOB_MAX) {
+    const [id] = ordered.shift();
+    adminJobs.delete(id);
+  }
+}
+
+function publicAdminJob(job) {
+  if (!job) return null;
+  return {
+    id: job.id,
+    type: job.type,
+    label: job.label,
+    status: job.status,
+    progress: job.progress || {},
+    result: job.result || null,
+    error: job.error || "",
+    createdAt: job.createdAt,
+    startedAt: job.startedAt || null,
+    updatedAt: job.updatedAt || null,
+    finishedAt: job.finishedAt || null,
+  };
+}
+
+function createAdminJob(type, label, runner) {
+  pruneAdminJobs();
+  const id = crypto.randomBytes(10).toString("hex");
+  const now = new Date().toISOString();
+  const job = {
+    id,
+    type: sanitizeText(type || "job"),
+    label: sanitizeText(label || type || "Admin job"),
+    status: "queued",
+    progress: { phase: "Wachtrij", percent: 1, detail: "Taak staat klaar." },
+    result: null,
+    error: "",
+    createdAt: now,
+    startedAt: null,
+    updatedAt: now,
+    finishedAt: null,
+  };
+  adminJobs.set(id, job);
+
+  const update = (patch = {}) => {
+    const current = adminJobs.get(id);
+    if (!current) return;
+    current.progress = { ...(current.progress || {}), ...patch };
+    current.updatedAt = new Date().toISOString();
+  };
+
+  setTimeout(async () => {
+    const current = adminJobs.get(id);
+    if (!current) return;
+    current.status = "running";
+    current.startedAt = new Date().toISOString();
+    current.updatedAt = current.startedAt;
+    current.progress = { ...(current.progress || {}), phase: "Start", percent: 3, detail: "Taak gestart." };
+    try {
+      const result = await runner(update);
+      current.status = "done";
+      current.result = result || { ok: true };
+      current.progress = { ...(current.progress || {}), phase: "Klaar", percent: 100, detail: "Taak afgerond." };
+      current.finishedAt = new Date().toISOString();
+      current.updatedAt = current.finishedAt;
+    } catch (error) {
+      current.status = "failed";
+      current.error = error?.message || String(error);
+      current.progress = { ...(current.progress || {}), phase: "Fout", percent: 100, detail: current.error };
+      current.finishedAt = new Date().toISOString();
+      current.updatedAt = current.finishedAt;
+      console.error(`❌ Admin job ${id} (${type}) mislukt:`, current.error);
+    }
+  }, 0);
+
+  return publicAdminJob(job);
+}
+
 /** Bron-URL → rating uit alle publieke SEO-recepten (app_state.importedRecipes). */
 function buildStoredRecipeRatingIndexFromSeoEntries(entries) {
   const index = new Map();
@@ -15340,6 +15433,7 @@ async function backfillImportedRecipeRatingsForAllUsers({
   maxFetches = maxRecipes,
   concurrency = 6,
   timeoutMs = 6500,
+  onProgress = null,
 } = {}) {
   const fetchLimit = Math.max(1, Math.min(Number(maxFetches) || Number(maxRecipes) || 1200, Number(maxRecipes) || 1200, 8000));
   const out = {
@@ -15364,6 +15458,11 @@ async function backfillImportedRecipeRatingsForAllUsers({
     cacheHitWithRating: 0,
     syncedRecipeIndexUsers: 0,
   };
+  const reportProgress = (patch) => {
+    if (typeof onProgress === "function") {
+      try { onProgress(patch); } catch (_) {}
+    }
+  };
 
   const candidates = [];
   const seen = new Set();
@@ -15378,6 +15477,7 @@ async function backfillImportedRecipeRatingsForAllUsers({
   }
 
   // 1) Collect candidates
+  reportProgress({ phase: "Scannen", percent: 8, detail: "Gebruikers en recepten scannen op ontbrekende ratings." });
   if (isPostgresEnabled()) {
     await ensurePostgresSchema();
     const pool = await getPostgresPool();
@@ -15457,10 +15557,27 @@ async function backfillImportedRecipeRatingsForAllUsers({
   if (!candidates.length) return { ...out, message: "Geen recepten gevonden om ratings aan te vullen." };
   const fetchCandidates = candidates.slice(0, fetchLimit);
   out.fetchedCandidates = fetchCandidates.length;
+  reportProgress({
+    phase: "Ophalen",
+    percent: 18,
+    count: `0 / ${fetchCandidates.length}`,
+    detail: `${fetchCandidates.length} bronpagina's ophalen uit ${out.candidates} kandidaten.`,
+  });
 
   // 2) Fetch ratings (parallel)
   const ratingByKey = new Map(); // key: userId::recipeIndex -> ratingEntry
   let next = 0;
+  let fetchedDone = 0;
+  function markRatingFetchDone() {
+    fetchedDone += 1;
+    const pct = 18 + Math.round((fetchedDone / Math.max(1, fetchCandidates.length)) * 58);
+    reportProgress({
+      phase: "Ophalen",
+      percent: Math.min(76, pct),
+      count: `${fetchedDone} / ${fetchCandidates.length}`,
+      detail: `${ratingByKey.size} ratings gevonden · ${out.schemaMiss} zonder schema · ${out.httpErr} fetchfouten.`,
+    });
+  }
   async function worker() {
     for (;;) {
       const idx = next++;
@@ -15473,6 +15590,7 @@ async function backfillImportedRecipeRatingsForAllUsers({
           out.cacheHitWithRating += 1;
           ratingByKey.set(`${c.userId}::${c.recipeIndex}`, cached);
         }
+        markRatingFetchDone();
         continue;
       }
       try {
@@ -15487,6 +15605,7 @@ async function backfillImportedRecipeRatingsForAllUsers({
         });
         if (!resp.ok) {
           out.httpErr += 1;
+          markRatingFetchDone();
           continue;
         }
         const html = await resp.text();
@@ -15501,6 +15620,7 @@ async function backfillImportedRecipeRatingsForAllUsers({
       } catch {
         out.httpErr += 1;
       }
+      markRatingFetchDone();
     }
   }
   await Promise.all(
@@ -15511,6 +15631,12 @@ async function backfillImportedRecipeRatingsForAllUsers({
   if (out.dryRun) return { ...out, foundRatings: ratingByKey.size };
 
   // 3) Persist updates
+  reportProgress({
+    phase: "Opslaan",
+    percent: 80,
+    count: `${ratingByKey.size} gevonden`,
+    detail: "Gevonden ratings opslaan en zoek-index bijwerken.",
+  });
   const touchedUsers = new Set();
   if (isPostgresEnabled()) {
     await ensurePostgresSchema();
@@ -15557,6 +15683,12 @@ async function backfillImportedRecipeRatingsForAllUsers({
       out.syncedRecipeIndexUsers += 1;
       touchedUsers.add(userId);
       out.updatedRecipes += changed;
+      reportProgress({
+        phase: "Opslaan",
+        percent: Math.min(96, 80 + out.syncedRecipeIndexUsers * 4),
+        count: `${out.updatedRecipes} opgeslagen`,
+        detail: `${out.syncedRecipeIndexUsers} user-indexen bijgewerkt.`,
+      });
     }
   } else {
     const db = await loadDatabase();
@@ -22357,6 +22489,35 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/jobs" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        pruneAdminJobs();
+        const jobs = [...adminJobs.values()]
+          .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+          .slice(0, 30)
+          .map(publicAdminJob);
+        return sendJson(response, 200, { ok: true, jobs });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Jobs laden mislukt." });
+      }
+    }
+
+    if (requestUrl.pathname.startsWith("/api/admin/jobs/") && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        pruneAdminJobs();
+        const jobId = decodeURIComponent(requestUrl.pathname.replace("/api/admin/jobs/", "") || "");
+        const job = adminJobs.get(jobId);
+        if (!job) return sendJson(response, 404, { ok: false, error: "Job niet gevonden." });
+        return sendJson(response, 200, { ok: true, job: publicAdminJob(job) });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Job laden mislukt." });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/seo-recipe-ratings-backfill" && request.method === "POST") {
       console.log("⭐️ /api/admin/seo-recipe-ratings-backfill called");
       try {
@@ -22368,6 +22529,29 @@ const server = http.createServer(async (request, response) => {
         const maxFetches = Number.isFinite(Number(body?.maxFetches)) ? Math.max(1, Math.min(Number(body.maxFetches), maxRecipes, 8000)) : maxRecipes;
         const concurrency = Number.isFinite(Number(body?.concurrency)) ? Math.max(1, Math.min(Number(body.concurrency), 10)) : 6;
         const timeoutMs = Number.isFinite(Number(body?.timeoutMs)) ? Math.max(1500, Math.min(Number(body.timeoutMs), 20000)) : 6500;
+        if (body?.background === true) {
+          const job = createAdminJob(
+            "ratingsBackfill",
+            dryRun ? "Ratings dry-run" : "Ratings aanvullen",
+            async (update) => {
+              const startedAt = Date.now();
+              const result = await backfillImportedRecipeRatingsForAllUsers({
+                dryRun,
+                maxUsers,
+                maxRecipes,
+                maxFetches,
+                concurrency,
+                timeoutMs,
+                onProgress: update,
+              });
+              console.log(
+                `✅ SEO ratings job klaar: updated=${result.updatedRecipes || 0}, fetched=${result.fetchedCandidates || 0}/${result.candidates || 0}, scanned=${result.scannedRecipes || 0}, ${Date.now() - startedAt}ms`
+              );
+              return result;
+            }
+          );
+          return sendJson(response, 202, { ok: true, background: true, job });
+        }
         const startedAt = Date.now();
         const result = await backfillImportedRecipeRatingsForAllUsers({ dryRun, maxUsers, maxRecipes, maxFetches, concurrency, timeoutMs });
         console.log(
