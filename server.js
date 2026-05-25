@@ -7701,11 +7701,29 @@ function normalizeAggregateRating(agg) {
   };
 }
 
+function extractDutchVisibleRatingFromHtml(html) {
+  if (!html || typeof html !== "string") return null;
+  const text = sanitizeText(stripTags(html)).replace(/\s+/g, " ");
+  const patterns = [
+    /\b([1-5](?:[,.]\d{1,2})?)\s+van\s+([\d.]+)\s+stemmen\b/i,
+    /\b([1-5](?:[,.]\d{1,2})?)\s+uit\s+5\s+van\s+([\d.]+)\s+stemmen\b/i,
+  ];
+  for (const pattern of patterns) {
+    const m = text.match(pattern);
+    if (!m) continue;
+    const ratingValue = Number(String(m[1] || "").replace(",", "."));
+    const ratingCount = Number(String(m[2] || "").replace(/\./g, ""));
+    const normalized = normalizeAggregateRating({ ratingValue, ratingCount, bestRating: 5 });
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
 /** aggregateRating uit Recipe JSON-LD in HTML (import + enrich). */
 function extractAggregateRatingFromRecipeHtml(html) {
   if (!html || typeof html !== "string") return null;
   const recipe = findRecipeJsonLd(html);
-  return normalizeAggregateRating(recipe?.aggregateRating);
+  return normalizeAggregateRating(recipe?.aggregateRating) || extractDutchVisibleRatingFromHtml(html);
 }
 
 /** Eerst uit al geparsed recipe-object, anders opnieuw uit HTML. */
@@ -26038,6 +26056,7 @@ module.exports = {
     repairRecipeIngredientUnitRemainders,
     normalizeAggregateRating,
     normalizeAhGraphqlRating,
+    extractDutchVisibleRatingFromHtml,
     extractAggregateRatingFromRecipeHtml,
     searchPublicSeoRecipesLocal,
     buildStoredRecipeRatingIndexFromSeoEntries,

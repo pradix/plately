@@ -49,6 +49,12 @@ describe("parseWebsiteRecipe ratings", () => {
     assert.equal(__dev.normalizeAhGraphqlRating({ average: null, count: 156 }), null);
     assert.equal(__dev.normalizeAhGraphqlRating({ average: 4.3, count: 0 }), null);
   });
+
+  it("haalt Nederlandse zichtbare stemtekst op zoals Laura's Bakery", () => {
+    const html = `<html><body><main><p>Opslaan Opgeslagen! Recept afdrukken</p><div>4.25 van 48 stemmen</div></main></body></html>`;
+    const rating = __dev.extractDutchVisibleRatingFromHtml(html);
+    assert.deepEqual(rating, { ratingValue: 4, ratingCount: 48 });
+  });
 });
 
 function normalizeWideScaleHtml() {
