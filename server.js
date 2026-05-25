@@ -15192,6 +15192,90 @@ function createAdminJob(type, label, runner) {
   return publicAdminJob(job);
 }
 
+function getSeedChannelLabel(channelId) {
+  const clean = sanitizeText(channelId || "");
+  return SEED_CHANNELS.find((ch) => ch.id === clean)?.name || clean || "Onbekend";
+}
+
+function normalizeRatingsOverviewChannel(channelId) {
+  const clean = sanitizeText(channelId || "");
+  return clean || "unknown";
+}
+
+async function buildAdminRatingsOverview() {
+  const byChannel = new Map();
+  function ensure(channelId) {
+    const id = normalizeRatingsOverviewChannel(channelId);
+    if (!byChannel.has(id)) {
+      byChannel.set(id, {
+        channelId: id,
+        label: id === "unknown" ? "Onbekend / custom" : getSeedChannelLabel(id),
+        total: 0,
+        withRating: 0,
+        withoutRating: 0,
+        avgRating: null,
+        ratingCountSum: 0,
+      });
+    }
+    return byChannel.get(id);
+  }
+  function addRecipe(recipe, channelId) {
+    const row = ensure(channelId);
+    row.total += 1;
+    const rv = Number(recipe?.ratingValue);
+    const rc = Number(recipe?.ratingCount);
+    if (Number.isFinite(rv) && rv >= 1 && rv <= 5 && Number.isFinite(rc) && rc >= 1) {
+      row.withRating += 1;
+      row.ratingCountSum += Math.max(1, Math.round(rc));
+      row._ratingValueSum = Number(row._ratingValueSum || 0) + rv;
+    } else {
+      row.withoutRating += 1;
+    }
+  }
+
+  if (isPostgresEnabled()) {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const res = await pool.query(`
+      SELECT channel_id, data
+      FROM plately_recipes
+    `);
+    for (const row of res.rows || []) {
+      const recipe = row.data && typeof row.data === "object" ? row.data : {};
+      const channelId = sanitizeText(row.channel_id || "") || inferSeedChannelIdFromSourceUrl(recipe?.sourceUrl || "");
+      addRecipe(recipe, channelId);
+    }
+  } else {
+    const db = await loadDatabase();
+    for (const user of Object.values(db.users || {})) {
+      const recipes = Array.isArray(user?.importedRecipes) ? user.importedRecipes : [];
+      for (const recipe of recipes) {
+        addRecipe(recipe, inferSeedChannelIdFromSourceUrl(recipe?.sourceUrl || "") || sanitizeText(recipe?.channelId || ""));
+      }
+    }
+  }
+
+  const channels = [...byChannel.values()]
+    .map((row) => {
+      const pct = row.total ? Math.round((row.withRating / row.total) * 100) : 100;
+      const avgRating = row.withRating ? Math.round((Number(row._ratingValueSum || 0) / row.withRating) * 10) / 10 : null;
+      const { _ratingValueSum, ...clean } = row;
+      return { ...clean, coveragePct: pct, avgRating };
+    })
+    .sort((a, b) => (b.withoutRating - a.withoutRating) || (b.total - a.total) || a.label.localeCompare(b.label));
+
+  const totals = channels.reduce((acc, row) => {
+    acc.total += row.total;
+    acc.withRating += row.withRating;
+    acc.withoutRating += row.withoutRating;
+    acc.ratingCountSum += row.ratingCountSum;
+    return acc;
+  }, { total: 0, withRating: 0, withoutRating: 0, ratingCountSum: 0 });
+  totals.coveragePct = totals.total ? Math.round((totals.withRating / totals.total) * 100) : 100;
+
+  return { ok: true, totals, channels };
+}
+
 /** Bron-URL → rating uit alle publieke SEO-recepten (app_state.importedRecipes). */
 function buildStoredRecipeRatingIndexFromSeoEntries(entries) {
   const index = new Map();
@@ -15434,14 +15518,17 @@ async function backfillImportedRecipeRatingsForAllUsers({
   concurrency = 6,
   timeoutMs = 6500,
   onProgress = null,
+  channelId = "",
 } = {}) {
   const fetchLimit = Math.max(1, Math.min(Number(maxFetches) || Number(maxRecipes) || 1200, Number(maxRecipes) || 1200, 8000));
+  const cleanChannelId = sanitizeText(channelId || "");
   const out = {
     ok: true,
     dryRun: Boolean(dryRun),
     maxUsers,
     maxRecipes,
     maxFetches: fetchLimit,
+    channelId: cleanChannelId,
     concurrency,
     timeoutMs,
     scannedUsers: 0,
@@ -15506,6 +15593,10 @@ async function backfillImportedRecipeRatingsForAllUsers({
           out.skippedNoSourceUrl += 1;
           continue;
         }
+        if (cleanChannelId && inferSeedChannelIdFromSourceUrl(sourceUrl) !== cleanChannelId) {
+          out.skippedNotEligible += 1;
+          continue;
+        }
         if (r?.ratingValue != null && r?.ratingCount != null) {
           out.skippedAlreadyHasRating += 1;
           continue;
@@ -15536,6 +15627,10 @@ async function backfillImportedRecipeRatingsForAllUsers({
         const sourceUrl = sanitizeText(r?.sourceUrl || r?.source || "");
         if (!sourceUrl) {
           out.skippedNoSourceUrl += 1;
+          continue;
+        }
+        if (cleanChannelId && inferSeedChannelIdFromSourceUrl(sourceUrl) !== cleanChannelId) {
+          out.skippedNotEligible += 1;
           continue;
         }
         if (r?.ratingValue != null && r?.ratingCount != null) {
@@ -22504,6 +22599,17 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/ratings-overview" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        const overview = await buildAdminRatingsOverview();
+        return sendJson(response, 200, overview);
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Ratings-overzicht laden mislukt." });
+      }
+    }
+
     if (requestUrl.pathname.startsWith("/api/admin/jobs/") && request.method === "GET") {
       try {
         await requireAdmin(request);
@@ -22529,10 +22635,11 @@ const server = http.createServer(async (request, response) => {
         const maxFetches = Number.isFinite(Number(body?.maxFetches)) ? Math.max(1, Math.min(Number(body.maxFetches), maxRecipes, 8000)) : maxRecipes;
         const concurrency = Number.isFinite(Number(body?.concurrency)) ? Math.max(1, Math.min(Number(body.concurrency), 10)) : 6;
         const timeoutMs = Number.isFinite(Number(body?.timeoutMs)) ? Math.max(1500, Math.min(Number(body.timeoutMs), 20000)) : 6500;
+        const channelId = sanitizeText(body?.channelId || "");
         if (body?.background === true) {
           const job = createAdminJob(
             "ratingsBackfill",
-            dryRun ? "Ratings dry-run" : "Ratings aanvullen",
+            `${dryRun ? "Ratings dry-run" : "Ratings aanvullen"}${channelId ? ` · ${getSeedChannelLabel(channelId)}` : ""}`,
             async (update) => {
               const startedAt = Date.now();
               const result = await backfillImportedRecipeRatingsForAllUsers({
@@ -22543,6 +22650,7 @@ const server = http.createServer(async (request, response) => {
                 concurrency,
                 timeoutMs,
                 onProgress: update,
+                channelId,
               });
               console.log(
                 `✅ SEO ratings job klaar: updated=${result.updatedRecipes || 0}, fetched=${result.fetchedCandidates || 0}/${result.candidates || 0}, scanned=${result.scannedRecipes || 0}, ${Date.now() - startedAt}ms`
@@ -22553,7 +22661,7 @@ const server = http.createServer(async (request, response) => {
           return sendJson(response, 202, { ok: true, background: true, job });
         }
         const startedAt = Date.now();
-        const result = await backfillImportedRecipeRatingsForAllUsers({ dryRun, maxUsers, maxRecipes, maxFetches, concurrency, timeoutMs });
+        const result = await backfillImportedRecipeRatingsForAllUsers({ dryRun, maxUsers, maxRecipes, maxFetches, concurrency, timeoutMs, channelId });
         console.log(
           `✅ SEO ratings backfill klaar: updated=${result.updatedRecipes || 0}, fetched=${result.fetchedCandidates || 0}/${result.candidates || 0}, scanned=${result.scannedRecipes || 0}, ${Date.now() - startedAt}ms`
         );

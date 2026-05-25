@@ -2248,6 +2248,35 @@
           <div id="adminJobsStatus" class="muted" style="font-size:12px;margin-bottom:8px">Nog niet geladen.</div>
           <div id="adminJobsList" style="display:flex;flex-direction:column;gap:8px"></div>
         </div>
+        <div class="section" id="ratingsDashboardSection" style="margin-top:14px">
+          <div class="section-header">
+            <div>
+              <h2>Ratings dashboard</h2>
+              <div class="muted">Dekking per kanaal en gerichte rating-batches</div>
+            </div>
+            <button class="btn btn-sm" type="button" onclick="loadRatingsDashboard()">↻ Verversen</button>
+          </div>
+          <div class="stats-grid" style="margin:0 0 12px">
+            <div class="stat-card">
+              <div class="stat-value" id="ratingsTotalRecipes">-</div>
+              <div class="stat-label">Recepten</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="ratingsWithRating">-</div>
+              <div class="stat-label">Met rating</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="ratingsWithoutRating">-</div>
+              <div class="stat-label">Zonder rating</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="ratingsCoveragePct">-</div>
+              <div class="stat-label">Dekking</div>
+            </div>
+          </div>
+          <div id="ratingsDashboardStatus" class="muted" style="font-size:12px;margin-bottom:8px">Nog niet geladen.</div>
+          <div id="ratingsDashboardTable"></div>
+        </div>
       </div>
 
       <div class="admin-tab-section" id="adminTabLogs" data-tab="logs">
@@ -3237,6 +3266,129 @@
         renderAdminJobs(data.jobs || []);
       } catch (error) {
         if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
+      }
+    }
+
+    function renderRatingsDashboard(data) {
+      const totals = data?.totals || {};
+      const rows = Array.isArray(data?.channels) ? data.channels : [];
+      const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+      };
+      setText("ratingsTotalRecipes", formatNumber(totals.total || 0));
+      setText("ratingsWithRating", formatNumber(totals.withRating || 0));
+      setText("ratingsWithoutRating", formatNumber(totals.withoutRating || 0));
+      setText("ratingsCoveragePct", `${formatNumber(totals.coveragePct || 0)}%`);
+      const statusEl = document.getElementById("ratingsDashboardStatus");
+      if (statusEl) statusEl.textContent = `${formatNumber(rows.length)} kanaal/kanaalgroep(en) · sortering op meeste ontbrekende ratings`;
+      const tableEl = document.getElementById("ratingsDashboardTable");
+      if (!tableEl) return;
+      if (!rows.length) {
+        tableEl.innerHTML = `<div class="muted" style="font-size:12px">Geen recepten gevonden.</div>`;
+        return;
+      }
+      tableEl.innerHTML = `
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>Kanaal</th>
+              <th style="text-align:right">Totaal</th>
+              <th style="text-align:right">Met rating</th>
+              <th style="text-align:right">Zonder</th>
+              <th style="text-align:right">Dekking</th>
+              <th style="text-align:right">Gem.</th>
+              <th>Actie</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((row) => {
+              const id = String(row.channelId || "");
+              const canBackfill = id && id !== "unknown" && Number(row.withoutRating || 0) > 0;
+              const pct = Math.max(0, Math.min(100, Number(row.coveragePct || 0)));
+              return `
+                <tr>
+                  <td>
+                    <strong>${escapeHtml(row.label || id || "Onbekend")}</strong>
+                    <div class="muted mono" style="font-size:11px">${escapeHtml(id)}</div>
+                  </td>
+                  <td style="text-align:right">${formatNumber(row.total || 0)}</td>
+                  <td style="text-align:right">${formatNumber(row.withRating || 0)}</td>
+                  <td style="text-align:right;color:${Number(row.withoutRating || 0) ? "rgba(140,23,35,.95)" : "inherit"}">${formatNumber(row.withoutRating || 0)}</td>
+                  <td style="text-align:right">
+                    <div style="min-width:92px">
+                      <strong>${formatNumber(pct)}%</strong>
+                      <div class="admin-progress__bar" style="height:6px;margin:4px 0 0"><span style="width:${pct}%"></span></div>
+                    </div>
+                  </td>
+                  <td style="text-align:right">${row.avgRating ? `${escapeHtml(String(row.avgRating))} ★` : "—"}</td>
+                  <td>
+                    ${canBackfill
+                      ? `<button class="btn btn-sm btn-primary" type="button" onclick="startRatingsBackfillForChannel('${escapeHtml(id)}', '${escapeHtml(row.label || id)}')">Batch</button>`
+                      : `<span class="muted" style="font-size:12px">${Number(row.withoutRating || 0) ? "Geen seed-kanaal" : "OK"}</span>`}
+                  </td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function loadRatingsDashboard() {
+      const statusEl = document.getElementById("ratingsDashboardStatus");
+      if (statusEl) statusEl.textContent = "Ratings-overzicht laden…";
+      try {
+        const response = await fetch("/api/admin/ratings-overview", adminFetchInit());
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || "Ratings-overzicht laden mislukt");
+        renderRatingsDashboard(data);
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
+      }
+    }
+
+    async function startRatingsBackfillForChannel(channelId, label = "") {
+      const cleanId = String(channelId || "").trim();
+      if (!cleanId || cleanId === "unknown") return;
+      const name = label || cleanId;
+      if (!confirm(`Ratings aanvullen voor ${name}? Dit draait als achtergrondtaak.`)) return;
+      startAdminProgressWindow({
+        title: `Ratings: ${name}`,
+        subtitle: "Achtergrondtaak starten",
+        detail: "Gerichte rating-batch voorbereiden.",
+        count: cleanId,
+      });
+      try {
+        const response = await fetch("/api/admin/seo-recipe-ratings-backfill", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            background: true,
+            dryRun: false,
+            channelId: cleanId,
+            maxUsers: 2000,
+            maxRecipes: 2500,
+            maxFetches: 300,
+            concurrency: 4,
+            timeoutMs: 5000,
+          }),
+        }));
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok || !data.job?.id) throw new Error(data.error || "Ratingtaak starten mislukt");
+        await trackAdminJob(data.job.id, {
+          title: `Ratings: ${name}`,
+          onDone: async () => {
+            await Promise.allSettled([loadRatingsDashboard(), loadAdminJobs(), loadAdminCockpit(), loadAdminActionNeeded()]);
+          },
+        });
+      } catch (error) {
+        finishAdminProgressWindow({
+          success: false,
+          subtitle: "Start mislukt",
+          detail: error?.message || String(error),
+          count: "Fout",
+        });
       }
     }
 
@@ -7651,7 +7803,10 @@
         loadImportQuality();
         loadImportErrors();
       }
-      if (next === "repair") loadAdminJobs();
+      if (next === "repair") {
+        loadAdminJobs();
+        loadRatingsDashboard();
+      }
       if (next === "seo") { loadSeoOverview(); }
       if (next === "basket-stats") loadBasketStats();
       if (next === "storage") loadStorageInfo();
