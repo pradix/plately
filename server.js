@@ -13918,6 +13918,62 @@ function isLikelyRecipeCollectionPage(title, url, description = "") {
   return recipeCollectionPageScore(title, url, description) >= 4;
 }
 
+function isLowQualityRecipeSearchResult(title, url, description = "") {
+  const t = sanitizeText(title || "");
+  if (!t) return true;
+  if (/^\s*\d+\.\s+\S/.test(t)) return true;
+  return isLikelyRecipeCollectionPage(t, url, description);
+}
+
+function scoreRecipeSearchResultQuality(result, query = "") {
+  const title = sanitizeText(result?.title || result?.recipe?.title || "");
+  const url = sanitizeText(result?.url || result?.sourceUrl || result?.recipe?.sourceUrl || "");
+  const description = sanitizeText(result?.description || result?.recipe?.description || "");
+  let score = 72;
+  const reasons = [];
+  const collectionScore = recipeCollectionPageScore(title, url, description);
+  if (!title) {
+    score -= 60;
+    reasons.push("geen titel");
+  }
+  if (collectionScore >= 4) {
+    score -= 70;
+    reasons.push("lijsten/blogpagina");
+  } else if (collectionScore > 0) {
+    score -= Math.min(30, collectionScore * 5);
+    reasons.push("mogelijk overzicht");
+  }
+  if (/^\s*\d+\.\s+\S/.test(title)) {
+    score -= 70;
+    reasons.push("genummerd lijst-item");
+  }
+  if (result?.thumbnail || result?.recipe?.image) score += 8;
+  else score -= 8;
+  if (result?.ratingValue != null || result?.recipe?.ratingValue != null) score += 6;
+  if (url && RECIPE_URL_RE.test(url)) score += 12;
+  if (url && BLOG_POST_URL_RE.test(url) && !RECIPE_URL_RE.test(url)) {
+    score -= 18;
+    reasons.push("blog-url");
+  }
+  const qScore = titleQueryScore(title, query);
+  if (query && qScore < 0.5 && !channelSearchTrustsSiteIndexer(result?.channelId || "")) {
+    score -= 20;
+    reasons.push("zwakke zoekmatch");
+  } else if (query && qScore >= 0.9) {
+    score += 8;
+  }
+  return {
+    qualityScore: Math.max(0, Math.min(100, Math.round(score))),
+    qualityReasons: [...new Set(reasons)].slice(0, 5),
+  };
+}
+
+function filterAndScoreRecipeSearchResults(results, query = "") {
+  return (Array.isArray(results) ? results : [])
+    .map((row) => ({ ...row, ...scoreRecipeSearchResultQuality(row, query) }))
+    .filter((row) => Number(row.qualityScore || 0) >= 35);
+}
+
 function isLikelyBlogPage(title, url, description = "") {
   const t = sanitizeText(String(title || "")).trim();
   const u = String(url || "").trim();
@@ -14135,6 +14191,7 @@ function searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit })
     const r = e?.recipe || {};
     const title = sanitizeText(r.title || "");
     if (!title) continue;
+    if (isLowQualityRecipeSearchResult(title, sanitizeText(r.sourceUrl || ""), sanitizeText(r.description || ""))) continue;
     const channelId = sanitizeText(e.channelId || "");
     if (!allowAllSeeds && allowedSet && channelId && !allowedSet.has(channelId)) continue;
     if (!allowAllSeeds && allowedSet && !channelId) continue;
@@ -14156,7 +14213,7 @@ function searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit })
     const r = e.recipe || {};
     const channelId = sanitizeText(e.channelId || "") || "plately";
     const rating = pickChannelSearchCandidateRating(r);
-    return {
+    const row = {
       url: e.urlPath,
       title: sanitizeText(r.title || ""),
       thumbnail: sanitizeText(r.image || ""),
@@ -14167,7 +14224,8 @@ function searchPublicSeoRecipesLocal({ entries, query, allowedChannels, limit })
       _source: "plately",
       ...(rating || {}),
     };
-  });
+    return { ...row, ...scoreRecipeSearchResultQuality(row, q) };
+  }).filter((row) => Number(row.qualityScore || 0) >= 35);
 }
 
 /**
@@ -14242,7 +14300,7 @@ async function searchRecipesViaDatabase({ query, allowedChannels, limit, origin 
       const channelId = sanitizeText(row.channel_id || "") || "plately";
       const rv = Number(recipe.ratingValue);
       const rc = Number(recipe.ratingCount);
-      return {
+      const out = {
         url: `/recept/${sanitizeText(row.slug || "recept")}`,
         title: sanitizeText(recipe.title || ""),
         thumbnail: normalizePublicImageUrl(recipe.image || "", origin),
@@ -14255,7 +14313,8 @@ async function searchRecipesViaDatabase({ query, allowedChannels, limit, origin 
           ? { ratingValue: rv, ratingCount: rc, ...(recipe.ratingNormalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}) }
           : {}),
       };
-    });
+      return { ...out, ...scoreRecipeSearchResultQuality(out, q) };
+    }).filter((row) => Number(row.qualityScore || 0) >= 35);
   } catch (err) {
     console.error("❌ DB recipe search mislukt:", err?.message);
     return null; // val terug op in-memory zoeken
@@ -21285,7 +21344,7 @@ const server = http.createServer(async (request, response) => {
       const cacheKey = getChannelSearchCacheKey({ query, allowedChannels, customChannelsParam });
       const cached = getCachedChannelSearch(cacheKey);
       if (cached) {
-        sendJson(response, 200, { ok: true, results: cached, responseTimeMs: responseTimeMs() });
+        sendJson(response, 200, { ok: true, results: filterAndScoreRecipeSearchResults(cached, query), responseTimeMs: responseTimeMs() });
         return;
       }
 
@@ -21301,7 +21360,8 @@ const server = http.createServer(async (request, response) => {
 
       if (Array.isArray(dbFirstResults) && dbFirstResults.length >= 6) {
         // Genoeg resultaten uit DB — stuur direct terug, scrape op achtergrond voor cache-update
-        sendJson(response, 200, { ok: true, results: dbFirstResults, _source: "db", responseTimeMs: responseTimeMs() });
+        const cleanDbFirstResults = filterAndScoreRecipeSearchResults(dbFirstResults, query);
+        sendJson(response, 200, { ok: true, results: cleanDbFirstResults, _source: "db", responseTimeMs: responseTimeMs() });
         // Scrape in achtergrond en update cache zodra klaar
         Promise.all([
           searchChannelRecipes(query, allowedChannels),
@@ -21311,7 +21371,7 @@ const server = http.createServer(async (request, response) => {
             return [];
           })(),
         ]).then(([seedResults]) => {
-          const merged = Array.isArray(seedResults) && seedResults.length > 0 ? seedResults : dbFirstResults;
+          const merged = filterAndScoreRecipeSearchResults(Array.isArray(seedResults) && seedResults.length > 0 ? seedResults : dbFirstResults, query);
           if (merged.length > 0) setCachedChannelSearch(cacheKey, merged);
         }).catch(() => {});
         return;
@@ -21376,7 +21436,7 @@ const server = http.createServer(async (request, response) => {
 
       // DB-ratings direct; live JSON-LD-enrichment met time-budget (snelle response).
       const ENRICH_BUDGET_MS = 8000;
-      let finalResults = mergeStoredRatingsIntoSearchResults(merged, storedRatingIndex);
+      let finalResults = filterAndScoreRecipeSearchResults(mergeStoredRatingsIntoSearchResults(merged, storedRatingIndex), query);
       if (merged.length > 0) {
         const enrichPromise = enrichChannelSearchResultsWithRatings([...merged], {
           timeoutMs: 5500,
@@ -21387,12 +21447,12 @@ const server = http.createServer(async (request, response) => {
         const budgetPromise = new Promise((resolve) => setTimeout(() => resolve(null), ENRICH_BUDGET_MS));
         const winner = await Promise.race([enrichPromise, budgetPromise]);
         if (winner !== null) {
-          finalResults = winner;
+          finalResults = filterAndScoreRecipeSearchResults(winner, query);
         } else {
           enrichPromise
             .then((enriched) => {
               if (Array.isArray(enriched) && enriched.length > 0) {
-                setCachedChannelSearch(cacheKey, enriched);
+                setCachedChannelSearch(cacheKey, filterAndScoreRecipeSearchResults(enriched, query));
               }
             })
             .catch(() => {});
@@ -22906,6 +22966,61 @@ const server = http.createServer(async (request, response) => {
         const statusCode = error.statusCode || 400;
         console.error("❌ Error in /api/admin/import-quality:", error.message);
         return sendJson(response, statusCode, { ok: false, error: error.message || "Importkwaliteit laden mislukt." });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/channel-cockpit" && request.method === "GET") {
+      try {
+        await requireAdmin(request);
+        let users = [];
+        if (isPostgresEnabled()) {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const res = await pool.query(`SELECT * FROM plately_users`);
+          users = res.rows || [];
+        } else {
+          const db = await loadDatabase();
+          users = Object.values(db.users || {});
+        }
+        const quality = collectImportQualityForUsers(users);
+        const ratings = await buildAdminRatingsOverview();
+        const ratingByChannel = new Map((ratings.channels || []).map((row) => [sanitizeText(row.channelId || ""), row]));
+        const rows = (quality.rows || []).map((row) => {
+          const rating = ratingByChannel.get(sanitizeText(row.id || "")) || {};
+          const ratingCoverage = Number(rating.coveragePct);
+          const importSuccess = Number(row.successRate || 0);
+          const ratingPenalty = Number.isFinite(ratingCoverage) ? Math.max(0, 100 - ratingCoverage) * 0.25 : 0;
+          const issuePenalty = Math.min(35, Number(row.issueCount || 0) * 3);
+          const healthScore = Math.max(0, Math.min(100, Math.round(importSuccess - ratingPenalty - issuePenalty)));
+          const actions = [];
+          if (Number(rating.fetchableWithoutRating || 0) > 0) actions.push("ratings");
+          if (Number(row.missingImage || 0) > 0 || Number(row.invalidRecipe || 0) > 0) actions.push("repair");
+          if (Number(row.duplicateSourceUrl || 0) > 0) actions.push("dedupe");
+          return {
+            id: row.id,
+            label: row.label,
+            host: row.host,
+            total: row.total,
+            importSuccess,
+            issueCount: row.issueCount,
+            missingImage: row.missingImage,
+            invalidRecipe: row.invalidRecipe,
+            duplicateSourceUrl: row.duplicateSourceUrl,
+            ratingsTotal: rating.total || 0,
+            ratingsWithout: rating.withoutRating || 0,
+            ratingsFetchable: rating.fetchableWithoutRating || 0,
+            ratingCoverage: Number.isFinite(ratingCoverage) ? ratingCoverage : null,
+            healthScore,
+            actions,
+            lastTitle: row.lastTitle || "",
+            lastSourceUrl: row.lastSourceUrl || "",
+          };
+        }).sort((a, b) => (a.healthScore - b.healthScore) || (b.total - a.total));
+        return sendJson(response, 200, { ok: true, generatedAt: new Date().toISOString(), rows, totals: { channels: rows.length, recipes: quality.totalRecipes || 0 } });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/channel-cockpit:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Kanaal cockpit laden mislukt." });
       }
     }
 
@@ -26064,7 +26179,9 @@ module.exports = {
     urlLooksLikeRecipe,
     isLikelyBlogPage,
     isLikelyRecipeCollectionPage,
+    isLowQualityRecipeSearchResult,
     recipeCollectionPageScore,
+    scoreRecipeSearchResultQuality,
     titleLooksLikeRecipe,
     parseIngredientLine,
     repairIngredientUnitRemainder,

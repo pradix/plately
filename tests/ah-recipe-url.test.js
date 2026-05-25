@@ -76,6 +76,8 @@ describe("Channel recipe search blog/listicle guardrails", () => {
     for (const row of badRows) {
       assert.equal(__dev.isLikelyBlogPage(row.title, row.url), true, row.title);
       assert.equal(__dev.isLikelyRecipeCollectionPage(row.title, row.url, row.description || ""), true, row.title);
+      assert.equal(__dev.isLowQualityRecipeSearchResult(row.title, row.url, row.description || ""), true, row.title);
+      assert.ok(__dev.scoreRecipeSearchResultQuality(row, "pasta").qualityScore < 35, row.title);
       assert.equal(__dev.titleLooksLikeRecipe(row.title), false, row.title);
     }
   });
@@ -102,6 +104,20 @@ describe("Channel recipe search blog/listicle guardrails", () => {
         "https://example.com/recept/traybake-met-groenten-uit-de-oven/"
       ),
       false
+    );
+    assert.equal(
+      __dev.isLowQualityRecipeSearchResult(
+        "Poké bowl met broccolirijst",
+        "https://chickslovefood.com/recept/poke-bowl-met-broccolirijst/"
+      ),
+      false
+    );
+    assert.ok(
+      __dev.scoreRecipeSearchResultQuality({
+        title: "Pasta pesto met kip",
+        url: "https://example.com/recept/pasta-pesto-met-kip/",
+        thumbnail: "https://example.com/pasta.jpg",
+      }, "pasta kip").qualityScore >= 70
     );
   });
 });

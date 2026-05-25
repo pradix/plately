@@ -1565,6 +1565,17 @@
         <div id="adminCockpitVisuals" class="admin-visual-grid"></div>
       </div>
 
+      <div class="section" id="adminChannelCockpitWrap" style="margin-bottom:16px">
+        <div class="section-header">
+          <div>
+            <h2>Kanaal cockpit</h2>
+            <div class="muted" id="channelCockpitStatus">Imports, ratings en herstelacties per kanaal laden…</div>
+          </div>
+          <button class="btn btn-sm" type="button" onclick="loadChannelCockpit()">↻ Vernieuwen</button>
+        </div>
+        <div id="channelCockpitTable"></div>
+      </div>
+
       <div class="section" id="adminTaskCenterWrap" style="margin-bottom:16px">
         <div class="section-header">
           <div>
@@ -2979,6 +2990,7 @@
         loadInventory(); // independent block (own loading/error)
         await loadAdminDeployInfo();
         loadAdminCockpit();
+        loadChannelCockpit();
         loadAdminOpsHealth();
         loadAdminActionNeeded();
         loadAdminDemoLogin();
@@ -3769,6 +3781,71 @@
       if (metaEl) {
         const ts = new Date();
         metaEl.textContent = `Bijgewerkt: ${formatDate(ts)} · ${health?.env || "omgeving onbekend"} · Postgres ${health?.auth?.postgresEnabled ? "aan" : "uit"}`;
+      }
+    }
+
+    async function loadChannelCockpit() {
+      const statusEl = document.getElementById("channelCockpitStatus");
+      const tableEl = document.getElementById("channelCockpitTable");
+      if (statusEl) statusEl.textContent = "Kanaal cockpit laden…";
+      if (tableEl) tableEl.innerHTML = "";
+      try {
+        const data = await fetchAdminJson("/api/admin/channel-cockpit");
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        if (statusEl) statusEl.textContent = `${formatNumber(rows.length)} kanaal/source groep(en) · slechtste gezondheid bovenaan`;
+        if (!tableEl) return;
+        if (!rows.length) {
+          tableEl.innerHTML = `<p class="muted">Nog geen kanaaldata.</p>`;
+          return;
+        }
+        tableEl.innerHTML = `
+          <table class="users-table" style="margin-top:0">
+            <thead>
+              <tr>
+                <th>Kanaal</th>
+                <th style="text-align:right">Gezondheid</th>
+                <th style="text-align:right">Imports</th>
+                <th style="text-align:right">Import OK</th>
+                <th style="text-align:right">Rating</th>
+                <th style="text-align:right">Problemen</th>
+                <th>Actie</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.slice(0, 18).map((row) => {
+                const health = Math.max(0, Math.min(100, Number(row.healthScore || 0)));
+                const meter = health >= 90 ? "#2e7d32" : health >= 70 ? "#f59e0b" : "#b71c1c";
+                const actions = Array.isArray(row.actions) ? row.actions : [];
+                return `
+                  <tr>
+                    <td>
+                      <strong>${escapeHtml(row.label || row.id || "Onbekend")}</strong>
+                      <div class="mono" style="font-size:11px;color:#777">${escapeHtml(row.host || row.id || "")}</div>
+                    </td>
+                    <td style="text-align:right">
+                      <strong style="color:${meter}">${formatNumber(health)}%</strong>
+                      <div class="admin-progress__bar" style="height:6px;margin-top:4px"><span style="width:${health}%;background:${meter}"></span></div>
+                    </td>
+                    <td style="text-align:right">${formatNumber(row.total || 0)}</td>
+                    <td style="text-align:right">${formatNumber(row.importSuccess || 0)}%</td>
+                    <td style="text-align:right">${row.ratingCoverage == null ? "—" : `${formatNumber(row.ratingCoverage)}%`}</td>
+                    <td style="text-align:right">${formatNumber(row.issueCount || 0)}<div class="muted" style="font-size:11px">${formatNumber(row.ratingsWithout || 0)} zonder rating</div></td>
+                    <td>
+                      <div style="display:flex;gap:6px;flex-wrap:wrap">
+                        ${actions.includes("ratings") ? `<button class="btn btn-sm" type="button" onclick="openSeoRatingsPanel()">Ratings</button>` : ""}
+                        ${actions.includes("repair") ? `<button class="btn btn-sm" type="button" onclick="setAdminTab('activity')">Repair</button>` : ""}
+                        ${actions.includes("dedupe") ? `<button class="btn btn-sm" type="button" onclick="runActionNeededFix('duplicateSourceUrl')">Dedupe</button>` : ""}
+                        <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('reimport')">Kanaal</button>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+        `;
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
       }
     }
 
