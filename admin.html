@@ -359,6 +359,53 @@
       padding: 0 16px 16px;
     }
 
+    .admin-task-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 10px;
+    }
+
+    .admin-task-card {
+      border: 1px solid rgba(0,0,0,0.075);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.82);
+      padding: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 138px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.035);
+    }
+
+    .admin-task-card__label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      font-weight: 850;
+      color: rgba(65,60,54,0.55);
+    }
+
+    .admin-task-card__title {
+      font-size: 15px;
+      font-weight: 850;
+      color: rgba(25,31,27,0.95);
+      line-height: 1.2;
+    }
+
+    .admin-task-card__text {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      flex: 1;
+    }
+
+    .admin-task-card__actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
     /* ── KPIs ──────────────────────────────────────────────────────────────── */
     .stats-grid {
       display: grid;
@@ -1486,8 +1533,6 @@
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-sm" type="button" onclick="loadAdminCockpit()">↻ Alles checken</button>
-            <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('activity')">Importlog</button>
-            <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('basket-stats')">Winkelwagen</button>
           </div>
         </div>
         <div class="admin-cockpit__strip">
@@ -1518,6 +1563,61 @@
         </div>
         <div id="adminCockpitIssues" class="admin-action-grid"></div>
         <div id="adminCockpitVisuals" class="admin-visual-grid"></div>
+      </div>
+
+      <div class="section" id="adminTaskCenterWrap" style="margin-bottom:16px">
+        <div class="section-header">
+          <div>
+            <h2>Taakcentrum</h2>
+            <div class="muted">De belangrijkste beheeracties op één plek</div>
+          </div>
+        </div>
+        <div class="admin-task-grid">
+          <div class="admin-task-card">
+            <div>
+              <div class="admin-task-card__label">Receptkwaliteit</div>
+              <div class="admin-task-card__title">Ratings aanvullen</div>
+            </div>
+            <div class="admin-task-card__text">Haalt beoordelingen op in veilige batches en toont voortgang in het actievenster.</div>
+            <div class="admin-task-card__actions">
+              <button class="btn btn-sm btn-primary" type="button" onclick="runActionNeededFix('missingRating')">Start batch</button>
+              <button class="btn btn-sm" type="button" onclick="openSeoRatingsPanel()">Open tool</button>
+            </div>
+          </div>
+          <div class="admin-task-card">
+            <div>
+              <div class="admin-task-card__label">Import</div>
+              <div class="admin-task-card__title">Recepten herstellen</div>
+            </div>
+            <div class="admin-task-card__text">Repareer afbeeldingen, foutieve imports, dubbele bron-URLs en Chicks Love Food imports.</div>
+            <div class="admin-task-card__actions">
+              <button class="btn btn-sm btn-primary" type="button" onclick="setAdminTab('seo')">SEO herstel</button>
+              <button class="btn btn-sm" type="button" onclick="setAdminTab('reimport')">Reimport</button>
+            </div>
+          </div>
+          <div class="admin-task-card">
+            <div>
+              <div class="admin-task-card__label">Boodschappen</div>
+              <div class="admin-task-card__title">Mandje-match controleren</div>
+            </div>
+            <div class="admin-task-card__text">Bekijk slechte productmatches, kies alternatieven en blokkeer foutieve AH/Jumbo producten.</div>
+            <div class="admin-task-card__actions">
+              <button class="btn btn-sm btn-primary" type="button" onclick="setAdminTab('basket-stats')">Open controle</button>
+              <button class="btn btn-sm" type="button" onclick="setAdminTab('supermarkets')">Supermarkten</button>
+            </div>
+          </div>
+          <div class="admin-task-card">
+            <div>
+              <div class="admin-task-card__label">Kanalen</div>
+              <div class="admin-task-card__title">Zoeken en import testen</div>
+            </div>
+            <div class="admin-task-card__text">Test kanaalzoekresultaten, filter blogpagina's en voeg nieuwe receptkanalen toe.</div>
+            <div class="admin-task-card__actions">
+              <button class="btn btn-sm btn-primary" type="button" onclick="setAdminTab('channel-test')">Testen</button>
+              <button class="btn btn-sm" type="button" onclick="setAdminTab('channels')">Kanalen</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="stats-grid">
@@ -1593,12 +1693,6 @@
             <div class="stat-value" id="opsAhProxy">-</div>
             <div class="stat-label">AH proxy</div>
           </div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('storage')">Opslag & caches</button>
-          <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('reimport')">Reimport tools</button>
-          <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('seo')">SEO herstel</button>
-          <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('basket-stats')">Winkelwagen check</button>
         </div>
         <p class="muted" id="opsHealthMeta" style="font-size:12px;margin:10px 0 0">—</p>
       </div>
@@ -2975,6 +3069,14 @@
           adminProgress.controller.abort();
         } catch (_) {}
       }
+    }
+
+    function openSeoRatingsPanel() {
+      setAdminTab("seo");
+      setTimeout(() => {
+        const section = document.getElementById("seoRatingsBackfillSection");
+        if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
     }
 
     async function loadAdminActionNeeded() {
