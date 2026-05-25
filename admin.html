@@ -1342,7 +1342,7 @@
           <span class="admin-tabs__group-label">Recepten & import</span>
           <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channels">Kanalen</button>
           <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Testen</button>
-          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="reimport">Reimport</button>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="repair">Herstellen</button>
           <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk</button>
           <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="seo">SEO</button>
           <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="search-terms">Zoekwoorden</button>
@@ -1591,8 +1591,8 @@
             </div>
             <div class="admin-task-card__text">Repareer afbeeldingen, foutieve imports, dubbele bron-URLs en Chicks Love Food imports.</div>
             <div class="admin-task-card__actions">
-              <button class="btn btn-sm btn-primary" type="button" onclick="setAdminTab('seo')">SEO herstel</button>
-              <button class="btn btn-sm" type="button" onclick="setAdminTab('reimport')">Reimport</button>
+              <button class="btn btn-sm btn-primary" type="button" onclick="setAdminTab('repair')">Open herstelcentrum</button>
+              <button class="btn btn-sm" type="button" onclick="openSeoRatingsPanel()">Ratings</button>
             </div>
           </div>
           <div class="admin-task-card">
@@ -2086,7 +2086,7 @@
           </div>
           <div id="seoBackfillStatus" class="muted" style="font-size:12px;margin-bottom:8px">Kies dry-run of import.</div>
           <pre id="seoBackfillOutput" class="mono" style="display:block;margin:0;padding:12px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto">—</pre>
-          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
+          <div id="seoDeleteImportsSection" style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
             <div class="section-header" style="margin-bottom:8px">
               <h3 style="margin:0;font-size:14px">Imports van kanaal verwijderen</h3>
               <div class="muted" style="font-size:12px">Verwijdert recepten uit alle accounts + kookboeken</div>
@@ -2100,7 +2100,7 @@
             </div>
             <div id="seoDeleteChannelStatus" class="muted" style="font-size:12px">Tip: kies Rutger Bakt om alle Rutgerbakt-imports eruit te halen.</div>
           </div>
-          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
+          <div id="seoDedupeSection" style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
             <div class="section-header" style="margin-bottom:8px">
               <h3 style="margin:0;font-size:14px">Geïmporteerde recepten ontdubbelen</h3>
               <div class="muted" style="font-size:12px">Op basis van bron-URL, niet op omschrijving</div>
@@ -2112,7 +2112,7 @@
             <div id="seoDedupeStatus" class="muted" style="font-size:12px;margin-bottom:8px">Verwijdert dubbele imports met dezelfde bronlink uit alle accounts en werkt kookboeken bij.</div>
             <pre id="seoDedupeOutput" class="mono" style="display:block;margin:0;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto">—</pre>
           </div>
-          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
+          <div id="ingredientUnitsRepairSection" style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
             <div class="section-header" style="margin-bottom:8px">
               <h3 style="margin:0;font-size:14px">Ingrediënt-eenheden herstellen</h3>
               <div class="muted" style="font-size:12px">Herstelt restletters uit takjes, blaadjes, teentjes, bosjes, stengels, plakjes, blokjes en reepjes</div>
@@ -2124,7 +2124,7 @@
             <div id="ingredientUnitRepairStatus" class="muted" style="font-size:12px;margin-bottom:8px">Loopt alle geïmporteerde recepten na en voorkomt namen zoals “s kaas” of “s koriander”.</div>
             <pre id="ingredientUnitRepairOutput" class="mono" style="display:block;margin:0;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto">—</pre>
           </div>
-          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
+          <div id="seoCleanupRepairSection" style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:12px 0 0;background:rgba(255,255,255,0.72)">
             <div class="section-header" style="margin-bottom:8px">
               <h3 style="margin:0;font-size:14px">SEO recepten opschonen</h3>
               <div class="muted" style="font-size:12px">Verwijdert slechte SEO-recepten: geen bron-URL, ongeldig recept of dubbele bron-URL</div>
@@ -2190,6 +2190,52 @@
           </div>
           <div id="seoRatingsStatus" class="muted" style="font-size:12px;margin-bottom:8px">Kies dry-run of uitvoeren.</div>
           <pre id="seoRatingsOutput" class="mono" style="display:block;margin:0;padding:12px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto">—</pre>
+        </div>
+      </div>
+
+      <div class="admin-tab-section" id="adminTabRepair" data-tab="repair">
+        <div class="section" id="recipeRepairHub">
+          <div class="section-header">
+            <div>
+              <h2>Recepten herstellen</h2>
+              <div class="muted">Ratings, reimports, cleanup en reparaties bij elkaar</div>
+            </div>
+            <button class="btn btn-sm" type="button" onclick="loadAdminActionNeeded()">↻ Actiepunten verversen</button>
+          </div>
+          <div class="admin-task-grid">
+            <div class="admin-task-card">
+              <div>
+                <div class="admin-task-card__label">Stap 1</div>
+                <div class="admin-task-card__title">Ratings aanvullen</div>
+              </div>
+              <div class="admin-task-card__text">Veilige batch voor recepten zonder opgeslagen beoordeling.</div>
+              <div class="admin-task-card__actions">
+                <button class="btn btn-sm btn-primary" type="button" onclick="runActionNeededFix('missingRating')">Start batch</button>
+              </div>
+            </div>
+            <div class="admin-task-card">
+              <div>
+                <div class="admin-task-card__label">Stap 2</div>
+                <div class="admin-task-card__title">Slechte SEO herstellen</div>
+              </div>
+              <div class="admin-task-card__text">Repareer laag scorende recepten, ontbrekende afbeeldingen of incomplete imports.</div>
+              <div class="admin-task-card__actions">
+                <button class="btn btn-sm btn-primary" type="button" onclick="repairLowestSeoScores(true)">Dry-run</button>
+                <button class="btn btn-sm" type="button" onclick="repairLowestSeoScores(false)">Repareer</button>
+              </div>
+            </div>
+            <div class="admin-task-card">
+              <div>
+                <div class="admin-task-card__label">Stap 3</div>
+                <div class="admin-task-card__title">Duplicaten opschonen</div>
+              </div>
+              <div class="admin-task-card__text">Verwijder dubbele bron-URLs en slechte SEO-records.</div>
+              <div class="admin-task-card__actions">
+                <button class="btn btn-sm btn-primary" type="button" onclick="dedupeImportedRecipesBySource(true)">Dry-run</button>
+                <button class="btn btn-sm" type="button" onclick="cleanupSeoRecipes(true)">Cleanup check</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2267,7 +2313,7 @@
 
       <!-- ── Reimport tab ── -->
       <div class="admin-tab-section" id="adminTabReimport" data-tab="reimport">
-        <div class="section">
+        <div class="section" id="channelReimportSection">
           <div class="section-header">
             <h2>Kanaal opnieuw importeren</h2>
             <div class="muted">Herimporteert bestaande recepten van één kanaal uit alle accounts.</div>
@@ -3072,7 +3118,7 @@
     }
 
     function openSeoRatingsPanel() {
-      setAdminTab("seo");
+      setAdminTab("repair");
       setTimeout(() => {
         const section = document.getElementById("seoRatingsBackfillSection");
         if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -7364,18 +7410,26 @@
       const overview = document.getElementById("adminTabOverview");
       const activity = document.getElementById("adminTabActivity");
       const seo = document.getElementById("adminTabSeo");
+      const repair = document.getElementById("adminTabRepair");
       const supermarkets = document.getElementById("adminTabSupermarkets");
       const storage = document.getElementById("adminTabStorage");
 
       ensureAdminSectionNote(overview, "Dagelijkse cockpit: eerst gezondheid en actiepunten, daarna kerncijfers.");
       ensureAdminSectionNote(activity, "Gebruik, importkwaliteit en foutmeldingen bij elkaar.");
-      ensureAdminSectionNote(seo, "Vindbaarheid, ratings, afbeeldingen en receptkwaliteit.");
+      ensureAdminSectionNote(seo, "Vindbaarheid, backfill, zoekwoorden en publieke receptpagina's.");
+      ensureAdminSectionNote(repair, "Dagelijkse reparaties: eerst dry-run, daarna pas uitvoeren.");
       ensureAdminSectionNote(supermarkets, "Supermarktconfiguratie, AH-token en winkelwagenwerking.");
       ensureAdminSectionNote(storage, "Deploy, opslag, database, caches en runtime-bestanden.");
 
       moveAdminBlock("ahTokenSection", "supermarkets", { afterFirstSection: true });
-      moveAdminBlock("ingredientFixSection", "seo", { afterFirstSection: true });
+      moveAdminBlock("ingredientFixSection", "repair", { afterFirstSection: true });
       moveAdminBlock("adminDeployWrap", "storage", { beforeFirst: true });
+      moveAdminBlock("seoRatingsBackfillSection", "repair");
+      moveAdminBlock("channelReimportSection", "repair");
+      moveAdminBlock("seoDeleteImportsSection", "repair");
+      moveAdminBlock("seoDedupeSection", "repair");
+      moveAdminBlock("ingredientUnitsRepairSection", "repair");
+      moveAdminBlock("seoCleanupRepairSection", "repair");
 
       if (activity && !document.getElementById("adminImportHealthSection")) {
         const section = document.createElement("div");
@@ -7399,8 +7453,9 @@
       const sections = Array.from(document.querySelectorAll(".admin-tab-section"));
       const btns = Array.from(document.querySelectorAll("[data-admin-tab]"));
       const id = String(tabId || "").trim();
-      const exists = sections.some((s) => String(s.getAttribute("data-tab") || "") === id);
-      const next = exists ? id : "overview";
+      const normalized = id === "reimport" ? "repair" : id;
+      const exists = sections.some((s) => String(s.getAttribute("data-tab") || "") === normalized);
+      const next = exists ? normalized : "overview";
 
       sections.forEach((s) => {
         const sId = String(s.getAttribute("data-tab") || "");
