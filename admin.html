@@ -3235,12 +3235,15 @@
         const color = status === "done" ? "#2e7d32" : status === "failed" ? "#b71c1c" : status === "running" ? "#78936f" : "#64748b";
         const created = job.createdAt ? new Date(job.createdAt).toLocaleString("nl-NL") : "—";
         const percent = Math.max(0, Math.min(100, Math.round(Number(progress.percent || (status === "done" ? 100 : 0)))));
+        const resultSummary = job.type === "ratingsBackfill" && job.result
+          ? formatRatingsBackfillSummary(job.result)
+          : "";
         return `
           <div style="border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.78);padding:10px 12px">
             <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
               <div>
                 <strong>${escapeHtml(job.label || job.type || "Achtergrondtaak")}</strong>
-                <div class="muted" style="font-size:12px;margin-top:2px">${escapeHtml(progress.detail || job.error || "")}</div>
+                <div class="muted" style="font-size:12px;margin-top:2px">${escapeHtml(resultSummary || progress.detail || job.error || "")}</div>
               </div>
               <span style="background:${color};color:white;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:850">${escapeHtml(status || "onbekend")}</span>
             </div>
@@ -3324,7 +3327,10 @@
                   <td style="text-align:right">${row.avgRating ? `${escapeHtml(String(row.avgRating))} ★` : "—"}</td>
                   <td>
                     ${canBackfill
-                      ? `<button class="btn btn-sm btn-primary" type="button" data-channel-id="${escapeHtml(id)}" data-channel-label="${escapeHtml(row.label || id)}" onclick="startRatingsBackfillForChannelFromButton(this)">Batch</button>`
+                      ? `<div style="display:flex;gap:6px;flex-wrap:wrap">
+                          <button class="btn btn-sm" type="button" data-channel-id="${escapeHtml(id)}" data-channel-label="${escapeHtml(row.label || id)}" onclick="testRatingsBackfillForChannelFromButton(this)">Test</button>
+                          <button class="btn btn-sm btn-primary" type="button" data-channel-id="${escapeHtml(id)}" data-channel-label="${escapeHtml(row.label || id)}" onclick="startRatingsBackfillForChannelFromButton(this)">Batch</button>
+                        </div>`
                       : `<span class="muted" style="font-size:12px">${Number(row.withoutRating || 0) ? "Geen seed-kanaal" : "OK"}</span>`}
                   </td>
                 </tr>
@@ -3351,6 +3357,56 @@
     function startRatingsBackfillForChannelFromButton(button) {
       const el = button || {};
       return startRatingsBackfillForChannel(el.dataset?.channelId || "", el.dataset?.channelLabel || "");
+    }
+
+    function testRatingsBackfillForChannelFromButton(button) {
+      const el = button || {};
+      return testRatingsBackfillForChannel(el.dataset?.channelId || "", el.dataset?.channelLabel || "");
+    }
+
+    async function testRatingsBackfillForChannel(channelId, label = "") {
+      const cleanId = String(channelId || "").trim();
+      if (!cleanId || cleanId === "unknown") return;
+      const name = label || cleanId;
+      startAdminProgressWindow({
+        title: `Rating-test: ${name}`,
+        subtitle: "Kleine dry-run",
+        detail: "Maximaal 10 bronpagina's ophalen zonder iets op te slaan.",
+        count: cleanId,
+      });
+      try {
+        const response = await fetch("/api/admin/seo-recipe-ratings-backfill", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            background: false,
+            dryRun: true,
+            channelId: cleanId,
+            maxUsers: 2000,
+            maxRecipes: 2500,
+            maxFetches: 10,
+            concurrency: 3,
+            timeoutMs: 6500,
+          }),
+        }));
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || "Rating-test mislukt");
+        finishAdminProgressWindow({
+          success: true,
+          subtitle: "Rating-test klaar",
+          detail: formatRatingsBackfillSummary(data),
+          count: `${formatNumber(data.fetchedCandidates || data.candidates || 0)} getest`,
+          raw: data,
+        });
+        await Promise.allSettled([loadRatingsDashboard(), loadAdminJobs(), loadAdminCockpit(), loadAdminActionNeeded()]);
+      } catch (error) {
+        finishAdminProgressWindow({
+          success: false,
+          subtitle: "Rating-test mislukt",
+          detail: error?.message || String(error),
+          count: "Fout",
+        });
+      }
     }
 
     async function startRatingsBackfillForChannel(channelId, label = "") {
