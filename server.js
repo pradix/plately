@@ -14815,6 +14815,54 @@ function extractAhRecipeIdFromUrl(url) {
   return match ? Number(match[1]) : 0;
 }
 
+function normalizeAhGraphqlRating(rating) {
+  const ratingValue = Number(rating?.average);
+  const ratingCount = Number(rating?.count);
+  if (!Number.isFinite(ratingValue) || ratingValue < 1 || ratingValue > 5) return null;
+  if (!Number.isFinite(ratingCount) || ratingCount < 1) return null;
+  return {
+    ratingValue: Math.round(ratingValue),
+    ratingCount: Math.max(1, Math.round(ratingCount)),
+  };
+}
+
+async function fetchAhRecipeRatingViaGraphql(sourceUrl, timeoutMs = 6500) {
+  const recipeId = extractAhRecipeIdFromUrl(sourceUrl);
+  if (!recipeId) return null;
+  if (/^(1|true|yes)$/i.test(String(process.env.PLATELY_DISABLE_AH_GRAPHQL || "").trim())) {
+    return null;
+  }
+  const headers = ahGraphqlHeaders(sourceUrl);
+  const payload = {
+    operationName: "recipe",
+    variables: { id: recipeId },
+    query: AH_RECIPE_DETAIL_QUERY,
+  };
+  const parse = (json) => normalizeAhGraphqlRating(json?.data?.recipe?.rating);
+  try {
+    const resp = await fetch(`${AH_WWW_BASE}/gql`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(Math.max(1500, Math.min(Number(timeoutMs) || 6500, 20000))),
+    });
+    if (resp?.ok) {
+      const json = await resp.json().catch(() => null);
+      const rt = parse(json);
+      if (rt) return rt;
+    }
+  } catch (err) {
+    console.log(`AH rating GraphQL fetch error: ${err.message}`);
+  }
+  try {
+    const curlResult = await postJsonViaCurl(`${AH_WWW_BASE}/gql`, headers, payload);
+    if (curlResult.ok) return parse(curlResult.json);
+  } catch (err) {
+    console.log(`AH rating GraphQL curl error: ${err.message}`);
+  }
+  return null;
+}
+
 function formatAhGraphqlMinutes(recipe) {
   const minutes = ["cookTime", "ovenTime", "waitTime"].reduce((sum, key) => {
     const value = Number(recipe?.[key]);
@@ -15053,6 +15101,13 @@ function urlEligibleForChannelSearchRatingFetch(url) {
 async function fetchAggregateRatingForRecipePageUrl(url, timeoutMs = 6500) {
   const uKey = normalizeRecipeRatingCacheUrl(String(url || "").trim());
   if (!uKey || !urlEligibleForChannelSearchRatingFetch(uKey)) return null;
+  if (isAhAllerhandeRecipeUrl(uKey)) {
+    const ahRating = await fetchAhRecipeRatingViaGraphql(uKey, timeoutMs);
+    if (ahRating) {
+      setCachedRecipeLdRating(uKey, ahRating);
+      return ahRating;
+    }
+  }
   const cached = getCachedRecipeLdRating(uKey);
   if (cached !== undefined) {
     return cached && typeof cached === "object" ? cached : null;
@@ -15685,6 +15740,19 @@ async function backfillImportedRecipeRatingsForAllUsers({
           out.cacheHitWithRating += 1;
           ratingByKey.set(`${c.userId}::${c.recipeIndex}`, cached);
         }
+        if (!isAhAllerhandeRecipeUrl(uKey)) {
+          markRatingFetchDone();
+          continue;
+        }
+      }
+      const fromFetcher = await fetchAggregateRatingForRecipePageUrl(uKey, timeoutMs);
+      if (fromFetcher) {
+        ratingByKey.set(`${c.userId}::${c.recipeIndex}`, fromFetcher);
+        markRatingFetchDone();
+        continue;
+      }
+      if (getCachedRecipeLdRating(uKey) !== undefined) {
+        out.schemaMiss += 1;
         markRatingFetchDone();
         continue;
       }
@@ -25969,6 +26037,7 @@ module.exports = {
     repairIngredientUnitRemainder,
     repairRecipeIngredientUnitRemainders,
     normalizeAggregateRating,
+    normalizeAhGraphqlRating,
     extractAggregateRatingFromRecipeHtml,
     searchPublicSeoRecipesLocal,
     buildStoredRecipeRatingIndexFromSeoEntries,

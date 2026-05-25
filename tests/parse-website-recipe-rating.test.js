@@ -42,6 +42,13 @@ describe("parseWebsiteRecipe ratings", () => {
     assert.equal(parsed.ratingCount, 42);
     assert.equal(parsed.ratingNormalizedFromWideScale, true);
   });
+
+  it("normaliseert Allerhande GraphQL ratings", () => {
+    const rating = __dev.normalizeAhGraphqlRating({ average: 4.3, count: 156 });
+    assert.deepEqual(rating, { ratingValue: 4, ratingCount: 156 });
+    assert.equal(__dev.normalizeAhGraphqlRating({ average: null, count: 156 }), null);
+    assert.equal(__dev.normalizeAhGraphqlRating({ average: 4.3, count: 0 }), null);
+  });
 });
 
 function normalizeWideScaleHtml() {
