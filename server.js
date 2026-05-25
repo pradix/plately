@@ -15288,6 +15288,10 @@ async function buildAdminRatingsOverview() {
         withoutRating: 0,
         avgRating: null,
         ratingCountSum: 0,
+        missingSourceUrl: 0,
+        notFetchable: 0,
+        fetchableWithoutRating: 0,
+        sampleUrls: [],
       });
     }
     return byChannel.get(id);
@@ -15295,6 +15299,13 @@ async function buildAdminRatingsOverview() {
   function addRecipe(recipe, channelId) {
     const row = ensure(channelId);
     row.total += 1;
+    const sourceUrl = sanitizeText(recipe?.sourceUrl || recipe?.source || "");
+    if (!sourceUrl) {
+      row.missingSourceUrl += 1;
+    } else if (!urlEligibleForChannelSearchRatingFetch(sourceUrl)) {
+      row.notFetchable += 1;
+      if (row.sampleUrls.length < 5) row.sampleUrls.push({ title: sanitizeText(recipe?.title || "Recept").slice(0, 120), sourceUrl, reason: "Niet geschikt voor rating-fetch" });
+    }
     const rv = Number(recipe?.ratingValue);
     const rc = Number(recipe?.ratingCount);
     if (Number.isFinite(rv) && rv >= 1 && rv <= 5 && Number.isFinite(rc) && rc >= 1) {
@@ -15303,6 +15314,10 @@ async function buildAdminRatingsOverview() {
       row._ratingValueSum = Number(row._ratingValueSum || 0) + rv;
     } else {
       row.withoutRating += 1;
+      if (sourceUrl && urlEligibleForChannelSearchRatingFetch(sourceUrl)) {
+        row.fetchableWithoutRating += 1;
+        if (row.sampleUrls.length < 5) row.sampleUrls.push({ title: sanitizeText(recipe?.title || "Recept").slice(0, 120), sourceUrl, reason: "Geen rating opgeslagen" });
+      }
     }
   }
 

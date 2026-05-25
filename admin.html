@@ -3299,6 +3299,8 @@
               <th style="text-align:right">Totaal</th>
               <th style="text-align:right">Met rating</th>
               <th style="text-align:right">Zonder</th>
+              <th style="text-align:right">Fetchbaar</th>
+              <th style="text-align:right">Issues</th>
               <th style="text-align:right">Dekking</th>
               <th style="text-align:right">Gem.</th>
               <th>Actie</th>
@@ -3318,6 +3320,8 @@
                   <td style="text-align:right">${formatNumber(row.total || 0)}</td>
                   <td style="text-align:right">${formatNumber(row.withRating || 0)}</td>
                   <td style="text-align:right;color:${Number(row.withoutRating || 0) ? "rgba(140,23,35,.95)" : "inherit"}">${formatNumber(row.withoutRating || 0)}</td>
+                  <td style="text-align:right">${formatNumber(row.fetchableWithoutRating || 0)}</td>
+                  <td style="text-align:right">${formatNumber((row.missingSourceUrl || 0) + (row.notFetchable || 0))}</td>
                   <td style="text-align:right">
                     <div style="min-width:92px">
                       <strong>${formatNumber(pct)}%</strong>
@@ -3330,6 +3334,7 @@
                       ? `<div style="display:flex;gap:6px;flex-wrap:wrap">
                           <button class="btn btn-sm" type="button" data-channel-id="${escapeHtml(id)}" data-channel-label="${escapeHtml(row.label || id)}" onclick="testRatingsBackfillForChannelFromButton(this)">Test</button>
                           <button class="btn btn-sm btn-primary" type="button" data-channel-id="${escapeHtml(id)}" data-channel-label="${escapeHtml(row.label || id)}" onclick="startRatingsBackfillForChannelFromButton(this)">Batch</button>
+                          <button class="btn btn-sm btn-secondary" type="button" data-rating-row="${escapeHtml(encodeURIComponent(JSON.stringify(row)))}" onclick="showRatingsChannelDetailsFromButton(this)">Details</button>
                         </div>`
                       : `<span class="muted" style="font-size:12px">${Number(row.withoutRating || 0) ? "Geen seed-kanaal" : "OK"}</span>`}
                   </td>
@@ -3352,6 +3357,39 @@
       } catch (error) {
         if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
       }
+    }
+
+    function showRatingsChannelDetailsFromButton(button) {
+      let row = {};
+      try {
+        row = JSON.parse(decodeURIComponent(button?.dataset?.ratingRow || "%7B%7D"));
+      } catch {
+        row = {};
+      }
+      const samples = Array.isArray(row.sampleUrls) ? row.sampleUrls : [];
+      startAdminProgressWindow({
+        title: `Ratings details: ${row.label || row.channelId || "Kanaal"}`,
+        subtitle: "Kanaaldiagnose",
+        detail: `${formatNumber(row.fetchableWithoutRating || 0)} fetchbaar zonder rating · ${formatNumber(row.missingSourceUrl || 0)} zonder bron-URL · ${formatNumber(row.notFetchable || 0)} niet fetchbaar.`,
+        count: `${formatNumber(row.withoutRating || 0)} zonder`,
+      });
+      finishAdminProgressWindow({
+        success: true,
+        subtitle: "Kanaaldiagnose",
+        detail: samples.length ? "Voorbeelden staan hieronder." : "Geen voorbeeld-URL's beschikbaar.",
+        count: `${formatNumber(row.coveragePct || 0)}% dekking`,
+        raw: {
+          channelId: row.channelId,
+          label: row.label,
+          total: row.total,
+          withRating: row.withRating,
+          withoutRating: row.withoutRating,
+          fetchableWithoutRating: row.fetchableWithoutRating,
+          missingSourceUrl: row.missingSourceUrl,
+          notFetchable: row.notFetchable,
+          sampleUrls: samples,
+        },
+      });
     }
 
     function startRatingsBackfillForChannelFromButton(button) {
@@ -3491,14 +3529,40 @@
               <div class="muted" style="font-size:12px;margin-top:4px">${escapeHtml(item.description || "")}</div>
             </div>
             <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+              ${getActionNeededTestLabel(item.key) ? `<button class="btn btn-sm" type="button" onclick="runActionNeededTest('${escapeHtml(item.key || "")}')">${escapeHtml(getActionNeededTestLabel(item.key))}</button>` : ""}
               ${getActionNeededFixLabel(item.key) ? `<button class="btn btn-sm" type="button" onclick="runActionNeededFix('${escapeHtml(item.key || "")}')">${escapeHtml(getActionNeededFixLabel(item.key))}</button>` : ""}
-              <button class="btn btn-sm btn-secondary" type="button" onclick="setAdminTab('${escapeHtml(item.tab || "overview")}')">${escapeHtml(item.actionLabel || "Open")}</button>
+              <button class="btn btn-sm btn-secondary" type="button" onclick="openActionNeededDetails('${escapeHtml(item.key || "")}', '${escapeHtml(item.tab || "overview")}')">Bekijk details</button>
             </div>
           </div>
         `).join("");
       } catch (error) {
         if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
       }
+    }
+
+    function getActionNeededTestLabel(key) {
+      if (key === "missingRating") return "Test";
+      if (key === "missingImage" || key === "invalidRecipe" || key === "worstChannel") return "Open scan";
+      if (key === "ahToken") return "Check";
+      if (String(key || "").startsWith("cache:")) return "Bekijk";
+      return "";
+    }
+
+    function openActionNeededDetails(key, tab = "overview") {
+      const cleanKey = String(key || "");
+      if (cleanKey === "missingRating") return openSeoRatingsPanel();
+      if (cleanKey === "missingImage" || cleanKey === "invalidRecipe" || cleanKey === "worstChannel") return setAdminTab("activity");
+      if (cleanKey === "ahToken") return setAdminTab("supermarkets");
+      if (cleanKey === "duplicateSourceUrl") return setAdminTab("seo");
+      if (cleanKey.startsWith("cache:")) return setAdminTab("storage");
+      return setAdminTab(tab || "overview");
+    }
+
+    function runActionNeededTest(key) {
+      const cleanKey = String(key || "");
+      if (cleanKey === "missingRating") return openSeoRatingsPanel();
+      if (cleanKey === "ahToken") return loadAhTokenStatus();
+      return openActionNeededDetails(cleanKey);
     }
 
     function setCockpitText(id, value) {
@@ -8499,6 +8563,64 @@
       if (status) status.textContent = `${formatNumber(basketMatchLastChoices.length)} alternatieven voor ${ingredient} bij ${store === "jumbo" ? "Jumbo" : "AH"}.`;
     }
 
+    function renderBasketMatchDiagnosis(data, store, ingredient) {
+      const wrap = document.getElementById("basketMatchResults");
+      if (!wrap) return;
+      const basket = data?.basket || {};
+      const diagnostics = Array.isArray(basket.diagnostics) ? basket.diagnostics : [];
+      const diag = diagnostics[0] || {};
+      const items = Array.isArray(basket.items) ? basket.items : [];
+      const choices = Array.isArray(items[0]?.choices) ? items[0].choices : [];
+      basketMatchLastChoices = choices;
+      const reasonList = Array.isArray(diag.reasons) ? diag.reasons.filter(Boolean) : [];
+      const penalties = Array.isArray(diag.penalties) ? diag.penalties.filter((p) => p?.label).slice(0, 5) : [];
+      const bonuses = Array.isArray(diag.bonuses) ? diag.bonuses.filter((b) => b?.label).slice(0, 4) : [];
+      const selected = diag.selectedProduct || choices[0]?.title || "Geen product gekozen";
+      const flags = [
+        diag.found === false ? "Geen match" : "",
+        diag.hasImage === false && diag.found ? "Geen afbeelding" : "",
+        Number(diag.alternatives || 0) < 1 && diag.found ? "Weinig alternatieven" : "",
+        Number(diag.matchScore || 0) > 56 ? "Lage score" : "",
+      ].filter(Boolean);
+      const choiceHtml = choices.slice(0, 12).map((choice, idx) => {
+        const title = choice.title || "Onbekend product";
+        const img = choice.imageUrl
+          ? `<img src="${escAdm(choice.imageUrl)}" alt="" loading="lazy" />`
+          : `<div class="basket-match-card__placeholder" aria-hidden="true">${escAdm(choice.emoji || "🛒")}</div>`;
+        const score = getBasketChoiceScore(choice);
+        return `
+          <article class="basket-match-card">
+            ${img}
+            <div>
+              <div class="basket-match-card__title">${escAdm(title)}</div>
+              <div class="basket-match-card__meta">${escAdm(choice.price || "Prijs onbekend")} · ${score == null ? "score onbekend" : `score ${formatNumber(score)}`}</div>
+            </div>
+            <div class="basket-match-card__actions">
+              <button class="btn btn-sm btn-success" type="button" onclick="saveBasketMatchReview('prefer', ${idx})">Kies alternatief</button>
+              <button class="btn btn-sm btn-danger" type="button" onclick="saveBasketMatchReview('bad', ${idx})">Blokkeer</button>
+            </div>
+          </article>
+        `;
+      }).join("");
+      wrap.innerHTML = `
+        <div style="border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.78);padding:12px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <div>
+              <strong>Gekozen match: ${escAdm(selected)}</strong>
+              <div class="muted" style="font-size:12px;margin-top:3px">${escAdm(ingredient)} · ${store === "jumbo" ? "Jumbo" : "AH"} · score ${diag.matchScore == null ? "—" : formatNumber(diag.matchScore)}</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">${flags.map((flag) => `<span class="admin-chip">${escAdm(flag)}</span>`).join("") || `<span class="admin-chip">OK</span>`}</div>
+          </div>
+          <div class="muted" style="font-size:12px;margin-top:8px">
+            ${escAdm([...reasonList, ...penalties.map((p) => p.label), ...bonuses.map((b) => b.label)].filter(Boolean).slice(0, 8).join(" · ") || "Geen opvallende diagnose.")}
+          </div>
+        </div>
+        ${choiceHtml || `<p class="muted">Geen alternatieven gevonden.</p>`}
+      `;
+      const status = document.getElementById("basketMatchStatus");
+      if (status) status.textContent = `${formatNumber(choices.length)} alternatieven · ${diag.hasImage === false ? "gekozen match zonder afbeelding" : "diagnose geladen"}.`;
+    }
+
     async function runBasketMatchResearch() {
       const input = document.getElementById("basketMatchIngredient");
       const select = document.getElementById("basketMatchStore");
@@ -8511,6 +8633,17 @@
       }
       if (status) status.textContent = "Alternatieven zoeken…";
       try {
+        if (store === "albert-heijn") {
+          const checkRes = await fetch("/api/admin/ah-basket-check", adminFetchInit({
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ items: [{ title: ingredient, amount: "1 verpakking" }] })
+          }));
+          const checkData = await checkRes.json();
+          if (!checkRes.ok || !checkData.ok) throw new Error(checkData.error || "AH diagnose mislukt");
+          renderBasketMatchDiagnosis(checkData, store, ingredient);
+          return;
+        }
         const endpoint = store === "jumbo" ? "/api/jumbo-research" : "/api/ah-research";
         const res = await fetch(endpoint, adminFetchInit({
           method: "POST",
