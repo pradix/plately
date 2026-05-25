@@ -3324,7 +3324,7 @@
                   <td style="text-align:right">${row.avgRating ? `${escapeHtml(String(row.avgRating))} ★` : "—"}</td>
                   <td>
                     ${canBackfill
-                      ? `<button class="btn btn-sm btn-primary" type="button" onclick="startRatingsBackfillForChannel('${escapeHtml(id)}', '${escapeHtml(row.label || id)}')">Batch</button>`
+                      ? `<button class="btn btn-sm btn-primary" type="button" data-channel-id="${escapeHtml(id)}" data-channel-label="${escapeHtml(row.label || id)}" onclick="startRatingsBackfillForChannelFromButton(this)">Batch</button>`
                       : `<span class="muted" style="font-size:12px">${Number(row.withoutRating || 0) ? "Geen seed-kanaal" : "OK"}</span>`}
                   </td>
                 </tr>
@@ -3346,6 +3346,11 @@
       } catch (error) {
         if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
       }
+    }
+
+    function startRatingsBackfillForChannelFromButton(button) {
+      const el = button || {};
+      return startRatingsBackfillForChannel(el.dataset?.channelId || "", el.dataset?.channelLabel || "");
     }
 
     async function startRatingsBackfillForChannel(channelId, label = "") {
