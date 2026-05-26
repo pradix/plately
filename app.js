@@ -405,6 +405,7 @@ const initialRecipes = [...showcaseRecipes,
 
 const HOME_FEATURED_RECIPE_ID = "recipe-home-burger";
 const HOME_QUICK_RECIPE_IDS = ["recipe-home-avocado-smash", "recipe-home-eggs"];
+const EMPTY_SEARCH_SUGGESTIONS = ["pasta kip", "tompouce", "quinoa salade", "rijst met kip"];
 const COOKBOOK_SHOWCASE_IDS = [
   "recipe-book-spaghetti",
   "recipe-book-salmon",
@@ -5492,12 +5493,14 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
       } else {
         // Show "no results" message when actively searching but got nothing
         channelSearchSection.classList.remove("hidden");
+        const suggestionButtons = EMPTY_SEARCH_SUGGESTIONS.map((term) => `<button type="button" class="channel-filter-pill" data-empty-search-suggestion="${escapeHtml(term)}">${escapeHtml(term)}</button>`).join("");
         channelSearchResults.innerHTML = `
           <div class="ch-search-empty" style="grid-column:1/-1;text-align:center;padding:2rem 1rem;max-width:26rem;margin:0 auto">
             <p style="margin:0 0 .75rem;font-weight:650;color:var(--text,#2a2a28)">Geen resultaten gevonden in de geselecteerde kanalen</p>
             <p style="margin:0 0 1.1rem;font-size:0.95rem;opacity:.88;line-height:1.45">
               Probeer een specifieker gerecht of ingrediënt, of zet meer receptenkanalen aan via <strong>Profiel</strong> → <strong>Gekoppelde kanalen</strong>.
             </p>
+            <div style="display:flex;gap:.45rem;justify-content:center;flex-wrap:wrap;margin:0 0 1rem">${suggestionButtons}</div>
             <div style="display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap">
               <button type="button" class="profile-login-banner__btn profile-login-banner__btn--primary" data-open-channel-settings>Kanalen beheren</button>
               <button type="button" class="profile-login-banner__btn" data-action="retry-channel-search">Opnieuw zoeken</button>
@@ -5837,9 +5840,11 @@ function renderImportScreenResults(container, localResults, externalResults, isL
     html += shownExternal.map(renderCard).join("");
   }
   if (!shownLocal.length && !shownExternal.length && !isLoadingExternal) {
+    const suggestionButtons = EMPTY_SEARCH_SUGGESTIONS.map((term) => `<button type="button" class="channel-filter-pill" data-empty-search-suggestion="${escapeHtml(term)}">${escapeHtml(term)}</button>`).join("");
     html += `<div class="ch-search-empty" style="grid-column:1/-1;text-align:center;padding:2rem 1rem;color:var(--muted-strong)">
       <p style="margin:0 0 .75rem;font-weight:650;color:var(--text,#2a2a28)">Geen resultaten gevonden</p>
       <p style="margin:0 0 1rem">Probeer een concreter zoekwoord, bijvoorbeeld “pasta kip” of “tompouce”.</p>
+      <div style="display:flex;gap:.45rem;justify-content:center;flex-wrap:wrap;margin:0 0 1rem">${suggestionButtons}</div>
       <button type="button" class="profile-login-banner__btn" data-action="retry-channel-search">Opnieuw zoeken</button>
     </div>`;
   }
@@ -6515,6 +6520,7 @@ function renderRecipeGrid() {
           </div>
           <h3 class="home-empty-state__title">Niets gevonden</h3>
           <p class="home-empty-state__text">Pas je zoekterm of filter aan, of importeer een nieuw recept.</p>
+          ${hasSearch ? `<div class="home-empty-state__actions">${EMPTY_SEARCH_SUGGESTIONS.map((term) => `<button type="button" class="secondary-button home-empty-state__action" data-empty-search-suggestion="${escapeHtml(term)}">${escapeHtml(term)}</button>`).join("")}</div>` : ""}
           <div class="home-empty-state__actions">
             ${hasSearch ? `<button type="button" class="secondary-button home-empty-state__action" id="homeEmptyClearSearchBtn">Wis zoekveld</button>` : ""}
             ${hasFilter ? `<button type="button" class="secondary-button home-empty-state__action" id="homeEmptyClearFilterBtn">Toon alle recepten</button>` : ""}
@@ -6530,6 +6536,15 @@ function renderRecipeGrid() {
         switchView("import");
       };
       bindEvent(document.getElementById("homeEmptyGoImportBtn"), "click", goImport);
+      document.querySelectorAll("[data-empty-search-suggestion]").forEach((btn) => {
+        bindEvent(btn, "click", () => {
+          const term = btn.getAttribute("data-empty-search-suggestion") || "";
+          if (!term || !searchInput) return;
+          searchInput.value = term;
+          searchInput.focus();
+          searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+      });
       bindEvent(document.getElementById("homeEmptyClearSearchBtn"), "click", () => {
         if (searchInput) searchInput.value = "";
         state.searchQuery = "";
@@ -13255,6 +13270,16 @@ bindEvent(document.getElementById("channelSearchClose"), "click", () => {
 });
 
 bindEvent(document.getElementById("channelSearchSection"), "click", (event) => {
+  const suggestion = event.target.closest("[data-empty-search-suggestion]");
+  if (suggestion instanceof HTMLElement) {
+    const term = suggestion.getAttribute("data-empty-search-suggestion") || "";
+    if (term && searchInput) {
+      searchInput.value = term;
+      searchInput.focus();
+      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    return;
+  }
   const openCh = event.target.closest("[data-open-channel-settings]");
   if (openCh instanceof HTMLElement) {
     switchView("settings");

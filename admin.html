@@ -2706,6 +2706,17 @@
               <button class="btn btn-sm btn-secondary" type="button" onclick="setBasketMatchIngredient('quinoa', document.getElementById('basketMatchStore')?.value || 'albert-heijn')">quinoa</button>
               <button class="btn btn-sm btn-secondary" type="button" onclick="setBasketMatchIngredient('Italiaanse kruiden', document.getElementById('basketMatchStore')?.value || 'albert-heijn')">Italiaanse kruiden</button>
             </div>
+            <div style="border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.72);padding:10px 12px;margin:0 0 10px">
+              <div style="font-weight:800;font-size:13px;margin-bottom:7px">Auto-suggesties</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn-sm" type="button" onclick="applyBasketSuggestedFix('olie', 'olijfolie', 'albert-heijn')">olie → olijfolie</button>
+                <button class="btn btn-sm" type="button" onclick="applyBasketSuggestedFix('rode paprika', 'rode paprika', 'albert-heijn')">rode paprika → vers</button>
+                <button class="btn btn-sm" type="button" onclick="applyBasketSuggestedFix('feta', 'feta kaas', 'albert-heijn')">feta → pak/blok</button>
+                <button class="btn btn-sm" type="button" onclick="applyBasketSuggestedFix('blauwe bes', 'blauwe bessen', 'albert-heijn')">blauwe bes → vers</button>
+                <button class="btn btn-sm" type="button" onclick="applyBasketSuggestedFix('Italiaanse kruiden', 'Italiaanse kruiden strooier', 'albert-heijn')">Italiaanse kruiden → strooier</button>
+                <button class="btn btn-sm" type="button" onclick="applyBasketSuggestedFix('quinoa', 'quinoa', 'albert-heijn')">quinoa → droog</button>
+              </div>
+            </div>
             <div id="basketMatchStatus" class="muted"></div>
             <div id="basketProblemPresetResults" style="margin-top:10px"></div>
             <div id="basketMatchResults" class="basket-match-results"></div>
@@ -9055,6 +9066,55 @@
             </table>` : `<p class="muted">Geen recente impactdata gevonden.</p>`}
           `;
         }
+      } catch (error) {
+        if (status) status.textContent = "Fout: " + (error?.message || error);
+      }
+    }
+
+    async function applyBasketSuggestedFix(ingredient, preferredSearch, store = "albert-heijn") {
+      const status = document.getElementById("basketMatchStatus");
+      const cleanStore = store === "jumbo" ? "jumbo" : "albert-heijn";
+      const original = String(ingredient || "").trim();
+      const preferred = String(preferredSearch || original).trim();
+      if (!original || !preferred) return;
+      if (status) status.textContent = `Suggestie toepassen: ${original} → ${preferred}…`;
+      try {
+        let choice = null;
+        if (cleanStore === "albert-heijn") {
+          const res = await fetch("/api/admin/ah-basket-check", adminFetchInit({
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ items: [{ title: preferred, amount: "1 verpakking" }] })
+          }));
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) throw new Error(data.error || "AH suggestie zoeken mislukt");
+          const item = Array.isArray(data.basket?.items) ? data.basket.items[0] || {} : {};
+          choice = Array.isArray(item.choices) ? item.choices[0] || null : null;
+        } else {
+          const res = await fetch("/api/jumbo-research", adminFetchInit({
+            method: "POST",
+            body: JSON.stringify({ ingredientTitle: preferred, amount: "1 verpakking" })
+          }));
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) throw new Error(data.error || "Jumbo suggestie zoeken mislukt");
+          choice = Array.isArray(data.choices) ? data.choices[0] || null : null;
+        }
+        if (!choice) throw new Error("Geen voorkeursproduct gevonden.");
+        const save = await fetch("/api/admin/basket-match-review", adminFetchInit({
+          method: "POST",
+          body: JSON.stringify({
+            action: "prefer",
+            store: cleanStore,
+            ingredient: original,
+            productId: choice.productId || choice.id || "",
+            productTitle: choice.title || choice.name || "",
+          })
+        }));
+        const saved = await save.json().catch(() => ({}));
+        if (!save.ok || !saved.ok) throw new Error(saved.error || "Voorkeur opslaan mislukt");
+        if (status) status.textContent = `Voorkeur opgeslagen: ${original} → ${choice.title || choice.name || preferred}`;
+        setBasketMatchIngredient(original, cleanStore);
+        loadBasketMatchOverrides();
       } catch (error) {
         if (status) status.textContent = "Fout: " + (error?.message || error);
       }
