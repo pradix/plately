@@ -5608,6 +5608,27 @@ function formatCompactRecipeRatingHtml(recipe, extraClass = "") {
   </span>`;
 }
 
+function renderChannelSearchProgress() {
+  const progress = state.channelSearchProgress || {};
+  const hasProgress = Object.keys(progress).length > 0;
+  const isFinished = hasProgress && Object.values(progress).every((value) => value === "done");
+  if (!state.channelSearchIsSearching && (!hasProgress || isFinished)) return "";
+  const steps = [
+    ["local", "Mijn recepten"],
+    ["seo", "Plately index"],
+    ["web", "Webkanalen"],
+  ];
+  return `<div class="ch-search-progress" aria-label="Zoekvoortgang">
+    ${steps.map(([key, label]) => {
+      const status = progress[key] || "waiting";
+      return `<span class="ch-search-progress__step is-${escapeHtml(status)}">
+        <span class="ch-search-progress__dot" aria-hidden="true"></span>
+        <span>${escapeHtml(label)}</span>
+      </span>`;
+    }).join("")}
+  </div>`;
+}
+
 function renderChannelSearchResults(results, filter = state.channelSearchFilter) {
   if (!channelSearchSection || !channelSearchResults) return;
 
@@ -5625,7 +5646,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
       // While searching, don't show the empty-state yet (SEO-first can be empty while external search is still running).
       if (state.channelSearchIsSearching) {
         channelSearchSection.classList.remove("hidden");
-        channelSearchResults.innerHTML = CHANNEL_SEARCH_SKELETON_MARKUP;
+        channelSearchResults.innerHTML = `${renderChannelSearchProgress()}${CHANNEL_SEARCH_SKELETON_MARKUP}`;
         renderChannelFilterChips([]);
         return;
       }
@@ -5682,7 +5703,8 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
     // Include a rating fingerprint so that back-filling ratings into SEO results triggers a re-render.
     const ratingFp = rows.slice(0, 22).map((r) => (r?.ratingValue ?? "") + (r?.ratingCount ?? "")).join("|");
     const sig = `${rows.length}::${rows.slice(0, 22).map((r) => r?.url || "").join("|")}::r${ratingFp}`;
-    const nextRenderKey = `${state.channelSearchQuery}||${state.channelSearchFilter || ""}||${sig}||${state.channelSearchIsSearching ? "1" : "0"}||${visibleCount}`;
+    const progressKey = JSON.stringify(state.channelSearchProgress || {});
+    const nextRenderKey = `${state.channelSearchQuery}||${state.channelSearchFilter || ""}||${sig}||${state.channelSearchIsSearching ? "1" : "0"}||${visibleCount}||${progressKey}`;
     if (renderChannelSearchResults._lastKey === nextRenderKey) return;
     renderChannelSearchResults._lastKey = nextRenderKey;
 
@@ -5704,7 +5726,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
     const moreHint = hiddenCount > 0 && !state.channelSearchIsSearching
       ? `<button type="button" class="ch-load-more-btn" data-action="load-more-channel-search">+ ${hiddenCount} meer laden</button>`
       : "";
-    const sourceCounts = rows.reduce((acc, row) => {
+    const sourceCounts = all.reduce((acc, row) => {
       const key = row?._source === "local"
         ? "Mijn recepten"
         : (row?._source === "plately" || String(row?.url || "").startsWith("/recept/")) ? "Plately index" : "Web";
@@ -5715,7 +5737,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
       ? `<div class="ch-source-summary">${Object.entries(sourceCounts).map(([label, count]) => `<span>${escapeHtml(label)} <strong>${formatNumber(count)}</strong></span>`).join("")}</div>`
       : "";
     const gridClass = "ch-result-grid";
-    channelSearchResults.innerHTML = `${sourceSummary}<div class="${gridClass}">${rows.map((r) => {
+    channelSearchResults.innerHTML = `${renderChannelSearchProgress()}${sourceSummary}<div class="${gridClass}">${rows.map((r) => {
       const channel = channelById.get(r.channelId);
       const channelColor = channel?.color || "#8da485";
       const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
@@ -5778,11 +5800,13 @@ async function searchChannels(query) {
     channelSearchAbortController?.abort();
     channelSearchAbortController = null;
     state.channelSearchIsSearching = false;
+    state.channelSearchProgress = {};
     renderChannelSearchResults([]);
     return;
   }
   state.channelSearchQuery = query.trim();
   state.channelSearchIsSearching = true;
+  state.channelSearchProgress = { local: "active", seo: "waiting", web: "waiting" };
   pushRecentSearch(state.channelSearchQuery);
 
   // Skeleton loader: only show if the request isn't instant.
@@ -5794,8 +5818,12 @@ async function searchChannels(query) {
   skeletonTimer = setTimeout(() => {
     if (requestId !== searchChannels._reqId) return;
     if (!channelSearchSection || !channelSearchResults) return;
+    if (state.channelSearchAllResults?.length) {
+      renderChannelSearchResults(state.channelSearchAllResults);
+      return;
+    }
     channelSearchSection.classList.remove("hidden");
-    channelSearchResults.innerHTML = CHANNEL_SEARCH_SKELETON_MARKUP;
+    channelSearchResults.innerHTML = `${renderChannelSearchProgress()}${CHANNEL_SEARCH_SKELETON_MARKUP}`;
   }, CHANNEL_SEARCH_SKELETON_MS);
   try {
     const channels = getSeedChannelIdsForRecipeSearch().join(",");
@@ -5815,6 +5843,8 @@ async function searchChannels(query) {
     const cacheKey = getChannelSearchClientCacheKey({ query, channels, customChannelsParam });
     const cached = getCachedClientChannelSearch(cacheKey);
     if (cached && requestId === searchChannels._reqId) {
+      state.channelSearchProgress = { local: "done", seo: "done", web: "done" };
+      state.channelSearchIsSearching = false;
       // Leeg de container eerst zodat er geen stale resultaten van een vorige query flitsen
       if (channelSearchResults) channelSearchResults.innerHTML = "";
       renderChannelSearchResults(cached);
@@ -5822,8 +5852,11 @@ async function searchChannels(query) {
     }
 
     const savedResults = searchSavedRecipesForChannelQuery(query.trim(), 12);
+    state.channelSearchProgress = { local: "done", seo: "active", web: "waiting" };
     if (savedResults.length && requestId === searchChannels._reqId) {
       renderChannelSearchResults(savedResults);
+    } else if (requestId === searchChannels._reqId) {
+      renderChannelSearchResults([]);
     }
 
     let seoResults = [];
@@ -5836,10 +5869,13 @@ async function searchChannels(query) {
       const seoData = await seoResp.json().catch(() => null);
       if (requestId === searchChannels._reqId && Array.isArray(seoData?.results)) {
         seoResults = seoData.results;
+        state.channelSearchProgress = { local: "done", seo: "done", web: "active" };
         // Belangrijk: toon GEEN "geen resultaten" na alleen de SEO-zoek.
         // Pas na de externe kanaal-zoek beslissen we of het echt leeg is.
         if (seoResults.length) {
-          renderChannelSearchResults(seoResults);
+          renderChannelSearchResults([...savedResults, ...seoResults]);
+        } else {
+          renderChannelSearchResults(savedResults);
         }
       }
     } catch (e) {
@@ -5847,6 +5883,10 @@ async function searchChannels(query) {
         console.warn("[ChannelSearch] SEO-zoek mislukt:", e?.message);
       }
       // Fallback naar externe channel-search hieronder
+      if (requestId === searchChannels._reqId) {
+        state.channelSearchProgress = { local: "done", seo: "done", web: "active" };
+        renderChannelSearchResults([...savedResults, ...seoResults]);
+      }
     }
 
     let url = `/api/channel-search?q=${encodeURIComponent(query.trim())}&channels=${encodeURIComponent(channels)}`;
@@ -5901,12 +5941,14 @@ async function searchChannels(query) {
     // Zet isSearching false vóór de render zodat er geen skeletons blijven staan
     if (requestId === searchChannels._reqId) {
       state.channelSearchIsSearching = false;
+      state.channelSearchProgress = { local: "done", seo: "done", web: "done" };
     }
     renderChannelSearchResults(merged);
   } catch (error) {
     if (error?.name === "AbortError") return;
     if (requestId !== searchChannels._reqId) return;
     state.channelSearchIsSearching = false;
+    state.channelSearchProgress = {};
     // Toon foutmelding als er ook geen eerder resultaten zijn
     if (!state.channelSearchAllResults?.length) {
       showToast("Zoeken mislukt. Controleer je verbinding.", { variant: "error" });
@@ -6937,10 +6979,12 @@ function renderDetailRecipe(resetServings = false) {
     const assistTitle = recipe.needsReview ? "Controleer deze import nog even" : "Klaar om te koken";
     const assistCopy = recipe.needsReview
       ? "Loop titel, ingrediënten en bereidingsstappen nog even na voordat je het recept gebruikt."
-      : linkedCookbooks.length
-        ? `Dit recept staat in ${linkedCookbooks.length} kookboek${linkedCookbooks.length === 1 ? "" : "en"} en is klaar om op je boodschappenlijst te zetten.`
-        : "Sla dit recept op in een kookboek of zet de ingrediënten direct op je boodschappenlijst.";
+        : linkedCookbooks.length
+          ? `Dit recept staat in ${linkedCookbooks.length} kookboek${linkedCookbooks.length === 1 ? "" : "en"} en is klaar om op je boodschappenlijst te zetten.`
+          : "Sla dit recept op in een kookboek of zet de ingrediënten direct op je boodschappenlijst.";
     const canEnhance = recipe.needsReview && recipe.sourceUrl;
+    const ingredientDone = recipe.ingredients.filter((ingredient, index) => isIngredientChecked(recipe.id, ingredient, index)).length;
+    const stepDone = recipe.instructions.filter((_, index) => isStepChecked(recipe.id, index)).length;
     detailAssist.innerHTML = `
       <article class="detail-assist__card detail-assist__card--${assistTone}">
         <div class="detail-assist__head">
@@ -6948,6 +6992,20 @@ function renderDetailRecipe(resetServings = false) {
         </div>
         <p>${escapeHtml(assistCopy)}</p>
         ${canEnhance ? `<button class="detail-assist__enhance-btn" type="button" data-enhance-recipe="${escapeHtml(recipe.id)}">Verbeter automatisch</button>` : ""}
+      </article>
+      <article class="detail-assist__card detail-assist__card--cook">
+        <div class="detail-assist__head">
+          <strong>Kookflow</strong>
+          <span>${escapeHtml(`${stepDone}/${recipe.instructions.length || 0} stappen`)}</span>
+        </div>
+        <div class="detail-flow-strip">
+          <span>${escapeHtml(`${ingredientDone}/${recipe.ingredients.length || 0}`)} ingrediënten klaar</span>
+          <span>${escapeHtml(`${Math.max(1, state.currentServings || baseServings)} pers.`)}</span>
+        </div>
+        <div class="detail-assist__actions">
+          <button class="detail-assist__enhance-btn" type="button" data-start-kookstand="${escapeHtml(recipe.id)}">Kookstand</button>
+          <button class="detail-assist__enhance-btn" type="button" data-add-detail-grocery="${escapeHtml(recipe.id)}">Boodschappen</button>
+        </div>
       </article>
     `;
   }
@@ -7664,6 +7722,24 @@ function getPantryOptionalSuggestionsForRecipe(recipe, existingKeySet) {
     .filter((p) => !existing.has(normalizeIngredientKey(p.title)));
 }
 
+function setAllGroceryChecked(checked) {
+  if (!state.groceryItems.length) return;
+  let changed = 0;
+  state.groceryItems.forEach((item) => {
+    if (Boolean(item.checked) === checked) return;
+    changed += 1;
+    item.checked = checked;
+  });
+  if (!changed) {
+    showToast(checked ? "Alles was al afgevinkt." : "Alles stond al terug.", { variant: "info" });
+    return;
+  }
+  persistGroceryItemsLocally();
+  schedulePersistAppState();
+  renderGroceryGroups();
+  showToast(checked ? "Alles afgevinkt." : "Alles teruggezet.", { variant: "success" });
+}
+
 function renderGroceryGroups(options = {}) {
   ensureGroceryListsInitialized();
   consolidateUncheckedGroceryDuplicates();
@@ -7685,6 +7761,10 @@ function renderGroceryGroups(options = {}) {
     sortBar.querySelectorAll("[data-grocery-sort]").forEach((pill) => {
       pill.classList.toggle("is-active", pill.dataset.grocerySort === (state.grocerySort || "default"));
     });
+    const checkAllBtn = sortBar.querySelector("#groceryCheckAllBtn");
+    const uncheckAllBtn = sortBar.querySelector("#groceryUncheckAllBtn");
+    if (checkAllBtn) checkAllBtn.disabled = !uncheckedCount;
+    if (uncheckAllBtn) uncheckAllBtn.disabled = uncheckedCount === state.groceryItems.length;
   }
   const preferredStoreForLabel = state.profile.favoriteSupermarket || "ah";
   const _favImgStyle = 'display:inline-block;width:28px;height:28px;border-radius:6px;vertical-align:middle;margin:0 2px -2px';
@@ -7763,7 +7843,34 @@ function renderGroceryGroups(options = {}) {
   }
 
   // Determine unique recipes in the list
-  const uniqueRecipes = [...new Set(state.groceryItems.map((i) => i.recipeTitle || "Overig").filter(Boolean))];
+  const grocerySort = state.grocerySort || "default";
+  const visibleGroceryItems = grocerySort === "needed" || grocerySort === "store"
+    ? state.groceryItems.filter((item) => !item.checked)
+    : state.groceryItems;
+
+  if (!visibleGroceryItems.length && (grocerySort === "needed" || grocerySort === "store")) {
+    groceryGroups.innerHTML = `
+      <div class="grocery-empty-state grocery-empty-state--compact">
+        <div class="grocery-empty-state__icon" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none"><path d="M14 25l7 7 14-17" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h3 class="grocery-empty-state__title">Alles is afgevinkt</h3>
+        <p class="grocery-empty-state__hint">Je kijkt nu naar alleen wat nog nodig is.</p>
+        <div class="grocery-empty-state__actions">
+          <button type="button" class="secondary-button grocery-empty-state__btn" data-grocery-sort-show-all>Toon alles</button>
+          <button type="button" class="primary-button grocery-empty-state__btn" data-grocery-uncheck-all>Alles terugzetten</button>
+        </div>
+      </div>
+    `;
+    bindEvent(groceryGroups.querySelector("[data-grocery-sort-show-all]"), "click", () => {
+      state.grocerySort = "default";
+      renderGroceryGroups();
+    });
+    bindEvent(groceryGroups.querySelector("[data-grocery-uncheck-all]"), "click", () => setAllGroceryChecked(false));
+    return;
+  }
+
+  const uniqueRecipes = [...new Set(visibleGroceryItems.map((i) => i.recipeTitle || "Overig").filter(Boolean))];
   const multiRecipe = uniqueRecipes.length > 1;
 
   function renderGroceryItem(item) {
@@ -7805,11 +7912,10 @@ function renderGroceryGroups(options = {}) {
   }
 
   let html = "";
-  const grocerySort = state.grocerySort || "default";
 
   if (grocerySort === "alpha") {
     // Flat list, A-Z (unchecked first, then checked), regardless of recipe
-    const sorted = [...state.groceryItems].sort((a, b) => {
+    const sorted = [...visibleGroceryItems].sort((a, b) => {
       if (a.checked !== b.checked) return Number(a.checked) - Number(b.checked);
       return (a.title || "").localeCompare(b.title || "", "nl");
     });
@@ -7821,34 +7927,44 @@ function renderGroceryGroups(options = {}) {
         ${sorted.map(renderGroceryItem).join("")}
       </section>
     `;
-  } else if (grocerySort === "category") {
+  } else if (grocerySort === "category" || grocerySort === "store") {
     // Group all items by ingredient category, ignoring which recipe they belong to
-    const catGroups = state.groceryItems.reduce((acc, item) => {
+    const catGroups = visibleGroceryItems.reduce((acc, item) => {
       const key = item.group || "overig";
       if (!acc[key]) acc[key] = [];
       acc[key].push(item);
       return acc;
     }, {});
-    html = Object.entries(catGroups)
+    const storeMode = grocerySort === "store";
+    html = `
+      ${storeMode ? `<section class="grocery-store-mode">
+        <div>
+          <strong>Winkelmodus</strong>
+          <span>${visibleGroceryItems.length} product${visibleGroceryItems.length === 1 ? "" : "en"} nog te pakken</span>
+        </div>
+        <button type="button" data-grocery-sort-show-all>Toon alles</button>
+      </section>` : ""}
+    ` + Object.entries(catGroups)
       .map(([group, items]) => {
         const meta = getGroupMeta(group);
         const sortedItems = [...items].sort((a, b) => Number(a.checked) - Number(b.checked));
         return `
-          <section class="grocery-group">
+          <section class="grocery-group ${storeMode ? "grocery-group--store" : ""}">
             <div class="grocery-group__header grocery-group__header--aisle">
               <h2>${meta.title}</h2>
+              ${storeMode ? `<span class="grocery-group__count">${sortedItems.length}</span>` : ""}
             </div>
             ${sortedItems.map(renderGroceryItem).join("")}
           </section>
         `;
       }).join("");
   } else if (multiRecipe) {
-    const shared = state.groceryItems.filter((i) => i.recipeTitle && i.recipeTitle.includes(","));
+    const shared = visibleGroceryItems.filter((i) => i.recipeTitle && i.recipeTitle.includes(","));
     const sharedTitleSet = new Set(shared.map((i) => i.recipeTitle || ""));
     // Group by recipe; samengevoegde titels (“A, B”) alleen onder Gedeelde ingrediënten
     for (const recipeTitle of uniqueRecipes) {
       if (sharedTitleSet.has(recipeTitle)) continue;
-      const items = state.groceryItems
+      const items = visibleGroceryItems
         .filter((i) => (i.recipeTitle || "Overig") === recipeTitle)
         .sort((a, b) => Number(a.checked) - Number(b.checked));
       const headId = items.find((i) => i.recipeId)?.recipeId || "";
@@ -7884,13 +8000,13 @@ function renderGroceryGroups(options = {}) {
     }
   } else {
     // Single recipe — group by ingredient category as before
-    const groups = state.groceryItems.reduce((acc, item) => {
+    const groups = visibleGroceryItems.reduce((acc, item) => {
       if (!acc[item.group]) acc[item.group] = [];
       acc[item.group].push(item);
       return acc;
     }, {});
 
-    const soloId = state.groceryItems.find((i) => i.recipeId)?.recipeId || "";
+    const soloId = visibleGroceryItems.find((i) => i.recipeId)?.recipeId || "";
     const soloRecipe = soloId ? getRecipeById(soloId) : null;
     const soloConceptPill =
       soloRecipe?.needsReview ?
@@ -7915,8 +8031,19 @@ function renderGroceryGroups(options = {}) {
 
   groceryGroups.innerHTML = html;
 
+  groceryGroups.querySelectorAll("[data-grocery-sort-show-all]").forEach((btn) => {
+    bindEvent(btn, "click", () => {
+      state.grocerySort = "default";
+      renderGroceryGroups();
+    });
+  });
+
   // Pantry suggestions should only show for the relevant recipe group(s),
   // and should match the rest of the grocery list look & feel.
+  if (grocerySort === "store") {
+    if (!options.skipPhotoFetch) fetchGroceryPhotos();
+    return;
+  }
   const existingKeys = new Set(state.groceryItems.map((i) => normalizeIngredientKey(i.title)));
 
   const renderPantryEntry = (s, meta) => `
@@ -7960,12 +8087,12 @@ function renderGroceryGroups(options = {}) {
 
   if (multiRecipe) {
     for (const recipeTitle of uniqueRecipes) {
-      const recipeId = state.groceryItems.find((i) => (i.recipeTitle || "Overig") === recipeTitle)?.recipeId || "";
+      const recipeId = visibleGroceryItems.find((i) => (i.recipeTitle || "Overig") === recipeTitle)?.recipeId || "";
       if (recipeId) appendPantrySection({ recipeId, recipeTitle });
     }
   } else {
-    const onlyRecipeId = state.groceryItems.find((i) => i.recipeId)?.recipeId || "";
-    const onlyRecipeTitle = state.groceryItems.find((i) => i.recipeTitle)?.recipeTitle || "";
+    const onlyRecipeId = visibleGroceryItems.find((i) => i.recipeId)?.recipeId || "";
+    const onlyRecipeTitle = visibleGroceryItems.find((i) => i.recipeTitle)?.recipeTitle || "";
     if (onlyRecipeId && onlyRecipeTitle) appendPantrySection({ recipeId: onlyRecipeId, recipeTitle: onlyRecipeTitle });
   }
 
@@ -9337,6 +9464,13 @@ async function enhanceRecipeWithImport(recipeId) {
 bindEvent(document.getElementById("detailAssist"), "click", (e) => {
   const btn = e.target.closest("[data-enhance-recipe]");
   if (btn) enhanceRecipeWithImport(btn.dataset.enhanceRecipe);
+  const cookBtn = e.target.closest("[data-start-kookstand]");
+  if (cookBtn) openKookstand(cookBtn.dataset.startKookstand);
+  const groceryBtn = e.target.closest("[data-add-detail-grocery]");
+  if (groceryBtn) {
+    addRecipeToGrocery(getSelectedRecipe());
+    switchView("grocery");
+  }
 });
 
 const FAVORITES_COOKBOOK_NAME = "❤️ Favorieten";
@@ -12554,6 +12688,8 @@ bindEvent(document.getElementById("viewAllCookbooksBtn"), "click", () => {
 // Grocery sort pills
 bindEvent(document.getElementById("grocerySortBar"), "click", (e) => {
   if (e.target.closest("#groceryShareBtn")) { shareGroceryList(); return; }
+  if (e.target.closest("#groceryCheckAllBtn")) { setAllGroceryChecked(true); return; }
+  if (e.target.closest("#groceryUncheckAllBtn")) { setAllGroceryChecked(false); return; }
   const pill = e.target.closest("[data-grocery-sort]");
   if (!pill) return;
   state.grocerySort = pill.dataset.grocerySort || "default";

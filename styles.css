@@ -1922,6 +1922,8 @@ img {
 
 .detail-assist {
   margin-top: 12px;
+  display: grid;
+  gap: 10px;
 }
 
 .detail-assist__card {
@@ -1939,6 +1941,11 @@ img {
 
 .detail-assist__card--warn {
   background: rgba(255, 244, 236, 0.98);
+}
+
+.detail-assist__card--cook {
+  background: rgba(255,255,255,0.96);
+  border-color: rgba(36,60,43,0.12);
 }
 
 .detail-assist__head {
@@ -1985,6 +1992,28 @@ img {
   transition: background 0.15s;
 }
 .detail-assist__enhance-btn:hover { background: rgba(0,0,0,0.12); }
+
+.detail-flow-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.detail-flow-strip span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(120,147,111,0.1);
+  color: #34513b;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+.detail-assist__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
 .cook-link {
   border-radius: 16px;
@@ -13000,6 +13029,48 @@ body {
 .ch-source-summary strong {
   color: var(--text);
 }
+.ch-search-progress {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ch-search-progress::-webkit-scrollbar { display: none; }
+.ch-search-progress__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+.ch-search-progress__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.45;
+}
+.ch-search-progress__step.is-active {
+  background: rgba(120,147,111,0.12);
+  border-color: rgba(120,147,111,0.24);
+  color: #34513b;
+}
+.ch-search-progress__step.is-active .ch-search-progress__dot {
+  opacity: 1;
+  animation: platelyPulse 1s ease-in-out infinite;
+}
+.ch-search-progress__step.is-done {
+  background: rgba(52,81,59,0.08);
+  border-color: rgba(52,81,59,0.16);
+  color: #34513b;
+}
 .ch-result-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -18436,6 +18507,13 @@ body {
   border-color: #3a5c37;
   color: #fff;
 }
+.grocery-sort-pill:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.grocery-sort-pill--action {
+  background: rgba(120,147,111,0.08);
+}
 .grocery-sort-pill--share {
   display: flex;
   align-items: center;
@@ -18443,6 +18521,52 @@ body {
   margin-left: auto;
   color: #25a244;
   border-color: rgba(37,162,68,0.2);
+}
+
+.grocery-store-mode {
+  margin: 0 16px 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #243c2b;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.grocery-store-mode div {
+  display: grid;
+  gap: 2px;
+}
+.grocery-store-mode strong {
+  font-size: 0.94rem;
+}
+.grocery-store-mode span {
+  font-size: 0.78rem;
+  opacity: 0.8;
+  font-weight: 700;
+}
+.grocery-store-mode button {
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.16);
+  color: #fff;
+  padding: 7px 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.grocery-group--store .grocery-entry {
+  min-height: 74px;
+}
+.grocery-group--store .grocery-check {
+  width: 30px;
+  height: 30px;
+}
+
+@keyframes platelyPulse {
+  0%, 100% { transform: scale(1); opacity: 0.72; }
+  50% { transform: scale(1.35); opacity: 1; }
 }
 
 /* ── Nav avatar icon-wrap: no pill background, just ring ── */
