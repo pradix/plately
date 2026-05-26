@@ -13974,6 +13974,24 @@ function filterAndScoreRecipeSearchResults(results, query = "") {
     .filter((row) => Number(row.qualityScore || 0) >= 35);
 }
 
+async function runAdminSearchQualityCheck(query, { limit = 24, origin = "" } = {}) {
+  const q = sanitizeText(query || "");
+  const cap = Math.min(Math.max(Number(limit) || 24, 1), 60);
+  if (!q || q.length < 2) return { query: q, total: 0, kept: [], rejected: [], threshold: 35 };
+  let rawResults = await searchRecipesViaDatabase({ query: q, allowedChannels: null, limit: Math.max(cap * 2, 30), origin });
+  if (!Array.isArray(rawResults)) {
+    const entries = await listPublicSeoRecipesCached(origin);
+    rawResults = searchPublicSeoRecipesLocal({ entries, query: q, allowedChannels: null, limit: Math.max(cap * 2, 30) });
+  }
+  const scored = (Array.isArray(rawResults) ? rawResults : []).map((row) => ({
+    ...row,
+    ...scoreRecipeSearchResultQuality(row, q),
+  }));
+  const kept = scored.filter((row) => Number(row.qualityScore || 0) >= 35).slice(0, cap);
+  const rejected = scored.filter((row) => Number(row.qualityScore || 0) < 35).slice(0, cap);
+  return { query: q, total: scored.length, kept, rejected, threshold: 35 };
+}
+
 function isLikelyBlogPage(title, url, description = "") {
   const t = sanitizeText(String(title || "")).trim();
   const u = String(url || "").trim();
@@ -23647,6 +23665,68 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/basket-match-impact" && request.method === "POST") {
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const store = normalizeStoreSlug(body.store || "albert-heijn");
+        const ingredient = canonicalizeIngredientForStoreSearch(body.ingredient || body.ingredientTitle || "");
+        const daysRaw = Number(body.days || 90);
+        const days = Number.isFinite(daysRaw) ? Math.min(Math.max(daysRaw, 1), 365) : 90;
+        if (!ingredient) throw new HttpError(400, "Geen ingrediënt opgegeven.");
+        if (!isPostgresEnabled()) {
+          return sendJson(response, 200, { ok: true, store, ingredient, days, affectedItems: 0, affectedBaskets: 0, products: [] });
+        }
+        await ensurePostgresSchema();
+        const pool = await getPostgresPool();
+        const res = await pool.query(`
+          SELECT
+            COUNT(*)::int AS affected_items,
+            COUNT(DISTINCT e.id)::int AS affected_baskets
+          FROM plately_events e
+          CROSS JOIN LATERAL jsonb_array_elements(COALESCE(e.meta->'diagnostics', '[]'::jsonb)) AS diag
+          WHERE e.type = 'basket_built'
+            AND e.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+            AND COALESCE(e.meta->>'store', diag->>'store', '') = $2
+            AND LOWER(COALESCE(diag->>'ingredient', '')) = LOWER($3)
+        `, [days, store, ingredient]);
+        const prodRes = await pool.query(`
+          SELECT
+            COALESCE(diag->>'selectedProduct', 'Geen product') AS product,
+            COUNT(*)::int AS count,
+            COUNT(*) FILTER (WHERE diag->>'hasImage' <> 'true')::int AS missing_image,
+            COUNT(*) FILTER (WHERE COALESCE((diag->>'alternatives')::int, 0) < 1)::int AS low_alternatives
+          FROM plately_events e
+          CROSS JOIN LATERAL jsonb_array_elements(COALESCE(e.meta->'diagnostics', '[]'::jsonb)) AS diag
+          WHERE e.type = 'basket_built'
+            AND e.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+            AND COALESCE(e.meta->>'store', diag->>'store', '') = $2
+            AND LOWER(COALESCE(diag->>'ingredient', '')) = LOWER($3)
+          GROUP BY COALESCE(diag->>'selectedProduct', 'Geen product')
+          ORDER BY count DESC
+          LIMIT 10
+        `, [days, store, ingredient]);
+        const row = res.rows[0] || {};
+        return sendJson(response, 200, {
+          ok: true,
+          store,
+          ingredient,
+          days,
+          affectedItems: Number(row.affected_items || 0),
+          affectedBaskets: Number(row.affected_baskets || 0),
+          products: (prodRes.rows || []).map((p) => ({
+            product: sanitizeText(p.product || ""),
+            count: Number(p.count || 0),
+            missingImage: Number(p.missing_image || 0),
+            lowAlternatives: Number(p.low_alternatives || 0),
+          })),
+        });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Match-impact laden mislukt." });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/ah-basket-check" && request.method === "POST") {
       try {
         await requireAdmin(request);
@@ -25714,33 +25794,54 @@ const server = http.createServer(async (request, response) => {
         const query = sanitizeText(body.query || "");
         const limitRaw = Number.parseInt(String(body.limit || ""), 10);
         const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 40) : 24;
-        if (!query || query.length < 2) {
-          return sendJson(response, 200, { ok: true, query, kept: [], rejected: [], total: 0 });
-        }
         const origin = getPublicOrigin(request);
-        let rawResults = await searchRecipesViaDatabase({ query, allowedChannels: null, limit: Math.max(limit * 2, 30), origin });
-        if (!Array.isArray(rawResults)) {
-          const entries = await listPublicSeoRecipesCached(origin);
-          rawResults = searchPublicSeoRecipesLocal({ entries, query, allowedChannels: null, limit: Math.max(limit * 2, 30) });
-        }
-        const scored = (Array.isArray(rawResults) ? rawResults : []).map((row) => ({
-          ...row,
-          ...scoreRecipeSearchResultQuality(row, query),
-        }));
-        const kept = scored.filter((row) => Number(row.qualityScore || 0) >= 35).slice(0, limit);
-        const rejected = scored.filter((row) => Number(row.qualityScore || 0) < 35).slice(0, limit);
-        return sendJson(response, 200, {
-          ok: true,
-          query,
-          total: scored.length,
-          kept,
-          rejected,
-          threshold: 35,
-        });
+        const result = await runAdminSearchQualityCheck(query, { limit, origin });
+        return sendJson(response, 200, { ok: true, ...result });
       } catch (error) {
         const statusCode = error.statusCode || 400;
         console.error("❌ Error in /api/admin/search-quality-test:", error.message);
         return sendJson(response, statusCode, { ok: false, error: error.message || "Zoekkwaliteit-test mislukt." });
+      }
+    }
+
+    if (requestUrl.pathname === "/api/admin/search-quality-batch" && request.method === "POST") {
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const origin = getPublicOrigin(request);
+        const rawKeywords = Array.isArray(body.keywords) ? body.keywords : [];
+        let keywords = rawKeywords.map(sanitizeText).filter(Boolean).slice(0, 50);
+        if (!keywords.length) {
+          keywords = loadStaticJsonArray("assets/seo-recipe-keywords.nl.json", []).slice(0, 25);
+        }
+        const rows = [];
+        for (const keyword of keywords) {
+          const result = await runAdminSearchQualityCheck(keyword, { limit: 12, origin });
+          const kept = Array.isArray(result.kept) ? result.kept.length : 0;
+          const rejected = Array.isArray(result.rejected) ? result.rejected.length : 0;
+          const avgScore = kept
+            ? Math.round(result.kept.reduce((sum, row) => sum + Number(row.qualityScore || 0), 0) / kept)
+            : 0;
+          rows.push({
+            keyword,
+            total: result.total,
+            kept,
+            rejected,
+            avgScore,
+            status: kept >= 6 ? "ok" : kept >= 3 ? "warn" : "bad",
+            sampleRejected: (result.rejected || []).slice(0, 3).map((row) => ({
+              title: sanitizeText(row.title || ""),
+              reasons: Array.isArray(row.qualityReasons) ? row.qualityReasons : [],
+              qualityScore: Number(row.qualityScore || 0),
+            })),
+          });
+        }
+        rows.sort((a, b) => (a.kept - b.kept) || (a.avgScore - b.avgScore));
+        return sendJson(response, 200, { ok: true, rows, count: rows.length });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/search-quality-batch:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Zoekkwaliteit-batch mislukt." });
       }
     }
 
@@ -26049,6 +26150,48 @@ const server = http.createServer(async (request, response) => {
       const result = clearAdminCache(key);
       logAdminAction(admin.email, "clear_cache", { key });
       sendJson(response, 200, { ok: true, key, ...result });
+      return;
+    }
+
+    if (requestUrl.pathname === "/api/admin/app-performance" && request.method === "GET") {
+      await requireAdmin(request);
+      const assetDefs = [
+        { key: "app", label: "App JS", path: path.join(ROOT_DIR, "app.js"), budgetKb: 900 },
+        { key: "styles", label: "CSS", path: path.join(ROOT_DIR, "styles.css"), budgetKb: 500 },
+        { key: "admin", label: "Admin HTML", path: path.join(ROOT_DIR, "admin.html"), budgetKb: 500 },
+        { key: "sw", label: "Service worker", path: path.join(ROOT_DIR, "service-worker.js"), budgetKb: 80 },
+        { key: "index", label: "Index HTML", path: path.join(ROOT_DIR, "index.html"), budgetKb: 120 },
+      ];
+      const assets = await Promise.all(assetDefs.map(async (asset) => {
+        const stat = await fsp.stat(asset.path).catch(() => null);
+        return {
+          key: asset.key,
+          label: asset.label,
+          sizeBytes: stat ? stat.size : null,
+          sizeKb: stat ? Math.round(stat.size / 1024) : null,
+          budgetKb: asset.budgetKb,
+          overBudget: stat ? stat.size / 1024 > asset.budgetKb : false,
+        };
+      }));
+      let swVersion = "";
+      let appShellCount = 0;
+      try {
+        const sw = await fsp.readFile(path.join(ROOT_DIR, "service-worker.js"), "utf8");
+        swVersion = sw.match(/__PLATELY_SW_VERSION__\s*=\s*["']([^"']+)["']/)?.[1] || "";
+        appShellCount = (sw.match(/APP_SHELL\s*=\s*\[([\s\S]*?)\]/)?.[1] || "").split("\n").filter((line) => line.includes("\"/") || line.includes("`/")).length;
+      } catch {}
+      const deploy = buildPlatelyDeployInfoPayload();
+      return sendJson(response, 200, {
+        ok: true,
+        assets,
+        totalKb: assets.reduce((sum, a) => sum + Number(a.sizeKb || 0), 0),
+        clientBuild: CACHED_PLATELY_BUILD_META,
+        serviceWorker: { version: swVersion, appShellCount },
+        deploy,
+        recommendations: assets
+          .filter((a) => a.overBudget)
+          .map((a) => `${a.label} is ${a.sizeKb} KB; over budget ${a.budgetKb} KB.`),
+      });
       return;
     }
 

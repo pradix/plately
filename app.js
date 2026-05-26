@@ -5496,11 +5496,12 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
           <div class="ch-search-empty" style="grid-column:1/-1;text-align:center;padding:2rem 1rem;max-width:26rem;margin:0 auto">
             <p style="margin:0 0 .75rem;font-weight:650;color:var(--text,#2a2a28)">Geen resultaten gevonden in de geselecteerde kanalen</p>
             <p style="margin:0 0 1.1rem;font-size:0.95rem;opacity:.88;line-height:1.45">
-              Zet meer receptenkanalen aan via <strong>Profiel</strong> → <strong>Gekoppelde kanalen</strong>.
+              Probeer een specifieker gerecht of ingrediënt, of zet meer receptenkanalen aan via <strong>Profiel</strong> → <strong>Gekoppelde kanalen</strong>.
             </p>
-            <button type="button" class="profile-login-banner__btn profile-login-banner__btn--primary" data-open-channel-settings>
-              Kanalen beheren
-            </button>
+            <div style="display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap">
+              <button type="button" class="profile-login-banner__btn profile-login-banner__btn--primary" data-open-channel-settings>Kanalen beheren</button>
+              <button type="button" class="profile-login-banner__btn" data-action="retry-channel-search">Opnieuw zoeken</button>
+            </div>
           </div>`;
       }
       return;
@@ -5836,7 +5837,11 @@ function renderImportScreenResults(container, localResults, externalResults, isL
     html += shownExternal.map(renderCard).join("");
   }
   if (!shownLocal.length && !shownExternal.length && !isLoadingExternal) {
-    html += `<p style="grid-column:1/-1;text-align:center;padding:2rem 1rem;color:var(--muted-strong)">Geen resultaten gevonden.</p>`;
+    html += `<div class="ch-search-empty" style="grid-column:1/-1;text-align:center;padding:2rem 1rem;color:var(--muted-strong)">
+      <p style="margin:0 0 .75rem;font-weight:650;color:var(--text,#2a2a28)">Geen resultaten gevonden</p>
+      <p style="margin:0 0 1rem">Probeer een concreter zoekwoord, bijvoorbeeld “pasta kip” of “tompouce”.</p>
+      <button type="button" class="profile-login-banner__btn" data-action="retry-channel-search">Opnieuw zoeken</button>
+    </div>`;
   }
   if (hiddenCount > 0 && !isLoadingExternal) {
     html += `<p class="ch-search-more-hint" style="grid-column:1/-1">+ ${hiddenCount} meer — verfijn je zoekopdracht voor betere resultaten</p>`;
@@ -13269,6 +13274,12 @@ bindEvent(channelSearchResults, "click", (event) => {
   state.channelSearchVisibleCount = (state.channelSearchVisibleCount || 10) + 10;
   renderChannelSearchResults._lastKey = null;
   renderChannelSearchResults(state.channelSearchAllResults || []);
+});
+
+bindEvent(channelSearchResults, "click", (event) => {
+  if (!event.target.closest("[data-action='retry-channel-search']")) return;
+  const query = (state.channelSearchQuery || searchInput?.value || "").trim();
+  if (query) searchChannels(query);
 });
 
 // Import button inside channel search results

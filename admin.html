@@ -1377,12 +1377,14 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
           <input id="searchQualityQuery" class="admin-test__input" type="text" value="pasta kip" placeholder="Zoekwoord, bv. pasta kip" style="max-width:260px" />
           <button class="btn btn-primary" type="button" onclick="runSearchQualityTest()">Test zoekkwaliteit</button>
+          <button class="btn btn-sm" type="button" onclick="runSearchQualityBatch()">Test top 25 zoekwoorden</button>
           <button class="btn btn-sm" type="button" onclick="setSearchQualityQuery('tompouce')">tompouce</button>
           <button class="btn btn-sm" type="button" onclick="setSearchQualityQuery('quinoa')">quinoa</button>
           <button class="btn btn-sm" type="button" onclick="setSearchQualityQuery('avondeten')">avondeten</button>
         </div>
         <div id="searchQualityStatus" class="muted" style="font-size:13px;margin-bottom:8px">Nog niet getest.</div>
         <div id="searchQualityResults"></div>
+        <div id="searchQualityBatchResults" style="margin-top:12px"></div>
       </div>
 
       <div class="section" id="channelTestSection">
@@ -1592,6 +1594,17 @@
           <button class="btn btn-sm" type="button" onclick="loadChannelCockpit()">↻ Vernieuwen</button>
         </div>
         <div id="channelCockpitTable"></div>
+      </div>
+
+      <div class="section" id="appPerformanceWrap" style="margin-bottom:16px">
+        <div class="section-header">
+          <div>
+            <h2>App performance</h2>
+            <div class="muted" id="appPerformanceStatus">Bundle-grootte, service worker en deploystatus laden…</div>
+          </div>
+          <button class="btn btn-sm" type="button" onclick="loadAppPerformance()">↻ Check</button>
+        </div>
+        <div id="appPerformanceGrid" class="admin-visual-grid"></div>
       </div>
 
       <div class="section" id="adminTaskCenterWrap" style="margin-bottom:16px">
@@ -3020,6 +3033,7 @@
         await loadAdminDeployInfo();
         loadAdminCockpit();
         loadChannelCockpit();
+        loadAppPerformance();
         loadAdminOpsHealth();
         loadAdminActionNeeded();
         loadAdminDemoLogin();
@@ -3845,6 +3859,7 @@
                 const health = Math.max(0, Math.min(100, Number(row.healthScore || 0)));
                 const meter = health >= 90 ? "#2e7d32" : health >= 70 ? "#f59e0b" : "#b71c1c";
                 const actions = Array.isArray(row.actions) ? row.actions : [];
+                const seedId = String(row.id || "").startsWith("ch-") ? String(row.id || "") : "";
                 return `
                   <tr>
                     <td>
@@ -3861,6 +3876,8 @@
                     <td style="text-align:right">${formatNumber(row.issueCount || 0)}<div class="muted" style="font-size:11px">${formatNumber(row.ratingsWithout || 0)} zonder rating</div></td>
                     <td>
                       <div style="display:flex;gap:6px;flex-wrap:wrap">
+                        ${seedId ? `<button class="btn btn-sm" type="button" onclick="openChannelSearchTest('${escapeHtml(seedId)}')">Test zoeken</button>` : ""}
+                        ${seedId ? `<button class="btn btn-sm" type="button" onclick="openChannelImportTest('${escapeHtml(seedId)}', '${escapeHtml(row.lastSourceUrl || "")}')">Test import</button>` : ""}
                         ${actions.includes("ratings") ? `<button class="btn btn-sm" type="button" onclick="openSeoRatingsPanel()">Ratings</button>` : ""}
                         ${actions.includes("repair") ? `<button class="btn btn-sm" type="button" onclick="setAdminTab('activity')">Repair</button>` : ""}
                         ${actions.includes("dedupe") ? `<button class="btn btn-sm" type="button" onclick="runActionNeededFix('duplicateSourceUrl')">Dedupe</button>` : ""}
@@ -3873,6 +3890,67 @@
             </tbody>
           </table>
         `;
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
+      }
+    }
+
+    function openChannelSearchTest(channelId) {
+      setAdminTab("channel-test");
+      setTimeout(() => {
+        const sel = document.getElementById("channelTestSelect");
+        if (sel) {
+          const target = Array.from(sel.options).find((option) => {
+            try {
+              const parsed = JSON.parse(option.value || "{}");
+              return parsed.channelId === channelId;
+            } catch {
+              return false;
+            }
+          });
+          if (target) sel.value = target.value;
+        }
+        const input = document.getElementById("channelTestQuery");
+        if (input && !input.value) input.value = "pasta";
+        document.getElementById("channelTestSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    }
+
+    function openChannelImportTest(channelId, sourceUrl = "") {
+      openChannelSearchTest(channelId);
+      setTimeout(() => {
+        const input = document.getElementById("channelTestImportUrl");
+        if (input && sourceUrl) input.value = sourceUrl;
+      }, 120);
+    }
+
+    async function loadAppPerformance() {
+      const statusEl = document.getElementById("appPerformanceStatus");
+      const gridEl = document.getElementById("appPerformanceGrid");
+      if (statusEl) statusEl.textContent = "Performance laden…";
+      if (gridEl) gridEl.innerHTML = "";
+      try {
+        const data = await fetchAdminJson("/api/admin/app-performance");
+        const assets = Array.isArray(data.assets) ? data.assets : [];
+        if (statusEl) statusEl.textContent = `${formatNumber(data.totalKb || 0)} KB totaal · SW ${data.serviceWorker?.version || "—"} · build ${data.clientBuild || "—"}`;
+        if (!gridEl) return;
+        gridEl.innerHTML = [
+          ...assets.map((asset) => renderAdminVisualCard({
+            label: asset.label,
+            value: asset.sizeKb == null ? "—" : `${formatNumber(asset.sizeKb)} KB`,
+            badge: asset.overBudget ? "Groot" : "OK",
+            percent: asset.budgetKb ? Math.min(100, Math.round((Number(asset.sizeKb || 0) / asset.budgetKb) * 100)) : null,
+            meter: asset.overBudget ? "warn" : "ok",
+            detail: `Budget ${formatNumber(asset.budgetKb || 0)} KB`,
+          })),
+          renderAdminVisualCard({
+            label: "Service worker",
+            value: data.serviceWorker?.version || "—",
+            badge: `${formatNumber(data.serviceWorker?.appShellCount || 0)} shell assets`,
+            meter: "info",
+            detail: `Client build ${data.clientBuild || "onbekend"}`,
+          }),
+        ].join("");
       } catch (error) {
         if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
       }
@@ -4268,6 +4346,45 @@
                 ${renderSearchQualityRows(data.rejected || [], "rejected")}
               </div>
             </div>
+          `;
+        }
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
+      }
+    }
+
+    async function runSearchQualityBatch() {
+      const statusEl = document.getElementById("searchQualityStatus");
+      const outEl = document.getElementById("searchQualityBatchResults");
+      if (statusEl) statusEl.textContent = "Top zoekwoorden testen…";
+      if (outEl) outEl.innerHTML = "";
+      try {
+        const response = await fetch("/api/admin/search-quality-batch", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }));
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || "Batch-test mislukt");
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        if (statusEl) statusEl.textContent = `${formatNumber(rows.length)} zoekwoorden getest · zwakste bovenaan`;
+        if (outEl) {
+          outEl.innerHTML = `
+            <table class="users-table" style="margin-top:0">
+              <thead><tr><th>Zoekwoord</th><th style="text-align:right">Getoond</th><th style="text-align:right">Gem. score</th><th>Status</th><th>Voorbeeld weggefilterd</th></tr></thead>
+              <tbody>${rows.map((row) => {
+                const color = row.status === "ok" ? "#2e7d32" : row.status === "warn" ? "#f59e0b" : "#b71c1c";
+                const rejected = Array.isArray(row.sampleRejected) ? row.sampleRejected[0] : null;
+                const reason = rejected ? `${rejected.title || "—"} · ${(rejected.reasons || []).join(" · ")}` : "—";
+                return `<tr>
+                  <td><button class="btn btn-sm btn-secondary" type="button" onclick="setSearchQualityQuery('${escapeHtml(row.keyword || "")}')">${escapeHtml(row.keyword || "")}</button></td>
+                  <td style="text-align:right">${formatNumber(row.kept || 0)}</td>
+                  <td style="text-align:right">${formatNumber(row.avgScore || 0)}</td>
+                  <td><strong style="color:${color}">${escapeHtml(row.status || "")}</strong></td>
+                  <td style="font-size:12px">${escapeHtml(reason)}</td>
+                </tr>`;
+              }).join("")}</tbody>
+            </table>
           `;
         }
       } catch (error) {
@@ -8742,6 +8859,7 @@
               </div>
             </div>
             <div class="basket-match-card__actions">
+              <button class="btn btn-sm" type="button" onclick="loadBasketMatchImpact(${jsAdm(ingredient)}, ${jsAdm(store)})">Impact</button>
               <button class="btn btn-sm btn-success" type="button" onclick="saveBasketMatchReview('prefer', ${idx})">Kies alternatief</button>
               <button class="btn btn-sm" type="button" onclick="saveBasketMatchReview('good', ${idx})">Goed</button>
               <button class="btn btn-sm btn-danger" type="button" onclick="saveBasketMatchReview('bad', ${idx})">Fout</button>
@@ -8786,6 +8904,7 @@
               <div class="basket-match-card__meta">${escAdm(choice.price || "Prijs onbekend")} · ${score == null ? "score onbekend" : `score ${formatNumber(score)}`}</div>
             </div>
             <div class="basket-match-card__actions">
+              <button class="btn btn-sm" type="button" onclick="loadBasketMatchImpact(${jsAdm(ingredient)}, ${jsAdm(store)})">Impact</button>
               <button class="btn btn-sm btn-success" type="button" onclick="saveBasketMatchReview('prefer', ${idx})">Kies alternatief</button>
               <button class="btn btn-sm btn-danger" type="button" onclick="saveBasketMatchReview('bad', ${idx})">Blokkeer</button>
             </div>
@@ -8892,12 +9011,52 @@
                 <td style="font-size:12px">${escAdm([flags, ...(row.reasons || [])].filter(Boolean).join(" · "))}</td>
                 <td>
                   <button class="btn btn-sm" type="button" onclick="setBasketMatchIngredient(${jsAdm(row.ingredient)}, ${jsAdm(row.store)})">Open</button>
+                  <button class="btn btn-sm" type="button" onclick="loadBasketMatchImpact(${jsAdm(row.ingredient)}, ${jsAdm(row.store)})">Impact</button>
                   ${row.selectedProduct ? `<button class="btn btn-sm btn-danger" type="button" onclick="saveBasketMatchReview('bad', -1, { ingredient: ${jsAdm(row.ingredient)}, store: ${jsAdm(row.store)}, productId: ${jsAdm(row.selectedProductId || "")}, title: ${jsAdm(row.selectedProduct)} })">Blokkeer</button>` : ""}
                 </td>
               </tr>`;
             }).join("")}</tbody>
           </table>
         `;
+      }
+    }
+
+    async function loadBasketMatchImpact(ingredient, store = "albert-heijn") {
+      const status = document.getElementById("basketMatchStatus");
+      const out = document.getElementById("basketProblemPresetResults");
+      const cleanIngredient = String(ingredient || "").trim();
+      const cleanStore = store === "jumbo" ? "jumbo" : "albert-heijn";
+      if (!cleanIngredient) return;
+      if (status) status.textContent = `Impact laden voor ${cleanIngredient}…`;
+      try {
+        const res = await fetch("/api/admin/basket-match-impact", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ingredient: cleanIngredient, store: cleanStore, days: 90 }),
+        }));
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || "Impact laden mislukt");
+        if (status) status.textContent = `${formatNumber(data.affectedItems || 0)} items geraakt in ${formatNumber(data.affectedBaskets || 0)} mandjes (${data.days} dagen).`;
+        if (out) {
+          const rows = Array.isArray(data.products) ? data.products : [];
+          out.innerHTML = `
+            <div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.78);margin-bottom:10px">
+              <strong>Impact: ${escAdm(cleanIngredient)}</strong>
+              <div class="muted" style="font-size:12px">${formatNumber(data.affectedItems || 0)} items · ${formatNumber(data.affectedBaskets || 0)} mandjes · ${cleanStore === "jumbo" ? "Jumbo" : "AH"}</div>
+            </div>
+            ${rows.length ? `<table class="users-table" style="margin-top:0">
+              <thead><tr><th>Product</th><th style="text-align:right">Aantal</th><th style="text-align:right">Geen img</th><th style="text-align:right">Weinig alt.</th></tr></thead>
+              <tbody>${rows.map((row) => `<tr>
+                <td>${escAdm(row.product || "—")}</td>
+                <td style="text-align:right">${formatNumber(row.count || 0)}</td>
+                <td style="text-align:right">${formatNumber(row.missingImage || 0)}</td>
+                <td style="text-align:right">${formatNumber(row.lowAlternatives || 0)}</td>
+              </tr>`).join("")}</tbody>
+            </table>` : `<p class="muted">Geen recente impactdata gevonden.</p>`}
+          `;
+        }
+      } catch (error) {
+        if (status) status.textContent = "Fout: " + (error?.message || error);
       }
     }
 
