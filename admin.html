@@ -3161,19 +3161,21 @@
         initInventoryUserFilter();
         loadInventory(); // independent block (own loading/error)
         await loadAdminDeployInfo();
-        loadAdminCommandCenter();
-        loadAdminCockpit();
-        loadChannelCockpit();
-        loadAppPerformance();
-        loadAdminOpsHealth();
-        loadAdminActionNeeded();
-        loadAdminDemoLogin();
-        loadAhTokenStatus();
         const lastUpdatedPill = document.getElementById("lastUpdatedPill");
         if (lastUpdatedPill) lastUpdatedPill.textContent = `Laatst bijgewerkt: ${formatDate(new Date())}`;
 
         document.getElementById("loading").style.display = "none";
         document.getElementById("content").style.display = "block";
+        loadAdminCommandCenter();
+        loadAdminCockpit();
+        setTimeout(() => {
+          loadChannelCockpit();
+          loadAppPerformance();
+          loadAdminOpsHealth();
+          loadAdminActionNeeded();
+          loadAdminDemoLogin();
+          loadAhTokenStatus();
+        }, 250);
       } catch (error) {
         document.getElementById("loading").style.display = "none";
         document.getElementById("error").style.display = "block";
@@ -3802,8 +3804,11 @@
       return data;
     }
 
-    function renderCommandCenterCard({ label, value, detail, severity = "ok", tab, actionLabel }) {
+    function renderCommandCenterCard({ label, value, detail, severity = "ok", tab, actionLabel, fixKey }) {
       const cleanSeverity = ["ok", "warn", "high"].includes(severity) ? severity : "ok";
+      const actionHtml = fixKey
+        ? `<button class="btn btn-sm btn-primary" type="button" onclick="runActionNeededFix(${JSON.stringify(String(fixKey))})">${escapeHtml(actionLabel || "Fix")}</button>`
+        : tab ? `<button class="btn btn-sm" type="button" onclick="setAdminTab('${escapeHtml(tab)}')">${escapeHtml(actionLabel || "Open")}</button>` : "";
       return `
         <div class="admin-command-card admin-command-card--${cleanSeverity}">
           <div class="admin-command-card__top">
@@ -3813,7 +3818,7 @@
             </div>
           </div>
           ${detail ? `<div class="admin-command-card__detail">${escapeHtml(detail)}</div>` : ""}
-          ${tab ? `<div class="admin-command-card__actions"><button class="btn btn-sm" type="button" onclick="setAdminTab('${escapeHtml(tab)}')">${escapeHtml(actionLabel || "Open")}</button></div>` : ""}
+          ${actionHtml ? `<div class="admin-command-card__actions">${actionHtml}</div>` : ""}
         </div>
       `;
     }
@@ -3835,13 +3840,15 @@
         fetchAdminJson("/api/admin/ah-token-status"),
         fetchAdminJson("/api/admin/jobs"),
         fetchAdminJson("/api/admin/basket-stats?days=30"),
+        fetchAdminJson("/api/admin/ratings-overview"),
       ]);
-      const [healthRes, actionRes, ahRes, jobsRes, basketRes] = settled;
+      const [healthRes, actionRes, ahRes, jobsRes, basketRes, ratingsRes] = settled;
       const health = healthRes.status === "fulfilled" ? healthRes.value : null;
       const action = actionRes.status === "fulfilled" ? actionRes.value : null;
       const ah = ahRes.status === "fulfilled" ? ahRes.value : null;
       const jobs = jobsRes.status === "fulfilled" ? jobsRes.value : null;
       const basket = basketRes.status === "fulfilled" ? basketRes.value : null;
+      const ratings = ratingsRes.status === "fulfilled" ? ratingsRes.value : null;
       const failed = settled.filter((r) => r.status === "rejected").length;
       const actionItems = Array.isArray(action?.items) ? action.items : [];
       const visibleActions = actionItems.filter((item) => item?.severity === "high" || item?.severity === "medium").slice(0, 4);
@@ -3887,6 +3894,17 @@
           actionLabel: "Open lab",
         });
       }
+      const ratingsTotals = ratings?.totals || {};
+      if (Number(ratingsTotals.withoutRating || 0) > 0) {
+        cards.push({
+          label: "Ratings",
+          value: `${formatNumber(ratingsTotals.coveragePct || 0)}% dekking`,
+          detail: `${formatNumber(ratingsTotals.withoutRating || 0)} recepten zonder opgeslagen rating.`,
+          severity: Number(ratingsTotals.coveragePct || 0) < 70 ? "high" : "warn",
+          fixKey: "missingRating",
+          actionLabel: "Aanvullen",
+        });
+      }
       if (activeJobs.length) {
         cards.push({
           label: "Acties actief",
@@ -3904,6 +3922,7 @@
           detail: item.description || "",
           severity: item.severity === "high" ? "high" : "warn",
           tab: item.tab || "overview",
+          fixKey: item.key || "",
           actionLabel: item.actionLabel || "Open",
         });
       });

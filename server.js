@@ -10359,6 +10359,27 @@ function applyBasketMatchOverrideToProducts(store, ingredient, products, overrid
   return { products: filtered, preferred: preferred || null, rule, key, hit: Boolean(preferred || blockedCount > 0), blockedCount };
 }
 
+function normalizeBasketMatchPreferencesForRequest(store, rawPrefs) {
+  const out = {};
+  if (!rawPrefs || typeof rawPrefs !== "object") return out;
+  const entries = Array.isArray(rawPrefs) ? rawPrefs.map((value) => [null, value]) : Object.entries(rawPrefs);
+  for (const [rawKey, value] of entries.slice(-100)) {
+    if (!value || typeof value !== "object") continue;
+    const ingredient = canonicalizeIngredientForStoreSearch(value.ingredient || value.ingredientTitle || String(rawKey || "").split("::").pop() || "");
+    const key = getBasketMatchOverrideKey(value.store || store, ingredient);
+    const productId = sanitizeText(value.productId || value.id || "");
+    const productTitle = sanitizeText(value.productTitle || value.title || value.name || "");
+    if (!key || (!productId && !productTitle)) continue;
+    out[key] = {
+      store: normalizeStoreSlug(value.store || store),
+      ingredient,
+      preferred: { productId, productTitle },
+      clientOnly: true,
+    };
+  }
+  return out;
+}
+
 async function recordBasketMatchOverrideHits(overrides, hitKeys) {
   const keys = Array.isArray(hitKeys) ? hitKeys.filter(Boolean) : [];
   if (!keys.length || !overrides || typeof overrides !== "object") return;
@@ -18595,6 +18616,8 @@ async function buildStoreBasket(body) {
   const recipeTitle = sanitizeText(body.recipeTitle || "Boodschappenlijst");
   const sourceUrl = sanitizeText(body.sourceUrl || "");
   const basketMatchOverrides = await loadBasketMatchOverrides();
+  const clientBasketMatchPreferences = normalizeBasketMatchPreferencesForRequest(store, body.basketMatchPreferences);
+  const basketMatchRules = { ...basketMatchOverrides, ...clientBasketMatchPreferences };
   const basketMatchOverrideHits = [];
 
   if (sourceUrl) {
@@ -18664,9 +18687,9 @@ async function buildStoreBasket(body) {
             products = await findAHProducts(ingredientName, 14, null, ahSearchOptions);
           }
         }
-        const override = applyBasketMatchOverrideToProducts(store, ingredientName, products, basketMatchOverrides);
+        const override = applyBasketMatchOverrideToProducts(store, ingredientName, products, basketMatchRules);
         products = override.products;
-        if (override.hit) basketMatchOverrideHits.push(override.key);
+        if (override.hit && basketMatchOverrides[override.key]) basketMatchOverrideHits.push(override.key);
         const picked = override.preferred || selectAhProductForGroceryHandoff(products, preferences);
 
         // Ensure the selected product is also the first choice shown in the UI.
@@ -18694,9 +18717,9 @@ async function buildStoreBasket(body) {
         if (!products || products.length === 0) {
           products = await findJumboProducts(ingredientName, 12);
         }
-        const override = applyBasketMatchOverrideToProducts(store, ingredientName, products, basketMatchOverrides);
+        const override = applyBasketMatchOverrideToProducts(store, ingredientName, products, basketMatchRules);
         products = override.products;
-        if (override.hit) basketMatchOverrideHits.push(override.key);
+        if (override.hit && basketMatchOverrides[override.key]) basketMatchOverrideHits.push(override.key);
         const pickedJumbo = override.preferred || products[0] || null;
         if (pickedJumbo && products.length > 1) {
           const pickedKey = pickedJumbo.sku || pickedJumbo.name;

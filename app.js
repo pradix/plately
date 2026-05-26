@@ -2617,6 +2617,49 @@ function normalizeBasketToken(value) {
     .trim();
 }
 
+const BASKET_MATCH_PREFS_KEY = "plately-basket-match-preferences-v1";
+
+function getBasketMatchPreferenceKey(store, ingredient) {
+  const cleanStore = String(store || "albert-heijn").trim() || "albert-heijn";
+  const cleanIngredient = normalizeBasketToken(ingredient || "");
+  return cleanIngredient ? `${cleanStore}::${cleanIngredient}` : "";
+}
+
+function getBasketMatchPreferences() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(BASKET_MATCH_PREFS_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function setBasketMatchPreference(store, ingredient, choice) {
+  const key = getBasketMatchPreferenceKey(store, ingredient);
+  const productId = String(choice?.productId || choice?.id || "").trim();
+  const productTitle = String(choice?.title || choice?.name || "").trim();
+  if (!key || (!productId && !productTitle)) return;
+  const prefs = getBasketMatchPreferences();
+  prefs[key] = {
+    store: String(store || "albert-heijn"),
+    ingredient: normalizeBasketToken(ingredient || ""),
+    productId,
+    productTitle,
+    updatedAt: new Date().toISOString(),
+  };
+  try {
+    localStorage.setItem(BASKET_MATCH_PREFS_KEY, JSON.stringify(prefs));
+  } catch {}
+}
+
+function getBasketMatchPreferencesPayload() {
+  const prefs = getBasketMatchPreferences();
+  const entries = Object.entries(prefs)
+    .filter(([, value]) => value && typeof value === "object")
+    .slice(-80);
+  return Object.fromEntries(entries);
+}
+
 function extractBasketLabelsFromChoice(choice, item) {
   const raw = [
     choice?.title,
@@ -3131,6 +3174,7 @@ async function ensureBasketChoicesLoaded(itemIndexes, options = {}) {
       vegan: Boolean(state.basketFilter?.vegan),
       plantaardig: Boolean(state.basketFilter?.plantaardig),
       forceAhTokenRefresh: Boolean(options.refreshDegraded),
+      basketMatchPreferences: getBasketMatchPreferencesPayload(),
       items: missing.map(({ item }) => ({
         title: item.ingredientTitle,
         amount: item.ingredientAmount || "1",
@@ -3237,6 +3281,7 @@ async function fetchSingleBasketItemMatch(store, title, preferences) {
       vegetarisch: Boolean(preferences?.vegetarisch),
       vegan: Boolean(preferences?.vegan),
       plantaardig: Boolean(preferences?.plantaardig),
+      basketMatchPreferences: getBasketMatchPreferencesPayload(),
       items: [{ title: cleanTitle, amount: "1", recipeTitle: state.basketPreview?.recipeTitle || "" }],
     }),
   }).catch(() => null);
@@ -5559,8 +5604,18 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
     const moreHint = hiddenCount > 0 && !state.channelSearchIsSearching
       ? `<button type="button" class="ch-load-more-btn" data-action="load-more-channel-search">+ ${hiddenCount} meer laden</button>`
       : "";
+    const sourceCounts = rows.reduce((acc, row) => {
+      const key = row?._source === "local"
+        ? "Mijn recepten"
+        : (row?._source === "plately" || String(row?.url || "").startsWith("/recept/")) ? "Plately index" : "Web";
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const sourceSummary = Object.entries(sourceCounts).length > 1
+      ? `<div class="ch-source-summary">${Object.entries(sourceCounts).map(([label, count]) => `<span>${escapeHtml(label)} <strong>${formatNumber(count)}</strong></span>`).join("")}</div>`
+      : "";
     const gridClass = "ch-result-grid";
-    channelSearchResults.innerHTML = `<div class="${gridClass}">${rows.map((r) => {
+    channelSearchResults.innerHTML = `${sourceSummary}<div class="${gridClass}">${rows.map((r) => {
       const channel = channelById.get(r.channelId);
       const channelColor = channel?.color || "#8da485";
       const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
@@ -9816,6 +9871,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
       store: storeSlug,
       sourceUrl: getSingleRecipeContext(activeItems)?.sourceUrl || "",
       recipeTitle: getSingleRecipeContext(activeItems)?.recipeTitle || "Boodschappenlijst",
+      basketMatchPreferences: getBasketMatchPreferencesPayload(),
       items: activeItems.map((item) => ({
         title: getGroceryItemTitleForBasket(item),
         amount: item.amount,
@@ -9963,6 +10019,7 @@ async function refetchBasketWithPreferences(preferences) {
       vegetarisch: Boolean(preferences?.vegetarisch),
       vegan: Boolean(preferences?.vegan),
       plantaardig: Boolean(preferences?.plantaardig),
+      basketMatchPreferences: getBasketMatchPreferencesPayload(),
       items: activeItems.map((item) => ({
         title: getGroceryItemTitleForBasket(item),
         amount: item.amount,
@@ -13813,6 +13870,8 @@ bindEvent(document.getElementById("altOverlayList"), "click", (e) => {
   const prevIdx = Number.isInteger(item.selectedChoiceIndex) ? item.selectedChoiceIndex : 0;
   item.selectedChoiceIndex = choiceIdx;
   item.matchConfirmed = true;
+  const selectedChoice = Array.isArray(item.choices) ? item.choices[choiceIdx] : null;
+  setBasketMatchPreference(state.basketPreview?.store || "albert-heijn", item.ingredientTitle || "", selectedChoice);
   trackClientEvent("client_ah_wissel_pick", { from: prevIdx, to: choiceIdx });
   closeAlternativesSheet();
   renderBasketPreview();
