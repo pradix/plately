@@ -3880,6 +3880,49 @@ function sanitizeRecipeForStorage(recipe) {
   return out;
 }
 
+function pickStoredRecipeRatingPatch(recipe) {
+  const rv = Number(recipe?.ratingValue);
+  const rc = Number(recipe?.ratingCount);
+  if (!Number.isFinite(rv) || rv < 1 || rv > 5 || !Number.isFinite(rc) || rc < 1) {
+    return null;
+  }
+  return {
+    ratingValue: Math.round(rv),
+    ratingCount: Math.max(1, Math.round(rc)),
+    ...(recipe?.ratingNormalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}),
+  };
+}
+
+function buildStoredRecipeRatingLookup(recipes) {
+  const byId = new Map();
+  const bySource = new Map();
+  for (const recipe of Array.isArray(recipes) ? recipes : []) {
+    const ratingPatch = pickStoredRecipeRatingPatch(recipe);
+    if (!ratingPatch) continue;
+    const id = sanitizeText(recipe?.id || "");
+    if (id) byId.set(id, ratingPatch);
+    const sourceKey = normalizeRecipeSourceKey(recipe?.sourceUrl || "");
+    if (sourceKey) bySource.set(sourceKey, ratingPatch);
+  }
+  return { byId, bySource };
+}
+
+function mergeStoredRecipeRatingsIntoIncomingRecipes(incomingRecipes, storedRecipes) {
+  const lookup = buildStoredRecipeRatingLookup(storedRecipes);
+  return (Array.isArray(incomingRecipes) ? incomingRecipes : [])
+    .map((recipe) => {
+      const clean = sanitizeRecipeForStorage(recipe);
+      if (!clean) return null;
+      if (pickStoredRecipeRatingPatch(clean)) return clean;
+
+      const storedPatch =
+        lookup.byId.get(sanitizeText(clean.id || "")) ||
+        lookup.bySource.get(normalizeRecipeSourceKey(clean.sourceUrl || ""));
+      return storedPatch ? { ...clean, ...storedPatch } : clean;
+    })
+    .filter(Boolean);
+}
+
 function sanitizeCookbookForStorage(cookbook, fallbackId) {
   return {
     id: sanitizeText(cookbook?.id || fallbackId || generateId("cookbook")),
@@ -3926,7 +3969,7 @@ function sanitizeRecipeProgressForStorage(value) {
 
 function sanitizeUserStatePayload(body, currentUser) {
   const importedRecipes = Array.isArray(body?.importedRecipes)
-    ? body.importedRecipes.map((recipe) => sanitizeRecipeForStorage(recipe)).filter(Boolean)
+    ? mergeStoredRecipeRatingsIntoIncomingRecipes(body.importedRecipes, currentUser.importedRecipes)
     : currentUser.importedRecipes;
 
   const cookbooks = Array.isArray(body?.cookbooks)
@@ -26535,6 +26578,8 @@ module.exports = {
     normalizeAhGraphqlRating,
     extractDutchVisibleRatingFromHtml,
     extractAggregateRatingFromRecipeHtml,
+    mergeStoredRecipeRatingsIntoIncomingRecipes,
+    pickStoredRecipeRatingPatch,
     searchPublicSeoRecipesLocal,
     buildStoredRecipeRatingIndexFromSeoEntries,
     pickChannelSearchCandidateRating,
