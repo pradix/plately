@@ -1400,12 +1400,12 @@
     <section class="admin-command-center" id="adminCommandCenter" aria-label="Admin command center">
       <div class="admin-command-center__head">
         <div>
-          <div class="admin-command-center__title">Command center</div>
+          <div class="admin-command-center__title">Actie inbox</div>
           <div class="admin-command-center__meta" id="adminCommandCenterMeta">Status laden...</div>
         </div>
         <div class="header-actions">
           <button class="btn btn-sm" type="button" onclick="loadAdminCommandCenter()">Check</button>
-          <button class="btn btn-sm btn-primary" type="button" onclick="setAdminTab('overview')">Open dashboard</button>
+          <button class="btn btn-sm btn-primary" type="button" onclick="setAdminTab('overview')">Dashboard</button>
         </div>
       </div>
       <div class="admin-command-center__grid" id="adminCommandCenterGrid">
@@ -1441,6 +1441,7 @@
           </div>
         </div>
         <div class="admin-progress__bar" aria-hidden="true"><span id="adminProgressBar"></span></div>
+        <div class="admin-progress__detail" id="adminProgressSteps">Start → Uitvoeren → Controleren → Afronden</div>
         <div class="admin-progress__detail" id="adminProgressDetail">Actie wordt voorbereid.</div>
         <pre class="admin-progress__raw mono" id="adminProgressRaw"></pre>
       </div>
@@ -3274,6 +3275,12 @@
       if (el) el.textContent = value;
     }
 
+    function renderProgressSteps(active = "Start") {
+      const steps = ["Start", "Uitvoeren", "Controleren", "Afronden"];
+      const activeIndex = Math.max(0, steps.findIndex((step) => active && String(active).toLowerCase().includes(step.toLowerCase())));
+      return steps.map((step, index) => index <= activeIndex ? `● ${step}` : `○ ${step}`).join("  ");
+    }
+
     function startAdminProgressWindow({ title = "Actie uitvoeren", subtitle = "", detail = "", count = "-", controller = null } = {}) {
       const win = document.getElementById("adminProgressWindow");
       const raw = document.getElementById("adminProgressRaw");
@@ -3289,6 +3296,7 @@
       setAdminProgressText("adminProgressElapsed", "0s");
       setAdminProgressText("adminProgressPhase", "Start");
       setAdminProgressText("adminProgressCount", count);
+      setAdminProgressText("adminProgressSteps", renderProgressSteps("Start"));
       setAdminProgressText("adminProgressDetail", detail || "Actie wordt gestart.");
       const bar = document.getElementById("adminProgressBar");
       if (bar) bar.style.width = "8%";
@@ -3306,7 +3314,16 @@
     }
 
     function updateAdminProgressWindow({ phase, subtitle, detail, count, percent, raw } = {}) {
-      if (phase != null) setAdminProgressText("adminProgressPhase", String(phase));
+      if (phase != null) {
+        setAdminProgressText("adminProgressPhase", String(phase));
+        const p = String(phase);
+        const step =
+          /klaar|afrond/i.test(p) ? "Afronden" :
+          /verwerk|controle|status|refresh|ververs/i.test(p) ? "Controleren" :
+          /start/i.test(p) ? "Start" :
+          "Uitvoeren";
+        setAdminProgressText("adminProgressSteps", renderProgressSteps(step));
+      }
       if (subtitle != null) setAdminProgressText("adminProgressSubtitle", String(subtitle));
       if (detail != null) setAdminProgressText("adminProgressDetail", String(detail));
       if (count != null) setAdminProgressText("adminProgressCount", String(count));
@@ -3847,14 +3864,16 @@
         fetchAdminJson("/api/admin/jobs"),
         fetchAdminJson("/api/admin/basket-stats?days=30"),
         fetchAdminJson("/api/admin/ratings-overview"),
+        fetchAdminJson("/api/admin/app-performance"),
       ]);
-      const [healthRes, actionRes, ahRes, jobsRes, basketRes, ratingsRes] = settled;
+      const [healthRes, actionRes, ahRes, jobsRes, basketRes, ratingsRes, perfRes] = settled;
       const health = healthRes.status === "fulfilled" ? healthRes.value : null;
       const action = actionRes.status === "fulfilled" ? actionRes.value : null;
       const ah = ahRes.status === "fulfilled" ? ahRes.value : null;
       const jobs = jobsRes.status === "fulfilled" ? jobsRes.value : null;
       const basket = basketRes.status === "fulfilled" ? basketRes.value : null;
       const ratings = ratingsRes.status === "fulfilled" ? ratingsRes.value : null;
+      const perf = perfRes.status === "fulfilled" ? perfRes.value : null;
       const failed = settled.filter((r) => r.status === "rejected").length;
       const actionItems = Array.isArray(action?.items) ? action.items : [];
       const visibleActions = actionItems.filter((item) => item?.severity === "high" || item?.severity === "medium").slice(0, 4);
@@ -3869,6 +3888,9 @@
         Number(basketDebug.lowAlternatives || 0) +
         Number(basketDebug.lowConfidence || 0);
       const cards = [];
+      const perfMetrics = Array.isArray(perf?.clientMetrics) ? perf.clientMetrics : [];
+      const appLoad = perfMetrics.find((m) => m.metric === "app_load");
+      const basketPrepare = perfMetrics.find((m) => m.metric === "basket_prepare");
 
       if (failed || !health?.ok) {
         cards.push({
@@ -3898,6 +3920,16 @@
           severity: Number(basketDebug.notFound || 0) || Number(basketDebug.missingImage || 0) ? "high" : "warn",
           tab: "basket-stats",
           actionLabel: "Open lab",
+        });
+      }
+      if (Number(appLoad?.p95Ms || 0) > 2500 || Number(basketPrepare?.p95Ms || 0) > 4500) {
+        cards.push({
+          label: "Performance",
+          value: Number(appLoad?.p95Ms || 0) > 2500 ? `${formatNumber(appLoad.p95Ms)} ms start` : `${formatNumber(basketPrepare.p95Ms)} ms mandje`,
+          detail: `p95 7 dagen · app ${formatNumber(appLoad?.p95Ms || 0)} ms · mandje ${formatNumber(basketPrepare?.p95Ms || 0)} ms`,
+          severity: Number(appLoad?.p95Ms || 0) > 4500 || Number(basketPrepare?.p95Ms || 0) > 7000 ? "high" : "warn",
+          tab: "overview",
+          actionLabel: "Bekijk",
         });
       }
       const ratingsTotals = ratings?.totals || {};
@@ -3944,7 +3976,7 @@
       if (gridEl) gridEl.innerHTML = cards.map(renderCommandCenterCard).join("");
       if (metaEl) {
         const commit = String(health?.version?.commit || "").slice(0, 7);
-        metaEl.textContent = `Bijgewerkt: ${formatDate(new Date())}${commit ? ` · commit ${commit}` : ""}`;
+        metaEl.textContent = `Alleen open acties · bijgewerkt: ${formatDate(new Date())}${commit ? ` · commit ${commit}` : ""}`;
       }
     }
 
@@ -9508,10 +9540,11 @@
                 const ingredient = String(rule?.ingredient || key.split("::")[1] || "");
                 const preferred = rule?.preferred?.productTitle || "—";
                 const choices = Array.isArray(rule?.choices) ? rule.choices : [];
+                const avoid = Array.isArray(rule?.avoid) ? rule.avoid : [];
                 return `<tr>
                   <td><strong>${escAdm(store)} · ${escAdm(ingredient)}</strong><div class="muted mono">${escAdm(key)}</div></td>
                   <td>${escAdm(preferred)}</td>
-                  <td>${choices.slice(0, 3).map((c) => `${escAdm(c.productTitle || c.productId || "—")} (${formatNumber(c.count || 0)}×)`).join("<br>") || "—"}</td>
+                  <td>${choices.slice(0, 3).map((c) => `${escAdm(c.productTitle || c.productId || "—")} (${formatNumber(c.count || 0)}×)`).join("<br>") || "—"}${avoid.length ? `<div class="muted" style="margin-top:4px">Vermijdt: ${avoid.slice(0, 2).map((c) => `${escAdm(c.productTitle || c.productId || "—")} (${formatNumber(c.count || 0)}×)`).join(", ")}</div>` : ""}</td>
                   <td>${formatNumber(rule?.confidence || 0)}%</td>
                 </tr>`;
               }).join("")}</tbody>

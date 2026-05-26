@@ -10410,10 +10410,29 @@ function applyBasketMatchOverrideToProducts(store, ingredient, products, overrid
   if (!rule || typeof rule !== "object") return { products: list, preferred: null, rule: null, key: "" };
 
   const blacklist = Array.isArray(rule.blacklist) ? rule.blacklist : [];
-  const filtered = list.filter((product) => {
+  const learnedAvoid = rule.learned && Array.isArray(rule.avoid)
+    ? rule.avoid.filter((entry) => Number(entry.count || 0) >= 3)
+    : [];
+  let filtered = list.filter((product) => {
     if (!blacklist.length) return true;
     return !blacklist.some((blocked) => productMatchesBasketOverride(product, blocked));
   });
+  if (learnedAvoid.length && filtered.length > 1) {
+    const softFiltered = filtered.filter((product) =>
+      !learnedAvoid.some((avoided) => productMatchesBasketOverride(product, avoided))
+    );
+    if (softFiltered.length) filtered = softFiltered;
+  }
+  const learnedChoices = rule.learned && Array.isArray(rule.choices) ? rule.choices : [];
+  if (learnedChoices.length && filtered.length > 1) {
+    filtered = [...filtered].sort((a, b) => {
+      const scoreFor = (product) => {
+        const hit = learnedChoices.find((entry) => productMatchesBasketOverride(product, entry));
+        return Number(hit?.count || 0);
+      };
+      return scoreFor(b) - scoreFor(a);
+    });
+  }
   const preferred = filtered.find((product) => productMatchesBasketOverride(product, rule.preferred));
   const blockedCount = Math.max(0, list.length - filtered.length);
   return { products: filtered, preferred: preferred || null, rule, key, hit: Boolean(preferred || blockedCount > 0), blockedCount };
@@ -10445,6 +10464,8 @@ async function recordBasketMatchLearning(body, request = null) {
   const ingredient = canonicalizeIngredientForStoreSearch(body.ingredient || body.ingredientTitle || "");
   const productId = sanitizeText(body.productId || body.id || "");
   const productTitle = sanitizeText(body.productTitle || body.title || body.name || "");
+  const previousProductId = sanitizeText(body.previousProductId || "");
+  const previousProductTitle = sanitizeText(body.previousProductTitle || "");
   const key = getBasketMatchOverrideKey(store, ingredient);
   if (!key || !ingredient || (!productId && !productTitle)) {
     throw new HttpError(400, "Geen geldige match om te leren.");
@@ -10480,14 +10501,49 @@ async function recordBasketMatchLearning(body, request = null) {
     });
   }
   nextChoices.sort((a, b) => Number(b.count || 0) - Number(a.count || 0));
+  const previousKey = `${previousProductId || ""}::${previousProductTitle.toLowerCase()}`;
+  const pickedKey = `${productId || ""}::${productTitle.toLowerCase()}`;
+  const avoid = Array.isArray(current.avoid) ? current.avoid : [];
+  let nextAvoid = avoid;
+  if ((previousProductId || previousProductTitle) && previousKey !== pickedKey) {
+    let avoidFound = false;
+    nextAvoid = avoid.map((entry) => {
+      const entryKey = `${sanitizeText(entry.productId || "")}::${sanitizeText(entry.productTitle || "").toLowerCase()}`;
+      if (entryKey !== previousKey) return entry;
+      avoidFound = true;
+      return {
+        ...entry,
+        productId: previousProductId,
+        productTitle: previousProductTitle,
+        count: Number(entry.count || 0) + 1,
+        lastSeenAt: now,
+      };
+    });
+    if (!avoidFound) {
+      nextAvoid.push({
+        productId: previousProductId,
+        productTitle: previousProductTitle,
+        count: 1,
+        firstSeenAt: now,
+        lastSeenAt: now,
+      });
+    }
+    nextAvoid.sort((a, b) => Number(b.count || 0) - Number(a.count || 0));
+  }
   const winner = nextChoices[0] || null;
+  const totalVotes = nextChoices.reduce((sum, entry) => sum + Number(entry.count || 0), 0);
+  const winnerVotes = Number(winner?.count || 0);
+  const confidence = winner
+    ? Math.min(100, Math.round(52 + winnerVotes * 12 + (totalVotes ? (winnerVotes / totalVotes) * 24 : 0)))
+    : 0;
   learned[key] = {
     store,
     ingredient,
     preferred: winner ? { productId: sanitizeText(winner.productId || ""), productTitle: sanitizeText(winner.productTitle || "") } : null,
     learned: true,
-    confidence: winner ? Math.min(100, 60 + Math.max(0, Number(winner.count || 0) - 1) * 10) : 0,
+    confidence,
     choices: nextChoices.slice(0, 8),
+    avoid: nextAvoid.slice(0, 8),
     updatedAt: now,
   };
   await saveBasketMatchLearnedRules(learned);

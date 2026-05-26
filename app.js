@@ -413,8 +413,8 @@ const COOKBOOK_SHOWCASE_IDS = [
   "recipe-book-thai",
 ];
 
-const HOME_RECIPE_INITIAL = 6;
-const HOME_RECIPE_STEP = 12;
+const HOME_RECIPE_INITIAL = window.matchMedia?.("(max-width: 720px)")?.matches ? 4 : 6;
+const HOME_RECIPE_STEP = window.matchMedia?.("(max-width: 720px)")?.matches ? 8 : 12;
 const HOME_RECIPE_LIMIT_SESSION_KEY = "plately-home-recipe-limit";
 
 function getSessionNumber(key, fallback) {
@@ -2728,11 +2728,13 @@ function setBasketMatchPreference(store, ingredient, choice) {
   } catch {}
 }
 
-function sendBasketMatchFeedback(store, ingredient, choice) {
+function sendBasketMatchFeedback(store, ingredient, choice, previousChoice = null) {
   const productId = String(choice?.productId || choice?.id || "").trim();
   const productTitle = String(choice?.title || choice?.name || "").trim();
   const cleanIngredient = String(ingredient || "").trim();
   if (!cleanIngredient || (!productId && !productTitle)) return;
+  const previousProductId = String(previousChoice?.productId || previousChoice?.id || "").trim();
+  const previousProductTitle = String(previousChoice?.title || previousChoice?.name || "").trim();
   fetchJson(`${state.apiBase}/api/basket-match-feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2741,6 +2743,8 @@ function sendBasketMatchFeedback(store, ingredient, choice) {
       ingredient: cleanIngredient,
       productId,
       productTitle,
+      previousProductId,
+      previousProductTitle,
     }),
   }).catch(() => {});
 }
@@ -6564,6 +6568,23 @@ function isSeasonalRecipe(recipe) {
   return keywords.some((kw) => text.includes(kw));
 }
 
+function installRecipeCardPrefetchDelegation() {
+  if (installRecipeCardPrefetchDelegation._done || !recipeGrid) return;
+  installRecipeCardPrefetchDelegation._done = true;
+  const prefetchFromEvent = (event) => {
+    const card = event.target?.closest?.("button.recent-card[data-recipe-id]");
+    if (!(card instanceof HTMLElement)) return;
+    const recipe = getRecipeById(card.dataset.recipeId || "");
+    if (!recipe?.image || card.dataset.prefetchedImage === "1") return;
+    card.dataset.prefetchedImage = "1";
+    const run = () => { new Image().src = recipe.image; };
+    if ("requestIdleCallback" in window) window.requestIdleCallback(run, { timeout: 900 });
+    else window.setTimeout(run, 80);
+  };
+  recipeGrid.addEventListener("mouseover", prefetchFromEvent, { passive: true });
+  recipeGrid.addEventListener("touchstart", prefetchFromEvent, { passive: true });
+}
+
 function renderRecipeGrid() {
   // Keep skeleton while session is still loading.
   if (!state.session.ready) return;
@@ -6779,16 +6800,7 @@ function renderRecipeGrid() {
 
   recipeGrid.innerHTML = gridHtml;
   wireRecipeCardImageFallbacks(recipeGrid);
-
-  recipeGrid.querySelectorAll("button.recent-card[data-recipe-id]").forEach((card) => {
-    const recipeId = card.dataset.recipeId;
-    const recipe = recipeId ? getRecipeById(recipeId) : null;
-    if (recipe?.image) {
-      const prefetch = () => { new Image().src = recipe.image; };
-      card.addEventListener("mouseover", prefetch, { once: true, passive: true });
-      card.addEventListener("touchstart", prefetch, { once: true, passive: true });
-    }
-  });
+  installRecipeCardPrefetchDelegation();
 
   // Bind the add recipe card click
   const addRecipeCardBtn = document.getElementById("addRecipeCard");
@@ -13999,13 +14011,21 @@ bindEvent(document.getElementById("altOverlayList"), "click", (e) => {
   const item = state.basketPreview?.items?.[itemIdx];
   if (!item || !Number.isInteger(choiceIdx)) return;
   const prevIdx = Number.isInteger(item.selectedChoiceIndex) ? item.selectedChoiceIndex : 0;
+  const previousChoice = Array.isArray(item.choices) ? item.choices[prevIdx] : null;
   item.selectedChoiceIndex = choiceIdx;
   item.matchConfirmed = true;
   const selectedChoice = Array.isArray(item.choices) ? item.choices[choiceIdx] : null;
   const store = state.basketPreview?.store || "albert-heijn";
   setBasketMatchPreference(store, item.ingredientTitle || "", selectedChoice);
-  sendBasketMatchFeedback(store, item.ingredientTitle || "", selectedChoice);
-  trackClientEvent("client_ah_wissel_pick", { from: prevIdx, to: choiceIdx });
+  sendBasketMatchFeedback(store, item.ingredientTitle || "", selectedChoice, previousChoice);
+  trackClientEvent("client_ah_wissel_pick", {
+    from: prevIdx,
+    to: choiceIdx,
+    store,
+    ingredient: item.ingredientTitle || "",
+    picked: selectedChoice?.title || selectedChoice?.name || "",
+    replaced: previousChoice?.title || previousChoice?.name || "",
+  });
   closeAlternativesSheet();
   renderBasketPreview();
 });
