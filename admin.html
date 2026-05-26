@@ -156,6 +156,11 @@
       border-color: rgba(120, 147, 111, 0.18);
     }
 
+    .admin-tabs__btn--secondary {
+      opacity: 0.72;
+      padding-inline: 9px;
+    }
+
     .admin-tabs__group-label {
       flex: 0 0 100%;
       color: rgba(65, 60, 54, 0.56);
@@ -1448,7 +1453,7 @@
     <nav class="admin-tabs" aria-label="Admin tabs">
       <div class="admin-tabs__rail" id="adminTabsRail" role="tablist" aria-label="Admin secties">
         <div class="admin-tabs__group">
-          <span class="admin-tabs__group-label">Cockpit</span>
+          <span class="admin-tabs__group-label">Dashboard</span>
           <button class="admin-tabs__btn" type="button" role="tab" aria-selected="true"  data-admin-tab="overview">Dashboard</button>
           <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="activity">Activiteit</button>
         </div>
@@ -1458,13 +1463,13 @@
           <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="notifications">Notificaties</button>
         </div>
         <div class="admin-tabs__group">
-          <span class="admin-tabs__group-label">Recepten & import</span>
+          <span class="admin-tabs__group-label">Recepten</span>
           <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channels">Kanalen</button>
-          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Testen</button>
-          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="repair">Herstellen</button>
+          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="repair">Kwaliteit</button>
           <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="bulk-import">Bulk</button>
           <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="seo">SEO</button>
-          <button class="admin-tabs__btn" type="button" role="tab" aria-selected="false" data-admin-tab="search-terms">Zoekwoorden</button>
+          <button class="admin-tabs__btn admin-tabs__btn--secondary" type="button" role="tab" aria-selected="false" data-admin-tab="channel-test">Testen</button>
+          <button class="admin-tabs__btn admin-tabs__btn--secondary" type="button" role="tab" aria-selected="false" data-admin-tab="search-terms">Zoekwoorden</button>
         </div>
         <div class="admin-tabs__group">
           <span class="admin-tabs__group-label">Boodschappen</span>
@@ -9455,11 +9460,32 @@
         if (!res.ok || !data.ok) throw new Error(data.error || "Overrides laden mislukt");
         const entries = Object.entries(data.overrides || {})
           .sort((a, b) => String(b[1]?.updatedAt || b[1]?.lastHitAt || "").localeCompare(String(a[1]?.updatedAt || a[1]?.lastHitAt || "")));
-        if (!entries.length) {
-          el.innerHTML = `<p class="muted">Nog geen handmatige matchregels.</p>`;
+        const learnedEntries = Object.entries(data.learned || {})
+          .sort((a, b) => Number(b[1]?.choices?.[0]?.count || 0) - Number(a[1]?.choices?.[0]?.count || 0));
+        if (!entries.length && !learnedEntries.length) {
+          el.innerHTML = `<p class="muted">Nog geen handmatige of geleerde matchregels.</p>`;
           return;
         }
         el.innerHTML = `
+          ${learnedEntries.length ? `<div style="margin:0 0 12px">
+            <h3 style="font-size:13px;margin:0 0 8px">Geleerd van gebruikers</h3>
+            <table class="basket-override-table">
+              <thead><tr><th>Ingrediënt</th><th>Geleerde voorkeur</th><th>Keuzes</th><th>Score</th></tr></thead>
+              <tbody>${learnedEntries.slice(0, 20).map(([key, rule]) => {
+                const store = key.startsWith("jumbo::") ? "Jumbo" : "AH";
+                const ingredient = String(rule?.ingredient || key.split("::")[1] || "");
+                const preferred = rule?.preferred?.productTitle || "—";
+                const choices = Array.isArray(rule?.choices) ? rule.choices : [];
+                return `<tr>
+                  <td><strong>${escAdm(store)} · ${escAdm(ingredient)}</strong><div class="muted mono">${escAdm(key)}</div></td>
+                  <td>${escAdm(preferred)}</td>
+                  <td>${choices.slice(0, 3).map((c) => `${escAdm(c.productTitle || c.productId || "—")} (${formatNumber(c.count || 0)}×)`).join("<br>") || "—"}</td>
+                  <td>${formatNumber(rule?.confidence || 0)}%</td>
+                </tr>`;
+              }).join("")}</tbody>
+            </table>
+          </div>` : ""}
+          ${entries.length ? `
           <table class="basket-override-table">
             <thead>
               <tr>
@@ -9489,7 +9515,7 @@
                 </tr>`;
               }).join("")}
             </tbody>
-          </table>`;
+          </table>` : `<p class="muted">Nog geen handmatige matchregels.</p>`}`;
       } catch (error) {
         el.innerHTML = `<p class="muted">Fout: ${escAdm(error?.message || error)}</p>`;
       }

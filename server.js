@@ -10308,6 +10308,7 @@ function persistEnvKey(key, value) {
 // Fallback: sla het AH-token op in DATA_DIR als JSON — altijd schrijfbaar.
 const AH_TOKEN_FILE = () => path.join(DATA_DIR, "ah_token.json");
 const BASKET_MATCH_OVERRIDES_FILE = () => path.join(DATA_DIR, "basket_match_overrides.json");
+const BASKET_MATCH_LEARNED_FILE = () => path.join(DATA_DIR, "basket_match_learned.json");
 
 function getBasketMatchOverrideKey(store, ingredient) {
   const normalizedStore = normalizeStoreSlug(store || "albert-heijn");
@@ -10331,6 +10332,21 @@ async function loadBasketMatchOverrides() {
 async function saveBasketMatchOverrides(overrides) {
   await fsp.mkdir(DATA_DIR, { recursive: true });
   await fsp.writeFile(BASKET_MATCH_OVERRIDES_FILE(), JSON.stringify(overrides || {}, null, 2), "utf8");
+}
+
+async function loadBasketMatchLearnedRules() {
+  try {
+    const raw = await fsp.readFile(BASKET_MATCH_LEARNED_FILE(), "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function saveBasketMatchLearnedRules(rules) {
+  await fsp.mkdir(DATA_DIR, { recursive: true });
+  await fsp.writeFile(BASKET_MATCH_LEARNED_FILE(), JSON.stringify(rules || {}, null, 2), "utf8");
 }
 
 function productMatchesBasketOverride(product, rule) {
@@ -10378,6 +10394,60 @@ function normalizeBasketMatchPreferencesForRequest(store, rawPrefs) {
     };
   }
   return out;
+}
+
+async function recordBasketMatchLearning(body, request = null) {
+  const store = normalizeStoreSlug(body.store || "albert-heijn");
+  const ingredient = canonicalizeIngredientForStoreSearch(body.ingredient || body.ingredientTitle || "");
+  const productId = sanitizeText(body.productId || body.id || "");
+  const productTitle = sanitizeText(body.productTitle || body.title || body.name || "");
+  const key = getBasketMatchOverrideKey(store, ingredient);
+  if (!key || !ingredient || (!productId && !productTitle)) {
+    throw new HttpError(400, "Geen geldige match om te leren.");
+  }
+  const authUser = request ? await getAuthenticatedUser(request).catch(() => null) : null;
+  const learned = await loadBasketMatchLearnedRules();
+  const current = learned[key] && typeof learned[key] === "object" ? learned[key] : {};
+  const choices = Array.isArray(current.choices) ? current.choices : [];
+  const matchKey = `${productId || ""}::${productTitle.toLowerCase()}`;
+  const now = new Date().toISOString();
+  let found = false;
+  const nextChoices = choices.map((entry) => {
+    const entryKey = `${sanitizeText(entry.productId || "")}::${sanitizeText(entry.productTitle || "").toLowerCase()}`;
+    if (entryKey !== matchKey) return entry;
+    found = true;
+    return {
+      ...entry,
+      productId,
+      productTitle,
+      count: Number(entry.count || 0) + 1,
+      lastSeenAt: now,
+      sampleUserId: sanitizeText(authUser?.id || entry.sampleUserId || ""),
+    };
+  });
+  if (!found) {
+    nextChoices.push({
+      productId,
+      productTitle,
+      count: 1,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      sampleUserId: sanitizeText(authUser?.id || ""),
+    });
+  }
+  nextChoices.sort((a, b) => Number(b.count || 0) - Number(a.count || 0));
+  const winner = nextChoices[0] || null;
+  learned[key] = {
+    store,
+    ingredient,
+    preferred: winner ? { productId: sanitizeText(winner.productId || ""), productTitle: sanitizeText(winner.productTitle || "") } : null,
+    learned: true,
+    confidence: winner ? Math.min(100, 60 + Math.max(0, Number(winner.count || 0) - 1) * 10) : 0,
+    choices: nextChoices.slice(0, 8),
+    updatedAt: now,
+  };
+  await saveBasketMatchLearnedRules(learned);
+  return { key, rule: learned[key] };
 }
 
 async function recordBasketMatchOverrideHits(overrides, hitKeys) {
@@ -15173,7 +15243,8 @@ function getCachedRecipeLdRating(url) {
   const key = normalizeRecipeRatingCacheUrl(url);
   const e = recipeRatingLdCache.get(key);
   if (!e) return undefined;
-  if (Date.now() - e.at > RECIPE_RATING_LD_CACHE_TTL_MS) {
+  const ttl = e.value === null ? 7 * 24 * 60 * 60 * 1000 : RECIPE_RATING_LD_CACHE_TTL_MS;
+  if (Date.now() - e.at > ttl) {
     recipeRatingLdCache.delete(key);
     return undefined;
   }
@@ -18616,8 +18687,9 @@ async function buildStoreBasket(body) {
   const recipeTitle = sanitizeText(body.recipeTitle || "Boodschappenlijst");
   const sourceUrl = sanitizeText(body.sourceUrl || "");
   const basketMatchOverrides = await loadBasketMatchOverrides();
+  const basketMatchLearnedRules = await loadBasketMatchLearnedRules();
   const clientBasketMatchPreferences = normalizeBasketMatchPreferencesForRequest(store, body.basketMatchPreferences);
-  const basketMatchRules = { ...basketMatchOverrides, ...clientBasketMatchPreferences };
+  const basketMatchRules = { ...basketMatchLearnedRules, ...basketMatchOverrides, ...clientBasketMatchPreferences };
   const basketMatchOverrideHits = [];
 
   if (sourceUrl) {
@@ -18785,13 +18857,22 @@ async function buildStoreBasket(body) {
     };
   });
 
-  const foundResults = searchResults.filter((result) => result?.product);
+  const selectedHandoffResults = matchedItems
+    .map((matched, index) => {
+      const result = searchResults[index];
+      const choice = Array.isArray(matched?.choices) ? matched.choices[0] : null;
+      const score = Number(choice?.matchMeta?.score);
+      const isLowConfidence = Number.isFinite(score) && score > 42;
+      if (!result?.product || isLowConfidence) return null;
+      return result;
+    })
+    .filter(Boolean);
   await recordBasketMatchOverrideHits(basketMatchOverrides, basketMatchOverrideHits).catch(() => {});
   const directUrl =
-    foundResults.length > 0
+    selectedHandoffResults.length > 0
       ? store === "albert-heijn"
-        ? buildAHDirectAddUrl(foundResults)
-        : buildJumboDirectAddUrl(foundResults)
+        ? buildAHDirectAddUrl(selectedHandoffResults)
+        : buildJumboDirectAddUrl(selectedHandoffResults)
       : "";
 
   return {
@@ -18803,8 +18884,8 @@ async function buildStoreBasket(body) {
     directUrl,
     fallbackUrl: store === "jumbo" ? buildJumboFallbackUrl(items) : buildStoreSearchUrl(store, items),
     note:
-      foundResults.length
-        ? "Plately heeft echte winkelmatches gevonden. Controleer eventueel per ingrediënt en ga daarna door."
+      selectedHandoffResults.length
+        ? "Plately heeft betrouwbare winkelmatches gevonden. Controleer eventueel per ingrediënt en ga daarna door."
         : "Plately heeft nog niet voor elk ingrediënt een exacte winkelmatch gevonden. Controleer per ingrediënt en open daarna de winkel.",
     items: matchedItems.filter((item) => item && !item.skipped),
     diagnostics: matchedItems.filter(Boolean).map((item) => item.debug).filter(Boolean),
@@ -21809,6 +21890,18 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/basket-match-feedback" && request.method === "POST") {
+      try {
+        const body = await readRequestBody(request);
+        const result = await recordBasketMatchLearning(body, request);
+        sendJson(response, 200, { ok: true, key: result.key, rule: result.rule });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        sendJson(response, statusCode, { ok: false, error: error.message || "Match leren mislukt." });
+      }
+      return;
+    }
+
     if (requestUrl.pathname === "/api/ah-research" && request.method === "POST") {
       const body = await readRequestBody(request);
       const result = await researchAHChoices(body);
@@ -23597,7 +23690,8 @@ const server = http.createServer(async (request, response) => {
       try {
         await requireAdmin(request);
         const overrides = await loadBasketMatchOverrides();
-        return sendJson(response, 200, { ok: true, overrides, count: Object.keys(overrides || {}).length });
+        const learned = await loadBasketMatchLearnedRules();
+        return sendJson(response, 200, { ok: true, overrides, learned, count: Object.keys(overrides || {}).length, learnedCount: Object.keys(learned || {}).length });
       } catch (error) {
         return sendJson(response, 500, { ok: false, error: error.message || "Overrides laden mislukt." });
       }

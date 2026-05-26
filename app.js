@@ -2652,6 +2652,23 @@ function setBasketMatchPreference(store, ingredient, choice) {
   } catch {}
 }
 
+function sendBasketMatchFeedback(store, ingredient, choice) {
+  const productId = String(choice?.productId || choice?.id || "").trim();
+  const productTitle = String(choice?.title || choice?.name || "").trim();
+  const cleanIngredient = String(ingredient || "").trim();
+  if (!cleanIngredient || (!productId && !productTitle)) return;
+  fetchJson(`${state.apiBase}/api/basket-match-feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      store: store || "albert-heijn",
+      ingredient: cleanIngredient,
+      productId,
+      productTitle,
+    }),
+  }).catch(() => {});
+}
+
 function getBasketMatchPreferencesPayload() {
   const prefs = getBasketMatchPreferences();
   const entries = Object.entries(prefs)
@@ -13871,7 +13888,9 @@ bindEvent(document.getElementById("altOverlayList"), "click", (e) => {
   item.selectedChoiceIndex = choiceIdx;
   item.matchConfirmed = true;
   const selectedChoice = Array.isArray(item.choices) ? item.choices[choiceIdx] : null;
-  setBasketMatchPreference(state.basketPreview?.store || "albert-heijn", item.ingredientTitle || "", selectedChoice);
+  const store = state.basketPreview?.store || "albert-heijn";
+  setBasketMatchPreference(store, item.ingredientTitle || "", selectedChoice);
+  sendBasketMatchFeedback(store, item.ingredientTitle || "", selectedChoice);
   trackClientEvent("client_ah_wissel_pick", { from: prevIdx, to: choiceIdx });
   closeAlternativesSheet();
   renderBasketPreview();
