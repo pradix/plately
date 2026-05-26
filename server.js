@@ -10491,22 +10491,34 @@ const _persistedToken = loadPersistedAHToken();
 let ahTokenCache = _persistedToken
   ? { token: _persistedToken.token, expiresAt: _persistedToken.expiresAt }
   : { token: "", expiresAt: 0 };
+let ahTokenRefreshPromise = null;
+let ahTokenRefreshTimer = null;
+let ahTokenRetryInterval = null;
 
 // Bij serverstart altijd direct een vers token ophalen via de proxy.
 // Daarna elke 6 dagen automatisch vernieuwen — het token verloopt na 7 dagen.
 {
-  const doStartupRefresh = () =>
-    _fetchFreshAHToken()
+  const doStartupRefresh = () => {
+    if (ahTokenCache.token && ahTokenCache.expiresAt && ahTokenCache.expiresAt - Date.now() > 24 * 60 * 60 * 1000) {
+      scheduleAHTokenRefresh();
+      return;
+    }
+    refreshAHTokenOnce()
       .then(() => scheduleAHTokenRefresh())
       .catch((err) => {
         console.warn(`[AH] Startup token-refresh mislukt: ${err?.message || err} — retry over 30 min`);
-        // Retry elke 30 minuten totdat het lukt, dan scheduling starten
-        const retryInterval = setInterval(() => {
-          _fetchFreshAHToken()
-            .then(() => { clearInterval(retryInterval); scheduleAHTokenRefresh(); })
-          .catch(() => {});
+        if (ahTokenRetryInterval) return;
+        ahTokenRetryInterval = setInterval(() => {
+          refreshAHTokenOnce()
+            .then(() => {
+              clearInterval(ahTokenRetryInterval);
+              ahTokenRetryInterval = null;
+              scheduleAHTokenRefresh();
+            })
+            .catch(() => {});
         }, 30 * 60 * 1000);
       });
+  };
 
   if (process.env.NODE_ENV !== "test") {
     setImmediate(doStartupRefresh);
@@ -10624,6 +10636,15 @@ async function _fetchFreshAHToken() {
   return data.access_token;
 }
 
+function refreshAHTokenOnce() {
+  if (ahTokenRefreshPromise) return ahTokenRefreshPromise;
+  ahTokenRefreshPromise = _fetchFreshAHToken()
+    .finally(() => {
+      ahTokenRefreshPromise = null;
+    });
+  return ahTokenRefreshPromise;
+}
+
 async function fetchAHAnonymousToken(options = {}) {
   const forceRefresh = Boolean(options?.forceRefresh);
   // Cache-hit: vers token beschikbaar
@@ -10633,7 +10654,7 @@ async function fetchAHAnonymousToken(options = {}) {
 
   // Cache leeg of verlopen — haal direct een vers token op
   try {
-    return await _fetchFreshAHToken();
+    return await refreshAHTokenOnce();
   } catch (refreshErr) {
     console.warn(`[AH] Token-refresh mislukt: ${refreshErr?.message}`);
     // Geef verlopen cache-token terug als noodoplossing (beter dan niets)
@@ -10644,15 +10665,19 @@ async function fetchAHAnonymousToken(options = {}) {
 
 // Achtergrond-verversing: plan een refresh 1 dag vóór het token verloopt
 function scheduleAHTokenRefresh() {
+  if (ahTokenRefreshTimer) {
+    clearTimeout(ahTokenRefreshTimer);
+    ahTokenRefreshTimer = null;
+  }
   const msUntilRefresh = Math.max(
     60_000,
     ahTokenCache.expiresAt
       ? ahTokenCache.expiresAt - Date.now() - 24 * 60 * 60 * 1000
       : 6 * 24 * 60 * 60 * 1000
   );
-  setTimeout(async () => {
+  ahTokenRefreshTimer = setTimeout(async () => {
     try {
-      await _fetchFreshAHToken();
+      await refreshAHTokenOnce();
     } catch (e) {
       console.warn(`[AH] Geplande token-refresh mislukt: ${e?.message}`);
     }
@@ -19101,6 +19126,26 @@ async function serveStaticFile(requestPath, response, request) {
   }
 }
 
+async function prewarmStaticAppShellCache() {
+  const files = ["index.html", "app.js", "styles.css", "service-worker.js"];
+  const startedAt = Date.now();
+  let warmed = 0;
+  for (const file of files) {
+    const resolvedPath = path.join(ROOT_DIR, file);
+    const extension = path.extname(resolvedPath).toLowerCase();
+    try {
+      await readStaticFileVariant(resolvedPath, false);
+      warmed += 1;
+      if (GZIP_EXTENSIONS.has(extension)) {
+        await readStaticFileVariant(resolvedPath, true);
+      }
+    } catch {
+      // Best effort: missende shell-assets blokkeren boot niet.
+    }
+  }
+  console.log(`[static] App shell cache opgewarmd: ${warmed}/${files.length} bestanden in ${Date.now() - startedAt}ms`);
+}
+
 function renderPublicSeoRecipePage(entry, origin) {
   const recipe = entry.recipe || {};
   const title = sanitizeText(recipe.title || "Recept");
@@ -26441,6 +26486,7 @@ if (require.main === module) {
     .finally(() => {
       server.listen(PORT, HOST, () => {
         console.log(`Plately draait op http://${HOST}:${PORT}`);
+        void prewarmStaticAppShellCache();
         // Migreer bestaande recepten naar plately_recipes (eenmalig, async)
         void migrateRecipesToTable();
         // Herbouw search_vectors naar Dutch stemming (eenmalig, async)
