@@ -10166,6 +10166,7 @@ const CLIENT_INGEST_EVENT_TYPES = new Set([
   "client_import_review_saved",
   "client_recipe_deleted",
   "client_recipe_detail_view",
+  "client_perf",
   "client_storage_quota_exceeded",
 ]);
 
@@ -26402,6 +26403,56 @@ const server = http.createServer(async (request, response) => {
         swVersion = sw.match(/__PLATELY_SW_VERSION__\s*=\s*["']([^"']+)["']/)?.[1] || "";
         appShellCount = (sw.match(/APP_SHELL\s*=\s*\[([\s\S]*?)\]/)?.[1] || "").split("\n").filter((line) => line.includes("\"/") || line.includes("`/")).length;
       } catch {}
+      let clientMetrics = [];
+      let basketMetrics = null;
+      if (isPostgresEnabled()) {
+        try {
+          await ensurePostgresSchema();
+          const pool = await getPostgresPool();
+          const perfRes = await pool.query(`
+            SELECT
+              meta->>'metric' AS metric,
+              COUNT(*)::int AS samples,
+              ROUND(AVG((meta->>'valueMs')::numeric))::int AS avg_ms,
+              ROUND(percentile_cont(0.95) WITHIN GROUP (ORDER BY (meta->>'valueMs')::numeric))::int AS p95_ms,
+              MAX(created_at) AS last_seen
+            FROM plately_events
+            WHERE type = 'client_perf'
+              AND created_at >= NOW() - INTERVAL '7 days'
+              AND meta->>'metric' IS NOT NULL
+              AND meta->>'valueMs' ~ '^[0-9]+(\\.[0-9]+)?$'
+            GROUP BY meta->>'metric'
+            ORDER BY samples DESC
+            LIMIT 12
+          `);
+          clientMetrics = (perfRes.rows || []).map((row) => ({
+            metric: sanitizeText(row.metric || ""),
+            samples: Number(row.samples) || 0,
+            avgMs: Number(row.avg_ms) || 0,
+            p95Ms: Number(row.p95_ms) || 0,
+            lastSeen: row.last_seen || null,
+          }));
+          const basketRes = await pool.query(`
+            SELECT
+              COUNT(*)::int AS baskets,
+              ROUND(AVG((meta->>'missingImageCount')::numeric))::numeric AS avg_missing_images,
+              ROUND(AVG((meta->>'lowAlternativeCount')::numeric))::numeric AS avg_low_alternatives,
+              ROUND(AVG((meta->>'lowConfidenceCount')::numeric))::numeric AS avg_low_confidence
+            FROM plately_events
+            WHERE type = 'basket_built'
+              AND created_at >= NOW() - INTERVAL '7 days'
+          `);
+          const b = basketRes.rows?.[0] || {};
+          basketMetrics = {
+            baskets: Number(b.baskets) || 0,
+            avgMissingImages: Number(b.avg_missing_images) || 0,
+            avgLowAlternatives: Number(b.avg_low_alternatives) || 0,
+            avgLowConfidence: Number(b.avg_low_confidence) || 0,
+          };
+        } catch (error) {
+          clientMetrics = [{ metric: "postgres_error", samples: 0, avgMs: 0, p95Ms: 0, error: sanitizeText(error.message || "") }];
+        }
+      }
       const deploy = buildPlatelyDeployInfoPayload();
       return sendJson(response, 200, {
         ok: true,
@@ -26409,6 +26460,8 @@ const server = http.createServer(async (request, response) => {
         totalKb: assets.reduce((sum, a) => sum + Number(a.sizeKb || 0), 0),
         clientBuild: CACHED_PLATELY_BUILD_META,
         serviceWorker: { version: swVersion, appShellCount },
+        clientMetrics,
+        basketMetrics,
         deploy,
         recommendations: assets
           .filter((a) => a.overBudget)

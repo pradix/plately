@@ -733,6 +733,7 @@ const CLIENT_TRACK_ALLOWED = new Set([
   "client_import_review_saved",
   "client_recipe_deleted",
   "client_recipe_detail_view",
+  "client_perf",
   "client_storage_quota_exceeded",
 ]);
 const __clientEventQueue = [];
@@ -788,6 +789,37 @@ function trackClientEvent(type, meta = {}) {
   if (__clientEventQueue.length >= 10) flushClientEventsBatch();
   else scheduleClientEventsFlush();
 }
+
+function trackClientPerf(metric, valueMs, meta = {}) {
+  const value = Number(valueMs);
+  if (!metric || !Number.isFinite(value) || value < 0) return;
+  trackClientEvent("client_perf", {
+    metric: String(metric).slice(0, 48),
+    valueMs: Math.round(value),
+    build: document.querySelector('meta[name="plately-build"]')?.getAttribute("content")?.trim() || "",
+    ...meta,
+  });
+}
+
+function installClientPerformanceTelemetry() {
+  if (installClientPerformanceTelemetry._done) return;
+  installClientPerformanceTelemetry._done = true;
+  window.addEventListener("load", () => {
+    window.setTimeout(() => {
+      try {
+        const nav = performance?.getEntriesByType?.("navigation")?.[0];
+        if (!nav) return;
+        trackClientPerf("app_load", nav.loadEventEnd || nav.duration || 0, {
+          ttfbMs: Math.round(nav.responseStart || 0),
+          domMs: Math.round(nav.domContentLoadedEventEnd || 0),
+          navType: nav.type || "",
+        });
+      } catch {}
+    }, 0);
+  }, { once: true });
+}
+
+installClientPerformanceTelemetry();
 
 function hostnameForAnalytics(url) {
   try {
@@ -9894,6 +9926,7 @@ function setStoreButtonLoading(button, isLoading) {
 }
 
 async function openStoreBasket(storeSlug = "albert-heijn") {
+  const perfStartedAt = performance?.now ? performance.now() : 0;
   const activeItems = getActiveGroceryItems();
   if (!activeItems.length) {
     showToast("Voeg eerst ingrediënten toe aan je lijst.", { variant: "info" });
@@ -9947,6 +9980,13 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
       retryAh: storeSlug === "albert-heijn",
       cacheBust: Date.now(),
     });
+    if (perfStartedAt && performance?.now) {
+      trackClientPerf("basket_prepare", performance.now() - perfStartedAt, {
+        store: storeSlug,
+        itemCount: activeItems.length,
+        resultItems: Array.isArray(payload?.items) ? payload.items.length : 0,
+      });
+    }
 
     if (!payload?.items?.length) {
       throw new Error("Geen producten gevonden");
@@ -11553,35 +11593,59 @@ async function registerServiceWorker() {
 
     // Toon update-banner in Plately-stijl — gebruiker kiest zelf wanneer te herladen.
     let _updateBannerShown = false;
+    let _updateApplyRequested = false;
+    const updateBannerText = document.getElementById("updateBannerText");
+    const updateBannerProgress = document.getElementById("updateBannerProgress");
+    const setUpdateProgress = (text, pct) => {
+      if (updateBannerText) updateBannerText.textContent = text;
+      if (updateBannerProgress) updateBannerProgress.style.width = `${Math.max(4, Math.min(100, Number(pct) || 0))}%`;
+    };
     const showUpdateBanner = () => {
       if (_updateBannerShown) return;
       _updateBannerShown = true;
       const banner = document.getElementById("updateBanner");
-      if (banner) banner.classList.remove("hidden");
+      setUpdateProgress("Nieuwe versie beschikbaar", 18);
+      if (banner) {
+        banner.classList.remove("hidden");
+        banner.classList.remove("is-updating");
+      }
     };
 
     const updateBannerReloadBtn = document.getElementById("updateBannerReload");
     if (updateBannerReloadBtn) {
       updateBannerReloadBtn.addEventListener("click", () => {
+        _updateApplyRequested = true;
+        document.getElementById("updateBanner")?.classList.add("is-updating");
         updateBannerReloadBtn.disabled = true;
-        updateBannerReloadBtn.textContent = "Herladen…";
+        updateBannerReloadBtn.textContent = "Bezig…";
+        setUpdateProgress("Nieuwe versie activeren…", 48);
         // Activeer de wachtende SW en herlaad zodra die de controle overneemt.
         const waiting = registration.waiting;
         if (waiting) {
-          navigator.serviceWorker.addEventListener("controllerchange", () => window.location.reload(), { once: true });
           waiting.postMessage({ type: "SKIP_WAITING" });
         } else {
-          window.location.reload();
+          registration.update().catch(() => {});
+          setUpdateProgress("Bestanden controleren…", 32);
+          window.setTimeout(() => {
+            if (registration.waiting) {
+              setUpdateProgress("Nieuwe versie activeren…", 58);
+              registration.waiting.postMessage({ type: "SKIP_WAITING" });
+            } else {
+              setUpdateProgress("Pagina opnieuw laden…", 90);
+              window.location.reload();
+            }
+          }, 700);
         }
       });
     }
 
-    // Nieuwe SW heeft de controle overgenomen → herlaad alleen als banner al getoond was
-    // (gebruiker heeft al "Vernieuwen" geklikt) of als er nog geen controller was (eerste load).
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (_updateBannerShown) {
-        // Banner was shown and user clicked reload — now the new SW controls the page.
-        // The reload was already triggered by the button handler; nothing to do here.
+      if (_updateApplyRequested) {
+        setUpdateProgress("Nieuwe versie geladen…", 78);
+        window.setTimeout(() => {
+          setUpdateProgress("Plately vernieuwen…", 100);
+          window.location.reload();
+        }, 450);
       }
     });
 
@@ -11594,6 +11658,8 @@ async function registerServiceWorker() {
       const worker = registration.installing;
       if (!worker) return;
       worker.addEventListener("statechange", () => {
+        if (worker.state === "installing") setUpdateProgress("Update downloaden…", 28);
+        if (worker.state === "installed" && navigator.serviceWorker.controller) setUpdateProgress("Nieuwe versie klaar", 18);
         if (worker.state === "installed" && navigator.serviceWorker.controller) {
           // Nieuwe versie gereed — toon banner, wacht op gebruiker.
           showUpdateBanner();

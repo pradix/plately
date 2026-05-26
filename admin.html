@@ -2842,6 +2842,7 @@
               </div>
             </div>
             <div id="basketMatchStatus" class="muted"></div>
+            <div id="basketReviewQueue" style="margin-top:10px"></div>
             <div id="basketProblemPresetResults" style="margin-top:10px"></div>
             <div id="basketMatchResults" class="basket-match-results"></div>
             <div id="basketMatchOverrides"></div>
@@ -4208,9 +4209,40 @@
       try {
         const data = await fetchAdminJson("/api/admin/app-performance");
         const assets = Array.isArray(data.assets) ? data.assets : [];
+        const metrics = Array.isArray(data.clientMetrics) ? data.clientMetrics : [];
+        const metricLabel = (key) => ({
+          app_load: "App start",
+          basket_prepare: "AH/Jumbo matchen",
+        }[key] || key);
+        const metricBudget = (key) => key === "basket_prepare" ? 3500 : key === "app_load" ? 2200 : 2000;
+        const metricCards = metrics
+          .filter((m) => m && m.metric && m.metric !== "postgres_error")
+          .slice(0, 6)
+          .map((m) => {
+            const budget = metricBudget(m.metric);
+            const p95 = Number(m.p95Ms || 0);
+            return renderAdminVisualCard({
+              label: metricLabel(m.metric),
+              value: p95 ? `${formatNumber(p95)} ms` : "—",
+              badge: `${formatNumber(m.samples || 0)} metingen`,
+              percent: budget ? Math.min(100, Math.round((p95 / budget) * 100)) : null,
+              meter: p95 > budget ? "warn" : "ok",
+              detail: `p95 · gemiddeld ${formatNumber(m.avgMs || 0)} ms · 7 dagen`,
+            });
+          });
+        const basketMetrics = data.basketMetrics || {};
         if (statusEl) statusEl.textContent = `${formatNumber(data.totalKb || 0)} KB totaal · SW ${data.serviceWorker?.version || "—"} · build ${data.clientBuild || "—"}`;
         if (!gridEl) return;
         gridEl.innerHTML = [
+          ...metricCards,
+          renderAdminVisualCard({
+            label: "Mandje kwaliteit",
+            value: `${formatNumber(basketMetrics.baskets || 0)} mandjes`,
+            badge: Number(basketMetrics.avgMissingImages || 0) > 0 ? "Actie" : "OK",
+            percent: Math.min(100, Math.round(((Number(basketMetrics.avgMissingImages || 0) + Number(basketMetrics.avgLowAlternatives || 0) + Number(basketMetrics.avgLowConfidence || 0)) / 3) * 100)),
+            meter: Number(basketMetrics.avgMissingImages || 0) || Number(basketMetrics.avgLowAlternatives || 0) ? "warn" : "ok",
+            detail: `gem. zonder foto ${formatNumber(basketMetrics.avgMissingImages || 0)} · weinig alternatieven ${formatNumber(basketMetrics.avgLowAlternatives || 0)}`,
+          }),
           ...assets.map((asset) => renderAdminVisualCard({
             label: asset.label,
             value: asset.sizeKb == null ? "—" : `${formatNumber(asset.sizeKb)} KB`,
@@ -9546,12 +9578,14 @@
       const productsTable = document.getElementById("basketStatsProductsTable");
       const brandsTable = document.getElementById("basketStatsBrandsTable");
       const debugTable = document.getElementById("basketStatsDebugTable");
+      const queueEl = document.getElementById("basketReviewQueue");
 
       if (status) status.textContent = "Laden…";
       if (supermarktGrid) supermarktGrid.innerHTML = "";
       if (productsTable) productsTable.innerHTML = "";
       if (brandsTable) brandsTable.innerHTML = "";
       if (debugTable) debugTable.innerHTML = "";
+      if (queueEl) queueEl.innerHTML = "";
       loadBasketMatchOverrides();
 
       try {
@@ -9566,6 +9600,57 @@
         setText("basketDebugMissingImage", formatNumber(debug.missingImage || 0));
         setText("basketDebugLowAlternatives", formatNumber(debug.lowAlternatives || 0));
         setText("basketDebugLowConfidence", formatNumber(debug.lowConfidence || 0));
+        if (queueEl) {
+          const recent = Array.isArray(data.recentDebug) ? data.recentDebug : [];
+          const priority = recent
+            .map((row) => {
+              const item = row.item || {};
+              const score =
+                (item.found === false ? 80 : 0) +
+                (item.hasImage === false ? 35 : 0) +
+                (Number(item.alternatives || 0) < 1 ? 25 : 0) +
+                (Number(item.matchScore || 0) > 56 ? 30 : 0);
+              return { row, item, score };
+            })
+            .filter((entry) => entry.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 8);
+          if (!priority.length) {
+            queueEl.innerHTML = `<div class="muted" style="padding:10px 0">Geen openstaande match-review in deze periode.</div>`;
+          } else {
+            queueEl.innerHTML = `
+              <div style="border:1px solid var(--border);border-radius:12px;background:#fff;padding:12px;margin:10px 0 12px">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
+                  <div>
+                    <div style="font-weight:850">Review queue</div>
+                    <div class="muted">Slechtste recente boodschappenmatches eerst. Acties verdwijnen zodra er geen probleemdata meer is.</div>
+                  </div>
+                  <span class="badge">${priority.length} acties</span>
+                </div>
+                <div style="display:grid;gap:8px">
+                  ${priority.map(({ row, item, score }) => {
+                    const flags = [];
+                    if (item.found === false) flags.push("geen match");
+                    if (item.hasImage === false) flags.push("geen foto");
+                    if (Number(item.alternatives || 0) < 1) flags.push("weinig alternatieven");
+                    if (Number(item.matchScore || 0) > 56) flags.push("lage score");
+                    const store = row.store || item.store || "albert-heijn";
+                    return `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--border);border-radius:10px;padding:9px 10px;background:rgba(247,246,242,.78)">
+                      <div>
+                        <strong>${escAdm(item.ingredient || "—")}</strong>
+                        <span class="muted"> · ${escAdm(store === "jumbo" ? "Jumbo" : "AH")} · prioriteit ${formatNumber(score)}</span>
+                        <div class="muted">${escAdm(item.selectedProduct || "geen product")} · ${escAdm(flags.join(" · ") || "controle")}</div>
+                      </div>
+                      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+                        <button class="btn btn-sm btn-primary" type="button" onclick="setBasketMatchIngredient(${jsAdm(item.ingredient || "")}, ${jsAdm(store)})">Open</button>
+                        ${item.selectedProduct ? `<button class="btn btn-sm btn-danger" type="button" onclick="saveBasketMatchReview('bad', -1, { ingredient: ${jsAdm(item.ingredient || "")}, store: ${jsAdm(store)}, productId: ${jsAdm(item.selectedProductId || "")}, title: ${jsAdm(item.selectedProduct || "")} })">Blokkeer</button>` : ""}
+                      </div>
+                    </div>`;
+                  }).join("")}
+                </div>
+              </div>`;
+          }
+        }
 
         // Supermarkt tiles
         if (supermarktGrid) {
