@@ -2450,6 +2450,14 @@ function isDegradedAhBasketPayload(payload) {
   return getDegradedAhBasketItemIndexes(items).length > 0;
 }
 
+function shouldRetryDegradedAhBasketPayload(payload) {
+  if (!isDegradedAhBasketPayload(payload)) return false;
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  if (!items.length) return true;
+  const degradedCount = getDegradedAhBasketItemIndexes(items).length;
+  return degradedCount === items.length || degradedCount / items.length >= 0.6;
+}
+
 function isBasketChoiceSafeForHandoff(item, choice) {
   if (!choice) return false;
   if (getBasketMatchQuality(choice) !== "low") return true;
@@ -2464,7 +2472,7 @@ async function fetchBasketPayload(endpoint, body, options = {}) {
     body: JSON.stringify(body),
   });
 
-  if (options.retryAh && isDegradedAhBasketPayload(payload)) {
+  if (options.retryAh && shouldRetryDegradedAhBasketPayload(payload)) {
     payload = await fetchJson(`${state.apiBase}${endpoint}?t=${encodeURIComponent(String(Date.now()))}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2473,6 +2481,42 @@ async function fetchBasketPayload(endpoint, body, options = {}) {
   }
 
   return payload;
+}
+
+function isStandaloneWebAppClient() {
+  return Boolean(
+    window.navigator?.standalone ||
+    window.matchMedia?.("(display-mode: standalone)")?.matches ||
+    window.matchMedia?.("(display-mode: fullscreen)")?.matches
+  );
+}
+
+function isIOSWebAppClient() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+function openStoreHandoffUrl(url, preview) {
+  if (!url) return;
+  try {
+    sessionStorage.setItem("plately-last-store-handoff", JSON.stringify({
+      store: preview?.store || "",
+      at: Date.now(),
+    }));
+  } catch {}
+
+  closeBasketModal();
+
+  // iOS homescreen apps can leave an empty external browser sheet behind when
+  // opening store links with target=_blank. Use same-window navigation there.
+  if (isIOSWebAppClient() && isStandaloneWebAppClient()) {
+    window.location.assign(url);
+    return;
+  }
+
+  const opened = window.open(url, "_blank", "noopener,noreferrer");
+  if (!opened) {
+    window.location.assign(url);
+  }
 }
 
 function parseAmountNumberClient(text) {
@@ -2995,9 +3039,9 @@ function renderBasketPreview() {
       if (refreshKey && refreshKey !== basketRichChoiceRefreshKey) {
         basketRichChoiceRefreshKey = refreshKey;
         window.setTimeout(async () => {
-          await ensureBasketChoicesLoaded(degradedIndexes, { refreshDegraded: true });
+          await ensureBasketChoicesLoaded(degradedIndexes, { refreshDegraded: true, retryAh: false });
           renderBasketPreview();
-        }, 50);
+        }, 350);
       }
     } else {
       basketRichChoiceRefreshKey = "";
@@ -3024,15 +3068,17 @@ function renderBasketPreview() {
       const previousHtml = ctaBtn.innerHTML;
       ctaBtn.textContent = "Producten laden…";
       if (state.basketPreview?.store === "albert-heijn") {
-        const idxs = (state.basketPreview.items || []).map((_, i) => i);
-        await ensureBasketChoicesLoaded(idxs, { refreshDegraded: true });
+        const idxs = (state.basketPreview.items || [])
+          .map((item, i) => (!Array.isArray(item?.choices) || item.choices.length === 0 ? i : null))
+          .filter((i) => Number.isInteger(i));
+        await ensureBasketChoicesLoaded(idxs);
       }
       const currentPreview = state.basketPreview || preview;
       const url = getBasketHandoffUrl(currentPreview);
       ctaBtn.disabled = false;
       ctaBtn.innerHTML = previousHtml;
       renderBasketPreview();
-      if (url) window.open(url, "_blank", "noreferrer");
+      openStoreHandoffUrl(url, currentPreview);
     };
   }
 
@@ -3185,12 +3231,13 @@ async function ensureBasketChoicesLoaded(itemIndexes, options = {}) {
       store: "albert-heijn",
       sourceUrl,
       recipeTitle,
+      fast: true,
       bio: Boolean(state.basketFilter?.bio),
       beterLeven1: Boolean(state.basketFilter?.beterLeven1),
       vegetarisch: Boolean(state.basketFilter?.vegetarisch),
       vegan: Boolean(state.basketFilter?.vegan),
       plantaardig: Boolean(state.basketFilter?.plantaardig),
-      forceAhTokenRefresh: Boolean(options.refreshDegraded),
+      forceAhTokenRefresh: Boolean(options.forceAhTokenRefresh),
       basketMatchPreferences: getBasketMatchPreferencesPayload(),
       items: missing.map(({ item }) => ({
         title: item.ingredientTitle,
@@ -3198,7 +3245,7 @@ async function ensureBasketChoicesLoaded(itemIndexes, options = {}) {
         recipeTitle: item.recipeTitle || "",
       })),
     }, {
-      retryAh: true,
+      retryAh: Boolean(options.retryAh),
       cacheBust: Date.now(),
     });
 
@@ -9888,6 +9935,7 @@ async function openStoreBasket(storeSlug = "albert-heijn") {
       store: storeSlug,
       sourceUrl: getSingleRecipeContext(activeItems)?.sourceUrl || "",
       recipeTitle: getSingleRecipeContext(activeItems)?.recipeTitle || "Boodschappenlijst",
+      fast: storeSlug === "albert-heijn",
       basketMatchPreferences: getBasketMatchPreferencesPayload(),
       items: activeItems.map((item) => ({
         title: getGroceryItemTitleForBasket(item),
@@ -15172,7 +15220,7 @@ bindEvent(basketContinueButton, "click", async () => {
 
   const clipboardText = getBasketClipboardText(preview);
   await navigator.clipboard.writeText(clipboardText).catch(() => {});
-  window.location.assign(url);
+  openStoreHandoffUrl(url, preview);
 });
 
 document.addEventListener("visibilitychange", () => {

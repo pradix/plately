@@ -11862,7 +11862,7 @@ async function findAHProducts(ingredient, count = 12, queryOverride = null, opti
           adjustments.push({ kind: "penalty", label: "Soep (geen verse groente als zodanig)", delta: 85 });
         }
         const processedFreshVeg =
-          /\b(?:gegrild|gefrituurde?|gefrituurd|op\s+zuur|gepekeld|ingesneden|ingemaakt|augurk|op\s+sap|op\s+wijn|gevuld|opgiet(?:en)?|spread|dip\b|hummus|humus|pesto|dressing|marinade|tomatenpuree|passata|(?:tomaten\s*)?puree|ketchup|\bblik\b|bouillon|opgemaakt|voorgesneden|reepjes|op\s+zak|zakje|antipasti|carpaccio|soep|chips|snack|sticks|gehakt)\b/i;
+          /\b(?:gegrild|gefrituurde?|gefrituurd|oven|airfryer|roerbak|wok|mix|pakket|op\s+zuur|gepekeld|ingesneden|ingemaakt|augurk|op\s+sap|op\s+wijn|gevuld|opgiet(?:en)?|spread|dip\b|hummus|humus|pesto|dressing|marinade|tomatenpuree|passata|(?:tomaten\s*)?puree|ketchup|\bblik\b|bouillon|opgemaakt|voorgesneden|reepjes|op\s+zak|zakje|antipasti|carpaccio|soep|chips|snack|sticks|gehakt)\b/i;
         if (processedFreshVeg.test(title)) {
           score += 92;
           adjustments.push({ kind: "penalty", label: "Verwerkte groente (niet puur vers)", delta: 92 });
@@ -12077,6 +12077,7 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30, 
   const rawBase = sanitizeText(ingredient || "");
   const base = normalizeIngredientForSearch(rawBase) || rawBase;
   if (!base) return [];
+  const fastPreview = Boolean(options?.fastPreview);
 
   // We want a richer pool than the on-screen cap so the frontend can:
   // - show more products overall
@@ -12090,30 +12091,41 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30, 
   // AH huismerk levert goedkope basisvarianten die door de gewone zoekopdracht soms gemist worden.
   variants.push({ tag: "huismerk", query: `AH ${base}`, count: LABEL_COUNT });
 
+  if (fastPreview && !(prefs?.bio || prefs?.beterLeven1 || prefs?.vegetarisch || prefs?.vegan || prefs?.plantaardig)) {
+    return mergeAHAlternativeBuckets(ingredient, variants, maxCount, options);
+  }
+
   // Alleen label-varianten ophalen als de bijbehorende voorkeur actief is.
   // Dit voorkomt 6+ onnodige AH API-aanroepen per ingrediënt wanneer geen filters zijn ingesteld.
   if (prefs?.bio) {
     variants.push({ tag: "biologisch", query: `biologisch ${base}`, count: BASE_COUNT });
-  } else {
+  } else if (!fastPreview) {
     // Altijd 1 bio-query zodat de Wissel-sheet bio-opties kan tonen.
     variants.push({ tag: "biologisch", query: `biologisch ${base}`, count: LABEL_COUNT });
   }
   if (prefs?.beterLeven1) {
     variants.push({ tag: "beter leven 1 ster", query: `beter leven 1 ster ${base}`, count: BASE_COUNT });
     variants.push({ tag: null, query: `beter leven ${base}`, count: Math.max(LABEL_COUNT, 10) });
-  } else {
+  } else if (!fastPreview) {
     variants.push({ tag: "beter leven 1 ster", query: `beter leven 1 ster ${base}`, count: LABEL_COUNT });
   }
   if (prefs?.vegetarisch) variants.push({ tag: "vegetarisch", query: `vegetarisch ${base}`, count: BASE_COUNT });
   if (prefs?.vegan) variants.push({ tag: "vegan", query: `vegan ${base}`, count: BASE_COUNT });
   if (prefs?.plantaardig) variants.push({ tag: "plantaardig", query: `plantaardig ${base}`, count: BASE_COUNT });
 
+  return mergeAHAlternativeBuckets(ingredient, variants, maxCount, options);
+}
+
+async function mergeAHAlternativeBuckets(ingredient, variants, maxCount, options = {}) {
+  const rawBase = sanitizeText(ingredient || "");
+  const base = normalizeIngredientForSearch(rawBase) || rawBase;
   const matchSeed = sanitizeText(rawBase || base || ingredient || "");
+  const DEFAULT_BUCKET_COUNT = 12;
 
   const buckets = await Promise.all(
     variants.map(async (v) => {
       // Use raw ingredient text for scorer (baseLower/rawLower nuance); query override stays `v.query`.
-      const products = await findAHProducts(matchSeed, v.count || LABEL_COUNT, v.query, options);
+      const products = await findAHProducts(matchSeed, v.count || DEFAULT_BUCKET_COUNT, v.query, options);
       return { tag: v.tag, products };
     })
   );
@@ -12155,16 +12167,17 @@ async function findAHAlternativesGrouped(ingredient, prefs = {}, maxCount = 30, 
   const parseAhPriceNum = (p) =>
     parseFloat(String(p.price || "").replace("€", "").replace(",", ".").trim()) || 9999;
 
-  // Voordeligste eerst (actuele prijs), daarna match-score; bonus als extra tie-break.
+  // Beste ingredientmatch eerst, daarna prijs. Prijs-first maakte randproducten
+  // soms de default pick (bv. bereide groentemix boven losse rode paprika).
   merged.sort((a, b) => {
-    const pa = parseAhPriceNum(a);
-    const pb = parseAhPriceNum(b);
-    if (pa !== pb) return pa - pb;
     const sa = Number(a.matchMeta?.score);
     const sb = Number(b.matchMeta?.score);
     const fa = Number.isFinite(sa) ? sa : 9999;
     const fb = Number.isFinite(sb) ? sb : 9999;
     if (fa !== fb) return fa - fb;
+    const pa = parseAhPriceNum(a);
+    const pb = parseAhPriceNum(b);
+    if (pa !== pb) return pa - pb;
     const ba = a.isBonus ? 1 : 0;
     const bb = b.isBonus ? 1 : 0;
     if (ba !== bb) return bb - ba;
@@ -18746,6 +18759,7 @@ async function buildStoreBasket(body) {
   };
   const ahSearchOptions = {
     forceTokenRefresh: Boolean(body.forceAhTokenRefresh),
+    fastPreview: store === "albert-heijn" && Boolean(body.fast),
   };
 
   if (!items.length) {
@@ -18816,7 +18830,8 @@ async function buildStoreBasket(body) {
 
         // Fetch a wider, label-tagged set of alternatives so the AH "Wissel"
         // sheet can group by Meest voordelig / Bio / Beter Leven / etc.
-        let products = await findAHAlternativesGrouped(ingredientName, preferences, 30, ahSearchOptions);
+        const ahChoiceLimit = ahSearchOptions.fastPreview ? 12 : 30;
+        let products = await findAHAlternativesGrouped(ingredientName, preferences, ahChoiceLimit, ahSearchOptions);
 
         // If the broad fetch returned nothing, fall back to the legacy single
         // query so the basket is never empty for that item.
