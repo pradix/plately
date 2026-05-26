@@ -167,6 +167,105 @@
       padding: 0 2px 2px;
     }
 
+    .admin-command-center {
+      margin: 0 0 14px;
+      border: 1px solid rgba(120, 147, 111, 0.18);
+      border-radius: var(--radius);
+      background: #fff;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .admin-command-center__head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      background: rgba(120, 147, 111, 0.08);
+    }
+
+    .admin-command-center__title {
+      font-size: 13px;
+      font-weight: 900;
+      color: rgba(40, 64, 42, 0.94);
+    }
+
+    .admin-command-center__meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .admin-command-center__grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .admin-command-card {
+      border: 1px solid rgba(0,0,0,0.07);
+      border-radius: 8px;
+      padding: 10px 11px;
+      background: rgba(0,0,0,0.025);
+      display: grid;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .admin-command-card--ok {
+      border-color: rgba(46, 125, 50, 0.20);
+      background: rgba(46, 125, 50, 0.07);
+    }
+
+    .admin-command-card--warn {
+      border-color: rgba(245, 158, 11, 0.25);
+      background: rgba(245, 158, 11, 0.09);
+    }
+
+    .admin-command-card--high {
+      border-color: rgba(220, 53, 69, 0.25);
+      background: rgba(220, 53, 69, 0.08);
+    }
+
+    .admin-command-card__top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .admin-command-card__label {
+      font-size: 10px;
+      font-weight: 900;
+      color: rgba(0,0,0,0.56);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .admin-command-card__value {
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1.12;
+      color: rgba(0,0,0,0.84);
+      overflow-wrap: anywhere;
+    }
+
+    .admin-command-card__detail {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .admin-command-card__actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
     .admin-section-note {
       margin: -4px 0 14px;
       color: var(--muted);
@@ -1292,6 +1391,26 @@
     </header>
 
     <div id="error" class="error" style="display: none;"></div>
+
+    <section class="admin-command-center" id="adminCommandCenter" aria-label="Admin command center">
+      <div class="admin-command-center__head">
+        <div>
+          <div class="admin-command-center__title">Command center</div>
+          <div class="admin-command-center__meta" id="adminCommandCenterMeta">Status laden...</div>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-sm" type="button" onclick="loadAdminCommandCenter()">Check</button>
+          <button class="btn btn-sm btn-primary" type="button" onclick="setAdminTab('overview')">Open dashboard</button>
+        </div>
+      </div>
+      <div class="admin-command-center__grid" id="adminCommandCenterGrid">
+        <div class="admin-command-card">
+          <div class="admin-command-card__label">Laden</div>
+          <div class="admin-command-card__value">Even checken</div>
+          <div class="admin-command-card__detail">Plately haalt de belangrijkste signalen op.</div>
+        </div>
+      </div>
+    </section>
 
     <div class="admin-progress" id="adminProgressWindow" role="status" aria-live="polite" aria-label="Actie voortgang">
       <div class="admin-progress__header">
@@ -3042,6 +3161,7 @@
         initInventoryUserFilter();
         loadInventory(); // independent block (own loading/error)
         await loadAdminDeployInfo();
+        loadAdminCommandCenter();
         loadAdminCockpit();
         loadChannelCockpit();
         loadAppPerformance();
@@ -3680,6 +3800,127 @@
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.ok === false) throw new Error(data.error || data.message || `${url} laden mislukt`);
       return data;
+    }
+
+    function renderCommandCenterCard({ label, value, detail, severity = "ok", tab, actionLabel }) {
+      const cleanSeverity = ["ok", "warn", "high"].includes(severity) ? severity : "ok";
+      return `
+        <div class="admin-command-card admin-command-card--${cleanSeverity}">
+          <div class="admin-command-card__top">
+            <div>
+              <div class="admin-command-card__label">${escapeHtml(label || "")}</div>
+              <div class="admin-command-card__value">${escapeHtml(value || "OK")}</div>
+            </div>
+          </div>
+          ${detail ? `<div class="admin-command-card__detail">${escapeHtml(detail)}</div>` : ""}
+          ${tab ? `<div class="admin-command-card__actions"><button class="btn btn-sm" type="button" onclick="setAdminTab('${escapeHtml(tab)}')">${escapeHtml(actionLabel || "Open")}</button></div>` : ""}
+        </div>
+      `;
+    }
+
+    async function loadAdminCommandCenter() {
+      const metaEl = document.getElementById("adminCommandCenterMeta");
+      const gridEl = document.getElementById("adminCommandCenterGrid");
+      if (metaEl) metaEl.textContent = "Status laden...";
+      if (gridEl) {
+        gridEl.innerHTML = renderCommandCenterCard({
+          label: "Laden",
+          value: "Even checken",
+          detail: "Belangrijkste app- en adminsignalen worden opgehaald.",
+        });
+      }
+      const settled = await Promise.allSettled([
+        fetchAdminJson("/api/health", { credentials: "include", cache: "no-store" }),
+        fetchAdminJson("/api/admin/action-needed"),
+        fetchAdminJson("/api/admin/ah-token-status"),
+        fetchAdminJson("/api/admin/jobs"),
+        fetchAdminJson("/api/admin/basket-stats?days=30"),
+      ]);
+      const [healthRes, actionRes, ahRes, jobsRes, basketRes] = settled;
+      const health = healthRes.status === "fulfilled" ? healthRes.value : null;
+      const action = actionRes.status === "fulfilled" ? actionRes.value : null;
+      const ah = ahRes.status === "fulfilled" ? ahRes.value : null;
+      const jobs = jobsRes.status === "fulfilled" ? jobsRes.value : null;
+      const basket = basketRes.status === "fulfilled" ? basketRes.value : null;
+      const failed = settled.filter((r) => r.status === "rejected").length;
+      const actionItems = Array.isArray(action?.items) ? action.items : [];
+      const visibleActions = actionItems.filter((item) => item?.severity === "high" || item?.severity === "medium").slice(0, 4);
+      const activeJobs = (Array.isArray(jobs?.jobs) ? jobs.jobs : [])
+        .filter((job) => ["queued", "running"].includes(String(job.status || "").toLowerCase()));
+      const ahExpiresMs = Number(ah?.expiresInMs || 0);
+      const ahExpiresSoon = Boolean(ah?.hasToken) && ahExpiresMs > 0 && ahExpiresMs < 48 * 60 * 60 * 1000;
+      const basketDebug = basket?.debug || {};
+      const basketProblemCount =
+        Number(basketDebug.notFound || 0) +
+        Number(basketDebug.missingImage || 0) +
+        Number(basketDebug.lowAlternatives || 0) +
+        Number(basketDebug.lowConfidence || 0);
+      const cards = [];
+
+      if (failed || !health?.ok) {
+        cards.push({
+          label: "Systeem",
+          value: failed ? `${formatNumber(failed)} fout(en)` : "Health faalt",
+          detail: "Een of meer checks kon niet goed laden.",
+          severity: "high",
+          tab: "logs",
+          actionLabel: "Bekijk logs",
+        });
+      }
+      if (!ah?.hasToken || ahExpiresSoon) {
+        cards.push({
+          label: "AH koppeling",
+          value: ah?.hasToken ? "Verloopt snel" : "Geen token",
+          detail: ah?.expiresAt ? `Verloopt ${new Date(ah.expiresAt).toLocaleString("nl-NL")}` : "Productzoeker heeft een token nodig voor goede afbeeldingen en alternatieven.",
+          severity: !ah?.hasToken ? "high" : "warn",
+          tab: "supermarkets",
+          actionLabel: "Open AH",
+        });
+      }
+      if (basketProblemCount > 0) {
+        cards.push({
+          label: "Mandje-match",
+          value: `${formatNumber(basketProblemCount)} signalen`,
+          detail: `${formatNumber(basketDebug.missingImage || 0)} zonder afbeelding · ${formatNumber(basketDebug.lowAlternatives || 0)} weinig alternatieven`,
+          severity: Number(basketDebug.notFound || 0) || Number(basketDebug.missingImage || 0) ? "high" : "warn",
+          tab: "basket-stats",
+          actionLabel: "Open lab",
+        });
+      }
+      if (activeJobs.length) {
+        cards.push({
+          label: "Acties actief",
+          value: formatNumber(activeJobs.length),
+          detail: activeJobs.slice(0, 2).map((job) => job.label || job.type || job.id).join(" · "),
+          severity: "warn",
+          tab: "repair",
+          actionLabel: "Bekijk",
+        });
+      }
+      visibleActions.forEach((item) => {
+        cards.push({
+          label: item.title || "Actiepunt",
+          value: item.count != null ? formatNumber(item.count) : "Actie",
+          detail: item.description || "",
+          severity: item.severity === "high" ? "high" : "warn",
+          tab: item.tab || "overview",
+          actionLabel: item.actionLabel || "Open",
+        });
+      });
+
+      if (!cards.length) {
+        cards.push({
+          label: "Geen actie nodig",
+          value: "Alles rustig",
+          detail: "100% of gezonde onderdelen worden hier bewust niet als losse actie getoond.",
+          severity: "ok",
+        });
+      }
+      if (gridEl) gridEl.innerHTML = cards.map(renderCommandCenterCard).join("");
+      if (metaEl) {
+        const commit = String(health?.version?.commit || "").slice(0, 7);
+        metaEl.textContent = `Bijgewerkt: ${formatDate(new Date())}${commit ? ` · commit ${commit}` : ""}`;
+      }
     }
 
     async function loadAdminCockpit() {
