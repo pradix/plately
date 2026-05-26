@@ -19595,11 +19595,13 @@ const server = http.createServer(async (request, response) => {
     if (requestUrl.pathname === "/api/health" && request.method === "GET") {
       const ahProxyUrl = String(process.env.AH_API_PROXY || "").trim();
       const ahStaticToken = String(process.env.AH_ANONYMOUS_TOKEN || "").trim();
+      const deployInfo = buildPlatelyDeployInfoPayload();
       sendJson(response, 200, {
         ok: true,
         app: "Plately",
         version: {
-          commit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.GIT_SHA || "",
+          commit: deployInfo?.render?.gitCommit || process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.GIT_SHA || "",
+          clientBuild: deployInfo?.clientBuild || "",
         },
         env: process.env.NODE_ENV || "development",
         persistence: {
