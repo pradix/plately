@@ -1367,6 +1367,24 @@
 
     <div id="content" style="display: none;">
       <div class="admin-tab-section" id="adminTabChannelTest" data-tab="channel-test">
+      <div class="section" id="searchQualityLabSection" style="margin-bottom:16px">
+        <div class="section-header">
+          <div>
+            <h2>Zoekkwaliteit lab</h2>
+            <div class="muted">Test welke receptresultaten worden getoond of weggefilterd en waarom.</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <input id="searchQualityQuery" class="admin-test__input" type="text" value="pasta kip" placeholder="Zoekwoord, bv. pasta kip" style="max-width:260px" />
+          <button class="btn btn-primary" type="button" onclick="runSearchQualityTest()">Test zoekkwaliteit</button>
+          <button class="btn btn-sm" type="button" onclick="setSearchQualityQuery('tompouce')">tompouce</button>
+          <button class="btn btn-sm" type="button" onclick="setSearchQualityQuery('quinoa')">quinoa</button>
+          <button class="btn btn-sm" type="button" onclick="setSearchQualityQuery('avondeten')">avondeten</button>
+        </div>
+        <div id="searchQualityStatus" class="muted" style="font-size:13px;margin-bottom:8px">Nog niet getest.</div>
+        <div id="searchQualityResults"></div>
+      </div>
+
       <div class="section" id="channelTestSection">
         <div class="section-header">
           <h2>Kanaal testen</h2>
@@ -2665,7 +2683,18 @@
               </select>
               <button class="btn btn-primary" type="button" onclick="runBasketMatchResearch()">Zoek alternatieven</button>
             </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0">
+              <button class="btn btn-sm" type="button" onclick="runBasketProblemPreset('albert-heijn')">Test AH probleemlijst</button>
+              <button class="btn btn-sm" type="button" onclick="runBasketProblemPreset('jumbo')">Test Jumbo probleemlijst</button>
+              <button class="btn btn-sm btn-secondary" type="button" onclick="setBasketMatchIngredient('olie', document.getElementById('basketMatchStore')?.value || 'albert-heijn')">olie</button>
+              <button class="btn btn-sm btn-secondary" type="button" onclick="setBasketMatchIngredient('feta', document.getElementById('basketMatchStore')?.value || 'albert-heijn')">feta</button>
+              <button class="btn btn-sm btn-secondary" type="button" onclick="setBasketMatchIngredient('blauwe bes', document.getElementById('basketMatchStore')?.value || 'albert-heijn')">blauwe bes</button>
+              <button class="btn btn-sm btn-secondary" type="button" onclick="setBasketMatchIngredient('rode paprika', document.getElementById('basketMatchStore')?.value || 'albert-heijn')">rode paprika</button>
+              <button class="btn btn-sm btn-secondary" type="button" onclick="setBasketMatchIngredient('quinoa', document.getElementById('basketMatchStore')?.value || 'albert-heijn')">quinoa</button>
+              <button class="btn btn-sm btn-secondary" type="button" onclick="setBasketMatchIngredient('Italiaanse kruiden', document.getElementById('basketMatchStore')?.value || 'albert-heijn')">Italiaanse kruiden</button>
+            </div>
             <div id="basketMatchStatus" class="muted"></div>
+            <div id="basketProblemPresetResults" style="margin-top:10px"></div>
             <div id="basketMatchResults" class="basket-match-results"></div>
             <div id="basketMatchOverrides"></div>
           </div>
@@ -4160,6 +4189,90 @@
       const b = document.getElementById("importsByChannelTabSource");
       if (a) a.classList.toggle("btn-primary", importsByChannelGroupBy === "channel");
       if (b) b.classList.toggle("btn-primary", importsByChannelGroupBy === "source");
+    }
+
+    function setSearchQualityQuery(query) {
+      const input = document.getElementById("searchQualityQuery");
+      if (input) input.value = query || "";
+      runSearchQualityTest();
+    }
+
+    function renderSearchQualityRows(rows, kind) {
+      const list = Array.isArray(rows) ? rows : [];
+      if (!list.length) return `<p class="muted" style="font-size:13px">Geen ${kind === "kept" ? "getoonde" : "weggefilterde"} resultaten.</p>`;
+      return `
+        <table class="users-table" style="margin-top:0">
+          <thead>
+            <tr>
+              <th>Titel</th>
+              <th>Kanaal</th>
+              <th style="text-align:right">Score</th>
+              <th>Reden</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.slice(0, 18).map((row) => {
+              const score = Number(row.qualityScore || 0);
+              const color = score >= 70 ? "#2e7d32" : score >= 35 ? "#f59e0b" : "#b71c1c";
+              const reasons = Array.isArray(row.qualityReasons) && row.qualityReasons.length
+                ? row.qualityReasons.join(" · ")
+                : (kind === "kept" ? "Voldoende receptsignalen" : "Onder kwaliteitsdrempel");
+              return `
+                <tr>
+                  <td>
+                    <strong>${escapeHtml(row.title || "Onbekend")}</strong>
+                    ${row.sourceUrl ? `<div class="mono" style="font-size:11px;color:#777;word-break:break-all">${escapeHtml(row.sourceUrl)}</div>` : ""}
+                  </td>
+                  <td>${escapeHtml(row.channel || row.channelId || "—")}</td>
+                  <td style="text-align:right"><strong style="color:${color}">${formatNumber(score)}</strong></td>
+                  <td style="font-size:12px">${escapeHtml(reasons)}</td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function runSearchQualityTest() {
+      const input = document.getElementById("searchQualityQuery");
+      const statusEl = document.getElementById("searchQualityStatus");
+      const resultEl = document.getElementById("searchQualityResults");
+      const query = String(input?.value || "").trim();
+      if (!query) {
+        if (statusEl) statusEl.textContent = "Vul eerst een zoekwoord in.";
+        return;
+      }
+      if (statusEl) statusEl.textContent = "Zoekkwaliteit testen…";
+      if (resultEl) resultEl.innerHTML = "";
+      try {
+        const response = await fetch("/api/admin/search-quality-test", adminFetchInit({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, limit: 24 }),
+        }));
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.ok) throw new Error(data.error || "Zoekkwaliteit-test mislukt");
+        if (statusEl) {
+          statusEl.textContent = `${formatNumber(data.kept?.length || 0)} getoond · ${formatNumber(data.rejected?.length || 0)} weggefilterd · drempel ${formatNumber(data.threshold || 35)}`;
+        }
+        if (resultEl) {
+          resultEl.innerHTML = `
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;align-items:start">
+              <div>
+                <h3 style="font-size:14px;margin:0 0 8px">Getoond</h3>
+                ${renderSearchQualityRows(data.kept || [], "kept")}
+              </div>
+              <div>
+                <h3 style="font-size:14px;margin:0 0 8px">Weggefilterd</h3>
+                ${renderSearchQualityRows(data.rejected || [], "rejected")}
+              </div>
+            </div>
+          `;
+        }
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);
+      }
     }
 
     async function loadImportsByChannel() {
@@ -8696,6 +8809,96 @@
       `;
       const status = document.getElementById("basketMatchStatus");
       if (status) status.textContent = `${formatNumber(choices.length)} alternatieven · ${diag.hasImage === false ? "gekozen match zonder afbeelding" : "diagnose geladen"}.`;
+    }
+
+    function summarizeBasketDiagnosis(data, ingredient, store) {
+      const basket = data?.basket || {};
+      const diag = Array.isArray(basket.diagnostics) ? basket.diagnostics[0] || {} : {};
+      const item = Array.isArray(basket.items) ? basket.items[0] || {} : {};
+      const choices = Array.isArray(item.choices) ? item.choices : [];
+      const flags = [];
+      if (diag.found === false) flags.push("geen match");
+      if (diag.found && diag.hasImage === false) flags.push("geen afbeelding");
+      if (diag.found && Number(diag.alternatives || 0) < 1) flags.push("weinig alternatieven");
+      if (Number(diag.matchScore || 0) > 56) flags.push("lage score");
+      const reasons = Array.isArray(diag.reasons) ? diag.reasons.filter(Boolean).slice(0, 3) : [];
+      return {
+        ingredient,
+        store,
+        selectedProduct: diag.selectedProduct || choices[0]?.title || "",
+        selectedProductId: diag.selectedProductId || choices[0]?.productId || "",
+        score: diag.matchScore,
+        alternatives: choices.length,
+        flags,
+        reasons,
+      };
+    }
+
+    async function runBasketProblemPreset(store = "albert-heijn") {
+      const terms = ["olie", "Italiaanse kruiden", "rode paprika", "quinoa", "blauwe bes", "framboos", "feta"];
+      const status = document.getElementById("basketMatchStatus");
+      const out = document.getElementById("basketProblemPresetResults");
+      const select = document.getElementById("basketMatchStore");
+      if (select) select.value = store === "jumbo" ? "jumbo" : "albert-heijn";
+      if (status) status.textContent = `Probleemlijst testen voor ${store === "jumbo" ? "Jumbo" : "AH"}…`;
+      if (out) out.innerHTML = "";
+      const rows = [];
+      for (const term of terms) {
+        try {
+          if (store === "albert-heijn") {
+            const res = await fetch("/api/admin/ah-basket-check", adminFetchInit({
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ items: [{ title: term, amount: "1 verpakking" }] })
+            }));
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || "AH diagnose mislukt");
+            rows.push(summarizeBasketDiagnosis(data, term, store));
+          } else {
+            const res = await fetch("/api/jumbo-research", adminFetchInit({
+              method: "POST",
+              body: JSON.stringify({ ingredientTitle: term, amount: "1 verpakking" })
+            }));
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || "Jumbo diagnose mislukt");
+            const first = Array.isArray(data.choices) ? data.choices[0] || {} : {};
+            rows.push({
+              ingredient: term,
+              store,
+              selectedProduct: first.title || "",
+              selectedProductId: first.productId || "",
+              score: getBasketChoiceScore(first),
+              alternatives: Array.isArray(data.choices) ? data.choices.length : 0,
+              flags: first.imageUrl ? [] : ["geen afbeelding"],
+              reasons: [],
+            });
+          }
+        } catch (error) {
+          rows.push({ ingredient: term, store, selectedProduct: "", score: null, alternatives: 0, flags: ["fout"], reasons: [error?.message || String(error)] });
+        }
+      }
+      if (status) status.textContent = `${formatNumber(rows.length)} probleemingrediënten getest.`;
+      if (out) {
+        out.innerHTML = `
+          <table class="users-table" style="margin-top:0">
+            <thead><tr><th>Ingrediënt</th><th>Gekozen product</th><th style="text-align:right">Score</th><th>Signaal</th><th>Actie</th></tr></thead>
+            <tbody>${rows.map((row) => {
+              const flags = row.flags.length ? row.flags.join(" · ") : "OK";
+              const product = row.selectedProduct || "Geen product";
+              return `<tr>
+                <td><strong>${escAdm(row.ingredient)}</strong></td>
+                <td>${escAdm(product)}<div class="muted" style="font-size:11px">${formatNumber(row.alternatives || 0)} alternatieven</div></td>
+                <td style="text-align:right">${row.score == null ? "—" : formatNumber(row.score)}</td>
+                <td style="font-size:12px">${escAdm([flags, ...(row.reasons || [])].filter(Boolean).join(" · "))}</td>
+                <td>
+                  <button class="btn btn-sm" type="button" onclick="setBasketMatchIngredient(${jsAdm(row.ingredient)}, ${jsAdm(row.store)})">Open</button>
+                  ${row.selectedProduct ? `<button class="btn btn-sm btn-danger" type="button" onclick="saveBasketMatchReview('bad', -1, { ingredient: ${jsAdm(row.ingredient)}, store: ${jsAdm(row.store)}, productId: ${jsAdm(row.selectedProductId || "")}, title: ${jsAdm(row.selectedProduct)} })">Blokkeer</button>` : ""}
+                </td>
+              </tr>`;
+            }).join("")}</tbody>
+          </table>
+        `;
+      }
     }
 
     async function runBasketMatchResearch() {

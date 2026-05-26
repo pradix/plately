@@ -25707,6 +25707,43 @@ const server = http.createServer(async (request, response) => {
       }
     }
 
+    if (requestUrl.pathname === "/api/admin/search-quality-test" && request.method === "POST") {
+      try {
+        await requireAdmin(request);
+        const body = await readRequestBody(request);
+        const query = sanitizeText(body.query || "");
+        const limitRaw = Number.parseInt(String(body.limit || ""), 10);
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 40) : 24;
+        if (!query || query.length < 2) {
+          return sendJson(response, 200, { ok: true, query, kept: [], rejected: [], total: 0 });
+        }
+        const origin = getPublicOrigin(request);
+        let rawResults = await searchRecipesViaDatabase({ query, allowedChannels: null, limit: Math.max(limit * 2, 30), origin });
+        if (!Array.isArray(rawResults)) {
+          const entries = await listPublicSeoRecipesCached(origin);
+          rawResults = searchPublicSeoRecipesLocal({ entries, query, allowedChannels: null, limit: Math.max(limit * 2, 30) });
+        }
+        const scored = (Array.isArray(rawResults) ? rawResults : []).map((row) => ({
+          ...row,
+          ...scoreRecipeSearchResultQuality(row, query),
+        }));
+        const kept = scored.filter((row) => Number(row.qualityScore || 0) >= 35).slice(0, limit);
+        const rejected = scored.filter((row) => Number(row.qualityScore || 0) < 35).slice(0, limit);
+        return sendJson(response, 200, {
+          ok: true,
+          query,
+          total: scored.length,
+          kept,
+          rejected,
+          threshold: 35,
+        });
+      } catch (error) {
+        const statusCode = error.statusCode || 400;
+        console.error("❌ Error in /api/admin/search-quality-test:", error.message);
+        return sendJson(response, statusCode, { ok: false, error: error.message || "Zoekkwaliteit-test mislukt." });
+      }
+    }
+
     if (requestUrl.pathname === "/api/admin/channel-test/import" && request.method === "POST") {
       console.log("🧪 /api/admin/channel-test/import called");
       try {
