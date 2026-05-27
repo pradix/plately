@@ -81,4 +81,39 @@ describe("recipe rating preservation", () => {
     assert.equal(merged.ratingValue, 5);
     assert.equal(merged.ratingCount, 9);
   });
+
+  it("bewaart Postgres app_state ratings bij een client-save zonder ratings", () => {
+    const currentUser = {
+      id: "user-1",
+      email: "test@example.com",
+      app_state: {
+        importedRecipes: [
+          {
+            id: "recipe-pg",
+            title: "Postgres pasta",
+            sourceUrl: "https://example.com/recept/postgres-pasta",
+            ratingValue: 4,
+            ratingCount: 321,
+            ingredients: [{ name: "pasta" }],
+            instructions: ["Kook."],
+          },
+        ],
+      },
+    };
+    const incoming = {
+      importedRecipes: [
+        {
+          id: "recipe-pg",
+          title: "Postgres pasta",
+          sourceUrl: "https://example.com/recept/postgres-pasta",
+          ingredients: [{ name: "pasta" }],
+          instructions: ["Kook."],
+        },
+      ],
+    };
+
+    const next = __dev.sanitizeUserStatePayload(incoming, currentUser);
+    assert.equal(next.importedRecipes[0].ratingValue, 4);
+    assert.equal(next.importedRecipes[0].ratingCount, 321);
+  });
 });

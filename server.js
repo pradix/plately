@@ -3968,27 +3968,30 @@ function sanitizeRecipeProgressForStorage(value) {
 }
 
 function sanitizeUserStatePayload(body, currentUser) {
+  const currentState = currentUser?.app_state && typeof currentUser.app_state === "object"
+    ? buildAppStateFromUser(currentUser)
+    : (currentUser || {});
   const importedRecipes = Array.isArray(body?.importedRecipes)
-    ? mergeStoredRecipeRatingsIntoIncomingRecipes(body.importedRecipes, currentUser.importedRecipes)
-    : currentUser.importedRecipes;
+    ? mergeStoredRecipeRatingsIntoIncomingRecipes(body.importedRecipes, currentState.importedRecipes)
+    : currentState.importedRecipes;
 
   const cookbooks = Array.isArray(body?.cookbooks)
     ? body.cookbooks
         .map((cookbook, index) => sanitizeCookbookForStorage(cookbook, `cookbook-${index + 1}`))
         .filter((cookbook) => cookbook.name)
-    : currentUser.cookbooks;
+    : currentState.cookbooks;
 
   const mealPlan = {
     ...DEFAULT_MEAL_PLAN,
-    ...(body?.mealPlan && typeof body.mealPlan === "object" ? body.mealPlan : currentUser.mealPlan),
+    ...(body?.mealPlan && typeof body.mealPlan === "object" ? body.mealPlan : currentState.mealPlan),
   };
 
   const groceryItems = Array.isArray(body?.groceryItems)
     ? body.groceryItems.map((item, index) => sanitizeGroceryItemForStorage(item, index))
-    : currentUser.groceryItems;
+    : currentState.groceryItems;
 
   // Grocery lists (multiple lists feature)
-  let groceryLists = currentUser.groceryLists || [];
+  let groceryLists = currentState.groceryLists || [];
   if (Array.isArray(body?.groceryLists)) {
     groceryLists = body.groceryLists.map((list) => ({
       id: sanitizeText(list.id || ""),
@@ -4003,25 +4006,25 @@ function sanitizeUserStatePayload(body, currentUser) {
   }
   const activeGroceryListId = typeof body?.activeGroceryListId === "string"
     ? sanitizeText(body.activeGroceryListId)
-    : (currentUser.activeGroceryListId || "");
+    : (currentState.activeGroceryListId || "");
 
   const recipeProgress = body?.recipeProgress
     ? sanitizeRecipeProgressForStorage(body.recipeProgress)
-    : currentUser.recipeProgress;
+    : currentState.recipeProgress;
 
   const followedChannelIds = Array.isArray(body?.followedChannelIds)
     ? body.followedChannelIds.map(sanitizeText).filter(Boolean)
-    : currentUser.followedChannelIds || [];
+    : currentState.followedChannelIds || [];
 
   const customChannels = Array.isArray(body?.customChannels)
     ? body.customChannels
-    : currentUser.customChannels || [];
+    : currentState.customChannels || [];
 
   const language = "nl";
 
   const onboardingSeenAt = typeof body?.onboardingSeenAt === "string"
     ? sanitizeText(body.onboardingSeenAt).slice(0, 80)
-    : (typeof currentUser.onboardingSeenAt === "string" ? currentUser.onboardingSeenAt : "");
+    : (typeof currentState.onboardingSeenAt === "string" ? currentState.onboardingSeenAt : "");
 
   return {
     ...currentUser,
@@ -15937,6 +15940,7 @@ async function backfillImportedRecipeRatingsForAllUsers({
     skippedAlreadyHasRating: 0,
     httpErr: 0,
     schemaMiss: 0,
+    updatedRecipeIndexRows: 0,
     cacheHitWithRating: 0,
     syncedRecipeIndexUsers: 0,
   };
@@ -15949,13 +15953,20 @@ async function backfillImportedRecipeRatingsForAllUsers({
   const candidates = [];
   const seen = new Set();
 
-  function addCandidate({ userId, recipeIndex, sourceUrl }) {
+  function getRatingBackfillCandidateKey(candidate) {
+    if (candidate?.tableId) return `table::${sanitizeText(candidate.tableId || "")}`;
+    return `user::${sanitizeText(candidate?.userId || "")}::${Number(candidate?.recipeIndex) || 0}`;
+  }
+
+  function addCandidate({ userId = "", recipeIndex = -1, tableId = "", sourceUrl }) {
     const u = String(sourceUrl || "").trim();
     if (!u) return;
-    const key = `${sanitizeText(userId)}::${normalizeRecipeRatingCacheUrl(u)}::${recipeIndex}`;
+    const key = tableId
+      ? `table::${sanitizeText(tableId)}`
+      : `${sanitizeText(userId)}::${normalizeRecipeRatingCacheUrl(u)}::${recipeIndex}`;
     if (seen.has(key)) return;
     seen.add(key);
-    candidates.push({ userId: sanitizeText(userId), recipeIndex, sourceUrl: u });
+    candidates.push({ userId: sanitizeText(userId), recipeIndex, tableId: sanitizeText(tableId), sourceUrl: u });
   }
 
   // 1) Collect candidates
@@ -15963,6 +15974,39 @@ async function backfillImportedRecipeRatingsForAllUsers({
   if (isPostgresEnabled()) {
     await ensurePostgresSchema();
     const pool = await getPostgresPool();
+    const recipeRows = await pool.query(
+      `
+      SELECT id, data
+      FROM plately_recipes
+      WHERE data ? 'sourceUrl'
+        AND NOT (data ? 'ratingValue' AND data ? 'ratingCount')
+      ORDER BY updated_at DESC NULLS LAST
+      LIMIT $1
+      `,
+      [Math.max(1, Math.min(Number(maxRecipes) || 1200, 8000))]
+    );
+    for (const row of recipeRows.rows || []) {
+      if (out.scannedRecipes >= maxRecipes) break;
+      const r = row.data && typeof row.data === "object" ? row.data : {};
+      out.scannedRecipes += 1;
+      const sourceUrl = sanitizeText(r?.sourceUrl || r?.source || "");
+      if (!sourceUrl) {
+        out.skippedNoSourceUrl += 1;
+        continue;
+      }
+      if (cleanChannelId && inferSeedChannelIdFromSourceUrl(sourceUrl) !== cleanChannelId) {
+        out.skippedNotEligible += 1;
+        continue;
+      }
+      if (!urlEligibleForChannelSearchRatingFetch(sourceUrl)) {
+        out.skippedNotEligible += 1;
+        continue;
+      }
+      out.candidates += 1;
+      addCandidate({ tableId: row.id, sourceUrl });
+      if (candidates.length >= maxRecipes) break;
+    }
+
     const res = await pool.query(
       `
       SELECT id, app_state
@@ -16078,7 +16122,7 @@ async function backfillImportedRecipeRatingsForAllUsers({
       if (cached !== undefined) {
         if (cached && typeof cached === "object") {
           out.cacheHitWithRating += 1;
-          ratingByKey.set(`${c.userId}::${c.recipeIndex}`, cached);
+          ratingByKey.set(getRatingBackfillCandidateKey(c), cached);
         }
         if (!isAhAllerhandeRecipeUrl(uKey)) {
           markRatingFetchDone();
@@ -16087,7 +16131,7 @@ async function backfillImportedRecipeRatingsForAllUsers({
       }
       const fromFetcher = await fetchAggregateRatingForRecipePageUrl(uKey, timeoutMs);
       if (fromFetcher) {
-        ratingByKey.set(`${c.userId}::${c.recipeIndex}`, fromFetcher);
+        ratingByKey.set(getRatingBackfillCandidateKey(c), fromFetcher);
         markRatingFetchDone();
         continue;
       }
@@ -16115,7 +16159,7 @@ async function backfillImportedRecipeRatingsForAllUsers({
         const rt = extractAggregateRatingFromRecipeHtml(html);
         if (rt) {
           setCachedRecipeLdRating(uKey, rt);
-          ratingByKey.set(`${c.userId}::${c.recipeIndex}`, rt);
+          ratingByKey.set(getRatingBackfillCandidateKey(c), rt);
         } else {
           setCachedRecipeLdRating(uKey, null);
           out.schemaMiss += 1;
@@ -16144,9 +16188,44 @@ async function backfillImportedRecipeRatingsForAllUsers({
   if (isPostgresEnabled()) {
     await ensurePostgresSchema();
     const pool = await getPostgresPool();
+
+    const tablePatches = fetchCandidates
+      .map((candidate) => ({ candidate, rt: ratingByKey.get(getRatingBackfillCandidateKey(candidate)) }))
+      .filter((entry) => entry.candidate.tableId && entry.rt);
+    for (const { candidate, rt } of tablePatches) {
+      const rv = Number(rt.ratingValue);
+      const rc = Number(rt.ratingCount);
+      if (!Number.isFinite(rv) || rv < 1 || rv > 5 || !Number.isFinite(rc) || rc < 1) continue;
+      const patch = {
+        ratingValue: Math.round(rv),
+        ratingCount: Math.max(1, Math.round(rc)),
+        ...(rt.ratingNormalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}),
+      };
+      const result = await pool.query(
+        `
+          UPDATE plately_recipes
+          SET data = data || $2::jsonb,
+              updated_at = NOW()
+          WHERE id = $1
+            AND NOT (data ? 'ratingValue' AND data ? 'ratingCount')
+        `,
+        [candidate.tableId, JSON.stringify(patch)]
+      );
+      if (result.rowCount > 0) {
+        out.updatedRecipeIndexRows += result.rowCount;
+        out.updatedRecipes += result.rowCount;
+      }
+    }
+
     const byUser = new Map();
     for (const c of fetchCandidates) {
-      const rt = ratingByKey.get(`${c.userId}::${c.recipeIndex}`);
+      if (!c.userId) continue;
+      let rt = ratingByKey.get(getRatingBackfillCandidateKey(c));
+      if (!rt) {
+        const sourceKey = normalizeRecipeRatingCacheUrl(c.sourceUrl);
+        const sameSource = tablePatches.find((entry) => normalizeRecipeRatingCacheUrl(entry.candidate.sourceUrl) === sourceKey);
+        rt = sameSource?.rt || null;
+      }
       if (!rt) continue;
       if (!byUser.has(c.userId)) byUser.set(c.userId, []);
       byUser.get(c.userId).push({ recipeIndex: c.recipeIndex, rt });
@@ -16192,6 +16271,61 @@ async function backfillImportedRecipeRatingsForAllUsers({
         count: `${out.updatedRecipes} opgeslagen`,
         detail: `${out.syncedRecipeIndexUsers} user-indexen bijgewerkt.`,
       });
+    }
+
+    if (tablePatches.length) {
+      const ratingBySource = new Map();
+      for (const { candidate, rt } of tablePatches) {
+        const sourceKey = normalizeRecipeRatingCacheUrl(candidate.sourceUrl);
+        if (sourceKey && rt) ratingBySource.set(sourceKey, rt);
+      }
+      if (ratingBySource.size) {
+        const userRows = await pool.query(
+          `
+          SELECT id, app_state
+          FROM plately_users
+          WHERE COALESCE(jsonb_array_length(COALESCE(app_state, '{}'::jsonb)->'importedRecipes'), 0) > 0
+          ORDER BY updated_at DESC NULLS LAST
+          LIMIT $1
+          `,
+          [Math.max(1, Math.min(Number(maxUsers) || 250, 2000))]
+        );
+        for (const row of userRows.rows || []) {
+          if (touchedUsers.has(row.id)) continue;
+          const appState = row.app_state && typeof row.app_state === "object" ? row.app_state : {};
+          const recipes = Array.isArray(appState.importedRecipes) ? appState.importedRecipes : [];
+          let changed = 0;
+          const nextRecipes = recipes.map((recipe) => {
+            if (!recipe || (recipe.ratingValue != null && recipe.ratingCount != null)) return recipe;
+            const rt = ratingBySource.get(normalizeRecipeRatingCacheUrl(recipe.sourceUrl || recipe.source || ""));
+            if (!rt) return recipe;
+            const rv = Number(rt.ratingValue);
+            const rc = Number(rt.ratingCount);
+            if (!Number.isFinite(rv) || rv < 1 || rv > 5 || !Number.isFinite(rc) || rc < 1) return recipe;
+            changed += 1;
+            return {
+              ...recipe,
+              ratingValue: Math.round(rv),
+              ratingCount: Math.max(1, Math.round(rc)),
+              ...(rt.ratingNormalizedFromWideScale ? { ratingNormalizedFromWideScale: true } : {}),
+            };
+          });
+          if (!changed) continue;
+          appState.importedRecipes = nextRecipes;
+          await pool.query(
+            `
+              UPDATE plately_users
+              SET app_state = $2::jsonb,
+                  updated_at = NOW()
+              WHERE id = $1
+            `,
+            [row.id, JSON.stringify(appState)]
+          );
+          touchedUsers.add(row.id);
+          out.updatedRecipes += changed;
+          out.syncedRecipeIndexUsers += 1;
+        }
+      }
     }
   } else {
     const db = await loadDatabase();
@@ -26703,6 +26837,7 @@ module.exports = {
     extractDutchVisibleRatingFromHtml,
     extractAggregateRatingFromRecipeHtml,
     mergeStoredRecipeRatingsIntoIncomingRecipes,
+    sanitizeUserStatePayload,
     pickStoredRecipeRatingPatch,
     searchPublicSeoRecipesLocal,
     buildStoredRecipeRatingIndexFromSeoEntries,
