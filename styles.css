@@ -2015,6 +2015,23 @@ img {
   flex-wrap: wrap;
 }
 
+.detail-quality-list {
+  display: grid;
+  gap: 9px;
+}
+.detail-quality-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+}
+.detail-quality-item p {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: #5f5a54;
+}
+
 .cook-link {
   border-radius: 16px;
   padding: 11px 14px;
@@ -4194,6 +4211,15 @@ button.ingredient-item {
   background: rgba(246, 182, 157, 0.28);
   border-color: rgba(232, 150, 120, 0.65);
   color: #5c351f;
+}
+
+.recipe-status-pill--image,
+.recipe-status-pill--ingredients,
+.recipe-status-pill--steps,
+.recipe-status-pill--rating {
+  background: rgba(255, 253, 249, 0.96);
+  border-color: rgba(120, 147, 111, 0.28);
+  color: #3d5a45;
 }
 
 .recipe-status-pill--fav {

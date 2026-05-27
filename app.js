@@ -413,8 +413,8 @@ const COOKBOOK_SHOWCASE_IDS = [
   "recipe-book-thai",
 ];
 
-const HOME_RECIPE_INITIAL = window.matchMedia?.("(max-width: 720px)")?.matches ? 4 : 6;
-const HOME_RECIPE_STEP = window.matchMedia?.("(max-width: 720px)")?.matches ? 8 : 12;
+const HOME_RECIPE_INITIAL = window.matchMedia?.("(max-width: 720px)")?.matches ? 3 : 5;
+const HOME_RECIPE_STEP = window.matchMedia?.("(max-width: 720px)")?.matches ? 6 : 10;
 const HOME_RECIPE_LIMIT_SESSION_KEY = "plately-home-recipe-limit";
 
 function getSessionNumber(key, fallback) {
@@ -6601,13 +6601,54 @@ const SEASONAL_KEYWORDS = {
   winter: ["stamppot", "snert", "erwtensoep", "hutspot", "hachee", "boerenkool", "knolselderij", "rode kool", "witlof", "zuurkool"],
 };
 
+const seasonalRecipeCache = new WeakMap();
+
 function isSeasonalRecipe(recipe) {
-  const keywords = SEASONAL_KEYWORDS[getSeason()] || [];
+  if (!recipe || typeof recipe !== "object") return false;
+  const season = getSeason();
+  const cached = seasonalRecipeCache.get(recipe);
+  if (cached?.season === season) return Boolean(cached.match);
+  const keywords = SEASONAL_KEYWORDS[season] || [];
   const text = [
     recipe.title || "",
     ...(recipe.ingredients || []).map((i) => i.name || ""),
   ].join(" ").toLowerCase();
-  return keywords.some((kw) => text.includes(kw));
+  const match = keywords.some((kw) => text.includes(kw));
+  seasonalRecipeCache.set(recipe, { season, match });
+  return match;
+}
+
+function getRecipeQualityIssues(recipe) {
+  if (!recipe) return [];
+  const issues = [];
+  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+  const instructions = Array.isArray(recipe.instructions) ? recipe.instructions : [];
+  const image = String(recipe.image || "").trim();
+  if (recipe.needsReview) {
+    issues.push({ key: "review", label: "Nakijken", detail: "Import heeft controle nodig." });
+  }
+  if (!image || image.includes("hero-burger")) {
+    issues.push({ key: "image", label: "Mist afbeelding", detail: "Voeg een betere foto toe of herstel de import." });
+  }
+  if (ingredients.length < 3) {
+    issues.push({ key: "ingredients", label: "Weinig ingrediënten", detail: "Controleer of alle ingrediënten zijn meegenomen." });
+  }
+  if (instructions.length < 2) {
+    issues.push({ key: "steps", label: "Weinig stappen", detail: "Controleer de bereidingswijze." });
+  }
+  if (!getRecipeRatingSummary(recipe) && recipe.sourceUrl) {
+    issues.push({ key: "rating", label: "Mist rating", detail: "Rating kan later via bronherstel worden aangevuld." });
+  }
+  return issues;
+}
+
+function renderRecipeQualityPills(recipe, { compact = false } = {}) {
+  const issues = getRecipeQualityIssues(recipe);
+  if (!issues.length) return "";
+  const shown = compact ? issues.slice(0, 2) : issues;
+  return shown
+    .map((issue) => `<span class="recipe-status-pill recipe-status-pill--${escapeHtml(issue.key)}">${escapeHtml(issue.label)}</span>`)
+    .join("");
 }
 
 function installRecipeCardPrefetchDelegation() {
@@ -6801,9 +6842,7 @@ function renderRecipeGrid() {
           : "";
         const ratingHtml = formatCompactRecipeRatingHtml(recipe, "recent-card__rating");
         const statusBadges = [
-          recipe.needsReview
-            ? `<span class="recipe-status-pill recipe-status-pill--review">Nakijken</span>`
-            : "",
+          renderRecipeQualityPills(recipe, { compact: true }),
           isRecipeFavorited(recipe.id)
             ? `<span class="recipe-status-pill recipe-status-pill--fav" aria-hidden="true">❤︎</span>`
             : "",
@@ -6975,34 +7014,42 @@ function renderDetailRecipe(resetServings = false) {
   }
   if (detailAssist) {
     const linkedCookbooks = getCookbooksForRecipe(recipe.id);
-    const assistTone = recipe.needsReview ? "warn" : "good";
-    const assistTitle = recipe.needsReview ? "Controleer deze import nog even" : "Klaar om te koken";
-    const assistCopy = recipe.needsReview
-      ? "Loop titel, ingrediënten en bereidingsstappen nog even na voordat je het recept gebruikt."
-        : linkedCookbooks.length
-          ? `Dit recept staat in ${linkedCookbooks.length} kookboek${linkedCookbooks.length === 1 ? "" : "en"} en is klaar om op je boodschappenlijst te zetten.`
-          : "Sla dit recept op in een kookboek of zet de ingrediënten direct op je boodschappenlijst.";
+    const qualityIssues = getRecipeQualityIssues(recipe);
     const canEnhance = recipe.needsReview && recipe.sourceUrl;
     const ingredientDone = recipe.ingredients.filter((ingredient, index) => isIngredientChecked(recipe.id, ingredient, index)).length;
     const stepDone = recipe.instructions.filter((_, index) => isStepChecked(recipe.id, index)).length;
-    detailAssist.innerHTML = `
-      <article class="detail-assist__card detail-assist__card--${assistTone}">
+    const qualityCard = qualityIssues.length ? `
+      <article class="detail-assist__card detail-assist__card--warn">
         <div class="detail-assist__head">
-          <strong>${escapeHtml(assistTitle)}</strong>
+          <strong>Actie nodig</strong>
+          <span>${escapeHtml(`${qualityIssues.length} punt${qualityIssues.length === 1 ? "" : "en"}`)}</span>
         </div>
-        <p>${escapeHtml(assistCopy)}</p>
+        <div class="detail-quality-list">
+          ${qualityIssues.map((issue) => `
+            <div class="detail-quality-item">
+              <span class="recipe-status-pill recipe-status-pill--${escapeHtml(issue.key)}">${escapeHtml(issue.label)}</span>
+              <p>${escapeHtml(issue.detail)}</p>
+            </div>
+          `).join("")}
+        </div>
         ${canEnhance ? `<button class="detail-assist__enhance-btn" type="button" data-enhance-recipe="${escapeHtml(recipe.id)}">Verbeter automatisch</button>` : ""}
       </article>
+    ` : "";
+    detailAssist.innerHTML = `
+      ${qualityCard}
       <article class="detail-assist__card detail-assist__card--cook">
         <div class="detail-assist__head">
-          <strong>Kookflow</strong>
+          <strong>Voorbereiden</strong>
           <span>${escapeHtml(`${stepDone}/${recipe.instructions.length || 0} stappen`)}</span>
         </div>
         <div class="detail-flow-strip">
           <span>${escapeHtml(`${ingredientDone}/${recipe.ingredients.length || 0}`)} ingrediënten klaar</span>
+          <span>${escapeHtml(`${linkedCookbooks.length}`)} kookboek${linkedCookbooks.length === 1 ? "" : "en"}</span>
           <span>${escapeHtml(`${Math.max(1, state.currentServings || baseServings)} pers.`)}</span>
         </div>
         <div class="detail-assist__actions">
+          <button class="detail-assist__enhance-btn" type="button" data-prep-check-all="${escapeHtml(recipe.id)}">Ingrediënten klaar</button>
+          <button class="detail-assist__enhance-btn" type="button" data-prep-reset="${escapeHtml(recipe.id)}">Reset</button>
           <button class="detail-assist__enhance-btn" type="button" data-start-kookstand="${escapeHtml(recipe.id)}">Kookstand</button>
           <button class="detail-assist__enhance-btn" type="button" data-add-detail-grocery="${escapeHtml(recipe.id)}">Boodschappen</button>
         </div>
@@ -9425,7 +9472,7 @@ function saveRecipeToCookbook(recipeId, cookbookId = state.selectedCookbookId, o
   if (state.view === "home") {
     renderHomeFocusPanel();
   }
-  schedulePersistAppState();
+  schedulePersistAppState(50);
   renderCookbookSaveList(recipeId);
   if (!opts || !opts.silentToast) {
     showToast(`Opgeslagen in ${cookbook.name}.`);
@@ -9464,6 +9511,10 @@ async function enhanceRecipeWithImport(recipeId) {
 bindEvent(document.getElementById("detailAssist"), "click", (e) => {
   const btn = e.target.closest("[data-enhance-recipe]");
   if (btn) enhanceRecipeWithImport(btn.dataset.enhanceRecipe);
+  const prepCheck = e.target.closest("[data-prep-check-all]");
+  if (prepCheck) checkAllIngredients();
+  const prepReset = e.target.closest("[data-prep-reset]");
+  if (prepReset) uncheckAllIngredients();
   const cookBtn = e.target.closest("[data-start-kookstand]");
   if (cookBtn) openKookstand(cookBtn.dataset.startKookstand);
   const groceryBtn = e.target.closest("[data-add-detail-grocery]");
@@ -9503,6 +9554,17 @@ function isRecipeFavorited(recipeId) {
   return favoritesBookmark ? favoritesBookmark.recipeIds.includes(recipeId) : false;
 }
 
+function syncFavoriteButtons(recipeId) {
+  const isFavorited = isRecipeFavorited(recipeId);
+  const favoriteLabel = isFavorited ? "Verwijder uit favorieten" : "Toevoegen aan favorieten";
+  [favoriteRecipeButton, topbarFavoriteButton].forEach((button) => {
+    if (!button) return;
+    button.setAttribute("aria-label", favoriteLabel);
+    button.setAttribute("title", favoriteLabel);
+    button.classList.toggle("is-active", isFavorited);
+  });
+}
+
 function toggleRecipeFavorite(recipeId) {
   const favoritesBookmark = getOrCreateFavoritesBookmark();
   const index = favoritesBookmark.recipeIds.indexOf(recipeId);
@@ -9517,9 +9579,11 @@ function toggleRecipeFavorite(recipeId) {
     showToast("Toegevoegd aan favorieten!");
   }
 
-  renderDetailRecipe(false);
+  syncFavoriteButtons(recipeId);
   renderCookbookList();
-  schedulePersistAppState();
+  if (state.view === "home") renderRecipeGrid();
+  else window.setTimeout(() => renderRecipeGrid(), 0);
+  schedulePersistAppState(50);
 }
 
 function createCookbook(name) {
@@ -9898,10 +9962,9 @@ function addRecipeToGrocery(recipe) {
   });
 
   renderGroceryGroups();
-  schedulePersistAppState();
+  schedulePersistAppState(50);
   if (added > 0) {
-    showGrocerySplash();
-    Promise.resolve(fetchGroceryPhotos()).finally(() => hideGrocerySplash());
+    debouncedFetchGroceryPhotos();
   }
   if (added || merged) {
     const gScreen = document.getElementById("groceryScreen");
@@ -10680,19 +10743,31 @@ function renderAll() {
   renderRecentImports();
   renderHomeConcepts();
   renderChannelRow();
-  renderHomeCookbooks();
-  renderChannelSettings();
   renderCookbookFilterBar();
   renderRecipeSlider();
   renderRecipeGrid();
-  renderCookbookList();
   renderNavBadge();
-  renderDetailRecipe(true);
   renderImportReview();
   renderGroceryGroups();
-  renderMealPlanGrid();
-  renderProfileSummary();
-  renderAvatars();
+  if (state.view === "home") {
+    schedulePostBootTask("secondary-home-render", () => {
+      renderHomeCookbooks();
+      renderChannelSettings();
+      renderCookbookList();
+      renderDetailRecipe(true);
+      renderMealPlanGrid();
+      renderProfileSummary();
+      renderAvatars();
+    }, 650);
+  } else {
+    renderHomeCookbooks();
+    renderChannelSettings();
+    renderCookbookList();
+    renderDetailRecipe(true);
+    renderMealPlanGrid();
+    renderProfileSummary();
+    renderAvatars();
+  }
   updateAuthUI();
   closeBasketModal();
   // Apply translations for current language (once loaded)
