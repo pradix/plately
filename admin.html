@@ -4267,7 +4267,17 @@
             });
           });
         const basketMetrics = data.basketMetrics || {};
-        if (statusEl) statusEl.textContent = `${formatNumber(data.totalKb || 0)} KB totaal · SW ${data.serviceWorker?.version || "—"} · build ${data.clientBuild || "—"}`;
+        const overBudgetAssets = assets.filter((asset) => asset && asset.overBudget);
+        const slowMetrics = metrics.filter((m) => {
+          if (!m || !m.metric || m.metric === "postgres_error") return false;
+          return Number(m.p95Ms || 0) > metricBudget(m.metric);
+        });
+        if (statusEl) {
+          const issueCount = overBudgetAssets.length + slowMetrics.length;
+          statusEl.textContent = issueCount
+            ? `${formatNumber(issueCount)} performance actiepunt(en) · ${formatNumber(data.totalKb || 0)} KB totaal · build ${data.clientBuild || "—"}`
+            : `Geen directe actiepunten · ${formatNumber(data.totalKb || 0)} KB totaal · SW ${data.serviceWorker?.version || "—"}`;
+        }
         if (!gridEl) return;
         gridEl.innerHTML = [
           ...metricCards,
@@ -4279,7 +4289,7 @@
             meter: Number(basketMetrics.avgMissingImages || 0) || Number(basketMetrics.avgLowAlternatives || 0) ? "warn" : "ok",
             detail: `gem. zonder foto ${formatNumber(basketMetrics.avgMissingImages || 0)} · weinig alternatieven ${formatNumber(basketMetrics.avgLowAlternatives || 0)}`,
           }),
-          ...assets.map((asset) => renderAdminVisualCard({
+          ...overBudgetAssets.map((asset) => renderAdminVisualCard({
             label: asset.label,
             value: asset.sizeKb == null ? "—" : `${formatNumber(asset.sizeKb)} KB`,
             badge: asset.overBudget ? "Groot" : "OK",
@@ -4294,6 +4304,13 @@
             meter: "info",
             detail: `Client build ${data.clientBuild || "onbekend"}`,
           }),
+          ...(overBudgetAssets.length || slowMetrics.length ? [] : [renderAdminVisualCard({
+            label: "Performance status",
+            value: "OK",
+            badge: "Geen actie",
+            meter: "ok",
+            detail: "Alle bundles binnen budget en geen trage p95-meting boven drempel.",
+          })]),
         ].join("");
       } catch (error) {
         if (statusEl) statusEl.textContent = "❌ " + (error?.message || error);

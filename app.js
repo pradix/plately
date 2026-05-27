@@ -4528,7 +4528,16 @@ function switchView(view, opts = {}) {
 
   // When entering grocery screen, kick off a photo fetch for items that don't have one yet
   if (view === "grocery") {
+    renderGroceryGroups();
     fetchGroceryPhotos();
+  }
+
+  if (view === "detail") {
+    renderDetailRecipe(prevView !== "detail");
+  }
+
+  if (view === "review") {
+    renderImportReview();
   }
 
   // When opening import screen: offer to paste clipboard URL via a chip (not auto-paste).
@@ -6760,9 +6769,6 @@ function getRecipeQualityIssues(recipe) {
   if (instructions.length < 2) {
     issues.push({ key: "steps", label: "Weinig stappen", detail: "Controleer de bereidingswijze." });
   }
-  if (!getRecipeRatingSummary(recipe) && recipe.sourceUrl) {
-    issues.push({ key: "rating", label: "Mist rating", detail: "Rating kan later via bronherstel worden aangevuld." });
-  }
   return issues;
 }
 
@@ -8682,6 +8688,8 @@ function renderReviewSummary(recipe) {
 
   const ingredientCount = (recipe.ingredients || []).length;
   const stepCount = (recipe.instructions || []).length;
+  const image = String(recipe.image || "").trim();
+  const hasImage = image && !image.includes("hero-burger");
   const summaryItems = [
     {
       title: "Bron",
@@ -8705,6 +8713,12 @@ function renderReviewSummary(recipe) {
       value: recipe.time || "Onbekend",
       tone: "muted",
     },
+    {
+      title: "Afbeelding",
+      value: hasImage ? "Aanwezig" : "Ontbreekt",
+      detail: hasImage ? "" : "Herstel de import of voeg later een foto toe",
+      tone: hasImage ? "good" : "warn",
+    },
   ];
 
   reviewSummary.innerHTML = `
@@ -8724,8 +8738,22 @@ function renderReviewSummary(recipe) {
   `;
 }
 
+function reviewLooksLikeCollectionPage(recipe) {
+  const title = String(recipe?.title || "").toLowerCase();
+  const sourcePath = (() => {
+    try { return new URL(recipe?.sourceUrl || "").pathname.toLowerCase(); } catch { return ""; }
+  })();
+  return /\b(\d+\s*x|best bekeken|favoriete|populaire|recepten|weekmenu|verzameling|tips?)\b/.test(title) ||
+    /\/(blog|tips?|categorie|category|tag|zoeken|search|recepten)(\/|$)/.test(sourcePath);
+}
+
 function buildReviewInsights(recipe) {
   const insights = [];
+  const image = String(recipe?.image || "").trim();
+
+  if (reviewLooksLikeCollectionPage(recipe)) {
+    insights.push({ tone: "warn", text: "Deze pagina lijkt mogelijk een overzicht/blog met meerdere recepten. Gebruik bij voorkeur de directe receptpagina." });
+  }
 
   if ((recipe.title || "").length > 44) {
     insights.push({ tone: "warn", text: "De titel is nog vrij lang. Maak hem kort en duidelijk." });
@@ -8753,6 +8781,10 @@ function buildReviewInsights(recipe) {
 
   if (recipe.needsReview) {
     insights.unshift({ tone: "warn", text: "Deze import lijkt nog onvolledig. Loop hem even na voordat je gaat koken." });
+  }
+
+  if (!image || image.includes("hero-burger")) {
+    insights.push({ tone: "warn", text: "Er is nog geen goede afbeelding gevonden. Dat maakt de kaart minder herkenbaar." });
   }
 
   return insights;
@@ -10874,15 +10906,14 @@ function renderAll() {
   renderRecipeSlider();
   renderRecipeGrid();
   renderNavBadge();
-  renderImportReview();
-  renderGroceryGroups();
+  if (state.view === "review") renderImportReview();
+  if (state.view === "grocery") renderGroceryGroups();
   if (state.view === "home") {
     schedulePostBootTask("secondary-home-render", () => {
       renderHomeCookbooks();
       renderChannelRow();
       renderChannelSettings();
       renderCookbookList();
-      renderDetailRecipe(true);
       renderMealPlanGrid();
       renderProfileSummary();
       renderAvatars();
@@ -10892,7 +10923,7 @@ function renderAll() {
     renderChannelRow();
     renderChannelSettings();
     renderCookbookList();
-    renderDetailRecipe(true);
+    if (state.view === "detail") renderDetailRecipe(true);
     renderMealPlanGrid();
     renderProfileSummary();
     renderAvatars();
