@@ -12922,6 +12922,15 @@ body {
   border-color: var(--line);
   box-shadow: none;
 }
+.channel-filter-pill--quick {
+  background: rgba(52,81,59,0.08);
+  border-color: rgba(52,81,59,0.14);
+}
+.channel-filter-pill--quick strong {
+  font-size: 0.72rem;
+  color: inherit;
+  opacity: 0.78;
+}
 
 .channel-search-list {
   display: flex;
@@ -14812,6 +14821,23 @@ body {
   font-weight: 900;
   letter-spacing: 0.01em;
   line-height: 1.2;
+}
+
+.basket-product__match-reason {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(36, 60, 43, 0.07);
+  color: #3a5c37;
+  padding: 2px 7px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+.basket-product__match-reason--warn {
+  background: rgba(220, 53, 69, 0.08);
+  color: #9b2f38;
 }
 
 .price-new {
@@ -18623,6 +18649,10 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  position: sticky;
+  top: 8px;
+  z-index: 3;
+  box-shadow: 0 10px 24px rgba(36,60,43,0.18);
 }
 .grocery-store-mode div {
   display: grid;
@@ -18646,12 +18676,33 @@ body {
   font-weight: 800;
   cursor: pointer;
 }
+.grocery-store-mode__progress {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 7px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.18);
+  overflow: hidden;
+}
+.grocery-store-mode__progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #cfe7c8;
+}
 .grocery-group--store .grocery-entry {
-  min-height: 74px;
+  min-height: 82px;
+  border-radius: 16px;
 }
 .grocery-group--store .grocery-check {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
+  border-width: 2px;
+}
+.grocery-group--store .grocery-entry__title {
+  font-size: 1rem;
 }
 
 @keyframes platelyPulse {

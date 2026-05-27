@@ -7,7 +7,7 @@
     <title>Plately — Bewaar, importeer en kook recepten van Instagram &amp; websites</title>
     <meta name="description" content="Importeer recepten van Instagram, TikTok en websites met één klik. Bewaar ze in je eigen kookboek, maak automatisch een boodschappenlijst en kook met gemak." />
     <meta name="robots" content="index,follow" />
-    <meta name="plately-build" content="1.0.21.71" />
+    <meta name="plately-build" content="1.0.21.72" />
     <!-- Statische SPA + Node-API elders: zet plately-api-base naar die API-origin (bv. Render). Bij proxy van /share op je eigen domein: zet ook plately-share-link-origin naar dat domein. -->
     <meta name="plately-api-base" content="" />
     <meta name="plately-share-link-origin" content="https://app.plately.nl" />
@@ -40,9 +40,9 @@
     <link rel="icon" type="image/png" sizes="64x64" href="assets/favicon-64x64.png?v=7" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=7" />
     <link rel="manifest" href="manifest.webmanifest?v=7" />
-    <link rel="preload" href="styles.css?v=1.0.21.71" as="style" />
-    <link rel="preload" href="app.js?v=1.0.21.71" as="script" />
-    <link rel="stylesheet" href="styles.css?v=1.0.21.71" />
+    <link rel="preload" href="styles.css?v=1.0.21.72" as="style" />
+    <link rel="preload" href="app.js?v=1.0.21.72" as="script" />
+    <link rel="stylesheet" href="styles.css?v=1.0.21.72" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -537,7 +537,7 @@
           <div class="grocery-sort-bar hidden" id="grocerySortBar" aria-label="Sorteer boodschappenlijst">
             <button class="grocery-sort-pill is-active" data-grocery-sort="default" type="button">Per recept</button>
             <button class="grocery-sort-pill" data-grocery-sort="needed" type="button">Nog nodig</button>
-            <button class="grocery-sort-pill" data-grocery-sort="store" type="button">Winkel</button>
+            <button class="grocery-sort-pill" data-grocery-sort="store" type="button">In winkel</button>
             <button class="grocery-sort-pill" data-grocery-sort="alpha" type="button">A → Z</button>
             <button class="grocery-sort-pill" data-grocery-sort="category" type="button">Per categorie</button>
             <button class="grocery-sort-pill grocery-sort-pill--action" id="groceryCheckAllBtn" type="button">Alles afvinken</button>
@@ -2655,6 +2655,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=1.0.21.71" defer></script>
+    <script src="app.js?v=1.0.21.72" defer></script>
   </body>
 </html>

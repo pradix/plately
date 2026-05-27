@@ -684,6 +684,7 @@ const state = {
   customChannels: [],
   channelEnabled: { seed: {}, custom: {} },
   channelSearchFilter: null,
+  channelSearchQuickFilter: "",
   channelSearchAllResults: [],
   channelSearchIsSearching: false,
   openCookbookId: null,
@@ -2584,6 +2585,7 @@ function openStoreHandoffUrl(url, preview) {
     sessionStorage.setItem("plately-last-store-handoff", JSON.stringify({
       store: preview?.store || "",
       at: Date.now(),
+      view: state.view || "",
     }));
   } catch {}
 
@@ -2600,6 +2602,27 @@ function openStoreHandoffUrl(url, preview) {
   if (!opened) {
     window.location.assign(url);
   }
+}
+
+function handleStoreHandoffReturn() {
+  let marker = null;
+  try {
+    marker = JSON.parse(sessionStorage.getItem("plately-last-store-handoff") || "null");
+  } catch {
+    marker = null;
+  }
+  if (!marker?.at || Date.now() - Number(marker.at) > 20 * 60 * 1000) return;
+  hideAHBasketSplash();
+  if (state.view !== "grocery") {
+    switchView("grocery");
+  }
+  renderGroceryGroups();
+  if (state.basketPreview) {
+    openBasketModal(state.basketPreview);
+  }
+  try {
+    sessionStorage.removeItem("plately-last-store-handoff");
+  } catch {}
 }
 
 function parseAmountNumberClient(text) {
@@ -2920,6 +2943,20 @@ function renderBasketMatchConfidenceHtml(choice) {
   return `<span class="basket-product__confidence" title="Matchzekerheid op basis van ingrediënt en AH-product">${label} ${confidence}%</span>`;
 }
 
+function renderBasketMatchReasonHtml(choice, item) {
+  if (!choice) return "";
+  const quality = getBasketMatchQuality(choice);
+  const choiceTitle = normalizeBasketToken(choice.title || "");
+  const ingredient = normalizeBasketToken(item?.ingredientTitle || "");
+  const reasons = Array.isArray(choice?.matchMeta?.reasons) ? choice.matchMeta.reasons : [];
+  let label = quality === "low" ? "Lage zekerheid" : "Beste match";
+  if (ingredient && choiceTitle && choiceTitle.includes(ingredient)) label = "Exacte match";
+  else if (reasons.some((r) => /exact|ingredient|titel/i.test(String(r || "")))) label = "Goede ingrediëntmatch";
+  else if (choice?.productId || choice?.sku) label = quality === "low" ? "Twijfelmatch" : "Beste alternatief";
+  const modifier = quality === "low" ? " basket-product__match-reason--warn" : "";
+  return `<span class="basket-product__match-reason${modifier}">${escapeHtml(label)}</span>`;
+}
+
 function renderBasketPreview() {
   const preview = state.basketPreview;
   const nameEl = document.getElementById("basketRecipeName");
@@ -3067,6 +3104,7 @@ function renderBasketPreview() {
             ${promotionBadge}
             ${matchBadge}
             ${confidenceBadge}
+            ${renderBasketMatchReasonHtml(choice, item)}
             ${choice.subtitle ? `<span>${escapeHtml(choice.subtitle)}</span>` : ""}
           </p>
           <p class="basket-product__for">voor ${escapeHtml(item.ingredientAmount || "")} ${escapeHtml(ingredientTitle)}</p>
@@ -3970,6 +4008,7 @@ function ensureChannelSearchClosed() {
   if (channelSearchResults) channelSearchResults.innerHTML = "";
   state.channelSearchQuery = "";
   state.channelSearchFilter = null;
+  state.channelSearchQuickFilter = "";
 }
 
 function mulberry32(seed) {
@@ -4400,6 +4439,7 @@ function runHomeSearchQuery(query) {
   searchInput.value = q;
   state.channelSearchQuery = q;
   state.channelSearchFilter = null;
+  state.channelSearchQuickFilter = "";
   hideHomeFocusPanel();
   if (q.length >= 2) {
     clearTimeout(channelSearchTimeout);
@@ -5727,7 +5767,20 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
       return;
     }
 
-    const filtered = effectiveFilter ? all.filter((r) => r.channelId === effectiveFilter) : all;
+    const quickFilter = String(state.channelSearchQuickFilter || "");
+    const passesQuickFilter = (row) => {
+      if (quickFilter === "rated") return row?.ratingValue != null || row?.recipe?.ratingValue != null;
+      if (quickFilter === "fast") {
+        const minutes = parseDurationToMinutes(row?.time || row?.recipe?.time || "");
+        return Number.isFinite(minutes) && minutes > 0 && minutes <= 30;
+      }
+      if (quickFilter === "local") return row?._source === "local";
+      if (quickFilter === "plately") return row?._source === "plately" || String(row?.url || "").startsWith("/recept/");
+      if (quickFilter === "web") return row?._source !== "local" && row?._source !== "plately" && !String(row?.url || "").startsWith("/recept/");
+      return true;
+    };
+    const filteredBase = effectiveFilter ? all.filter((r) => r.channelId === effectiveFilter) : all;
+    const filtered = filteredBase.filter(passesQuickFilter);
 
     channelSearchSection.classList.remove("hidden");
     renderChannelFilterChips(all);
@@ -5737,7 +5790,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
 
     const showRatingSourceInPill = !effectiveFilter && presentChannelIds.length > 1;
 
-    let rows = filtered.length ? filtered : all;
+    let rows = filtered.length ? filtered : filteredBase;
     if (!filtered.length && effectiveFilter) {
       state.channelSearchFilter = null;
       renderChannelFilterChips(all);
@@ -5755,7 +5808,7 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
     const ratingFp = rows.slice(0, 22).map((r) => (r?.ratingValue ?? "") + (r?.ratingCount ?? "")).join("|");
     const sig = `${rows.length}::${rows.slice(0, 22).map((r) => r?.url || "").join("|")}::r${ratingFp}`;
     const progressKey = JSON.stringify(state.channelSearchProgress || {});
-    const nextRenderKey = `${state.channelSearchQuery}||${state.channelSearchFilter || ""}||${sig}||${state.channelSearchIsSearching ? "1" : "0"}||${visibleCount}||${progressKey}`;
+    const nextRenderKey = `${state.channelSearchQuery}||${state.channelSearchFilter || ""}||${quickFilter}||${sig}||${state.channelSearchIsSearching ? "1" : "0"}||${visibleCount}||${progressKey}`;
     if (renderChannelSearchResults._lastKey === nextRenderKey) return;
     renderChannelSearchResults._lastKey = nextRenderKey;
 
@@ -5849,11 +5902,33 @@ function renderChannelFilterChips(results) {
   if (!filterRow) return;
 
   // Build set of channelIds present in results
-  const present = [...new Set(results.map((r) => r.channelId))];
-  if (present.length <= 1) { filterRow.innerHTML = ""; return; }
+  const rows = Array.isArray(results) ? results : [];
+  const present = [...new Set(rows.map((r) => r.channelId))];
+  const sourceCounts = rows.reduce((acc, row) => {
+    const source = row?._source === "local"
+      ? "local"
+      : (row?._source === "plately" || String(row?.url || "").startsWith("/recept/")) ? "plately" : "web";
+    acc[source] = (acc[source] || 0) + 1;
+    if (row?.ratingValue != null || row?.recipe?.ratingValue != null) acc.rated = (acc.rated || 0) + 1;
+    const minutes = parseDurationToMinutes(row?.time || row?.recipe?.time || "");
+    if (Number.isFinite(minutes) && minutes > 0 && minutes <= 30) acc.fast = (acc.fast || 0) + 1;
+    return acc;
+  }, {});
+  const quickFilter = String(state.channelSearchQuickFilter || "");
+  const quickPills = [
+    ["", "Alles", rows.length],
+    ["local", "Mijn recepten", sourceCounts.local || 0],
+    ["plately", "Plately", sourceCounts.plately || 0],
+    ["web", "Web", sourceCounts.web || 0],
+    ["rated", "Met rating", sourceCounts.rated || 0],
+    ["fast", "Snel klaar", sourceCounts.fast || 0],
+  ].filter(([key, , count]) => key === "" || Number(count) > 0);
+  if (present.length <= 1 && quickPills.length <= 1) { filterRow.innerHTML = ""; return; }
 
   filterRow.innerHTML = [
-    `<button class="channel-filter-pill ${!state.channelSearchFilter ? "" : "is-off"}" data-ch-filter="">Alles</button>`,
+    ...quickPills.map(([key, label, count]) => (
+      `<button class="channel-filter-pill channel-filter-pill--quick ${quickFilter === key ? "" : "is-off"}" data-ch-quick-filter="${escapeHtml(key)}">${escapeHtml(label)} <strong>${formatNumber(count)}</strong></button>`
+    )),
     ...getAllChannels()
       .filter((ch) => present.includes(ch.id))
       .map((ch) => {
@@ -7981,6 +8056,9 @@ function renderGroceryGroups(options = {}) {
   const visibleGroceryItems = grocerySort === "needed" || grocerySort === "store"
     ? state.groceryItems.filter((item) => !item.checked)
     : state.groceryItems;
+  const totalGroceryCount = state.groceryItems.length;
+  const doneGroceryCount = state.groceryItems.filter((item) => item.checked).length;
+  const storeProgressPct = totalGroceryCount ? Math.round((doneGroceryCount / totalGroceryCount) * 100) : 0;
 
   if (!visibleGroceryItems.length && (grocerySort === "needed" || grocerySort === "store")) {
     groceryGroups.innerHTML = `
@@ -8074,8 +8152,9 @@ function renderGroceryGroups(options = {}) {
       ${storeMode ? `<section class="grocery-store-mode">
         <div>
           <strong>Winkelmodus</strong>
-          <span>${visibleGroceryItems.length} product${visibleGroceryItems.length === 1 ? "" : "en"} nog te pakken</span>
+          <span>${visibleGroceryItems.length} product${visibleGroceryItems.length === 1 ? "" : "en"} nog te pakken · ${storeProgressPct}% klaar</span>
         </div>
+        <div class="grocery-store-mode__progress" aria-hidden="true"><span style="width:${storeProgressPct}%"></span></div>
         <button type="button" data-grocery-sort-show-all>Toon alles</button>
       </section>` : ""}
     ` + Object.entries(catGroups)
@@ -10532,6 +10611,20 @@ function displayTime(value) {
     .replace(/[\s·|,\-–]+\d+\s*(?:kcal|cal|kj|kcals?)\b.*$/i, "")
     .replace(/\b\d+\s*(?:kcal|cal|kj|kcals?)\b.*/i, "")
     .trim();
+}
+
+function parseDurationToMinutes(value) {
+  const clean = displayTime(value).toLowerCase();
+  if (!clean) return null;
+  const iso = clean.match(/pt(?:(\d+)h)?(?:(\d+)m)?/i);
+  if (iso) return (Number(iso[1]) || 0) * 60 + (Number(iso[2]) || 0);
+  const hours = clean.match(/(\d+(?:[,.]\d+)?)\s*(?:uur|uren|hour|hours|h)\b/i);
+  const mins = clean.match(/(\d+)\s*(?:min|mins|minute|minutes|minuten|m)\b/i);
+  if (hours || mins) {
+    return Math.round((hours ? Number(String(hours[1]).replace(",", ".")) * 60 : 0) + (mins ? Number(mins[1]) : 0));
+  }
+  const plain = clean.match(/\b(\d{1,3})\b/);
+  return plain ? Number(plain[1]) : null;
 }
 
 function parseServingsValue(value) {
@@ -13647,6 +13740,7 @@ bindEvent(searchInput, "input", (event) => {
 
   // Reset filter en visible count bij nieuwe zoekopdracht
   state.channelSearchFilter = null;
+  state.channelSearchQuickFilter = "";
   state.channelSearchVisibleCount = 10;
 
   // Toon lokale resultaten direct (geen debounce) zodat opgeslagen recepten meteen verschijnen.
@@ -13786,9 +13880,19 @@ bindEvent(document.getElementById("channelSearchSection"), "click", (event) => {
     openProfileSubPanel("profileSubChannels");
     return;
   }
+  const quickChip = event.target.closest("[data-ch-quick-filter]");
+  if (quickChip instanceof HTMLElement) {
+    state.channelSearchQuickFilter = quickChip.dataset.chQuickFilter || "";
+    state.channelSearchVisibleCount = 10;
+    renderChannelSearchResults._lastKey = null;
+    renderChannelSearchResults(null, state.channelSearchFilter);
+    return;
+  }
   const chip = event.target.closest("[data-ch-filter]");
   if (!(chip instanceof HTMLElement) || !chip.hasAttribute("data-ch-filter")) return;
   const filter = chip.dataset.chFilter || null;
+  state.channelSearchVisibleCount = 10;
+  renderChannelSearchResults._lastKey = null;
   renderChannelSearchResults(null, filter);
 });
 
@@ -15609,6 +15713,9 @@ bindEvent(basketContinueButton, "click", async () => {
 });
 
 document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    handleStoreHandoffReturn();
+  }
   if (
     document.visibilityState === "visible" &&
     state.keepAwake &&
@@ -15617,6 +15724,10 @@ document.addEventListener("visibilitychange", () => {
   ) {
     requestWakeLock();
   }
+});
+
+window.addEventListener("pageshow", () => {
+  handleStoreHandoffReturn();
 });
 
 // Phase 1: Instagram paste helper button
