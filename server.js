@@ -14179,9 +14179,17 @@ function scoreRecipeSearchResultQuality(result, query = "") {
     score -= 70;
     reasons.push("genummerd lijst-item");
   }
-  if (result?.thumbnail || result?.recipe?.image) score += 8;
-  else score -= 8;
-  if (result?.ratingValue != null || result?.recipe?.ratingValue != null) score += 6;
+  const hasImage = Boolean(result?.thumbnail || result?.recipe?.image);
+  const hasRating = Boolean(result?.ratingValue != null || result?.recipe?.ratingValue != null);
+  const hasSource = Boolean(url && /^https?:\/\//i.test(url));
+  if (hasImage) score += 10;
+  else {
+    score -= 10;
+    reasons.push("geen afbeelding");
+  }
+  if (hasRating) score += 10;
+  else reasons.push("geen rating");
+  if (hasSource) score += 4;
   if (url && RECIPE_URL_RE.test(url)) score += 12;
   if (url && BLOG_POST_URL_RE.test(url) && !RECIPE_URL_RE.test(url)) {
     score -= 18;
@@ -14203,7 +14211,16 @@ function scoreRecipeSearchResultQuality(result, query = "") {
 function filterAndScoreRecipeSearchResults(results, query = "") {
   return (Array.isArray(results) ? results : [])
     .map((row) => ({ ...row, ...scoreRecipeSearchResultQuality(row, query) }))
-    .filter((row) => Number(row.qualityScore || 0) >= 35);
+    .filter((row) => Number(row.qualityScore || 0) >= 35)
+    .sort((a, b) => {
+      const aq = Number(a.qualityScore || 0);
+      const bq = Number(b.qualityScore || 0);
+      if (bq !== aq) return bq - aq;
+      const ar = Number(a.ratingCount || 0);
+      const br = Number(b.ratingCount || 0);
+      if (br !== ar) return br - ar;
+      return sanitizeText(a.title || "").localeCompare(sanitizeText(b.title || ""), "nl", { sensitivity: "base" });
+    });
 }
 
 async function runAdminSearchQualityCheck(query, { limit = 24, origin = "" } = {}) {
@@ -15601,6 +15618,7 @@ async function buildAdminRatingsOverview() {
         missingSourceUrl: 0,
         notFetchable: 0,
         fetchableWithoutRating: 0,
+        likelyNoSchemaOrNotTried: 0,
         sampleUrls: [],
       });
     }
@@ -15658,6 +15676,10 @@ async function buildAdminRatingsOverview() {
       const pct = row.total ? Math.round((row.withRating / row.total) * 100) : 100;
       const avgRating = row.withRating ? Math.round((Number(row._ratingValueSum || 0) / row.withRating) * 10) / 10 : null;
       const { _ratingValueSum, ...clean } = row;
+      clean.likelyNoSchemaOrNotTried = Math.max(
+        0,
+        Number(clean.withoutRating || 0) - Number(clean.missingSourceUrl || 0) - Number(clean.notFetchable || 0)
+      );
       return { ...clean, coveragePct: pct, avgRating };
     })
     .sort((a, b) => (b.withoutRating - a.withoutRating) || (b.total - a.total) || a.label.localeCompare(b.label));
@@ -15670,6 +15692,10 @@ async function buildAdminRatingsOverview() {
     return acc;
   }, { total: 0, withRating: 0, withoutRating: 0, ratingCountSum: 0 });
   totals.coveragePct = totals.total ? Math.round((totals.withRating / totals.total) * 100) : 100;
+  totals.missingSourceUrl = channels.reduce((n, row) => n + Number(row.missingSourceUrl || 0), 0);
+  totals.notFetchable = channels.reduce((n, row) => n + Number(row.notFetchable || 0), 0);
+  totals.fetchableWithoutRating = channels.reduce((n, row) => n + Number(row.fetchableWithoutRating || 0), 0);
+  totals.likelyNoSchemaOrNotTried = channels.reduce((n, row) => n + Number(row.likelyNoSchemaOrNotTried || 0), 0);
 
   return { ok: true, totals, channels };
 }
@@ -18139,7 +18165,7 @@ function cleanSeoRecipesForUser(user) {
 
 async function repairSeoRecipesForUser(user, options = {}) {
   const maxRecipes = Math.max(1, Math.min(Number(options.maxRecipes) || 20, 100));
-  const mode = ["image", "rating", "reimport"].includes(options.mode) ? options.mode : "reimport";
+  const mode = ["smart", "image", "rating", "reimport"].includes(options.mode) ? options.mode : "reimport";
   const lowestFirst = Boolean(options.lowestFirst);
   const maxScore = Number.isFinite(Number(options.maxScore)) ? Math.max(0, Math.min(Number(options.maxScore), 100)) : null;
   const appState = buildAppStateFromUser(user);
@@ -18170,9 +18196,20 @@ async function repairSeoRecipesForUser(user, options = {}) {
     const sourceKey = normalizeRecipeSourceKey(sourceUrl);
     const duplicate = sourceKey && seenSources.has(sourceKey);
     if (sourceKey) seenSources.add(sourceKey);
+    const hasRating = Boolean(pickChannelSearchCandidateRating(recipe));
+    const hasHardRecipeIssue = issues.includes("missing_title") || issues.includes("too_few_ingredients") || issues.includes("missing_steps");
+    const effectiveMode = mode === "smart"
+      ? hasHardRecipeIssue
+        ? "reimport"
+        : issues.includes("missing_image")
+          ? "image"
+          : !hasRating
+            ? "rating"
+            : "reimport"
+      : mode;
     const repairable =
       sourceUrl &&
-      (mode === "rating" ||
+      (effectiveMode === "rating" ||
         issues.includes("missing_image") ||
         issues.includes("too_few_ingredients") ||
         issues.includes("missing_steps") ||
@@ -18181,7 +18218,7 @@ async function repairSeoRecipesForUser(user, options = {}) {
 
     try {
       let merged = null;
-      if (mode === "rating") {
+      if (effectiveMode === "rating") {
         const ratingPatch = await fetchAggregateRatingForRecipePageUrl(sourceUrl);
         if (!ratingPatch) {
           failed.push({ id, title: sanitizeText(recipe?.title || "Recept"), sourceUrl, error: "geen_rating_gevonden" });
@@ -18192,7 +18229,7 @@ async function repairSeoRecipesForUser(user, options = {}) {
         const fresh = await importRecipe(sourceUrl, "", sanitizeText(recipe?.image || ""));
         merged = sanitizeRecipeForStorage({
           ...recipe,
-          ...(mode === "image" ? { image: fresh?.image || recipe?.image || "" } : fresh),
+          ...(effectiveMode === "image" ? { image: fresh?.image || recipe?.image || "" } : fresh),
           id,
           sourceUrl: sanitizeText(fresh?.sourceUrl || sourceUrl),
           image: sanitizeText(fresh?.image || recipe?.image || ""),
@@ -18204,7 +18241,7 @@ async function repairSeoRecipesForUser(user, options = {}) {
         continue;
       }
       recipes[i] = merged;
-      repaired.push({ id, title: sanitizeText(merged.title || "Recept"), sourceUrl, mode, scoreBefore: item.score, scoreAfter: computeSeoRecipeScore(merged), fixed: issues });
+      repaired.push({ id, title: sanitizeText(merged.title || "Recept"), sourceUrl, mode: effectiveMode, requestedMode: mode, scoreBefore: item.score, scoreAfter: computeSeoRecipeScore(merged), fixed: issues });
     } catch (error) {
       failed.push({
         id,
@@ -23518,7 +23555,7 @@ const server = http.createServer(async (request, response) => {
         const body = await readRequestBody(request);
         const dryRun = body?.dryRun !== false;
         const maxRecipes = Math.max(1, Math.min(Number(body?.maxRecipes) || 20, 100));
-        const mode = ["image", "rating", "reimport"].includes(sanitizeText(body?.mode || "")) ? sanitizeText(body.mode) : "reimport";
+        const mode = ["smart", "image", "rating", "reimport"].includes(sanitizeText(body?.mode || "")) ? sanitizeText(body.mode) : "reimport";
         const lowestFirst = Boolean(body?.lowestFirst);
         const maxScore = Number.isFinite(Number(body?.maxScore)) ? Math.max(0, Math.min(Number(body.maxScore), 100)) : null;
         let usersScanned = 0;

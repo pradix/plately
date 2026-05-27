@@ -6315,6 +6315,7 @@ function renderCategoryGrid() {
 
 function renderChannelRow() {
   const row = document.getElementById("channelRow");
+  const heading = document.getElementById("homeChannelsHeading");
   if (!row) return;
   // Only show followed channels that are approved (not pending)
   const followed = getAllChannels()
@@ -6325,6 +6326,12 @@ function renderChannelRow() {
         (SEED_CHANNELS.some((s) => s.id === ch.id) ? isSeedChannelEnabled(ch.id) : isCustomChannelEnabled(ch.id))
     )
     .sort(compareChannelDisplayName);
+  if (!followed.length) {
+    if (heading) heading.classList.add("hidden");
+    row.innerHTML = "";
+    return;
+  }
+  if (heading) heading.classList.remove("hidden");
   row.innerHTML = followed.map((ch) => {
     const faviconUrl = getSourceIconUrl(ch.url);
     return `
@@ -10742,7 +10749,6 @@ function renderAll() {
   renderHomeStats();
   renderRecentImports();
   renderHomeConcepts();
-  renderChannelRow();
   renderCookbookFilterBar();
   renderRecipeSlider();
   renderRecipeGrid();
@@ -10752,6 +10758,7 @@ function renderAll() {
   if (state.view === "home") {
     schedulePostBootTask("secondary-home-render", () => {
       renderHomeCookbooks();
+      renderChannelRow();
       renderChannelSettings();
       renderCookbookList();
       renderDetailRecipe(true);
@@ -10761,6 +10768,7 @@ function renderAll() {
     }, 650);
   } else {
     renderHomeCookbooks();
+    renderChannelRow();
     renderChannelSettings();
     renderCookbookList();
     renderDetailRecipe(true);

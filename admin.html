@@ -2309,6 +2309,7 @@
                 </label>
                 <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Modus
                   <select id="seoRepairMode" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:#fff">
+                    <option value="smart">Slim kiezen</option>
                     <option value="reimport">Opnieuw importeren</option>
                     <option value="image">Alleen afbeelding</option>
                     <option value="rating">Alleen rating</option>
@@ -2317,10 +2318,8 @@
                 <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center">Max score
                   <input id="seoRepairMaxScore" type="number" min="0" max="100" value="70" style="width:72px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:#fff" />
                 </label>
-                <button type="button" class="btn btn-sm" onclick="repairSeoRecipes(true)">Dry-run repareren</button>
-                <button type="button" class="btn btn-sm btn-primary" onclick="repairSeoRecipes(false)">Repareren</button>
-                <button type="button" class="btn btn-sm" onclick="repairLowestSeoScores(true)">Dry-run laagste scores</button>
-                <button type="button" class="btn btn-sm btn-primary" onclick="repairLowestSeoScores(false)">Repareer laagste scores eerst</button>
+                <button type="button" class="btn btn-sm" onclick="repairSeoRecipes(true, { lowestFirst: true })">Dry-run</button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="repairSeoRecipes(false, { lowestFirst: true })">Herstellen</button>
               </div>
               <div id="seoRepairStatus" class="muted" style="font-size:12px;margin-bottom:8px">Probeert SEO-recepten met ontbrekende afbeelding/stappen opnieuw vanaf de bron te importeren.</div>
               <pre id="seoRepairOutput" class="mono" style="display:block;margin:0;padding:10px;background:rgba(0,0,0,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto">—</pre>
@@ -2387,8 +2386,8 @@
               </div>
               <div class="admin-task-card__text">Repareer laag scorende recepten, ontbrekende afbeeldingen of incomplete imports.</div>
               <div class="admin-task-card__actions">
-                <button class="btn btn-sm btn-primary" type="button" onclick="repairLowestSeoScores(true)">Dry-run</button>
-                <button class="btn btn-sm" type="button" onclick="repairLowestSeoScores(false)">Repareer</button>
+                <button class="btn btn-sm btn-primary" type="button" onclick="smartRepairSeoRecipes(true)">Slimme dry-run</button>
+                <button class="btn btn-sm" type="button" onclick="smartRepairSeoRecipes(false)">Slim herstellen</button>
               </div>
             </div>
             <div class="admin-task-card">
@@ -3495,7 +3494,9 @@
       setText("ratingsWithoutRating", formatNumber(totals.withoutRating || 0));
       setText("ratingsCoveragePct", `${formatNumber(totals.coveragePct || 0)}%`);
       const statusEl = document.getElementById("ratingsDashboardStatus");
-      if (statusEl) statusEl.textContent = `${formatNumber(rows.length)} kanaal/kanaalgroep(en) · sortering op meeste ontbrekende ratings`;
+      if (statusEl) {
+        statusEl.textContent = `${formatNumber(rows.length)} kanaal/kanaalgroep(en) · ${formatNumber(totals.fetchableWithoutRating || 0)} opnieuw te proberen · ${formatNumber(totals.notFetchable || 0)} niet fetchbaar · ${formatNumber(totals.missingSourceUrl || 0)} zonder bron`;
+      }
       const tableEl = document.getElementById("ratingsDashboardTable");
       if (!tableEl) return;
       if (!rows.length) {
@@ -3511,7 +3512,7 @@
               <th style="text-align:right">Met rating</th>
               <th style="text-align:right">Zonder</th>
               <th style="text-align:right">Fetchbaar</th>
-              <th style="text-align:right">Issues</th>
+              <th style="text-align:right">Geen schema/bron</th>
               <th style="text-align:right">Dekking</th>
               <th style="text-align:right">Gem.</th>
               <th>Actie</th>
@@ -3532,7 +3533,10 @@
                   <td style="text-align:right">${formatNumber(row.withRating || 0)}</td>
                   <td style="text-align:right;color:${Number(row.withoutRating || 0) ? "rgba(140,23,35,.95)" : "inherit"}">${formatNumber(row.withoutRating || 0)}</td>
                   <td style="text-align:right">${formatNumber(row.fetchableWithoutRating || 0)}</td>
-                  <td style="text-align:right">${formatNumber((row.missingSourceUrl || 0) + (row.notFetchable || 0))}</td>
+                  <td style="text-align:right">
+                    <strong>${formatNumber(row.likelyNoSchemaOrNotTried || 0)}</strong>
+                    <div class="muted" style="font-size:11px">${formatNumber(row.notFetchable || 0)} niet fetchbaar · ${formatNumber(row.missingSourceUrl || 0)} zonder bron</div>
+                  </td>
                   <td style="text-align:right">
                     <div style="min-width:92px">
                       <strong>${formatNumber(pct)}%</strong>
@@ -6288,13 +6292,14 @@
       const statusEl = document.getElementById("seoRepairStatus");
       const outEl = document.getElementById("seoRepairOutput");
       const maxRaw = document.getElementById("seoRepairMaxRecipes")?.value || "20";
-      const mode = String(document.getElementById("seoRepairMode")?.value || "reimport");
+      const mode = String(extra.mode || document.getElementById("seoRepairMode")?.value || "smart");
       const maxScoreRaw = document.getElementById("seoRepairMaxScore")?.value || "70";
       const maxRecipes = Math.max(1, Math.min(Number(maxRaw) || 20, 100));
       const maxScore = Math.max(0, Math.min(Number(maxScoreRaw) || 70, 100));
       if (!dryRun) {
         const lowestText = extra.lowestFirst ? ` met SEO-score t/m ${maxScore}, laagste eerst` : "";
-        const ok = confirm(`Maximaal ${maxRecipes} SEO-recepten${lowestText} opnieuw vanaf de bron importeren en repareren?`);
+        const actionLabel = mode === "smart" ? "slim herstellen (rating, afbeelding of herimport waar nodig)" : "opnieuw vanaf de bron importeren en repareren";
+        const ok = confirm(`Maximaal ${maxRecipes} SEO-recepten${lowestText} ${actionLabel}?`);
         if (!ok) return;
       }
       if (statusEl) statusEl.innerHTML = `<span class="spinner" aria-hidden="true"></span> ${dryRun ? "Dry-run repareren" : "Repareren"}${extra.lowestFirst ? " laagste scores" : ""}…`;
@@ -6335,8 +6340,8 @@
       }
     }
 
-    function repairLowestSeoScores(dryRun) {
-      return repairSeoRecipes(dryRun, { lowestFirst: true });
+    function smartRepairSeoRecipes(dryRun) {
+      return repairSeoRecipes(dryRun, { lowestFirst: true, mode: "smart" });
     }
 
     function selectAllSeoBackfillKeywords() {
