@@ -5943,17 +5943,29 @@ async function searchChannels(query) {
       state.channelSearchIsSearching = false;
       state.channelSearchProgress = { local: "done", seo: "done", web: "done" };
     }
-    renderChannelSearchResults(merged);
+    const existingResultsForQuery = Array.isArray(state.channelSearchAllResults)
+      && state.channelSearchAllResults.length > 0
+      && state.channelSearchQuery === query.trim();
+    if (merged.length || !existingResultsForQuery) {
+      renderChannelSearchResults(merged);
+    } else {
+      renderChannelSearchResults(state.channelSearchAllResults);
+    }
   } catch (error) {
     if (error?.name === "AbortError") return;
     if (requestId !== searchChannels._reqId) return;
     state.channelSearchIsSearching = false;
     state.channelSearchProgress = {};
+    const existingResultsForQuery = Array.isArray(state.channelSearchAllResults)
+      && state.channelSearchAllResults.length > 0
+      && state.channelSearchQuery === query.trim();
     // Toon foutmelding als er ook geen eerder resultaten zijn
-    if (!state.channelSearchAllResults?.length) {
+    if (!existingResultsForQuery) {
       showToast("Zoeken mislukt. Controleer je verbinding.", { variant: "error" });
+      renderChannelSearchResults([]);
+    } else {
+      renderChannelSearchResults(state.channelSearchAllResults);
     }
-    renderChannelSearchResults([]);
   } finally {
     if (requestId === searchChannels._reqId) {
       state.channelSearchIsSearching = false;
