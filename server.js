@@ -14188,7 +14188,6 @@ function scoreRecipeSearchResultQuality(result, query = "") {
     reasons.push("geen afbeelding");
   }
   if (hasRating) score += 10;
-  else reasons.push("geen rating");
   if (hasSource) score += 4;
   if (url && RECIPE_URL_RE.test(url)) score += 12;
   if (url && BLOG_POST_URL_RE.test(url) && !RECIPE_URL_RE.test(url)) {
@@ -15872,7 +15871,7 @@ async function enrichChannelSearchResultsWithRatings(results, opts = {}) {
         } else {
           batch.jsonLdMiss++;
           bumpRatingEnrichHostStat(host, "schemaMiss");
-          // Sla ook "geen rating" op zodat we niet elke keer opnieuw fetchen
+          // Sla negatieve rating-lookups kort op zodat we niet elke keer opnieuw fetchen.
           setCachedRecipeLdRating(uKey, null);
         }
       } catch {

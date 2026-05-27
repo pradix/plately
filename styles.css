@@ -12922,16 +12922,6 @@ body {
   border-color: var(--line);
   box-shadow: none;
 }
-.channel-filter-pill--quick {
-  background: rgba(52,81,59,0.08);
-  border-color: rgba(52,81,59,0.14);
-}
-.channel-filter-pill--quick strong {
-  font-size: 0.72rem;
-  color: inherit;
-  opacity: 0.78;
-}
-
 .channel-search-list {
   display: flex;
   flex-direction: column;
