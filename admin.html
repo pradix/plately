@@ -4246,6 +4246,7 @@
         const data = await fetchAdminJson("/api/admin/app-performance");
         const assets = Array.isArray(data.assets) ? data.assets : [];
         const metrics = Array.isArray(data.clientMetrics) ? data.clientMetrics : [];
+        const clientErrors = Array.isArray(data.clientErrors) ? data.clientErrors : [];
         const metricLabel = (key) => ({
           app_load: "App start",
           basket_prepare: "AH/Jumbo matchen",
@@ -4272,8 +4273,9 @@
           if (!m || !m.metric || m.metric === "postgres_error") return false;
           return Number(m.p95Ms || 0) > metricBudget(m.metric);
         });
+        const activeClientErrors = clientErrors.filter((row) => Number(row.count || 0) > 0);
         if (statusEl) {
-          const issueCount = overBudgetAssets.length + slowMetrics.length;
+          const issueCount = overBudgetAssets.length + slowMetrics.length + activeClientErrors.length;
           statusEl.textContent = issueCount
             ? `${formatNumber(issueCount)} performance actiepunt(en) · ${formatNumber(data.totalKb || 0)} KB totaal · build ${data.clientBuild || "—"}`
             : `Geen directe actiepunten · ${formatNumber(data.totalKb || 0)} KB totaal · SW ${data.serviceWorker?.version || "—"}`;
@@ -4297,6 +4299,13 @@
             meter: asset.overBudget ? "warn" : "ok",
             detail: `Budget ${formatNumber(asset.budgetKb || 0)} KB`,
           })),
+          ...activeClientErrors.slice(0, 4).map((row) => renderAdminVisualCard({
+            label: "Client fout",
+            value: formatNumber(row.count || 0),
+            badge: row.view || "app",
+            meter: "warn",
+            detail: `${row.message || "Onbekende fout"}${row.source ? ` · ${row.source}` : ""}`,
+          })),
           renderAdminVisualCard({
             label: "Service worker",
             value: data.serviceWorker?.version || "—",
@@ -4304,7 +4313,7 @@
             meter: "info",
             detail: `Client build ${data.clientBuild || "onbekend"}`,
           }),
-          ...(overBudgetAssets.length || slowMetrics.length ? [] : [renderAdminVisualCard({
+          ...(overBudgetAssets.length || slowMetrics.length || activeClientErrors.length ? [] : [renderAdminVisualCard({
             label: "Performance status",
             value: "OK",
             badge: "Geen actie",

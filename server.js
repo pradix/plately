@@ -10170,6 +10170,7 @@ const CLIENT_INGEST_EVENT_TYPES = new Set([
   "client_recipe_deleted",
   "client_recipe_detail_view",
   "client_perf",
+  "client_error",
   "client_storage_quota_exceeded",
 ]);
 
@@ -26630,6 +26631,7 @@ const server = http.createServer(async (request, response) => {
         appShellCount = (sw.match(/APP_SHELL\s*=\s*\[([\s\S]*?)\]/)?.[1] || "").split("\n").filter((line) => line.includes("\"/") || line.includes("`/")).length;
       } catch {}
       let clientMetrics = [];
+      let clientErrors = [];
       let basketMetrics = null;
       if (isPostgresEnabled()) {
         try {
@@ -26656,6 +26658,27 @@ const server = http.createServer(async (request, response) => {
             samples: Number(row.samples) || 0,
             avgMs: Number(row.avg_ms) || 0,
             p95Ms: Number(row.p95_ms) || 0,
+            lastSeen: row.last_seen || null,
+          }));
+          const errorRes = await pool.query(`
+            SELECT
+              COALESCE(meta->>'message', 'Onbekende fout') AS message,
+              COALESCE(meta->>'source', '') AS source,
+              COALESCE(meta->>'view', '') AS view,
+              COUNT(*)::int AS count,
+              MAX(created_at) AS last_seen
+            FROM plately_events
+            WHERE type = 'client_error'
+              AND created_at >= NOW() - INTERVAL '7 days'
+            GROUP BY 1, 2, 3
+            ORDER BY count DESC, last_seen DESC
+            LIMIT 8
+          `);
+          clientErrors = (errorRes.rows || []).map((row) => ({
+            message: sanitizeText(row.message || ""),
+            source: sanitizeText(row.source || ""),
+            view: sanitizeText(row.view || ""),
+            count: Number(row.count) || 0,
             lastSeen: row.last_seen || null,
           }));
           const basketRes = await pool.query(`
@@ -26687,6 +26710,7 @@ const server = http.createServer(async (request, response) => {
         clientBuild: CACHED_PLATELY_BUILD_META,
         serviceWorker: { version: swVersion, appShellCount },
         clientMetrics,
+        clientErrors,
         basketMetrics,
         deploy,
         recommendations: assets

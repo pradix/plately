@@ -734,6 +734,7 @@ const CLIENT_TRACK_ALLOWED = new Set([
   "client_recipe_deleted",
   "client_recipe_detail_view",
   "client_perf",
+  "client_error",
   "client_storage_quota_exceeded",
 ]);
 const __clientEventQueue = [];
@@ -820,6 +821,58 @@ function installClientPerformanceTelemetry() {
 }
 
 installClientPerformanceTelemetry();
+
+function installClientErrorTelemetry() {
+  if (installClientErrorTelemetry._done) return;
+  installClientErrorTelemetry._done = true;
+  const seen = new Map();
+  const shouldSend = (key) => {
+    const now = Date.now();
+    const previous = seen.get(key) || 0;
+    if (now - previous < 60_000) return false;
+    seen.set(key, now);
+    if (seen.size > 40) {
+      for (const [entryKey, ts] of seen) {
+        if (now - ts > 5 * 60_000) seen.delete(entryKey);
+      }
+    }
+    return true;
+  };
+  const report = (kind, payload = {}) => {
+    try {
+      const message = String(payload.message || payload.reason || "Onbekende fout").slice(0, 160);
+      const source = String(payload.source || payload.filename || location.pathname || "").slice(0, 120);
+      const key = `${kind}:${message}:${source}`;
+      if (!shouldSend(key)) return;
+      trackClientEvent("client_error", {
+        kind,
+        message,
+        source,
+        line: Number(payload.line || payload.lineno || 0) || 0,
+        column: Number(payload.column || payload.colno || 0) || 0,
+        view: state.view || "",
+        build: document.querySelector('meta[name="plately-build"]')?.getAttribute("content")?.trim() || "",
+      });
+    } catch {}
+  };
+  window.addEventListener("error", (event) => {
+    report("error", {
+      message: event.message,
+      source: event.filename,
+      line: event.lineno,
+      column: event.colno,
+    });
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason;
+    report("promise", {
+      message: reason?.message || reason,
+      source: reason?.name || "unhandledrejection",
+    });
+  });
+}
+
+installClientErrorTelemetry();
 
 function hostnameForAnalytics(url) {
   try {

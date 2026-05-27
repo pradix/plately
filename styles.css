@@ -17074,6 +17074,66 @@ body {
   background: transparent;
 }
 
+/* Home recipe cards use the same rhythm as cookbook-detail cards. */
+@media (min-width: 760px) {
+  .recipe-grid,
+  .recipe-grid--cookbook {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 22px;
+  }
+}
+
+.recipe-grid .recent-card {
+  border-radius: 28px;
+  border-color: rgba(120, 147, 111, 0.08);
+  box-shadow: 0 2px 10px rgba(36, 60, 43, 0.03);
+}
+
+.recipe-grid .recent-card__img,
+.recipe-grid .recent-card__add-icon {
+  width: 100%;
+  margin: 0;
+  aspect-ratio: 1 / 1;
+  border-radius: 0;
+}
+
+.recipe-grid .recent-card__body {
+  min-height: 112px;
+  padding: 16px 18px 18px;
+  justify-content: flex-start;
+  gap: 14px;
+}
+
+.recipe-grid .recent-card__title {
+  min-height: 2.28em;
+  margin: 0;
+  font-size: 1.12rem;
+  line-height: 1.14;
+  letter-spacing: 0;
+  font-weight: 850;
+  color: #1f3426;
+}
+
+.recipe-grid .recent-card__meta-row {
+  min-height: 30px;
+}
+
+.recipe-grid .recent-card__meta {
+  min-height: 30px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #f5f2eb;
+  color: #7d8f77;
+  font-size: 0.86rem;
+  line-height: 1;
+  font-weight: 750;
+}
+
+.recipe-grid .recent-card__favicon {
+  top: 12px;
+  right: 12px;
+}
+
 .recent-card__add-icon svg,
 .home-empty-state__icon svg {
   width: 32px;
