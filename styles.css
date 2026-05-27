@@ -13099,9 +13099,9 @@ body {
 }
 .ch-result-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
   gap: 10px;
-  padding: 12px 14px;
+  padding: 10px 12px 12px;
 }
 .ch-result-grid--list {
   grid-template-columns: 1fr;
@@ -13150,8 +13150,16 @@ body {
   color: var(--muted-strong);
   margin-top: 0;
 }
-.ch-result-grid--list .ch-card__desc,
-.ch-result-grid--list .ch-card__rating { display: none; }
+.ch-result-grid--list .ch-card__desc { display: none; }
+.ch-result-grid--list .ch-card__rating {
+  display: flex;
+  margin-top: 2px;
+  gap: 2px;
+}
+.ch-result-grid--list .ch-card__rating-confidence,
+.ch-result-grid--list .ch-card__rating-trust {
+  display: none;
+}
 .ch-result-grid--list .ch-card__actions {
   flex-direction: column;
   gap: 0;
@@ -13182,6 +13190,7 @@ body {
 .ch-result-grid--list .ch-card--skeleton .ch-card__body { flex: 1; }
 
 .ch-search-section-label {
+  grid-column: 1 / -1;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -13211,21 +13220,23 @@ body {
 
 .ch-card {
   background: #fff;
-  border-radius: 14px;
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  border: 1px solid rgba(34, 32, 29, 0.08);
+  box-shadow: 0 1px 5px rgba(0,0,0,0.06);
   display: flex;
   flex-direction: column;
   transition: box-shadow 0.18s, transform 0.18s;
 }
 .ch-card:hover {
-  box-shadow: 0 6px 20px rgba(0,0,0,0.13);
+  box-shadow: 0 5px 16px rgba(0,0,0,0.11);
   transform: translateY(-2px);
 }
 
 .ch-card__visual {
   position: relative;
-  height: 160px;
+  height: auto;
+  aspect-ratio: 4 / 3;
   background: #f0f0ec;
   overflow: hidden;
 }
@@ -13260,15 +13271,15 @@ body {
 
 .ch-card__body {
   flex: 1;
-  padding: 12px 14px 6px;
+  padding: 10px 11px 5px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .ch-card__title {
-  font-size: 0.92rem;
-  font-weight: 600;
+  font-size: 0.89rem;
+  font-weight: 680;
   color: #1a1a1a;
   margin: 0;
   line-height: 1.3;
@@ -13297,7 +13308,7 @@ body {
 
 /* Allerhande / kanaal-zoek: beoordeling (Plately pill, geel goud vermeden) */
 .ch-card__rating {
-  margin-top: 6px;
+  margin-top: 4px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -13311,7 +13322,7 @@ body {
   flex-wrap: wrap;
   gap: 6px;
   max-width: 100%;
-  padding: 5px 11px 5px 9px;
+  padding: 4px 8px;
   border-radius: var(--radius-pill);
   background: var(--color-surface-3);
   border: 1px solid var(--color-border);
@@ -13376,7 +13387,7 @@ body {
 }
 
 .ch-card__rating-confidence {
-  display: block;
+  display: none;
   font-size: 0.65rem;
   font-weight: 500;
   line-height: 1.35;
@@ -13399,7 +13410,7 @@ body {
 }
 
 .ch-card__rating-trust {
-  display: block;
+  display: none;
   font-size: 0.61rem;
   line-height: 1.35;
   font-weight: 500;
@@ -13410,7 +13421,7 @@ body {
 .ch-card__actions {
   display: flex;
   gap: 8px;
-  padding: 10px 14px 14px;
+  padding: 8px 11px 11px;
   align-items: center;
 }
 
@@ -13463,6 +13474,59 @@ body {
 .ch-card__import:hover { background: #78936f; transform: scale(1.03); }
 .ch-card__import:disabled { opacity: 0.5; cursor: default; transform: none; }
 .ch-card__import svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+@media (max-width: 520px) {
+  .channel-search-section {
+    margin-inline: 10px;
+    border-radius: 14px;
+  }
+
+  .channel-search-header {
+    padding: 12px 12px 10px;
+  }
+
+  .channel-search-filters {
+    padding: 9px 12px;
+  }
+
+  .ch-source-summary,
+  .ch-search-progress {
+    padding-inline: 10px;
+  }
+
+  .ch-result-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 9px 10px 12px;
+  }
+
+  .ch-card__badge,
+  .ch-card__rating-source,
+  .ch-card__rating-count,
+  .ch-card__rating-sep {
+    display: none;
+  }
+
+  .ch-card__title {
+    font-size: 0.84rem;
+    line-height: 1.25;
+  }
+
+  .ch-card__rating-pill {
+    padding: 3px 7px;
+    gap: 4px;
+  }
+
+  .ch-card__actions {
+    padding-top: 6px;
+  }
+
+  .ch-card__import {
+    min-height: 30px;
+    font-size: 0.74rem;
+    border-radius: 7px;
+  }
+}
 
 
 /* spinner for import button while loading */

@@ -413,7 +413,7 @@ const COOKBOOK_SHOWCASE_IDS = [
   "recipe-book-thai",
 ];
 
-const HOME_RECIPE_INITIAL = window.matchMedia?.("(max-width: 720px)")?.matches ? 3 : 5;
+const HOME_RECIPE_INITIAL = window.matchMedia?.("(max-width: 720px)")?.matches ? 2 : 4;
 const HOME_RECIPE_STEP = window.matchMedia?.("(max-width: 720px)")?.matches ? 6 : 10;
 const HOME_RECIPE_LIMIT_SESSION_KEY = "plately-home-recipe-limit";
 
@@ -2496,7 +2496,50 @@ function isBasketChoiceSafeForHandoff(item, choice) {
   return Boolean(item?.matchConfirmed);
 }
 
+const BASKET_PAYLOAD_CACHE_TTL_MS = 10 * 60 * 1000;
+const basketPayloadCache = new Map();
+
+function getBasketPayloadCacheKey(endpoint, body) {
+  const compactItems = (Array.isArray(body?.items) ? body.items : [])
+    .map((item) => ({
+      title: normalizeBasketToken(item?.title || ""),
+      amount: String(item?.amount || "").trim().toLowerCase(),
+      recipeTitle: String(item?.recipeTitle || "").trim().toLowerCase(),
+    }))
+    .filter((item) => item.title);
+  return JSON.stringify({
+    endpoint,
+    store: String(body?.store || "").trim().toLowerCase(),
+    recipeTitle: String(body?.recipeTitle || "").trim().toLowerCase(),
+    sourceUrl: String(body?.sourceUrl || "").trim(),
+    fast: Boolean(body?.fast),
+    bio: Boolean(body?.bio),
+    beterLeven1: Boolean(body?.beterLeven1),
+    vegetarisch: Boolean(body?.vegetarisch),
+    vegan: Boolean(body?.vegan),
+    plantaardig: Boolean(body?.plantaardig),
+    prefs: body?.basketMatchPreferences || {},
+    items: compactItems,
+  });
+}
+
+function cloneBasketPayload(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  try {
+    return structuredClone(payload);
+  } catch {
+    return JSON.parse(JSON.stringify(payload));
+  }
+}
+
 async function fetchBasketPayload(endpoint, body, options = {}) {
+  const cacheKey = getBasketPayloadCacheKey(endpoint, body);
+  const now = Date.now();
+  const cached = options.allowCache !== false && !body?.forceAhTokenRefresh ? basketPayloadCache.get(cacheKey) : null;
+  if (cached && now - cached.at < BASKET_PAYLOAD_CACHE_TTL_MS) {
+    return cloneBasketPayload(cached.payload);
+  }
+
   const cacheBust = options.cacheBust ? `?t=${encodeURIComponent(String(options.cacheBust))}` : "";
   let payload = await fetchJson(`${state.apiBase}${endpoint}${cacheBust}`, {
     method: "POST",
@@ -2510,6 +2553,14 @@ async function fetchBasketPayload(endpoint, body, options = {}) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...body, forceAhTokenRefresh: true }),
     });
+  }
+
+  if (payload?.items?.length && !isDegradedAhBasketPayload(payload)) {
+    basketPayloadCache.set(cacheKey, { at: now, payload: cloneBasketPayload(payload) });
+    if (basketPayloadCache.size > 20) {
+      const oldestKey = basketPayloadCache.keys().next().value;
+      if (oldestKey) basketPayloadCache.delete(oldestKey);
+    }
   }
 
   return payload;
@@ -5736,8 +5787,12 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
     const sourceSummary = Object.entries(sourceCounts).length > 1
       ? `<div class="ch-source-summary">${Object.entries(sourceCounts).map(([label, count]) => `<span>${escapeHtml(label)} <strong>${formatNumber(count)}</strong></span>`).join("")}</div>`
       : "";
-    const gridClass = "ch-result-grid";
-    channelSearchResults.innerHTML = `${renderChannelSearchProgress()}${sourceSummary}<div class="${gridClass}">${rows.map((r) => {
+    const getSourceBucket = (row) => {
+      if (row?._source === "local") return { key: "local", label: "Mijn recepten" };
+      if (row?._source === "plately" || String(row?.url || "").startsWith("/recept/")) return { key: "plately", label: "Plately index" };
+      return { key: "web", label: "Webkanalen" };
+    };
+    const renderCard = (r) => {
       const channel = channelById.get(r.channelId);
       const channelColor = channel?.color || "#8da485";
       const thumbUrl = normalizeChannelThumbnailUrl(r.thumbnail);
@@ -5772,7 +5827,20 @@ function renderChannelSearchResults(results, filter = state.channelSearchFilter)
           </button>
         </div>
       </div>`;
-    }).join("")}${loadingBanner}${moreHint}</div>`;
+    };
+    const gridClass = "ch-result-grid";
+    const groupedRows = [];
+    let lastBucket = "";
+    const shouldGroupSources = Object.entries(sourceCounts).length > 1 && !effectiveFilter;
+    for (const row of rows) {
+      const bucket = getSourceBucket(row);
+      if (shouldGroupSources && bucket.key !== lastBucket) {
+        lastBucket = bucket.key;
+        groupedRows.push(`<div class="ch-search-section-label">${escapeHtml(bucket.label)}</div>`);
+      }
+      groupedRows.push(renderCard(row));
+    }
+    channelSearchResults.innerHTML = `${renderChannelSearchProgress()}${sourceSummary}<div class="${gridClass}">${groupedRows.join("")}${loadingBanner}${moreHint}</div>`;
   });
 }
 
