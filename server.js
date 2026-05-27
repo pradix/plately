@@ -26842,5 +26842,6 @@ module.exports = {
     searchPublicSeoRecipesLocal,
     buildStoredRecipeRatingIndexFromSeoEntries,
     pickChannelSearchCandidateRating,
+    backfillImportedRecipeRatingsForAllUsers,
   },
 };
